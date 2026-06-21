@@ -264,6 +264,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
         <input class="search" id="src-search" placeholder="Search handle…" oninput="renderSourcing()" />
         <button class="adminbtn" id="src-record-btn" style="display:none" onclick="recordDay()">Record day</button>
         <button class="ghost" id="src-import-btn" style="display:none" onclick="importSourcingHistory()">Import history</button>
+        <button class="ghost" id="src-clear-btn" style="display:none" onclick="clearBoard()">Clear board</button>
       </div>
       <div class="stats" id="src-stats"></div>
 
@@ -356,7 +357,7 @@ function enterApp(user, admin){
   if(!configured()){ $('setup').style.display='block'; return; }
   $('app').style.display='block';
   $('who-name').textContent=firstName(user.full_name||user.employee_id);
-  if(ISADMIN){ $('import-btn').style.display=''; $('src-add').style.display='flex'; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; }
+  if(ISADMIN){ $('import-btn').style.display=''; $('src-add').style.display='flex'; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; $('src-clear-btn').style.display=''; }
   // record the marker's name (the signed-in person)
   MYVA = ISADMIN ? 'Admin' : (user.full_name || user.employee_id || '');
   // dates default today (filled after state load)
@@ -672,6 +673,12 @@ async function importSourcingHistory(){
     else toast('Import failed'+(r&&r.error?': '+r.error:''));
     await loadState();
   }catch(e){ toast('Import failed'); }
+}
+
+async function clearBoard(){
+  if(!confirm('Clear ALL sourcing boxes? This wipes the sourcing board only (accounts and posting are untouched).')) return;
+  try{ await apiPost({ action:'src_clear' }); toast('Sourcing board cleared'); await loadState(); }
+  catch(e){ toast('Clear failed'); }
 }
 
 /* ---- import + refresh ---- */
