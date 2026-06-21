@@ -121,6 +121,9 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .agbody.open{display:block}
 .acctgroup.disc{opacity:.5}
 .agh .discb{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--red);border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.1);border-radius:20px;padding:2px 8px;white-space:nowrap}
+.agh .phbtn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;border:1px solid var(--line-hi);background:rgba(255,107,26,.1);color:var(--o3);cursor:pointer;font-size:15px;font-family:inherit;line-height:1;flex-shrink:0;margin-left:4px}
+.agh .phbtn:hover{background:rgba(255,107,26,.22);color:#fff}
+.agh .phbtn svg{width:13px;height:13px}
 .arow{display:flex;flex-direction:column;gap:9px;padding:11px 15px;border-top:1px solid var(--line)}
 .arow.post{padding:7px 15px;gap:0}
 .arow.post .cell{min-width:22px;height:22px;width:auto;padding:0 5px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:9.5px;line-height:1}
@@ -186,8 +189,9 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .adminbtn:hover{opacity:.92}
 .ghost{font-size:12px;font-weight:600;color:var(--t2);background:none;border:1px solid var(--line);border-radius:9px;padding:8px 13px;cursor:pointer;font-family:inherit}
 .ghost:hover{color:var(--t1);border-color:var(--line-hi)}
-#eod-modal{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(7,9,13,.8);backdrop-filter:blur(8px);padding:1.5rem}
-#eod-modal.open{display:flex;animation:docFade .2s ease}
+#eod-modal,#eod-warn{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(7,9,13,.8);backdrop-filter:blur(8px);padding:1.5rem}
+#eod-modal.open,#eod-warn.open{display:flex;animation:docFade .2s ease}
+.eodhd.warn{color:#f59e0b}
 @keyframes docFade{from{opacity:0}to{opacity:1}}
 .eodbox{width:100%;max-width:480px;background:#12161e;border:1px solid var(--line-hi);border-radius:16px;padding:1.6rem;box-shadow:0 24px 70px rgba(0,0,0,.6)}
 .eodhd{font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;margin-bottom:4px}
@@ -284,12 +288,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
           <b>Daily targets</b><span class="targsum" id="targ-sum"></span>
         </div>
         <div class="targbody">
-          <table class="srctable"><thead><tr><th>Sourcer</th><th>Daily target</th><th>Sourced</th><th>Completion</th><th></th></tr></thead><tbody id="src-body"></tbody></table>
-          <div class="srcadd" id="src-add" style="display:none">
-            <input class="search" id="src-name" placeholder="Add sourcer name…" style="flex:0 0 220px" />
-            <input class="numin" id="src-target" placeholder="target" />
-            <button class="adminbtn" onclick="addSourcer()">Add sourcer</button>
-          </div>
+          <table class="srctable"><thead><tr><th>Phone</th><th>Target</th><th>Sourced</th><th>Completion</th></tr></thead><tbody id="src-body"></tbody></table>
         </div>
       </div>
 
@@ -299,6 +298,15 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- EOD warning -->
+<div id="eod-warn">
+  <div class="eodbox">
+    <div class="eodhd warn">⚠ End the day?</div>
+    <div class="eodsub">Make sure all posting is finished. This will:<br>• record today's completion, and<br>• permanently remove all <b>posted (green)</b> items from the sourcing queue.<br>This can't be undone.</div>
+    <div class="eodbtns"><button class="ghost" onclick="closeEodWarn()">Cancel</button><button class="adminbtn" onclick="confirmEOD()">Yes, end the day</button></div>
+  </div>
+</div>
 
 <!-- EOD report modal -->
 <div id="eod-modal">
@@ -377,7 +385,7 @@ function enterApp(user, admin){
   if(!configured()){ $('setup').style.display='block'; return; }
   $('app').style.display='block';
   $('who-name').textContent=firstName(user.full_name||user.employee_id);
-  if(ISADMIN){ $('import-btn').style.display=''; $('src-add').style.display='flex'; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; $('src-clear-btn').style.display=''; }
+  if(ISADMIN){ $('import-btn').style.display=''; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; $('src-clear-btn').style.display=''; }
   // record the marker's name (the signed-in person)
   MYVA = ISADMIN ? 'Admin' : (user.full_name || user.employee_id || '');
   // dates default today (filled after state load)
@@ -550,12 +558,30 @@ function groupHTML(kind, ph, list, map, disc){
   var badge = isDisc ? '<span class="discb">disconnected · not counted</span>' : '';
   var open = !!OPEN[kind][ph];
   var body = open ? list.map(function(a){ return acctRow(kind, a, map[keyOf(a)]); }).join('') : '';
+  var phctrl = (kind==='src' && ISADMIN) ?
+    '<button class="phbtn" title="Add a red cycle to every account on this phone" onclick="event.stopPropagation();addPhoneCycle(\''+esc(ph)+'\')">+</button>'+
+    '<button class="phbtn" title="Undo last added cycle for this phone" onclick="event.stopPropagation();undoPhoneCycle(\''+esc(ph)+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg></button>' : '';
   return '<div class="acctgroup'+(isDisc?' disc':'')+'"><div class="agh" onclick="toggleGroup(\''+kind+'\',\''+esc(ph)+'\')">'+
-    '<b>Phone '+esc(ph)+'</b>'+badge+'<div class="agbar"><i style="width:'+pct+'%"></i></div>'+
+    '<b>Phone '+esc(ph)+'</b>'+phctrl+badge+'<div class="agbar"><i style="width:'+pct+'%"></i></div>'+
     '<span class="agc">'+green+' ✓ · '+withGreen+'/'+list.length+'</span></div>'+
     '<div class="agbody'+(open?' open':'')+'">'+body+'</div></div>';
 }
 function toggleGroup(kind, ph){ OPEN[kind][ph]=!OPEN[kind][ph]; if(kind==='src') renderSourcing(); else renderPosting(); }
+async function addPhoneCycle(ph){
+  try{
+    var r=await apiPost({ action:'phone_cycle', phone:ph, remove:false, by:firstName(USER.full_name||USER.employee_id) });
+    if(r && r.ok){ toast(r.count?('Added cycle '+r.num+' to '+r.count+' accounts on Phone '+ph):'Nothing to add'); await refreshQuiet(); }
+    else toast((r&&r.error)||'Failed');
+  }catch(e){ toast('Failed'); }
+}
+async function undoPhoneCycle(ph){
+  if(!confirm('Undo the last added cycle for Phone '+ph+'?\nThis removes the newest cycle box from every account on this phone.')) return;
+  try{
+    var r=await apiPost({ action:'phone_cycle', phone:ph, remove:true, by:firstName(USER.full_name||USER.employee_id) });
+    if(r && r.ok){ toast(r.count?('Removed cycle '+r.num+' from '+r.count+' accounts'):'Nothing to undo'); await refreshQuiet(); }
+    else toast((r&&r.error)||'Failed');
+  }catch(e){ toast('Failed'); }
+}
 function escAttr(s){ return String(s==null?'':s).replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
 async function cycleCell(kind,phone,user,acct,handle,idx){
   var isSrc=kind==='src'; var map=isSrc?sourceMap():postingMap();
@@ -638,8 +664,10 @@ function onCellsClick(e){
   if(kind==='post'){ togglePostBox(p,u,a,h); return; }   // posting pulls next queued from sourcing
   cycleCell(kind, p, u, a, h, parseInt(cell.getAttribute('data-i'),10));
 }
-async function runEOD(){
-  if(!confirm('End of day?\nThis records today’s completion and removes posted (green) items from the sourcing queue. You’ll get a message to copy for the client chat.')) return;
+function runEOD(){ $('eod-warn').classList.add('open'); }       // show the warning first
+function closeEodWarn(){ $('eod-warn').classList.remove('open'); }
+async function confirmEOD(){
+  closeEodWarn();
   try{
     var r=await apiPost({ action:'eod', date:STATE.date, by:firstName(USER.full_name||USER.employee_id) });
     if(r && r.ok){ showEod(r.message); await refreshQuiet(); }
@@ -705,23 +733,24 @@ function renderSourcing(){
   $('sourcing-list').innerHTML=phones.map(function(ph){ return groupHTML('src', ph, byPhone[ph], map, {}); }).join('');
 }
 /* minimized per-sourcer target table */
+/* per-phone targets, computed live from the sourcing board:
+   target = assigned boxes (red+orange+green), sourced = orange+green */
 function renderTargets(){
-  var rows=srcRows();
-  var totT=0,totS=0; rows.forEach(function(r){ totT+=fnum(r.target); totS+=fnum(r.sourced); });
-  var pct=totT?Math.round(totS/totT*100):0;
-  var sum=$('targ-sum'); if(sum) sum.textContent=totS+' / '+totT+' clips · '+pct+'%';
-  var body=$('src-body'); if(!body) return;
-  body.innerHTML=rows.map(function(r){
-    var t=fnum(r.target), s=fnum(r.sourced), p=t?Math.round(s/t*100):0;
-    var pc = p>=100?'ok':(p>=70?'mid':'low');
-    return '<tr>'+
-      '<td class="nm">'+esc(r.va)+'</td>'+
-      '<td><input class="numin" type="number" min="0" value="'+t+'" '+(ISADMIN?'':'disabled')+' onchange="setSrc(\''+escAttr(r.va)+'\',\'target\',this.value)"></td>'+
-      '<td><input class="numin" type="number" min="0" value="'+s+'" '+(ISADMIN?'':'disabled')+' onchange="setSrc(\''+escAttr(r.va)+'\',\'sourced\',this.value)"></td>'+
-      '<td><div style="display:flex;align-items:center;gap:10px"><span class="pct '+pc+'">'+p+'%</span><div class="pbar"><i style="width:'+Math.min(100,p)+'%"></i></div></div></td>'+
-      '<td><span style="font-family:\'JetBrains Mono\',monospace;font-size:11px;color:var(--t3)">'+(t?(s>=t?'+'+(s-t):(s-t)):'')+'</span></td>'+
-    '</tr>';
-  }).join('');
+  var accts=(STATE.accounts||[]), map=sourceMap();
+  var byPhone={}; accts.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
+  var phones=Object.keys(byPhone).sort(function(a,b){ return fnum(a)-fnum(b); });
+  var totT=0, totS=0, html='';
+  phones.forEach(function(ph){
+    var list=byPhone[ph], target=0, sourced=0;
+    list.forEach(function(a){ var r=map[srcKey(a)]; if(!r) return; var n=srcLen(r); target+=countNonBlank(r.cells,n); sourced+=countAt(r.cells,n,2)+countAt(r.cells,n,3); });
+    if(target===0) return;   // only show phones that have assigned boxes
+    totT+=target; totS+=sourced;
+    var p=target?Math.round(sourced/target*100):0, pc=p>=100?'ok':(p>=70?'mid':'low');
+    html+='<tr><td class="nm">Phone '+esc(ph)+'</td><td><b>'+target+'</b></td><td>'+sourced+'</td>'+
+      '<td><div style="display:flex;align-items:center;gap:10px"><span class="pct '+pc+'">'+p+'%</span><div class="pbar"><i style="width:'+Math.min(100,p)+'%"></i></div></div></td></tr>';
+  });
+  var sum=$('targ-sum'); if(sum) sum.textContent=totS+' / '+totT+' boxes · '+(totT?Math.round(totS/totT*100):0)+'%';
+  var body=$('src-body'); if(body) body.innerHTML = html || '<tr><td colspan="4" class="muted">No assigned boxes yet.</td></tr>';
 }
 async function setSrc(va, field, val){
   val=fnum(val);
