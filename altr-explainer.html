@@ -274,6 +274,7 @@ body{font-family:'Inter',sans-serif;color:var(--t1);background:var(--bg);min-hei
       <button id="play" title="Play / Pause"></button>
       <button id="next" title="Next"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM6 5l9 7-9 7z"/></svg></button>
       <button id="mute" class="act" title="Narrator on/off"></button>
+      <button id="music" class="act" title="Background music on/off"></button>
       <div class="prog"><i id="progbar"></i></div>
       <div class="dots" id="dots"></div>
       <div class="tlabel" id="tlabel">0:00</div>
@@ -307,6 +308,22 @@ function stopSpeech(){ if(SS){ try{ SS.cancel(); }catch(e){} } }
 function sceneVO(el){ return el.getAttribute('data-vo')||el.getAttribute('data-cap')||''; }
 function sceneDur(el){ if(narrator){ var w=sceneVO(el).trim().split(/\s+/).length; return Math.max(6000, Math.round(w/2.2*1000)+1600); } return +el.getAttribute('data-dur')||7000; }
 
+/* ambient background music — synthesized (Web Audio), license-free, kept low under the narration */
+var ICON_MUS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+var ICON_MUSOFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/><line x1="2" y1="2" x2="22" y2="22"/></svg>';
+var actx=null, mGain=null, musicOnPref=true, musicBuilt=false;
+function buildMusic(){
+  if(musicBuilt) return; var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+  actx=new AC(); mGain=actx.createGain(); mGain.gain.value=0; mGain.connect(actx.destination);
+  var filt=actx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=900; filt.Q.value=0.7; filt.connect(mGain);
+  var freqs=[110,164.81,220,277.18], gains=[0.16,0.12,0.09,0.07], types=['triangle','sine','sine','triangle'];
+  freqs.forEach(function(f,i){ var o=actx.createOscillator(); o.type=types[i]; o.frequency.value=f; o.detune.value=(i-1.5)*5; var g=actx.createGain(); g.gain.value=gains[i]; o.connect(g); g.connect(filt); o.start(); });
+  var lfo=actx.createOscillator(); lfo.frequency.value=0.05; var lg=actx.createGain(); lg.gain.value=380; lfo.connect(lg); lg.connect(filt.frequency); lfo.start();
+  musicBuilt=true;
+}
+function musicOn(){ if(!musicOnPref) return; buildMusic(); if(!actx) return; if(actx.state==='suspended') actx.resume(); var n=actx.currentTime; mGain.gain.cancelScheduledValues(n); mGain.gain.setValueAtTime(mGain.gain.value,n); mGain.gain.linearRampToValueAtTime(0.07, n+1.4); }
+function musicOff(){ if(!actx||!mGain) return; var n=actx.currentTime; mGain.gain.cancelScheduledValues(n); mGain.gain.setValueAtTime(mGain.gain.value,n); mGain.gain.linearRampToValueAtTime(0, n+0.7); }
+
 var idx=0, playing=false, t0=0, dur=0, rem=0, raf=null;
 function totalDur(){ return scenes.reduce(function(s,el){ return s+sceneDur(el); },0); }
 function fmt(ms){ var s=Math.round(ms/1000); return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2); }
@@ -326,7 +343,7 @@ function go(i,forcePlay){
   dur=sceneDur(scenes[idx]); rem=dur; t0=performance.now();
   cancelAnimationFrame(raf); stopSpeech();
   if(forcePlay) playing=true;
-  if(playing){ $('play').innerHTML=ICON_PAUSE; speak(sceneVO(scenes[idx])); loop(); }
+  if(playing){ $('play').innerHTML=ICON_PAUSE; musicOn(); speak(sceneVO(scenes[idx])); loop(); }
   else { $('play').innerHTML=ICON_PLAY; }
 }
 function loop(){
@@ -337,8 +354,8 @@ function loop(){
   if(left<=0){ if(idx===scenes.length-1){ pause(true); return; } go(idx+1); return; }
   raf=requestAnimationFrame(loop);
 }
-function pause(ended){ playing=false; if(!ended) rem=Math.max(0,rem-(performance.now()-t0)); cancelAnimationFrame(raf); stopSpeech(); $('play').innerHTML=ICON_PLAY; }
-function play(){ playing=true; t0=performance.now(); $('play').innerHTML=ICON_PAUSE; speak(sceneVO(scenes[idx])); loop(); }
+function pause(ended){ playing=false; if(!ended) rem=Math.max(0,rem-(performance.now()-t0)); cancelAnimationFrame(raf); stopSpeech(); musicOff(); $('play').innerHTML=ICON_PLAY; }
+function play(){ playing=true; t0=performance.now(); $('play').innerHTML=ICON_PAUSE; musicOn(); speak(sceneVO(scenes[idx])); loop(); }
 
 $('play').onclick=function(){ playing?pause():play(); };
 $('next').onclick=function(){ go(idx+1,true); };
@@ -346,6 +363,8 @@ $('prev').onclick=function(){ go(idx-1,true); };
 $('replay').onclick=function(){ go(0,true); };
 $('mute').onclick=function(){ narrator=!narrator; $('mute').innerHTML=narrator?ICON_VOL:ICON_MUTE; $('mute').classList.toggle('act',narrator); if(!narrator) stopSpeech(); else if(playing) speak(sceneVO(scenes[idx])); };
 $('mute').innerHTML=narrator?ICON_VOL:ICON_MUTE;
+$('music').onclick=function(){ musicOnPref=!musicOnPref; $('music').innerHTML=musicOnPref?ICON_MUS:ICON_MUSOFF; $('music').classList.toggle('act',musicOnPref); if(!musicOnPref) musicOff(); else if(playing) musicOn(); };
+$('music').innerHTML=musicOnPref?ICON_MUS:ICON_MUSOFF;
 $('play').innerHTML=ICON_PLAY;
 
 function start(){ $('poster').classList.add('hide'); if(SS){ try{ SS.cancel(); }catch(e){} } go(0,true); }
