@@ -122,6 +122,8 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .acctgroup.disc{opacity:.5}
 .agh .discb{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--red);border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.1);border-radius:20px;padding:2px 8px;white-space:nowrap}
 .arow{display:flex;flex-direction:column;gap:9px;padding:11px 15px;border-top:1px solid var(--line)}
+.arow.post{padding:7px 15px;gap:0}
+.arow.post .cell{width:20px;height:20px}
 .atop{display:flex;align-items:center;gap:12px}
 .cells{display:flex;flex-wrap:wrap;gap:4px}
 .cells.locked{pointer-events:none;opacity:.4;filter:grayscale(.6)}
@@ -257,6 +259,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
         <div class="msel" id="ms-src"><button type="button" class="msel-btn" onclick="toggleMsel('src',event)"><span id="ms-src-lbl">All phones</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button><div class="msel-pan" id="ms-src-pan" onclick="event.stopPropagation()"></div></div>
         <select class="sel" id="src-filter" onchange="renderSourcing()"><option value="all">All accounts</option><option value="todo">Not sourced</option><option value="done">Sourced</option><option value="active">Active only</option></select>
         <input class="search" id="src-search" placeholder="Search handle…" oninput="renderSourcing()" />
+        <button class="adminbtn" id="src-record-btn" style="display:none" onclick="recordDay()">Record day</button>
       </div>
       <div class="stats" id="src-stats"></div>
 
@@ -349,7 +352,7 @@ function enterApp(user, admin){
   if(!configured()){ $('setup').style.display='block'; return; }
   $('app').style.display='block';
   $('who-name').textContent=firstName(user.full_name||user.employee_id);
-  if(ISADMIN){ $('import-btn').style.display=''; $('src-add').style.display='flex'; }
+  if(ISADMIN){ $('import-btn').style.display=''; $('src-add').style.display='flex'; $('src-record-btn').style.display=''; }
   // record the marker's name (the signed-in person)
   MYVA = ISADMIN ? 'Admin' : (user.full_name || user.employee_id || '');
   // dates default today (filled after state load)
@@ -493,15 +496,16 @@ function acctRow(kind, a, r){
   var locked = (kind==='post') && !!disconnectedPhones()[String(a.phone)];
   var susp = a.status && a.status!=='active' ? '<span class="susp">'+esc(a.status==='logged_out'?'logged out':a.status)+'</span>' : '';
   var assigned = countNonBlank(cells,n);
-  var head = '<div class="atop">'+
-    '<div class="ah"><b>@'+esc(a.handle)+'</b><span>P'+esc(a.phone)+' · U'+esc(a.user)+' · A'+esc(a.acct)+(a.followers?' · '+esc(a.followers)+' followers':'')+'</span></div>'+
-    susp+(va?'<span class="vacode" title="'+esc(va)+'">'+esc(firstName(va))+'</span>':'')+
-    (kind==='src' ? '<span class="cellcount"><b>'+g+'</b>/'+assigned+'</span>' : '')+
-    '<button class="kebab" title="Mark suspended / logged out" onclick="cycleAcctStatus(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>'+
-    '</div>';
+  var meta='<div class="ah"><b>@'+esc(a.handle)+'</b><span>P'+esc(a.phone)+' · U'+esc(a.user)+' · A'+esc(a.acct)+(a.followers?' · '+esc(a.followers)+' followers':'')+'</span></div>';
+  var vaTag = va?'<span class="vacode" title="'+esc(va)+'">'+esc(firstName(va))+'</span>':'';
+  var kebab='<button class="kebab" title="Mark suspended / logged out" onclick="cycleAcctStatus(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>';
   var boxes=''; for(var i=0;i<n;i++){ boxes+='<i class="cell s'+cellAt(cells,i)+'" data-i="'+i+'"></i>'; }
-  var body='<div class="cells'+(locked?' locked':'')+'" data-kind="'+kind+'" data-p="'+esc(a.phone)+'" data-u="'+esc(a.user)+'" data-a="'+esc(a.acct)+'" data-h="'+esc(a.handle)+'">'+boxes+'</div>';
-  return '<div class="arow">'+head+body+'</div>';
+  var cellsDiv='<div class="cells'+(locked?' locked':'')+'" data-kind="'+kind+'" data-p="'+esc(a.phone)+'" data-u="'+esc(a.user)+'" data-a="'+esc(a.acct)+'" data-h="'+esc(a.handle)+'">'+boxes+'</div>';
+  if(kind==='post'){  // compact single line: box sits inline
+    return '<div class="arow post"><div class="atop">'+meta+susp+vaTag+cellsDiv+kebab+'</div></div>';
+  }
+  var counter='<span class="cellcount"><b>'+g+'</b>/'+assigned+'</span>';
+  return '<div class="arow"><div class="atop">'+meta+susp+vaTag+counter+kebab+'</div>'+cellsDiv+'</div>';
 }
 function groupHTML(kind, ph, list, map, disc){
   var green=0, withGreen=0;
@@ -597,7 +601,7 @@ function renderTargets(){
     return '<tr>'+
       '<td class="nm">'+esc(r.va)+'</td>'+
       '<td><input class="numin" type="number" min="0" value="'+t+'" '+(ISADMIN?'':'disabled')+' onchange="setSrc(\''+escAttr(r.va)+'\',\'target\',this.value)"></td>'+
-      '<td><input class="numin" type="number" min="0" value="'+s+'" onchange="setSrc(\''+escAttr(r.va)+'\',\'sourced\',this.value)"></td>'+
+      '<td><input class="numin" type="number" min="0" value="'+s+'" '+(ISADMIN?'':'disabled')+' onchange="setSrc(\''+escAttr(r.va)+'\',\'sourced\',this.value)"></td>'+
       '<td><div style="display:flex;align-items:center;gap:10px"><span class="pct '+pc+'">'+p+'%</span><div class="pbar"><i style="width:'+Math.min(100,p)+'%"></i></div></div></td>'+
       '<td><span style="font-family:\'JetBrains Mono\',monospace;font-size:11px;color:var(--t3)">'+(t?(s>=t?'+'+(s-t):(s-t)):'')+'</span></td>'+
     '</tr>';
@@ -623,6 +627,15 @@ async function addSourcer(){
   STATE.sourcing.push({ date:STATE.date, va:name, target:target, sourced:0 });
   $('src-name').value=''; $('src-target').value=''; renderSourcing();
   try{ await apiPost({ action:'sourcing_set', date:STATE.date, va:name, target:target, sourced:0 }); }catch(e){ toast('Save failed'); }
+}
+
+async function recordDay(){
+  if(!confirm('Record today’s sourcing totals to history? The board stays as-is (nothing is cleared).')) return;
+  try{
+    var r=await apiPost({ action:'src_record', by:firstName(USER.full_name||USER.employee_id) });
+    if(r&&r.ok) toast('Recorded '+r.date+' — sourced today: '+r.sourced_today+', assigned: '+r.assigned);
+    else toast('Could not record');
+  }catch(e){ toast('Record failed'); }
 }
 
 /* ---- import + refresh ---- */
