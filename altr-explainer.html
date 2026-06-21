@@ -315,13 +315,14 @@ var actx=null, mGain=null, musicOnPref=true, musicBuilt=false;
 function buildMusic(){
   if(musicBuilt) return; var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
   actx=new AC(); mGain=actx.createGain(); mGain.gain.value=0; mGain.connect(actx.destination);
-  var filt=actx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=900; filt.Q.value=0.7; filt.connect(mGain);
-  var freqs=[110,164.81,220,277.18], gains=[0.16,0.12,0.09,0.07], types=['triangle','sine','sine','triangle'];
-  freqs.forEach(function(f,i){ var o=actx.createOscillator(); o.type=types[i]; o.frequency.value=f; o.detune.value=(i-1.5)*5; var g=actx.createGain(); g.gain.value=gains[i]; o.connect(g); g.connect(filt); o.start(); });
-  var lfo=actx.createOscillator(); lfo.frequency.value=0.05; var lg=actx.createGain(); lg.gain.value=380; lfo.connect(lg); lg.connect(filt.frequency); lfo.start();
+  var filt=actx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=1800; filt.Q.value=0.6; filt.connect(mGain);
+  // mid-range pad (A3 C#4 E4 A4 + E5 shimmer) so it's clearly audible on laptop speakers
+  var freqs=[220,277.18,329.63,440,659.25], gains=[0.18,0.14,0.13,0.10,0.06], types=['sine','triangle','sine','triangle','sine'];
+  freqs.forEach(function(f,i){ var o=actx.createOscillator(); o.type=types[i]; o.frequency.value=f; o.detune.value=(i-2)*5; var g=actx.createGain(); g.gain.value=gains[i]; o.connect(g); g.connect(filt); o.start(); });
+  var lfo=actx.createOscillator(); lfo.frequency.value=0.06; var lg=actx.createGain(); lg.gain.value=600; lfo.connect(lg); lg.connect(filt.frequency); lfo.start();
   musicBuilt=true;
 }
-function musicOn(){ if(!musicOnPref) return; buildMusic(); if(!actx) return; if(actx.state==='suspended') actx.resume(); var n=actx.currentTime; mGain.gain.cancelScheduledValues(n); mGain.gain.setValueAtTime(mGain.gain.value,n); mGain.gain.linearRampToValueAtTime(0.07, n+1.4); }
+function musicOn(){ if(!musicOnPref) return; buildMusic(); if(!actx) return; if(actx.state==='suspended'){ try{ actx.resume(); }catch(e){} } var n=actx.currentTime; mGain.gain.cancelScheduledValues(n); mGain.gain.setValueAtTime(mGain.gain.value,n); mGain.gain.linearRampToValueAtTime(0.30, n+1.2); }
 function musicOff(){ if(!actx||!mGain) return; var n=actx.currentTime; mGain.gain.cancelScheduledValues(n); mGain.gain.setValueAtTime(mGain.gain.value,n); mGain.gain.linearRampToValueAtTime(0, n+0.7); }
 
 var idx=0, playing=false, t0=0, dur=0, rem=0, raf=null;
