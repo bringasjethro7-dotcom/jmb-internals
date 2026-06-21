@@ -73,6 +73,18 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .search{flex:1;min-width:150px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--t1);font-family:inherit;font-size:13px;padding:9px 12px;outline:none}
 .search:focus{border-color:var(--o1)}
 .sel{background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--t1);font-family:inherit;font-size:13px;padding:9px 12px;outline:none}
+.msel{position:relative}
+.msel-btn{display:flex;align-items:center;gap:10px;justify-content:space-between;min-width:140px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--t1);font-family:inherit;font-size:13px;padding:9px 12px;cursor:pointer}
+.msel-btn:hover{border-color:var(--line-hi)}
+.msel-btn svg{width:13px;height:13px;color:var(--t3);transition:transform .2s}
+.msel.open .msel-btn svg{transform:rotate(180deg)}
+.msel.open .msel-btn{border-color:var(--o1)}
+.msel-pan{position:absolute;top:calc(100% + 6px);left:0;z-index:60;display:none;background:#12161e;border:1px solid var(--line-hi);border-radius:12px;padding:7px;min-width:190px;max-height:300px;overflow:auto;box-shadow:0 18px 44px rgba(0,0,0,.55)}
+.msel.open .msel-pan{display:block}
+.msel-opt{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--t1);white-space:nowrap}
+.msel-opt:hover{background:rgba(255,255,255,.05)}
+.msel-opt input{accent-color:var(--o1);width:15px;height:15px;cursor:pointer}
+.msel-opt.allrow{border-bottom:1px solid var(--line);border-radius:0;margin-bottom:4px;padding-bottom:9px;font-weight:600;color:var(--o3)}
 
 /* stat cards */
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:1.3rem}
@@ -231,7 +243,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
     <div class="page" id="page-posting">
       <div class="toolbar">
         <input type="date" class="dt" id="post-date" onchange="onDateChange()" />
-        <select class="sel" id="post-phone" onchange="renderPosting()"><option value="">All phones</option></select>
+        <div class="msel" id="ms-post"><button type="button" class="msel-btn" onclick="toggleMsel('post',event)"><span id="ms-post-lbl">All phones</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button><div class="msel-pan" id="ms-post-pan" onclick="event.stopPropagation()"></div></div>
         <select class="sel" id="post-filter" onchange="renderPosting()"><option value="all">All accounts</option><option value="todo">Not posted</option><option value="done">Posted</option><option value="active">Active only</option></select>
         <input class="search" id="post-search" placeholder="Search handle…" oninput="renderPosting()" />
       </div>
@@ -242,8 +254,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
     <!-- SOURCING -->
     <div class="page" id="page-sourcing">
       <div class="toolbar">
-        <input type="date" class="dt" id="src-date" onchange="onDateChange()" />
-        <select class="sel" id="src-phone" onchange="renderSourcing()"><option value="">All phones</option></select>
+        <div class="msel" id="ms-src"><button type="button" class="msel-btn" onclick="toggleMsel('src',event)"><span id="ms-src-lbl">All phones</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button><div class="msel-pan" id="ms-src-pan" onclick="event.stopPropagation()"></div></div>
         <select class="sel" id="src-filter" onchange="renderSourcing()"><option value="all">All accounts</option><option value="todo">Not sourced</option><option value="done">Sourced</option><option value="active">Active only</option></select>
         <input class="search" id="src-search" placeholder="Search handle…" oninput="renderSourcing()" />
       </div>
@@ -352,7 +363,7 @@ async function loadState(){
     STATE = await apiGet({ action:'state', date:d });
     if(STATE.error) throw new Error(STATE.error);
     STATE.phones=STATE.phones||[]; STATE.accounts=STATE.accounts||[]; STATE.posting=STATE.posting||[]; STATE.sourcing=STATE.sourcing||[]; STATE.sourcelog=STATE.sourcelog||[];
-    if(!$('post-date').value){ $('post-date').value=STATE.date; $('src-date').value=STATE.date; }
+    if(!$('post-date').value){ $('post-date').value=STATE.date; }
     buildPhoneFilter();
     renderDevice(); renderPosting(); renderSourcing();
   }catch(e){ toast('Could not load data. Check the backend URL.'); }
@@ -361,10 +372,6 @@ function todayPST(){
   try{ var s=new Date().toLocaleString('en-CA',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}); return s; }catch(e){ return new Date().toISOString().slice(0,10); }
 }
 function onDateChange(){
-  // sync both date pickers to the changed one
-  var active = document.activeElement;
-  var d = (active && active.id==='src-date') ? $('src-date').value : $('post-date').value;
-  $('post-date').value=d; $('src-date').value=d;
   loadState();
 }
 
@@ -412,16 +419,28 @@ function postKey(a){ return [a.phone,a.user,a.acct,a.handle].join('|'); }
 function postingMap(){
   var m={}; (STATE.posting||[]).forEach(function(r){ m[[r.phone,r.user,r.acct,r.handle].join('|')]=r; }); return m;
 }
+var PHFILTER = { post:[], src:[] };   // selected phones per tab ([] = all)
 function buildPhoneFilter(){
   var ph={}; (STATE.accounts||[]).forEach(function(a){ ph[a.phone]=true; });
   var ks=Object.keys(ph).sort(function(a,b){return fnum(a)-fnum(b);});
-  var opts='<option value="">All phones</option>'+ks.map(function(k){ return '<option value="'+esc(k)+'">Phone '+esc(k)+'</option>'; }).join('');
-  ['post-phone','src-phone'].forEach(function(id){ var sel=$(id); if(sel){ var cur=sel.value; sel.innerHTML=opts; sel.value=cur; } });
+  ['post','src'].forEach(function(kind){
+    var pan=$('ms-'+kind+'-pan'); if(!pan) return;
+    var sel=PHFILTER[kind]||[];
+    var html='<label class="msel-opt allrow"><input type="checkbox" '+(sel.length===0?'checked':'')+' onchange="setAllPhones(\''+kind+'\',this.checked)"> All phones</label>';
+    html+=ks.map(function(k){ return '<label class="msel-opt"><input type="checkbox" '+(sel.indexOf(String(k))>=0?'checked':'')+' onchange="togglePhone(\''+kind+'\',\''+esc(k)+'\',this.checked)"> Phone '+esc(k)+'</label>'; }).join('');
+    pan.innerHTML=html;
+    updateMselBtn(kind);
+  });
 }
+function updateMselBtn(kind){ var sel=PHFILTER[kind]||[], lbl=$('ms-'+kind+'-lbl'); if(lbl) lbl.textContent = sel.length===0?'All phones':(sel.length+' phone'+(sel.length>1?'s':'')); }
+function toggleMsel(kind,e){ if(e) e.stopPropagation(); var el=$('ms-'+kind); var was=el.classList.contains('open'); document.querySelectorAll('.msel').forEach(function(m){ m.classList.remove('open'); }); if(!was) el.classList.add('open'); }
+function togglePhone(kind,phone,on){ var sel=PHFILTER[kind]; phone=String(phone); var i=sel.indexOf(phone); if(on){ if(i<0) sel.push(phone); } else if(i>=0){ sel.splice(i,1); } updateMselBtn(kind); if(kind==='src') renderSourcing(); else renderPosting(); }
+function setAllPhones(kind,on){ PHFILTER[kind]=[]; buildPhoneFilter(); if(kind==='src') renderSourcing(); else renderPosting(); }
+document.addEventListener('click', function(){ document.querySelectorAll('.msel.open').forEach(function(m){ m.classList.remove('open'); }); });
 function renderPosting(){
   if(!STATE) return;
   var accts=(STATE.accounts||[]), map=postingMap(), disc=disconnectedPhones();
-  var fp=$('post-phone').value, ff=$('post-filter').value, q=$('post-search').value.trim().toLowerCase();
+  var ff=$('post-filter').value, q=$('post-search').value.trim().toLowerCase();
   // stats — disconnected phones excluded from totals
   var green=0, orange=0, mine=0;
   accts.forEach(function(a){ if(disc[String(a.phone)]) return; var r=map[postKey(a)]; if(!r) return; var n=boxesFor('post',a); green+=countAt(r.cells,n,2); orange+=countAt(r.cells,n,1); if(r.va_code===MYVA) mine+=countAt(r.cells,n,2); });
@@ -433,7 +452,7 @@ function renderPosting(){
     statCard('Orange (in prog)', orange, 'a')+
     statCard('Postable', postable, '')+
     (discCount? statCard('Disconnected', discCount+' phone'+(discCount>1?'s':''), 'r') : '');
-  var rows=filterAccounts('post', accts, map, fp, ff, q);
+  var rows=filterAccounts('post', accts, map, ff, q);
   if(!rows.length){ $('posting').innerHTML='<div class="muted">No accounts match.</div>'; return; }
   var byPhone={}; rows.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
   var phones=Object.keys(byPhone).sort(function(a,b){return fnum(a)-fnum(b);});
@@ -444,20 +463,26 @@ function disconnectedPhones(){ var d={}; (STATE&&STATE.phones||[]).forEach(funct
 function countActive(accts){ return accts.filter(function(a){ return !a.status || a.status==='active'; }).length; }
 /* ---- shared cell grid — posting: 50 boxes (blank→orange→green) ;
         sourcing: per-account admin target boxes (blank→red→orange→green) ---- */
-var POST_BOXES = 50;
+var POST_BOXES = 1;    // posting = one box per account
+var SRC_BOXES  = 50;   // sourcing = up to 50 assignable boxes per account (admin marks red)
 var OPEN = { post:{}, src:{} };
 function maxState(kind){ return kind==='src'?3:2; }
 function greenState(kind){ return kind==='src'?3:2; }
 function cellAt(cells,i){ var c=String(cells||''); return c.charAt(i)||'0'; }
 function setCellAt(cells,i,ch){ var c=String(cells||''); while(c.length<=i) c+='0'; return c.substr(0,i)+ch+c.substr(i+1); }
-function boxesFor(kind,a){ if(kind==='src'){ var t=fnum(a&&a.src_target); return t<0?0:(t>100?100:t); } return POST_BOXES; }
+function boxesFor(kind,a){ return kind==='src' ? SRC_BOXES : POST_BOXES; }
 function countAt(cells,n,state){ var ss=String(state), c=0; for(var i=0;i<n;i++) if(cellAt(cells,i)===ss) c++; return c; }
 function greenCount(kind,cells,n){ return countAt(cells,n,greenState(kind)); }
+function countNonBlank(cells,n){ var c=0; for(var i=0;i<n;i++) if(cellAt(cells,i)!=='0') c++; return c; }
+function gdGet(gd,i){ var a=String(gd||'').split(','); return a[i]||''; }
+function gdSet(gd,i,v){ var a=String(gd||'').split(','); while(a.length<=i) a.push(''); a[i]=v; return a.join(','); }
+function countTodaySrc(cells,gd,n){ var gs=String(greenState('src')), t=(STATE&&STATE.today)||'', c=0; for(var i=0;i<n;i++){ if(cellAt(cells,i)===gs && gdGet(gd,i)===t) c++; } return c; }
 function keyOf(a){ return [a.phone,a.user,a.acct,a.handle].join('|'); }
-function filterAccounts(kind, accts, map, fp, ff, q){
+function filterAccounts(kind, accts, map, ff, q){
+  var sel=PHFILTER[kind]||[];
   return accts.filter(function(a){
-    if(kind==='src' && !ISADMIN && boxesFor('src',a)<=0) return false;   // VAs only see assigned accounts
-    if(fp && String(a.phone)!==String(fp)) return false;
+    if(sel.length && sel.indexOf(String(a.phone))<0) return false;   // multi-phone filter
+    if(kind==='src' && !ISADMIN){ var rr=map[keyOf(a)]; if(countNonBlank(rr?rr.cells:'', SRC_BOXES)<=0) return false; }  // VAs only see accounts with assignments
     if(ff==='active' && (a.status&&a.status!=='active')) return false;
     if(ff==='todo' || ff==='done'){ var n=boxesFor(kind,a); var has=greenCount(kind,(map[keyOf(a)]||{}).cells,n)>0; if(ff==='todo'&&has)return false; if(ff==='done'&&!has)return false; }
     if(q && esc(a.handle).toLowerCase().indexOf(q)<0) return false;
@@ -469,18 +494,15 @@ function acctRow(kind, a, r){
   var va=r&&r.va_code?r.va_code:'';
   var locked = (kind==='post') && !!disconnectedPhones()[String(a.phone)];
   var susp = a.status && a.status!=='active' ? '<span class="susp">'+esc(a.status==='logged_out'?'logged out':a.status)+'</span>' : '';
-  var tgtVal = (a.src_target!==undefined&&a.src_target!==''&&a.src_target!==null)?fnum(a.src_target):'';
-  var tgt = (kind==='src' && ISADMIN) ? '<input class="tgtin" type="number" min="0" title="Contents to source for this account" placeholder="0" value="'+tgtVal+'" onclick="event.stopPropagation()" onchange="setAcctTarget(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\',this.value)">' : '';
+  var assigned = countNonBlank(cells,n);
   var head = '<div class="atop">'+
     '<div class="ah"><b>@'+esc(a.handle)+'</b><span>P'+esc(a.phone)+' · U'+esc(a.user)+' · A'+esc(a.acct)+(a.followers?' · '+esc(a.followers)+' followers':'')+'</span></div>'+
-    susp+(va?'<span class="vacode" title="'+esc(va)+'">'+esc(firstName(va))+'</span>':'')+tgt+
-    '<span class="cellcount"><b>'+g+'</b>/'+n+'</span>'+
+    susp+(va?'<span class="vacode" title="'+esc(va)+'">'+esc(firstName(va))+'</span>':'')+
+    (kind==='src' ? '<span class="cellcount"><b>'+g+'</b>/'+assigned+'</span>' : '')+
     '<button class="kebab" title="Mark suspended / logged out" onclick="cycleAcctStatus(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>'+
     '</div>';
-  var body;
-  if(n>0){ var boxes=''; for(var i=0;i<n;i++){ boxes+='<i class="cell s'+cellAt(cells,i)+'" data-i="'+i+'"></i>'; }
-    body='<div class="cells'+(locked?' locked':'')+'" data-kind="'+kind+'" data-p="'+esc(a.phone)+'" data-u="'+esc(a.user)+'" data-a="'+esc(a.acct)+'" data-h="'+esc(a.handle)+'">'+boxes+'</div>';
-  } else { body = (kind==='src') ? '<div class="noassign">No contents assigned'+(ISADMIN?' — set a number above':'')+'</div>' : ''; }
+  var boxes=''; for(var i=0;i<n;i++){ boxes+='<i class="cell s'+cellAt(cells,i)+'" data-i="'+i+'"></i>'; }
+  var body='<div class="cells'+(locked?' locked':'')+'" data-kind="'+kind+'" data-p="'+esc(a.phone)+'" data-u="'+esc(a.user)+'" data-a="'+esc(a.acct)+'" data-h="'+esc(a.handle)+'">'+boxes+'</div>';
   return '<div class="arow">'+head+body+'</div>';
 }
 function groupHTML(kind, ph, list, map, disc){
@@ -497,22 +519,23 @@ function groupHTML(kind, ph, list, map, disc){
     '<div class="agbody'+(open?' open':'')+'">'+body+'</div></div>';
 }
 function toggleGroup(kind, ph){ OPEN[kind][ph]=!OPEN[kind][ph]; if(kind==='src') renderSourcing(); else renderPosting(); }
-async function setAcctTarget(phone,user,acct,handle,val){
-  val=Math.max(0, fnum(val));
-  var a=(STATE.accounts||[]).filter(function(x){ return String(x.phone)===String(phone)&&String(x.user)===String(user)&&String(x.acct)===String(acct)&&String(x.handle)===String(handle); })[0];
-  if(a){ a.src_target=val; }
-  renderSourcing();
-  try{ await apiPost({ action:'account_target', phone:phone, user:user, acct:acct, handle:handle, target:val }); }
-  catch(e){ toast('Save failed'); }
-}
 function escAttr(s){ return String(s==null?'':s).replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
 async function cycleCell(kind,phone,user,acct,handle,idx){
   var isSrc=kind==='src'; var map=isSrc?sourceMap():postingMap();
   var k=[phone,user,acct,handle].join('|'); var r=map[k];
-  var cells=r?String(r.cells||''):''; var nn=parseInt(cellAt(cells,idx),10)||0; nn=(nn>=maxState(kind))?0:nn+1; var next=String(nn);
+  var cells=r?String(r.cells||''):''; var cur=cellAt(cells,idx); var next;
+  if(kind==='src'){ var nn=parseInt(cur,10)||0; nn=(nn>=maxState('src'))?0:nn+1; next=String(nn); }   // blank→red→orange→green→blank
+  else { next = (cur===String(greenState('post'))) ? '0' : String(greenState('post')); }              // posting: blank↔green
   cells=setCellAt(cells,idx,next);
-  if(r){ r.cells=cells; r.va_code=MYVA; }
-  else { r={ date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, cells:cells }; (isSrc?STATE.sourcelog:STATE.posting).push(r); }
+  var gs=String(greenState('src'));
+  if(r){
+    r.cells=cells; r.va_code=MYVA;
+    if(isSrc){ if(next===gs && cur!==gs) r.gdates=gdSet(r.gdates,idx,STATE.today); else if(next!==gs) r.gdates=gdSet(r.gdates,idx,''); }
+  } else if(isSrc){
+    r={ phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, cells:cells, gdates:(next===gs?gdSet('',idx,STATE.today):'') }; STATE.sourcelog.push(r);
+  } else {
+    r={ date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, cells:cells }; STATE.posting.push(r);
+  }
   if(isSrc) renderSourcing(); else renderPosting();
   try{ await apiPost({ action:'cell_set', kind:kind, date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, index:idx, state:next, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) }); }
   catch(e){ toast('Save failed'); }
@@ -547,16 +570,16 @@ function renderSourcing(){
   if(!STATE) return;
   renderTargets();
   var accts=(STATE.accounts||[]), map=sourceMap();
-  var fp=$('src-phone')?$('src-phone').value:'', ff=$('src-filter')?$('src-filter').value:'all', q=$('src-search')?$('src-search').value.trim().toLowerCase():'';
-  // sourcing target = sum of per-account admin assignments; sourced = green boxes
-  var target=0, sourced=0, mine=0;
-  accts.forEach(function(a){ var n=boxesFor('src',a); if(n<=0) return; target+=n; var r=map[srcKey(a)]; if(!r) return; var gg=greenCount('src',r.cells,n); sourced+=gg; if(r.va_code===MYVA) mine+=gg; });
+  var ff=$('src-filter')?$('src-filter').value:'all', q=$('src-search')?$('src-search').value.trim().toLowerCase():'';
+  // continuous board: Target = assigned (non-blank) ; Sourced today = greens stamped today
+  var assigned=0, doneTot=0, today=0;
+  accts.forEach(function(a){ var r=map[srcKey(a)]; if(!r) return; var n=boxesFor('src',a); assigned+=countNonBlank(r.cells,n); doneTot+=greenCount('src',r.cells,n); today+=countTodaySrc(r.cells,r.gdates,n); });
   $('src-stats').innerHTML=
-    statCard('Target', target, 'o')+
-    statCard('Sourced', sourced, 'g')+
-    statCard('Remaining', Math.max(0, target-sourced), 'a')+
-    statCard('You ('+esc(firstName(MYVA))+')', mine, '');
-  var rows=filterAccounts('src', accts, map, fp, ff, q);
+    statCard('Target', assigned, 'o')+
+    statCard('Sourced today', today, 'g')+
+    statCard('Remaining', Math.max(0, assigned-doneTot), 'a')+
+    statCard('Done (total)', doneTot, '');
+  var rows=filterAccounts('src', accts, map, ff, q);
   if(!rows.length){ $('sourcing-list').innerHTML='<div class="muted">No accounts match.</div>'; return; }
   var byPhone={}; rows.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
   var phones=Object.keys(byPhone).sort(function(a,b){return fnum(a)-fnum(b);});
