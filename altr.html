@@ -223,8 +223,8 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .adminbtn:hover{opacity:.92}
 .ghost{font-size:12px;font-weight:600;color:var(--t2);background:none;border:1px solid var(--line);border-radius:9px;padding:8px 13px;cursor:pointer;font-family:inherit}
 .ghost:hover{color:var(--t1);border-color:var(--line-hi)}
-#eod-modal,#eod-warn{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(7,9,13,.8);backdrop-filter:blur(8px);padding:1.5rem}
-#eod-modal.open,#eod-warn.open{display:flex;animation:docFade .2s ease}
+#eod-modal,#eod-warn,#phone-reminder{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(7,9,13,.8);backdrop-filter:blur(8px);padding:1.5rem}
+#eod-modal.open,#eod-warn.open,#phone-reminder.open{display:flex;animation:docFade .2s ease}
 .eodhd.warn{color:#f59e0b}
 @keyframes docFade{from{opacity:0}to{opacity:1}}
 .eodbox{width:100%;max-width:480px;background:#12161e;border:1px solid var(--line-hi);border-radius:16px;padding:1.6rem;box-shadow:0 24px 70px rgba(0,0,0,.6)}
@@ -280,9 +280,9 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
   <div class="wrap">
     <div class="tabs">
       <div class="tab on" data-page="device" onclick="showTab('device')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>Digital</div>
-      <div class="tab" data-page="posting" onclick="showTab('posting')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Posting</div>
-      <div class="tab" data-page="sourcing" onclick="showTab('sourcing')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Sourcing</div>
       <div class="tab" data-page="insights" onclick="showTab('insights')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Goal / Insights</div>
+      <div class="tab" data-page="sourcing" onclick="showTab('sourcing')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Sourcing</div>
+      <div class="tab" data-page="posting" onclick="showTab('posting')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Posting</div>
     </div>
 
     <!-- DEVICE -->
@@ -349,6 +349,15 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- First-open phone-check reminder -->
+<div id="phone-reminder">
+  <div class="eodbox">
+    <div class="eodhd warn">📱 Check your phones first</div>
+    <div class="eodsub">Before you start posting, open the <b>Digital</b> tab and update each phone's status — tap to set <span style="color:var(--green)">connected</span>, <span style="color:var(--red)">disconnected</span>, or <span style="color:var(--amber)">issue</span>.<br><br>Disconnected phones are excluded from today's targets and the end-of-day report, so keeping them accurate matters.</div>
+    <div class="eodbtns"><button class="ghost" onclick="dismissPhoneReminder()">Dismiss</button><button class="adminbtn" onclick="goCheckPhones()">Go to Digital</button></div>
+  </div>
+</div>
 
 <!-- EOD warning -->
 <div id="eod-warn">
@@ -454,6 +463,7 @@ async function loadState(){
     if(!$('post-date').value){ $('post-date').value=STATE.date; }
     buildPhoneFilter();
     renderDevice(); renderPosting(); renderSourcing(); renderInsights();
+    maybePhoneReminder();
   }catch(e){ toast('Could not load data. Check the backend URL.'); }
 }
 function todayPST(){
@@ -722,6 +732,12 @@ function onCellsClick(e){
   if(kind==='post'){ togglePostBox(p,u,a,h); return; }   // posting pulls next queued from sourcing
   cycleCell(kind, p, u, a, h, parseInt(cell.getAttribute('data-i'),10));
 }
+function maybePhoneReminder(){
+  try{ if(sessionStorage.getItem('altr_phonechk')) return; }catch(e){}
+  $('phone-reminder').classList.add('open');
+}
+function dismissPhoneReminder(){ try{ sessionStorage.setItem('altr_phonechk','1'); }catch(e){} $('phone-reminder').classList.remove('open'); }
+function goCheckPhones(){ dismissPhoneReminder(); showTab('device'); }
 function runEOD(){ $('eod-warn').classList.add('open'); }       // show the warning first
 function closeEodWarn(){ $('eod-warn').classList.remove('open'); }
 async function confirmEOD(){
