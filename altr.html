@@ -186,6 +186,14 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .adminbtn:hover{opacity:.92}
 .ghost{font-size:12px;font-weight:600;color:var(--t2);background:none;border:1px solid var(--line);border-radius:9px;padding:8px 13px;cursor:pointer;font-family:inherit}
 .ghost:hover{color:var(--t1);border-color:var(--line-hi)}
+#eod-modal{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(7,9,13,.8);backdrop-filter:blur(8px);padding:1.5rem}
+#eod-modal.open{display:flex;animation:docFade .2s ease}
+@keyframes docFade{from{opacity:0}to{opacity:1}}
+.eodbox{width:100%;max-width:480px;background:#12161e;border:1px solid var(--line-hi);border-radius:16px;padding:1.6rem;box-shadow:0 24px 70px rgba(0,0,0,.6)}
+.eodhd{font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;margin-bottom:4px}
+.eodsub{font-size:13px;color:var(--t2);margin-bottom:1rem}
+#eod-text{width:100%;height:190px;resize:vertical;background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.5;padding:12px;outline:none}
+.eodbtns{display:flex;gap:10px;margin-top:1rem;justify-content:flex-end}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#1b222d;border:1px solid var(--line-hi);border-radius:11px;padding:11px 18px;font-size:13px;color:var(--t1);box-shadow:0 14px 40px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:.25s;z-index:200}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
@@ -252,6 +260,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
         <div class="msel" id="ms-post"><button type="button" class="msel-btn" onclick="toggleMsel('post',event)"><span id="ms-post-lbl">All phones</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button><div class="msel-pan" id="ms-post-pan" onclick="event.stopPropagation()"></div></div>
         <select class="sel" id="post-filter" onchange="renderPosting()"><option value="all">All accounts</option><option value="todo">Not posted</option><option value="done">Posted</option><option value="active">Active only</option></select>
         <input class="search" id="post-search" placeholder="Search handle…" oninput="renderPosting()" />
+        <button class="adminbtn" onclick="runEOD()">End of day</button>
       </div>
       <div class="stats" id="post-stats"></div>
       <div id="posting"><div class="muted">Loading accounts…</div></div>
@@ -290,6 +299,16 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- EOD report modal -->
+<div id="eod-modal">
+  <div class="eodbox">
+    <div class="eodhd">End-of-day report</div>
+    <div class="eodsub">Copy this and send it to the client group chat.</div>
+    <textarea id="eod-text" readonly></textarea>
+    <div class="eodbtns"><button class="adminbtn" onclick="copyEod()">Copy message</button><button class="ghost" onclick="closeEod()">Close</button></div>
+  </div>
+</div>
 
 <script>
 /* ====== CONFIG ====== */
@@ -618,6 +637,23 @@ function onCellsClick(e){
   var p=strip.getAttribute('data-p'), u=strip.getAttribute('data-u'), a=strip.getAttribute('data-a'), h=strip.getAttribute('data-h');
   if(kind==='post'){ togglePostBox(p,u,a,h); return; }   // posting pulls next queued from sourcing
   cycleCell(kind, p, u, a, h, parseInt(cell.getAttribute('data-i'),10));
+}
+async function runEOD(){
+  if(!confirm('End of day?\nThis records today’s completion and removes posted (green) items from the sourcing queue. You’ll get a message to copy for the client chat.')) return;
+  try{
+    var r=await apiPost({ action:'eod', date:STATE.date, by:firstName(USER.full_name||USER.employee_id) });
+    if(r && r.ok){ showEod(r.message); await refreshQuiet(); }
+    else toast('EOD failed'+(r&&r.error?': '+r.error:''));
+  }catch(e){ toast('EOD failed'); }
+}
+function showEod(msg){ $('eod-text').value=msg||''; $('eod-modal').classList.add('open'); }
+function closeEod(){ $('eod-modal').classList.remove('open'); }
+function copyEod(){
+  var t=$('eod-text'); t.focus(); t.select();
+  var done=false;
+  try{ done=document.execCommand('copy'); }catch(e){}
+  if(!done && navigator.clipboard){ navigator.clipboard.writeText(t.value).then(function(){ toast('Copied to clipboard'); }).catch(function(){ toast('Select the text and copy manually'); }); return; }
+  toast(done?'Copied to clipboard':'Select the text and copy manually');
 }
 async function togglePostBox(phone,user,acct,handle){
   var r=postingMap()[[phone,user,acct,handle].join('|')];
