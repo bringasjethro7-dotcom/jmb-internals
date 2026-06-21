@@ -123,7 +123,8 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .agh .discb{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--red);border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.1);border-radius:20px;padding:2px 8px;white-space:nowrap}
 .arow{display:flex;flex-direction:column;gap:9px;padding:11px 15px;border-top:1px solid var(--line)}
 .arow.post{padding:7px 15px;gap:0}
-.arow.post .cell{width:20px;height:20px}
+.arow.post .cell{min-width:22px;height:22px;width:auto;padding:0 5px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:9.5px;line-height:1}
+.arow.post .cell.s2{color:rgba(0,0,0,.74);font-weight:600}
 .atop{display:flex;align-items:center;gap:12px}
 .cells{display:flex;flex-wrap:wrap;gap:4px}
 .cells.locked{pointer-events:none;opacity:.4;filter:grayscale(.6)}
@@ -507,7 +508,13 @@ function acctRow(kind, a, r){
   var meta='<div class="ah"><b>@'+esc(a.handle)+'</b><span>P'+esc(a.phone)+' · U'+esc(a.user)+' · A'+esc(a.acct)+(a.followers?' · '+esc(a.followers)+' followers':'')+'</span></div>';
   var vaTag = va?'<span class="vacode" title="'+esc(va)+'">'+esc(firstName(va))+'</span>':'';
   var kebab='<button class="kebab" title="Mark suspended / logged out" onclick="cycleAcctStatus(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>';
-  var boxes=''; for(var i=0;i<n;i++){ var lbl=(kind==='src')?(gdGet(nums,i)||(i+1)):''; var tt=(kind==='src'&&ISADMIN)?' title="Click: cycle status · Right-click: edit/delete"':''; boxes+='<i class="cell s'+cellAt(cells,i)+'" data-i="'+i+'"'+tt+'>'+lbl+'</i>'; }
+  var boxes=''; for(var i=0;i<n;i++){
+    var lbl;
+    if(kind==='src'){ lbl=gdGet(nums,i)||(i+1); }
+    else { lbl=(cellAt(cells,i)===String(greenState('post')) && r && r.num)?esc(r.num):''; }   // posting shows the consumed cycle #
+    var tt=(kind==='src'&&ISADMIN)?' title="Click: cycle status · Right-click: edit/delete"':'';
+    boxes+='<i class="cell s'+cellAt(cells,i)+'" data-i="'+i+'"'+tt+'>'+lbl+'</i>';
+  }
   if(kind==='src' && ISADMIN){ boxes += '<button class="addbox" title="Add next cycle (red)" onclick="addSrcBox(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')">+</button>'; }
   var cellsDiv='<div class="cells'+(locked?' locked':'')+'" data-kind="'+kind+'" data-p="'+esc(a.phone)+'" data-u="'+esc(a.user)+'" data-a="'+esc(a.acct)+'" data-h="'+esc(a.handle)+'">'+boxes+'</div>';
   if(kind==='post'){  // compact single line: box sits inline
@@ -607,7 +614,19 @@ function onCellsClick(e){
   var cell=e.target.closest ? e.target.closest('.cell') : null; if(!cell) return;
   var strip=cell.parentNode; if(!strip || !strip.classList || !strip.classList.contains('cells')) return;
   if(strip.classList.contains('locked')) return;   // disconnected phone — not tickable
-  cycleCell(strip.getAttribute('data-kind'), strip.getAttribute('data-p'), strip.getAttribute('data-u'), strip.getAttribute('data-a'), strip.getAttribute('data-h'), parseInt(cell.getAttribute('data-i'),10));
+  var kind=strip.getAttribute('data-kind');
+  var p=strip.getAttribute('data-p'), u=strip.getAttribute('data-u'), a=strip.getAttribute('data-a'), h=strip.getAttribute('data-h');
+  if(kind==='post'){ togglePostBox(p,u,a,h); return; }   // posting pulls next queued from sourcing
+  cycleCell(kind, p, u, a, h, parseInt(cell.getAttribute('data-i'),10));
+}
+async function togglePostBox(phone,user,acct,handle){
+  var r=postingMap()[[phone,user,acct,handle].join('|')];
+  var posted = r && cellAt(r.cells,0)===String(greenState('post'));
+  try{
+    var resp=await apiPost({ action:'post_tick', date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, posted:!posted, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) });
+    if(resp && resp.error){ toast(resp.error); return; }
+    await refreshQuiet();   // re-sync posting + sourcing (a box moved orange->green)
+  }catch(e){ toast('Save failed'); }
 }
 var ACCT_STATUS_CYCLE=['active','suspended','logged_out'];
 async function cycleAcctStatus(phone,user,acct,handle){
@@ -634,14 +653,14 @@ function renderSourcing(){
   renderTargets();
   var accts=(STATE.accounts||[]), map=sourceMap();
   var ff=$('src-filter')?$('src-filter').value:'all', q=$('src-search')?$('src-search').value.trim().toLowerCase():'';
-  // continuous board: Target = assigned (non-blank) ; Sourced today = greens stamped today
-  var assigned=0, doneTot=0, today=0;
-  accts.forEach(function(a){ var r=map[srcKey(a)]; if(!r) return; var n=srcLen(r); assigned+=countNonBlank(r.cells,n); doneTot+=greenCount('src',r.cells,n); today+=countTodaySrc(r.cells,r.gdates,n); });
+  // states: red(1)=target, orange(2)=queued/sourced, green(3)=posted
+  var red=0, orange=0, green=0, today=0;
+  accts.forEach(function(a){ var r=map[srcKey(a)]; if(!r) return; var n=srcLen(r); red+=countAt(r.cells,n,1); orange+=countAt(r.cells,n,2); green+=countAt(r.cells,n,3); today+=countTodaySrc(r.cells,r.gdates,n); });
   $('src-stats').innerHTML=
-    statCard('Target', assigned, 'o')+
-    statCard('Sourced today', today, 'g')+
-    statCard('Remaining', Math.max(0, assigned-doneTot), 'a')+
-    statCard('Done (total)', doneTot, '');
+    statCard('Target', red, 'r')+
+    statCard('Queued', orange, 'a')+
+    statCard('Posted', green, 'g')+
+    statCard('Sourced today', today, '');
   var rows=filterAccounts('src', accts, map, ff, q);
   if(!rows.length){ $('sourcing-list').innerHTML='<div class="muted">No accounts match.</div>'; return; }
   var byPhone={}; rows.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
