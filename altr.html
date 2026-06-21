@@ -445,13 +445,11 @@ function renderPosting(){
   var green=0, orange=0, mine=0;
   accts.forEach(function(a){ if(disc[String(a.phone)]) return; var r=map[postKey(a)]; if(!r) return; var n=boxesFor('post',a); green+=countAt(r.cells,n,2); orange+=countAt(r.cells,n,1); if(r.va_code===MYVA) mine+=countAt(r.cells,n,2); });
   var postable = accts.filter(function(a){ return !disc[String(a.phone)] && (!a.status||a.status==='active'); }).length;
-  var discCount=Object.keys(disc).length;
+  var pct = postable ? Math.round(green/postable*100) : 0;
   $('post-stats').innerHTML=
-    statCard('Green (done)', green, 'g')+
-    statCard('Your green ('+esc(firstName(MYVA))+')', mine, 'o')+
-    statCard('Orange (in prog)', orange, 'a')+
-    statCard('Postable', postable, '')+
-    (discCount? statCard('Disconnected', discCount+' phone'+(discCount>1?'s':''), 'r') : '');
+    statCard('Posted', green, 'g')+
+    statCard('Target', postable, 'o')+
+    statCard('Completion', pct+'%', pct>=100?'g':(pct>=50?'a':'r'));
   var rows=filterAccounts('post', accts, map, ff, q);
   if(!rows.length){ $('posting').innerHTML='<div class="muted">No accounts match.</div>'; return; }
   var byPhone={}; rows.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
