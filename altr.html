@@ -131,10 +131,11 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .cell:hover{border-color:var(--o1);transform:scale(1.15)}
 .cell.s1{background:var(--o1);border-color:var(--o1)}
 .cell.s2{background:var(--green);border-color:var(--green)}
-/* sourcing: blank -> red -> orange -> green */
-.cells[data-kind="src"] .cell.s1{background:var(--red);border-color:var(--red)}
-.cells[data-kind="src"] .cell.s2{background:var(--o1);border-color:var(--o1)}
-.cells[data-kind="src"] .cell.s3{background:var(--green);border-color:var(--green)}
+/* sourcing: blank -> red -> orange -> green, with the content/cycle number inside */
+.cells[data-kind="src"] .cell{width:27px;height:27px;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1;color:var(--t3)}
+.cells[data-kind="src"] .cell.s1{background:var(--red);border-color:var(--red);color:rgba(0,0,0,.72);font-weight:600}
+.cells[data-kind="src"] .cell.s2{background:var(--o1);border-color:var(--o1);color:rgba(0,0,0,.72);font-weight:600}
+.cells[data-kind="src"] .cell.s3{background:var(--green);border-color:var(--green);color:rgba(0,0,0,.72);font-weight:600}
 .cellcount{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--t2);white-space:nowrap}
 .cellcount b{color:var(--green);font-weight:700}
 .tgtin{width:60px;background:var(--bg2);border:1px solid var(--o1);border-radius:8px;color:var(--o3);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;padding:5px 7px;outline:none;text-align:center}
@@ -260,6 +261,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
         <select class="sel" id="src-filter" onchange="renderSourcing()"><option value="all">All accounts</option><option value="todo">Not sourced</option><option value="done">Sourced</option><option value="active">Active only</option></select>
         <input class="search" id="src-search" placeholder="Search handle…" oninput="renderSourcing()" />
         <button class="adminbtn" id="src-record-btn" style="display:none" onclick="recordDay()">Record day</button>
+        <button class="ghost" id="src-import-btn" style="display:none" onclick="importSourcingHistory()">Import history</button>
       </div>
       <div class="stats" id="src-stats"></div>
 
@@ -352,7 +354,7 @@ function enterApp(user, admin){
   if(!configured()){ $('setup').style.display='block'; return; }
   $('app').style.display='block';
   $('who-name').textContent=firstName(user.full_name||user.employee_id);
-  if(ISADMIN){ $('import-btn').style.display=''; $('src-add').style.display='flex'; $('src-record-btn').style.display=''; }
+  if(ISADMIN){ $('import-btn').style.display=''; $('src-add').style.display='flex'; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; }
   // record the marker's name (the signed-in person)
   MYVA = ISADMIN ? 'Admin' : (user.full_name || user.employee_id || '');
   // dates default today (filled after state load)
@@ -477,7 +479,8 @@ function greenCount(kind,cells,n){ return countAt(cells,n,greenState(kind)); }
 function countNonBlank(cells,n){ var c=0; for(var i=0;i<n;i++) if(cellAt(cells,i)!=='0') c++; return c; }
 function gdGet(gd,i){ var a=String(gd||'').split(','); return a[i]||''; }
 function gdSet(gd,i,v){ var a=String(gd||'').split(','); while(a.length<=i) a.push(''); a[i]=v; return a.join(','); }
-function countTodaySrc(cells,gd,n){ var gs=String(greenState('src')), t=(STATE&&STATE.today)||'', c=0; for(var i=0;i<n;i++){ if(cellAt(cells,i)===gs && gdGet(gd,i)===t) c++; } return c; }
+function srcToday(){ return (STATE&&STATE.src_today)||(STATE&&STATE.today)||''; }
+function countTodaySrc(cells,gd,n){ var gs=String(greenState('src')), t=srcToday(), c=0; for(var i=0;i<n;i++){ if(cellAt(cells,i)===gs && gdGet(gd,i)===t) c++; } return c; }
 function keyOf(a){ return [a.phone,a.user,a.acct,a.handle].join('|'); }
 function filterAccounts(kind, accts, map, ff, q){
   var sel=PHFILTER[kind]||[];
@@ -499,7 +502,7 @@ function acctRow(kind, a, r){
   var meta='<div class="ah"><b>@'+esc(a.handle)+'</b><span>P'+esc(a.phone)+' · U'+esc(a.user)+' · A'+esc(a.acct)+(a.followers?' · '+esc(a.followers)+' followers':'')+'</span></div>';
   var vaTag = va?'<span class="vacode" title="'+esc(va)+'">'+esc(firstName(va))+'</span>':'';
   var kebab='<button class="kebab" title="Mark suspended / logged out" onclick="cycleAcctStatus(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>';
-  var boxes=''; for(var i=0;i<n;i++){ boxes+='<i class="cell s'+cellAt(cells,i)+'" data-i="'+i+'"></i>'; }
+  var boxes=''; for(var i=0;i<n;i++){ boxes+='<i class="cell s'+cellAt(cells,i)+'" data-i="'+i+'">'+(kind==='src'?(i+1):'')+'</i>'; }
   var cellsDiv='<div class="cells'+(locked?' locked':'')+'" data-kind="'+kind+'" data-p="'+esc(a.phone)+'" data-u="'+esc(a.user)+'" data-a="'+esc(a.acct)+'" data-h="'+esc(a.handle)+'">'+boxes+'</div>';
   if(kind==='post'){  // compact single line: box sits inline
     return '<div class="arow post"><div class="atop">'+meta+susp+vaTag+cellsDiv+kebab+'</div></div>';
@@ -532,9 +535,9 @@ async function cycleCell(kind,phone,user,acct,handle,idx){
   var gs=String(greenState('src'));
   if(r){
     r.cells=cells; r.va_code=MYVA;
-    if(isSrc){ if(next===gs && cur!==gs) r.gdates=gdSet(r.gdates,idx,STATE.today); else if(next!==gs) r.gdates=gdSet(r.gdates,idx,''); }
+    if(isSrc){ if(next===gs && cur!==gs) r.gdates=gdSet(r.gdates,idx,srcToday()); else if(next!==gs) r.gdates=gdSet(r.gdates,idx,''); }
   } else if(isSrc){
-    r={ phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, cells:cells, gdates:(next===gs?gdSet('',idx,STATE.today):'') }; STATE.sourcelog.push(r);
+    r={ phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, cells:cells, gdates:(next===gs?gdSet('',idx,srcToday()):'') }; STATE.sourcelog.push(r);
   } else {
     r={ date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, cells:cells }; STATE.posting.push(r);
   }
@@ -636,6 +639,17 @@ async function recordDay(){
     if(r&&r.ok) toast('Recorded '+r.date+' — sourced today: '+r.sourced_today+', assigned: '+r.assigned);
     else toast('Could not record');
   }catch(e){ toast('Record failed'); }
+}
+
+async function importSourcingHistory(){
+  if(!confirm('Import existing Sourcing Dashboard data?\nGrey checks (☑️) become ORANGE boxes. Green checks are ignored. Safe to run once.')) return;
+  toast('Importing sourcing history… this can take ~20s');
+  try{
+    var r=await apiPost({ action:'import_sourcing' });
+    if(r&&r.ok) toast('Imported '+r.boxes+' orange boxes across '+r.accounts+' accounts');
+    else toast('Import failed'+(r&&r.error?': '+r.error:''));
+    await loadState();
+  }catch(e){ toast('Import failed'); }
 }
 
 /* ---- import + refresh ---- */
