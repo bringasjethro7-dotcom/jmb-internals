@@ -121,7 +121,8 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .agbody.open{display:block}
 .acctgroup.disc{opacity:.5}
 .agh .discb{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--red);border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.1);border-radius:20px;padding:2px 8px;white-space:nowrap}
-.agh .phbtn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;border:1px solid var(--line-hi);background:rgba(255,107,26,.1);color:var(--o3);cursor:pointer;font-size:15px;font-family:inherit;line-height:1;flex-shrink:0;margin-left:4px}
+.agh .aghl{display:flex;align-items:center;gap:7px;flex-shrink:0}
+.agh .phbtn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px;border:1px solid var(--line-hi);background:rgba(255,107,26,.1);color:var(--o3);cursor:pointer;font-size:15px;font-family:inherit;line-height:1;flex-shrink:0}
 .agh .phbtn:hover{background:rgba(255,107,26,.22);color:#fff}
 .agh .phbtn svg{width:13px;height:13px}
 .arow{display:flex;flex-direction:column;gap:9px;padding:11px 15px;border-top:1px solid var(--line)}
@@ -169,6 +170,8 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .numin{width:74px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:13px;padding:7px 9px;outline:none;text-align:center}
 .numin:focus{border-color:var(--o1)}
 .numin:disabled{opacity:.55;cursor:not-allowed}
+.empin{width:100%;max-width:200px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;color:var(--t1);font-family:inherit;font-size:13px;padding:7px 10px;outline:none}
+.empin:focus{border-color:var(--o1)}
 .pct{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px}
 .pct.ok{color:var(--green)}.pct.mid{color:var(--amber)}.pct.low{color:var(--red)}
 .pbar{height:7px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden;width:120px}
@@ -288,7 +291,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
           <b>Daily targets</b><span class="targsum" id="targ-sum"></span>
         </div>
         <div class="targbody">
-          <table class="srctable"><thead><tr><th>Phone</th><th>Target</th><th>Sourced</th><th>Completion</th></tr></thead><tbody id="src-body"></tbody></table>
+          <table class="srctable"><thead><tr><th>Employee</th><th>Phone</th><th>Assigned</th><th>Target</th><th>Sourced</th><th>Completion</th></tr></thead><tbody id="src-body"></tbody></table>
         </div>
       </div>
 
@@ -562,7 +565,7 @@ function groupHTML(kind, ph, list, map, disc){
     '<button class="phbtn" title="Add a red cycle to every account on this phone" onclick="event.stopPropagation();addPhoneCycle(\''+esc(ph)+'\')">+</button>'+
     '<button class="phbtn" title="Undo last added cycle for this phone" onclick="event.stopPropagation();undoPhoneCycle(\''+esc(ph)+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg></button>' : '';
   return '<div class="acctgroup'+(isDisc?' disc':'')+'"><div class="agh" onclick="toggleGroup(\''+kind+'\',\''+esc(ph)+'\')">'+
-    '<b>Phone '+esc(ph)+'</b>'+phctrl+badge+'<div class="agbar"><i style="width:'+pct+'%"></i></div>'+
+    '<div class="aghl"><b>Phone '+esc(ph)+'</b>'+phctrl+badge+'</div><div class="agbar"><i style="width:'+pct+'%"></i></div>'+
     '<span class="agc">'+green+' ✓ · '+withGreen+'/'+list.length+'</span></div>'+
     '<div class="agbody'+(open?' open':'')+'">'+body+'</div></div>';
 }
@@ -733,24 +736,35 @@ function renderSourcing(){
   $('sourcing-list').innerHTML=phones.map(function(ph){ return groupHTML('src', ph, byPhone[ph], map, {}); }).join('');
 }
 /* minimized per-sourcer target table */
-/* per-phone targets, computed live from the sourcing board:
-   target = assigned boxes (red+orange+green), sourced = orange+green */
+/* per-phone daily targets:
+   Assigned = # accounts on the phone ; Target = red boxes that were red today (red now + sourced today)
+   Sourced  = red that turned orange today ; Completion = Sourced / Target */
 function renderTargets(){
   var accts=(STATE.accounts||[]), map=sourceMap();
+  var empByPhone={}; (STATE.phones||[]).forEach(function(p){ empByPhone[String(p.phone)]=p.employee||''; });
   var byPhone={}; accts.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
   var phones=Object.keys(byPhone).sort(function(a,b){ return fnum(a)-fnum(b); });
   var totT=0, totS=0, html='';
   phones.forEach(function(ph){
-    var list=byPhone[ph], target=0, sourced=0;
-    list.forEach(function(a){ var r=map[srcKey(a)]; if(!r) return; var n=srcLen(r); target+=countNonBlank(r.cells,n); sourced+=countAt(r.cells,n,2)+countAt(r.cells,n,3); });
-    if(target===0) return;   // only show phones that have assigned boxes
+    var list=byPhone[ph], red=0, sourced=0, accounts=list.length;
+    list.forEach(function(a){ var r=map[srcKey(a)]; if(!r) return; var n=srcLen(r); red+=countAt(r.cells,n,1); sourced+=countTodaySrc(r.cells,r.gdates,n); });
+    var target=red+sourced;   // today's red target (still red + already sourced today)
     totT+=target; totS+=sourced;
     var p=target?Math.round(sourced/target*100):0, pc=p>=100?'ok':(p>=70?'mid':'low');
-    html+='<tr><td class="nm">Phone '+esc(ph)+'</td><td><b>'+target+'</b></td><td>'+sourced+'</td>'+
+    var emp=empByPhone[String(ph)]||'';
+    var empCell = ISADMIN
+      ? '<input class="empin" value="'+escAttr(emp)+'" placeholder="—" onchange="setPhoneEmployee(\''+esc(ph)+'\',this.value)">'
+      : (emp?esc(emp):'<span style="color:var(--t3)">—</span>');
+    html+='<tr><td>'+empCell+'</td><td class="nm">Phone '+esc(ph)+'</td><td>'+accounts+'</td><td><b>'+target+'</b></td><td>'+sourced+'</td>'+
       '<td><div style="display:flex;align-items:center;gap:10px"><span class="pct '+pc+'">'+p+'%</span><div class="pbar"><i style="width:'+Math.min(100,p)+'%"></i></div></div></td></tr>';
   });
-  var sum=$('targ-sum'); if(sum) sum.textContent=totS+' / '+totT+' boxes · '+(totT?Math.round(totS/totT*100):0)+'%';
-  var body=$('src-body'); if(body) body.innerHTML = html || '<tr><td colspan="4" class="muted">No assigned boxes yet.</td></tr>';
+  var sum=$('targ-sum'); if(sum) sum.textContent=totS+' / '+totT+' sourced · '+(totT?Math.round(totS/totT*100):0)+'%';
+  var body=$('src-body'); if(body) body.innerHTML = html || '<tr><td colspan="6" class="muted">No accounts yet.</td></tr>';
+}
+async function setPhoneEmployee(ph, val){
+  var p=(STATE.phones||[]).filter(function(x){ return String(x.phone)===String(ph); })[0];
+  if(p){ p.employee=val; }
+  try{ await apiPost({ action:'phone_employee', phone:ph, employee:val }); }catch(e){ toast('Save failed'); }
 }
 async function setSrc(va, field, val){
   val=fnum(val);
