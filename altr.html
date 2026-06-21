@@ -199,6 +199,11 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .inshd .adminbtn{font-size:11px;padding:6px 11px}
 .stat .pbar{width:100%}
 .goalsub{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--t3);margin-top:6px}
+.trendsvg{width:100%;height:auto;display:block}
+.trendsvg .axt{fill:var(--t3);font-family:'JetBrains Mono',monospace;font-size:10px}
+.trendleg{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px}
+.trendleg .lgi{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;color:var(--t2)}
+.trendleg .lgi i{width:11px;height:11px;border-radius:3px;display:inline-block;flex-shrink:0}
 .goaledit{cursor:pointer;border-bottom:1px dashed var(--t3)}
 .goaledit:hover{color:var(--o3)}
 .sbadge{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;border-radius:20px;padding:4px 10px;cursor:pointer;border:1px solid;font-weight:600}
@@ -328,10 +333,10 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 
     <!-- INSIGHTS -->
     <div class="page" id="page-insights">
-      <div class="stats" id="ins-stats"></div>
+      <div id="ins-stats"></div>
       <div class="inscols">
         <div class="inscard">
-          <div class="inshd"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> Music / Audio promotions</span><button class="adminbtn" onclick="addAudio()">+ Add</button></div>
+          <div class="inshd"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> Music / Audio promotions</span><span style="display:flex;gap:8px;align-items:center"><button class="ghost" id="ig-cookie-btn" style="display:none;font-size:11px;padding:6px 10px" onclick="setIgCookie()">IG session</button><button class="adminbtn" onclick="addAudio()">+ Add</button></span></div>
           <div id="ins-audios"></div>
         </div>
         <div class="inscard">
@@ -431,7 +436,7 @@ function enterApp(user, admin){
   if(!configured()){ $('setup').style.display='block'; return; }
   $('app').style.display='block';
   $('who-name').textContent=firstName(user.full_name||user.employee_id);
-  if(ISADMIN){ $('import-btn').style.display=''; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; $('src-clear-btn').style.display=''; $('src-assign-btn').style.display=''; }
+  if(ISADMIN){ $('import-btn').style.display=''; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; $('src-clear-btn').style.display=''; $('src-assign-btn').style.display=''; $('ig-cookie-btn').style.display=''; }
   // record the marker's name (the signed-in person)
   MYVA = ISADMIN ? 'Admin' : (user.full_name || user.employee_id || '');
   // dates default today (filled after state load)
@@ -907,21 +912,46 @@ function renderAll(){ renderDevice(); renderPosting(); renderSourcing(); renderI
 
 /* ======================= GOAL / INSIGHTS ======================= */
 function goalTarget(key){ var g=(STATE.goals||[]).filter(function(x){ return String(x.key)===key; })[0]; return g?fnum(g.target):0; }
+function setIgCookie(){
+  var msg='Paste the IG "sessionid" cookie value from a logged-in (ideally BURNER) account.\n\nGet it in your browser: log into instagram.com → DevTools (F12) → Application → Cookies → instagram.com → copy the "sessionid" value.\n\nLeave blank and OK to DISCONNECT.';
+  var ck=prompt(msg, ''); if(ck===null) return;
+  apiPost({ action:'ig_cookie_set', pass:ADMIN_PASS, cookie:ck.trim() })
+    .then(function(r){ if(r&&r.error){ toast('Unauthorized'); return; } toast(ck.trim()?'IG session saved':'IG session cleared'); return refreshQuiet(); })
+    .catch(function(){ toast('Save failed'); });
+}
 function renderInsights(){
   if(!STATE) return;
-  var audios=STATE.audios||[], reposts=STATE.reposts||[];
-  var audDone=audios.filter(function(a){ return String(a.status).toLowerCase()==='done'; }).length;
-  var audReach=0, repCount=0, repReach=0;
-  audios.forEach(function(a){ audReach+=fnum(a.reach); });
-  reposts.forEach(function(r){ repCount+=(fnum(r.count)||0); repReach+=fnum(r.reach); });
-  var audGoal=goalTarget('audios'), repGoal=goalTarget('reposts');
-  var ap=audGoal?Math.round(audDone/audGoal*100):0, rp=repGoal?Math.round(repCount/repGoal*100):0;
+  var igb=$('ig-cookie-btn'); if(igb && ISADMIN){ var on=!!STATE.ig_cookie; igb.textContent='IG session: '+(on?'on':'off'); igb.style.borderColor=on?'rgba(34,197,94,.4)':''; igb.style.color=on?'var(--green)':''; }
+  var audios=STATE.audios||[];
+  var inprog=audios.filter(function(a){ return String(a.status).toLowerCase()!=='done'; }).length;
   $('ins-stats').innerHTML=
-    goalCard('Audios promoted', audDone, audGoal, 'audios', ap)+
-    goalCard('Reels reposted', repCount, repGoal, 'reposts', rp)+
-    statCard('Total reach', (audReach+repReach).toLocaleString(), 'o')+
-    statCard('Audios in progress', audios.length-audDone, 'a');
+    '<div class="inscard"><div class="inshd"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg> Audio promotion trend</span>'+
+    '<span class="goalsub" style="margin:0">reels using promoted audios · '+audios.length+' tracked · '+inprog+' in progress</span></div>'+buildAudioChart()+'</div>';
   renderAudios(); renderReposts();
+}
+function buildAudioChart(){
+  var hist=STATE.audio_history||[];
+  if(!hist.length) return '<div class="muted">No trend yet — add audios and press ↻ Refresh over time (or type counts) to build the graph.</div>';
+  var titles={}; (STATE.audios||[]).forEach(function(a){ titles[String(a.id)]=a.title||('Audio '+a.id); });
+  var byAud={}, dateSet={};
+  hist.forEach(function(h){ var id=String(h.audio_id); (byAud[id]=byAud[id]||{})[String(h.date)]=fnum(h.count); dateSet[String(h.date)]=true; });
+  var dates=Object.keys(dateSet).sort();
+  function latest(id){ for(var i=dates.length-1;i>=0;i--){ if(byAud[id][dates[i]]!==undefined) return byAud[id][dates[i]]; } return 0; }
+  var ids=Object.keys(byAud).sort(function(a,b){ return latest(b)-latest(a); }).slice(0,8);
+  var maxY=1; ids.forEach(function(id){ dates.forEach(function(d){ var v=byAud[id][d]; if(v!==undefined&&v>maxY) maxY=v; }); });
+  var W=860,H=320,padL=54,padR=14,padT=14,padB=46, plotW=W-padL-padR, plotH=H-padT-padB, n=dates.length;
+  function xAt(i){ return padL + (n<=1? plotW/2 : (i/(n-1))*plotW); }
+  function yAt(v){ return padT + plotH - (v/maxY)*plotH; }
+  var colors=['#ff6b1a','#22c55e','#3b82f6','#f59e0b','#a855f7','#ef4444','#14b8a6','#eab308'];
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" class="trendsvg" preserveAspectRatio="xMidYMid meet">';
+  for(var g=0;g<=4;g++){ var yv=Math.round(maxY*g/4), yy=yAt(yv); svg+='<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="rgba(255,255,255,.06)"/><text x="'+(padL-8)+'" y="'+(yy+4)+'" text-anchor="end" class="axt">'+yv+'</text>'; }
+  dates.forEach(function(d,i){ if(n>10 && i%Math.ceil(n/8)!==0 && i!==n-1) return; svg+='<text x="'+xAt(i)+'" y="'+(H-padB+20)+'" text-anchor="middle" class="axt">'+esc(d.slice(5))+'</text>'; });
+  ids.forEach(function(id,ci){ var col=colors[ci%colors.length], pts=[]; dates.forEach(function(d,i){ var v=byAud[id][d]; if(v===undefined) return; pts.push([xAt(i),yAt(v)]); });
+    if(pts.length){ svg+='<path d="M'+pts.map(function(p){return p[0]+' '+p[1];}).join(' L')+'" fill="none" stroke="'+col+'" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'; pts.forEach(function(p){ svg+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="3" fill="'+col+'"/>'; }); }
+  });
+  svg+='</svg>';
+  var leg='<div class="trendleg">'+ids.map(function(id,ci){ return '<span class="lgi"><i style="background:'+colors[ci%colors.length]+'"></i>'+esc(titles[id]||('Audio '+id))+' ('+latest(id)+')</span>'; }).join('')+'</div>';
+  return svg+leg;
 }
 function goalCard(label, val, target, key, pct){
   var pc=pct>=100?'g':(pct>=50?'a':'r');
