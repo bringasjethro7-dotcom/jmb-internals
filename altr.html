@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>ALTR Media — Tracker</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%2276%2082%20360%20360%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22m%22%20x1%3D%220%22%20y1%3D%22.05%22%20x2%3D%220%22%20y2%3D%22.95%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23FFE0BE%22%2F%3E%3Cstop%20offset%3D%22.46%22%20stop-color%3D%22%23FF7A29%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23C3380A%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22b%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23FF8E45%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23A52E08%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20x%3D%22241%22%20y%3D%22110%22%20width%3D%2230%22%20height%3D%22304%22%20rx%3D%2215%22%20fill%3D%22url%28%23m%29%22%2F%3E%3Cpath%20d%3D%22M256%20226Q341%20264%20398%20320Q341%20376%20256%20414Q171%20376%20114%20320Q171%20264%20256%20226Z%22%20fill%3D%22none%22%20stroke%3D%22url%28%23b%29%22%20stroke-width%3D%2250%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%2F%3E%3Cpath%20d%3D%22M256%20110Q341%20148%20398%20204Q341%20260%20256%20298Q171%20260%20114%20204Q171%20148%20256%20110Z%22%20fill%3D%22none%22%20stroke%3D%22url%28%23m%29%22%20stroke-width%3D%2250%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0e14; --bg2:#0d1117; --card:#151b24; --card2:#1b222d;
+  --line:rgba(255,255,255,.08); --line-hi:rgba(255,122,41,.35);
+  --o1:#ff6b1a; --o2:#e84e00; --o3:#ff9a5c;
+  --t1:#f4f6fa; --t2:#a6adba; --t3:#5f6672;
+  --green:#22c55e; --red:#ef4444; --amber:#f59e0b;
+  --r:14px; --rs:11px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;color:var(--t1);min-height:100vh;background:var(--bg);-webkit-font-smoothing:antialiased}
+#bg{position:fixed;inset:0;z-index:-2;pointer-events:none;overflow:hidden}
+#bg .grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:46px 46px;-webkit-mask-image:radial-gradient(ellipse 80% 60% at 50% -4%,#000 26%,transparent 78%);mask-image:radial-gradient(ellipse 80% 60% at 50% -4%,#000 26%,transparent 78%)}
+#bg .orb{position:absolute;border-radius:50%;filter:blur(80px)}
+#bg .o1{width:520px;height:520px;top:-180px;right:-130px;background:radial-gradient(circle,rgba(255,107,26,.4),transparent 68%)}
+#bg .o2{width:440px;height:440px;bottom:-200px;left:-150px;background:radial-gradient(circle,rgba(255,107,26,.2),transparent 70%)}
+
+/* LOGIN */
+#login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1.5rem}
+.lbox{width:100%;max-width:400px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:20px;padding:2.4rem 2.2rem;backdrop-filter:blur(16px) saturate(150%);box-shadow:0 24px 70px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06)}
+.llogo{display:flex;align-items:center;gap:12px;margin-bottom:1.6rem}
+.llogo img{width:44px;height:44px;filter:drop-shadow(0 0 10px rgba(255,107,26,.4))}
+.lbrand{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;letter-spacing:.02em}
+.lbrand small{display:block;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--o3);font-weight:400}
+.lh{font-size:19px;font-weight:700;margin-bottom:4px}
+.lsub{font-size:13px;color:var(--t2);margin-bottom:1.6rem}
+.fg{margin-bottom:1rem}
+.fg label{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);margin-bottom:7px;font-weight:600}
+.inp{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:var(--rs);color:var(--t1);font-size:15px;padding:12px 14px;outline:none;font-family:inherit;transition:border-color .2s}
+.inp:focus{border-color:var(--o1)}
+.btn{width:100%;border:none;border-radius:var(--rs);padding:13px;font-family:inherit;font-size:14px;font-weight:600;color:#fff;background:linear-gradient(135deg,var(--o1),var(--o2));cursor:pointer;margin-top:.5rem;transition:transform .15s,box-shadow .15s}
+.btn:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(232,78,0,.4)}
+.btn:disabled{opacity:.6;cursor:default;transform:none;box-shadow:none}
+.lerr{color:#f87171;font-size:13px;margin-top:.9rem;display:none;text-align:center}
+
+/* APP */
+#app{display:none}
+header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:0 max(4%,1rem);height:62px;background:rgba(11,14,20,.78);backdrop-filter:blur(16px) saturate(150%);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.hl{display:flex;align-items:center;gap:10px}
+.hl img{width:32px;height:32px;filter:drop-shadow(0 0 8px rgba(255,107,26,.4))}
+.hl b{font-family:'Rajdhani',sans-serif;font-size:18px;letter-spacing:.02em}
+.hl .pill{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;background:rgba(255,107,26,.14);color:var(--o3);border:1px solid rgba(255,107,26,.25);border-radius:20px;padding:3px 9px}
+.hr{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hr .who{font-size:12.5px;color:var(--t2)}
+.hr .who b{color:var(--t1);font-weight:600}
+.mini{font-size:12px;font-weight:600;color:var(--t2);background:none;border:1px solid var(--line);border-radius:9px;padding:7px 12px;cursor:pointer;font-family:inherit}
+.mini:hover{color:var(--t1);border-color:var(--line-hi)}
+.selva{background:var(--bg2);border:1px solid var(--line);border-radius:9px;color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;padding:7px 10px;outline:none}
+.selva:focus{border-color:var(--o1)}
+
+.wrap{max-width:1180px;margin:0 auto;padding:1.4rem max(4%,1rem) 4rem}
+.tabs{display:flex;gap:8px;margin-bottom:1.3rem;flex-wrap:wrap}
+.tab{display:inline-flex;align-items:center;gap:8px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;letter-spacing:.01em;color:var(--t2);background:rgba(21,27,36,.55);border:1px solid var(--line);border-radius:12px;padding:10px 16px;cursor:pointer;transition:.18s}
+.tab svg{width:16px;height:16px}
+.tab:hover{color:var(--t1);border-color:var(--line-hi)}
+.tab.on{color:#fff;background:linear-gradient(135deg,rgba(255,107,26,.22),rgba(232,78,0,.12));border-color:var(--line-hi)}
+.page{display:none}.page.on{display:block}
+
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:1.2rem;flex-wrap:wrap}
+.toolbar .dt{background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--t1);font-family:inherit;font-size:13px;padding:9px 12px;outline:none}
+.toolbar .dt:focus{border-color:var(--o1)}
+.search{flex:1;min-width:150px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--t1);font-family:inherit;font-size:13px;padding:9px 12px;outline:none}
+.search:focus{border-color:var(--o1)}
+.sel{background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--t1);font-family:inherit;font-size:13px;padding:9px 12px;outline:none}
+
+/* stat cards */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:1.3rem}
+.stat{background:rgba(21,27,36,.6);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;backdrop-filter:blur(10px)}
+.stat .lab{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--t3);margin-bottom:6px}
+.stat .num{font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;line-height:1}
+.stat .num.g{color:var(--green)}.stat .num.r{color:var(--red)}.stat .num.a{color:var(--amber)}.stat .num.o{color:var(--o1)}
+
+/* device grid */
+.computers{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.comp{background:rgba(21,27,36,.6);border:1px solid var(--line);border-radius:var(--r);padding:14px;backdrop-filter:blur(10px)}
+.comp h4{font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;margin-bottom:11px;display:flex;align-items:center;gap:8px;color:var(--t1)}
+.comp h4 .cdot{width:8px;height:8px;border-radius:50%;background:var(--o1)}
+.phone{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:10px;background:rgba(11,14,20,.45);border:1px solid var(--line);margin-bottom:8px;cursor:pointer;transition:.15s}
+.phone:last-child{margin-bottom:0}
+.phone:hover{border-color:var(--line-hi)}
+.phone .pn{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;width:30px;text-align:center;flex-shrink:0}
+.phone .pmeta{flex:1;min-width:0}
+.phone .pser{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.phone .pby{font-size:10px;color:var(--t3);margin-top:1px}
+.dotbtn{width:22px;height:22px;border-radius:50%;flex-shrink:0;border:2px solid rgba(255,255,255,.15)}
+.dotbtn.connected{background:var(--green);border-color:rgba(34,197,94,.5);box-shadow:0 0 10px rgba(34,197,94,.4)}
+.dotbtn.disconnected{background:var(--red);border-color:rgba(239,68,68,.5)}
+.dotbtn.issue{background:var(--amber);border-color:rgba(245,158,11,.5);box-shadow:0 0 10px rgba(245,158,11,.4)}
+
+/* posting list */
+.acctgroup{margin-bottom:14px;background:rgba(21,27,36,.55);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.agh{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 15px;cursor:pointer;background:rgba(255,255,255,.02)}
+.agh b{font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700}
+.agh .agc{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t3)}
+.agh .agbar{flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.07);overflow:hidden;max-width:160px}
+.agh .agbar i{display:block;height:100%;background:linear-gradient(90deg,var(--o3),var(--o1))}
+.agbody{display:none}
+.agbody.open{display:block}
+.arow{display:flex;align-items:center;gap:12px;padding:9px 15px;border-top:1px solid var(--line)}
+.arow .ah{flex:1;min-width:0}
+.arow .ah b{font-size:13.5px;font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.arow .ah span{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--t3)}
+.arow .susp{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--red);border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.1);border-radius:20px;padding:2px 7px}
+.arow .serial{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--o3);min-width:34px;text-align:right}
+.arow .vacode{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t2)}
+.check{width:26px;height:26px;border-radius:8px;border:2px solid var(--t3);background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.15s;position:relative}
+.check:hover{border-color:var(--o1)}
+.check.on{background:var(--green);border-color:var(--green)}
+.check.on::after{content:'';width:6px;height:11px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(45deg);margin-top:-2px}
+.kebab{background:none;border:none;color:var(--t3);cursor:pointer;padding:4px;border-radius:6px}
+.kebab:hover{color:var(--t1);background:rgba(255,255,255,.06)}
+
+/* sourcing */
+.srctable{width:100%;border-collapse:collapse;background:rgba(21,27,36,.55);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.srctable th{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);font-weight:600;text-align:left;padding:12px 14px;border-bottom:1px solid var(--line)}
+.srctable td{padding:11px 14px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle}
+.srctable tr:last-child td{border-bottom:none}
+.srctable .nm{font-weight:600}
+.numin{width:74px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:13px;padding:7px 9px;outline:none;text-align:center}
+.numin:focus{border-color:var(--o1)}
+.numin:disabled{opacity:.55;cursor:not-allowed}
+.pct{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px}
+.pct.ok{color:var(--green)}.pct.mid{color:var(--amber)}.pct.low{color:var(--red)}
+.pbar{height:7px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden;width:120px}
+.pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--o3),var(--o1))}
+.srcadd{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+
+.muted{color:var(--t3);font-size:13px;text-align:center;padding:2rem}
+.note{font-size:12px;color:var(--t3);margin-top:10px}
+.adminbtn{font-size:12px;font-weight:600;color:#fff;background:linear-gradient(135deg,var(--o1),var(--o2));border:none;border-radius:9px;padding:8px 13px;cursor:pointer;font-family:inherit}
+.adminbtn:hover{opacity:.92}
+.ghost{font-size:12px;font-weight:600;color:var(--t2);background:none;border:1px solid var(--line);border-radius:9px;padding:8px 13px;cursor:pointer;font-family:inherit}
+.ghost:hover{color:var(--t1);border-color:var(--line-hi)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#1b222d;border:1px solid var(--line-hi);border-radius:11px;padding:11px 18px;font-size:13px;color:var(--t1);box-shadow:0 14px 40px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:.25s;z-index:200}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* setup banner */
+#setup{display:none;max-width:640px;margin:5rem auto;background:rgba(21,27,36,.7);border:1px solid var(--line-hi);border-radius:18px;padding:2rem}
+#setup h2{font-family:'Rajdhani',sans-serif;font-size:22px;margin-bottom:.6rem}
+#setup p{color:var(--t2);font-size:14px;line-height:1.6;margin-bottom:.8rem}
+#setup code{font-family:'JetBrains Mono',monospace;font-size:12px;background:rgba(255,255,255,.06);padding:2px 6px;border-radius:5px;color:var(--o3)}
+@media(max-width:560px){ .hl .pill{display:none} }
+</style>
+</head>
+<body>
+<div id="bg"><div class="grid"></div><div class="orb o1"></div><div class="orb o2"></div></div>
+
+<!-- LOGIN -->
+<div id="login">
+  <div class="lbox">
+    <div class="llogo"><img id="login-logo" alt="" /><div class="lbrand">ALTR MEDIA<small>Tracker · JMB Virtuals</small></div></div>
+    <div class="lh">Sign in</div>
+    <div class="lsub">Use your employee ID and PIN.</div>
+    <div class="fg"><label for="lid">Employee ID</label><input class="inp" id="lid" type="text" placeholder="JMB0XX" autocomplete="username" /></div>
+    <div class="fg"><label for="lpin">PIN</label><input class="inp" id="lpin" type="password" placeholder="••••" autocomplete="current-password" inputmode="numeric" /></div>
+    <button class="btn" id="lbtn" onclick="doLogin()">Sign in</button>
+    <div class="lerr" id="lerr"></div>
+  </div>
+</div>
+
+<!-- SETUP (shown if ALTR_URL not configured) -->
+<div id="setup">
+  <h2>Almost there — connect the backend</h2>
+  <p>This tool needs its Apps Script Web App URL. Open <code>altr.html</code>, set <code>ALTR_URL</code> to your deployed <code>/exec</code> URL, then re-upload. See <code>altr-apps-script.gs</code> for the 4-step setup.</p>
+  <p class="note">Once connected, sign in as ADMIN and press “Import inventory” to load the 26 phones and ~340 accounts.</p>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header>
+    <div class="hl"><img id="hdr-logo" alt="" /><b>ALTR TRACKER</b><span class="pill">JMB</span></div>
+    <div class="hr">
+      <span class="who" id="who-wrap">VA&nbsp;<select class="selva" id="va-select" title="Your VA code"></select></span>
+      <span class="who">Hi, <b id="who-name">—</b></span>
+      <button class="mini" id="import-btn" style="display:none" onclick="doImport()">Import inventory</button>
+      <button class="mini" onclick="doLogout()">Sign out</button>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="tabs">
+      <div class="tab on" data-page="device" onclick="showTab('device')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>Digital</div>
+      <div class="tab" data-page="posting" onclick="showTab('posting')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Posting</div>
+      <div class="tab" data-page="sourcing" onclick="showTab('sourcing')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Sourcing</div>
+    </div>
+
+    <!-- DEVICE -->
+    <div class="page on" id="page-device">
+      <div class="stats" id="dev-stats"></div>
+      <div class="computers" id="computers"><div class="muted">Loading devices…</div></div>
+      <div class="note" id="dev-updated"></div>
+    </div>
+
+    <!-- POSTING -->
+    <div class="page" id="page-posting">
+      <div class="toolbar">
+        <input type="date" class="dt" id="post-date" onchange="onDateChange()" />
+        <select class="sel" id="post-phone" onchange="renderPosting()"><option value="">All phones</option></select>
+        <select class="sel" id="post-filter" onchange="renderPosting()"><option value="all">All accounts</option><option value="todo">Not posted</option><option value="done">Posted</option><option value="active">Active only</option></select>
+        <input class="search" id="post-search" placeholder="Search handle…" oninput="renderPosting()" />
+      </div>
+      <div class="stats" id="post-stats"></div>
+      <div id="posting"><div class="muted">Loading accounts…</div></div>
+    </div>
+
+    <!-- SOURCING -->
+    <div class="page" id="page-sourcing">
+      <div class="toolbar">
+        <input type="date" class="dt" id="src-date" onchange="onDateChange()" />
+      </div>
+      <div class="stats" id="src-stats"></div>
+      <table class="srctable"><thead><tr><th>Sourcer</th><th>Daily target</th><th>Sourced</th><th>Completion</th><th></th></tr></thead><tbody id="src-body"></tbody></table>
+      <div class="srcadd" id="src-add" style="display:none">
+        <input class="search" id="src-name" placeholder="Add sourcer name…" style="flex:0 0 220px" />
+        <input class="numin" id="src-target" placeholder="target" />
+        <button class="adminbtn" onclick="addSourcer()">Add sourcer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ====== CONFIG ====== */
+var PORTAL_URL = "https://script.google.com/macros/s/AKfycbzoalT_9SYhSPciWdjDI6bv0qjKL7SWn0Rmkgt6CMJMzGs9pKCydCJChz6-ZuM_Srdj/exec"; // for employee ID+PIN login
+var ALTR_URL   = "PASTE_YOUR_ALTR_WEB_APP_URL_HERE"; // <-- deployed altr-apps-script.gs /exec URL
+var ADMIN_PASS = "JMBeast_020298";
+var DEFAULT_SOURCERS = [
+  { name:'Escoreal, Chyrajane', target:22 },
+  { name:'Pascual, Cherry Rose', target:20 },
+  { name:'Bocacao, Lara Janine', target:0 },
+  { name:'Ocampo, Felilou', target:13 },
+  { name:'Pascual, James Ivan', target:0 }
+];
+/* ==================== */
+
+var LOGO = document.querySelector('link[rel="icon"]').href;
+document.getElementById('login-logo').src = LOGO;
+document.getElementById('hdr-logo').src = LOGO;
+
+var USER=null, ISADMIN=false, STATE=null, MYVA='P01';
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove('show');},1800); }
+function fnum(n){ n=parseInt(n,10); return isNaN(n)?0:n; }
+function configured(){ return ALTR_URL && ALTR_URL.indexOf('PASTE_')<0 && /^https?:/.test(ALTR_URL); }
+
+/* ---- API ---- */
+function apiGet(params){
+  var qs = Object.keys(params).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(params[k]); }).join('&');
+  return fetch(ALTR_URL+'?'+qs).then(function(r){ return r.json(); });
+}
+function apiPost(obj){
+  return fetch(ALTR_URL, { method:'POST', body: JSON.stringify(obj) }).then(function(r){ return r.json(); });
+}
+
+/* ---- LOGIN ---- */
+$('lpin').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
+$('lid').addEventListener('keydown', function(e){ if(e.key==='Enter') $('lpin').focus(); });
+
+async function doLogin(){
+  var id=$('lid').value.trim(), pin=$('lpin').value.trim(), err=$('lerr'), btn=$('lbtn');
+  err.style.display='none';
+  if(!id||!pin){ err.textContent='Enter your employee ID and PIN.'; err.style.display='block'; return; }
+  if(id.toUpperCase()==='ADMIN'){
+    if(pin===ADMIN_PASS){ enterApp({ full_name:'Admin (JMB Virtuals)', employee_id:'ADMIN' }, true); }
+    else { err.textContent='Invalid admin password.'; err.style.display='block'; }
+    return;
+  }
+  btn.disabled=true; btn.textContent='Signing in…';
+  try{
+    var res=await fetch(PORTAL_URL+'?id='+encodeURIComponent(id)+'&pin='+encodeURIComponent(pin));
+    var data=await res.json();
+    if(!data || data.error || !data.employee_id) throw new Error('bad');
+    enterApp(data, false);
+  }catch(e){ err.textContent='Invalid ID or PIN.'; err.style.display='block'; }
+  finally{ btn.disabled=false; btn.textContent='Sign in'; }
+}
+function doLogout(){ sessionStorage.removeItem('altr_user'); location.reload(); }
+
+function firstName(n){ n=String(n||'').trim(); if(n.indexOf(',')>=0) return (n.split(',')[1]||'').trim().split(/\s+/)[0]||n; return n.split(/\s+/)[0]||n; }
+
+function enterApp(user, admin){
+  USER=user; ISADMIN=!!admin;
+  sessionStorage.setItem('altr_user', JSON.stringify({u:user,a:ISADMIN}));
+  $('login').style.display='none';
+  if(!configured()){ $('setup').style.display='block'; return; }
+  $('app').style.display='block';
+  $('who-name').textContent=firstName(user.full_name||user.employee_id);
+  if(ISADMIN){ $('import-btn').style.display=''; $('src-add').style.display='flex'; }
+  // VA code selector
+  MYVA = localStorage.getItem('altr_myva') || 'P01';
+  var sel=$('va-select'); sel.innerHTML=['P01','P02','P03','P04','P05','P06'].map(function(c){ return '<option'+(c===MYVA?' selected':'')+'>'+c+'</option>'; }).join('');
+  sel.onchange=function(){ MYVA=sel.value; localStorage.setItem('altr_myva',MYVA); };
+  // dates default today (filled after state load)
+  loadState();
+}
+
+/* ---- STATE ---- */
+async function loadState(){
+  var d = $('post-date').value || todayPST();
+  try{
+    STATE = await apiGet({ action:'state', date:d });
+    if(STATE.error) throw new Error(STATE.error);
+    if(!$('post-date').value){ $('post-date').value=STATE.date; $('src-date').value=STATE.date; }
+    buildPhoneFilter();
+    renderDevice(); renderPosting(); renderSourcing();
+  }catch(e){ toast('Could not load data. Check the backend URL.'); }
+}
+function todayPST(){
+  try{ var s=new Date().toLocaleString('en-CA',{timeZone:'America/Los_Angeles',year:'numeric',month:'2-digit',day:'2-digit'}); return s; }catch(e){ return new Date().toISOString().slice(0,10); }
+}
+function onDateChange(){
+  // sync both date pickers to the changed one
+  var active = document.activeElement;
+  var d = (active && active.id==='src-date') ? $('src-date').value : $('post-date').value;
+  $('post-date').value=d; $('src-date').value=d;
+  loadState();
+}
+
+/* ======================= DEVICE ======================= */
+var STATUS_CYCLE=['connected','disconnected','issue'];
+function renderDevice(){
+  var phones=(STATE.phones||[]).slice().sort(function(a,b){ return fnum(a.phone)-fnum(b.phone); });
+  var byComp={};
+  phones.forEach(function(p){ var c=p.computer||'?'; (byComp[c]=byComp[c]||[]).push(p); });
+  var conn=0,disc=0,iss=0;
+  phones.forEach(function(p){ var s=p.status||'disconnected'; if(s==='connected')conn++; else if(s==='issue')iss++; else disc++; });
+  $('dev-stats').innerHTML=
+    statCard('Total phones', phones.length, 'o')+
+    statCard('Connected', conn, 'g')+
+    statCard('Disconnected', disc, 'r')+
+    statCard('With issue', iss, 'a');
+  var comps=Object.keys(byComp).sort(function(a,b){ return fnum(a)-fnum(b); });
+  if(!phones.length){ $('computers').innerHTML='<div class="muted">No phones yet. Admin: press “Import inventory”.</div>'; $('dev-updated').textContent=''; return; }
+  $('computers').innerHTML=comps.map(function(c){
+    var list=byComp[c].sort(function(a,b){ return fnum(a.phone)-fnum(b.phone); });
+    return '<div class="comp"><h4><span class="cdot"></span>Computer '+esc(c)+'</h4>'+list.map(function(p){
+      var st=p.status||'disconnected';
+      return '<div class="phone" onclick="cyclePhone(\''+esc(p.phone)+'\')">'+
+        '<div class="pn">'+esc(p.phone)+'</div>'+
+        '<div class="pmeta"><div class="pser">'+(p.serial?esc(p.serial):'—')+'</div>'+
+        (p.updated_by?'<div class="pby">'+esc(p.updated_by)+' · '+esc(p.updated_at||'')+'</div>':'')+'</div>'+
+        '<div class="dotbtn '+st+'" title="'+st+'"></div></div>';
+    }).join('')+'</div>';
+  }).join('');
+  var last=phones.filter(function(p){return p.updated_at;}).map(function(p){return p.updated_at;}).sort().pop();
+  $('dev-updated').textContent = last ? ('Last device update: '+last) : '';
+}
+function statCard(lab,num,cls){ return '<div class="stat"><div class="lab">'+lab+'</div><div class="num '+(cls||'')+'">'+num+'</div></div>'; }
+async function cyclePhone(phone){
+  var p=(STATE.phones||[]).filter(function(x){ return String(x.phone)===String(phone); })[0]; if(!p) return;
+  var i=STATUS_CYCLE.indexOf(p.status||'disconnected'); var next=STATUS_CYCLE[(i+1)%STATUS_CYCLE.length];
+  p.status=next; p.updated_by=firstName(USER.full_name||USER.employee_id); p.updated_at='saving…';
+  renderDevice();
+  try{ await apiPost({ action:'phone_status', phone:phone, status:next, by:p.updated_by }); await refreshQuiet(); }
+  catch(e){ toast('Save failed'); }
+}
+
+/* ======================= POSTING ======================= */
+function postKey(a){ return [a.phone,a.user,a.acct,a.handle].join('|'); }
+function postingMap(){
+  var m={}; (STATE.posting||[]).forEach(function(r){ m[[r.phone,r.user,r.acct,r.handle].join('|')]=r; }); return m;
+}
+function buildPhoneFilter(){
+  var sel=$('post-phone'); var cur=sel.value;
+  var ph={}; (STATE.accounts||[]).forEach(function(a){ ph[a.phone]=true; });
+  var ks=Object.keys(ph).sort(function(a,b){return fnum(a)-fnum(b);});
+  sel.innerHTML='<option value="">All phones</option>'+ks.map(function(k){ return '<option value="'+esc(k)+'">Phone '+esc(k)+'</option>'; }).join('');
+  sel.value=cur;
+}
+function renderPosting(){
+  if(!STATE){ return; }
+  var accts=(STATE.accounts||[]), map=postingMap();
+  var fp=$('post-phone').value, ff=$('post-filter').value, q=$('post-search').value.trim().toLowerCase();
+  // stats
+  var doneAll=0, vaCount={}, phoneCount={};
+  (STATE.posting||[]).forEach(function(r){ if(String(r.posted).toUpperCase()==='TRUE'){ doneAll++; vaCount[r.va_code]=(vaCount[r.va_code]||0)+1; phoneCount[r.phone]=(phoneCount[r.phone]||0)+1; } });
+  var mine=vaCount[MYVA]||0;
+  $('post-stats').innerHTML=
+    statCard('Posted today', doneAll, 'g')+
+    statCard('Your posts ('+MYVA+')', mine, 'o')+
+    statCard('Accounts', accts.length, '')+
+    statCard('Remaining', Math.max(0, countActive(accts)-doneAll), 'a');
+  // filter + group by phone
+  var rows=accts.filter(function(a){
+    if(fp && String(a.phone)!==String(fp)) return false;
+    var k=postKey(a), pr=map[k], done=pr&&String(pr.posted).toUpperCase()==='TRUE';
+    if(ff==='todo' && done) return false;
+    if(ff==='done' && !done) return false;
+    if(ff==='active' && (a.status&&a.status!=='active')) return false;
+    if(q && esc(a.handle).toLowerCase().indexOf(q)<0) return false;
+    return true;
+  });
+  if(!rows.length){ $('posting').innerHTML='<div class="muted">No accounts match.</div>'; return; }
+  var byPhone={}; rows.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
+  var phones=Object.keys(byPhone).sort(function(a,b){return fnum(a)-fnum(b);});
+  $('posting').innerHTML=phones.map(function(ph){
+    var list=byPhone[ph], done=0; list.forEach(function(a){ var pr=map[postKey(a)]; if(pr&&String(pr.posted).toUpperCase()==='TRUE') done++; });
+    var pct=list.length?Math.round(done/list.length*100):0;
+    var open = (phones.length<=2) ? 'open' : '';
+    return '<div class="acctgroup"><div class="agh" onclick="this.nextElementSibling.classList.toggle(\'open\')">'+
+      '<b>Phone '+esc(ph)+'</b><div class="agbar"><i style="width:'+pct+'%"></i></div>'+
+      '<span class="agc">'+done+'/'+list.length+'</span></div>'+
+      '<div class="agbody '+open+'">'+list.map(function(a){ return postRow(a, map[postKey(a)]); }).join('')+'</div></div>';
+  }).join('');
+}
+function countActive(accts){ return accts.filter(function(a){ return !a.status || a.status==='active'; }).length; }
+function postRow(a, pr){
+  var done = pr && String(pr.posted).toUpperCase()==='TRUE';
+  var serial = pr && pr.serial ? pr.serial : '';
+  var va = pr && pr.va_code ? pr.va_code : '';
+  var susp = a.status && a.status!=='active' ? '<span class="susp">'+esc(a.status==='logged_out'?'logged out':a.status)+'</span>' : '';
+  return '<div class="arow">'+
+    '<button class="check '+(done?'on':'')+'" onclick="togglePost(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"></button>'+
+    '<div class="ah"><b>@'+esc(a.handle)+'</b><span>P'+esc(a.phone)+' · U'+esc(a.user)+' · A'+esc(a.acct)+(a.followers?' · '+esc(a.followers)+' followers':'')+'</span></div>'+
+    susp+
+    (va?'<span class="vacode">'+esc(va)+'</span>':'')+
+    '<span class="serial">'+(serial?'#'+esc(serial):'')+'</span>'+
+    '<button class="kebab" title="Mark suspended / logged out" onclick="cycleAcctStatus(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>'+
+    '</div>';
+}
+function escAttr(s){ return String(s==null?'':s).replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+async function togglePost(phone,user,acct,handle){
+  var k=[phone,user,acct,handle].join('|'); var map=postingMap(); var pr=map[k];
+  var done = pr && String(pr.posted).toUpperCase()==='TRUE';
+  var next=!done;
+  // optimistic
+  if(pr){ pr.posted=next?'TRUE':'FALSE'; pr.va_code=MYVA; }
+  else { STATE.posting.push({ date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, posted:next?'TRUE':'FALSE', serial:'' }); }
+  renderPosting();
+  try{
+    var r=await apiPost({ action:'post_toggle', date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, posted:next, by:firstName(USER.full_name||USER.employee_id) });
+    if(r && r.serial!==undefined){ var pr2=postingMap()[k]; if(pr2){ pr2.serial=r.serial; } renderPosting(); }
+  }catch(e){ toast('Save failed'); }
+}
+var ACCT_STATUS_CYCLE=['active','suspended','logged_out'];
+async function cycleAcctStatus(phone,user,acct,handle){
+  var a=(STATE.accounts||[]).filter(function(x){ return String(x.phone)===String(phone)&&String(x.user)===String(user)&&String(x.acct)===String(acct)&&String(x.handle)===String(handle); })[0]; if(!a) return;
+  var i=ACCT_STATUS_CYCLE.indexOf(a.status||'active'); var next=ACCT_STATUS_CYCLE[(i+1)%ACCT_STATUS_CYCLE.length];
+  a.status=next; renderPosting();
+  try{ await apiPost({ action:'account_status', phone:phone, user:user, acct:acct, handle:handle, status:next }); toast('@'+handle+' → '+next.replace('_',' ')); }
+  catch(e){ toast('Save failed'); }
+}
+
+/* ======================= SOURCING ======================= */
+function srcRows(){
+  var byVa={}; (STATE.sourcing||[]).forEach(function(r){ byVa[r.va]=r; });
+  // merge defaults that have no row yet
+  var rows=[];
+  DEFAULT_SOURCERS.forEach(function(d){ var r=byVa[d.name]; rows.push(r?r:{ va:d.name, target:d.target, sourced:0, _virtual:true }); delete byVa[d.name]; });
+  Object.keys(byVa).forEach(function(k){ rows.push(byVa[k]); });
+  return rows;
+}
+function renderSourcing(){
+  if(!STATE) return;
+  var rows=srcRows();
+  var totT=0,totS=0;
+  rows.forEach(function(r){ totT+=fnum(r.target); totS+=fnum(r.sourced); });
+  var pct=totT?Math.round(totS/totT*100):0;
+  $('src-stats').innerHTML=
+    statCard('Total target', totT, 'o')+
+    statCard('Sourced', totS, 'g')+
+    statCard('Remaining', Math.max(0,totT-totS), 'a')+
+    statCard('Completion', pct+'%', pct>=100?'g':(pct>=70?'a':'r'));
+  var dis = ISADMIN ? '' : '';
+  $('src-body').innerHTML=rows.map(function(r){
+    var t=fnum(r.target), s=fnum(r.sourced), p=t?Math.round(s/t*100):0;
+    var pc = p>=100?'ok':(p>=70?'mid':'low');
+    return '<tr>'+
+      '<td class="nm">'+esc(r.va)+'</td>'+
+      '<td><input class="numin" type="number" min="0" value="'+t+'" '+(ISADMIN?'':'disabled')+' onchange="setSrc(\''+escAttr(r.va)+'\',\'target\',this.value)"></td>'+
+      '<td><input class="numin" type="number" min="0" value="'+s+'" onchange="setSrc(\''+escAttr(r.va)+'\',\'sourced\',this.value)"></td>'+
+      '<td><div style="display:flex;align-items:center;gap:10px"><span class="pct '+pc+'">'+p+'%</span><div class="pbar"><i style="width:'+Math.min(100,p)+'%"></i></div></div></td>'+
+      '<td><span style="font-family:\'JetBrains Mono\',monospace;font-size:11px;color:var(--t3)">'+(t?(s>=t?'+'+(s-t):(s-t)):'')+'</span></td>'+
+    '</tr>';
+  }).join('');
+}
+async function setSrc(va, field, val){
+  val=fnum(val);
+  var obj={ action:'sourcing_set', date:STATE.date, va:va }; obj[field]=val;
+  // keep the other field if known
+  var existing=(STATE.sourcing||[]).filter(function(r){ return r.va===va; })[0];
+  var def=DEFAULT_SOURCERS.filter(function(d){return d.name===va;})[0];
+  if(field==='sourced'){ obj.target = existing?fnum(existing.target):(def?def.target:0); }
+  if(field==='target'){ obj.sourced = existing?fnum(existing.sourced):0; }
+  // update local
+  if(existing){ existing[field]=val; existing.target=obj.target; existing.sourced=obj.sourced; }
+  else { STATE.sourcing.push({ date:STATE.date, va:va, target:obj.target, sourced:obj.sourced }); }
+  renderSourcing();
+  try{ await apiPost(obj); }catch(e){ toast('Save failed'); }
+}
+async function addSourcer(){
+  var name=$('src-name').value.trim(), target=fnum($('src-target').value);
+  if(!name){ toast('Enter a name'); return; }
+  STATE.sourcing.push({ date:STATE.date, va:name, target:target, sourced:0 });
+  $('src-name').value=''; $('src-target').value=''; renderSourcing();
+  try{ await apiPost({ action:'sourcing_set', date:STATE.date, va:name, target:target, sourced:0 }); }catch(e){ toast('Save failed'); }
+}
+
+/* ---- import + refresh ---- */
+async function doImport(){
+  if(!confirm('Import the 26 phones and ~340 accounts from the ALTR source sheet? This is safe to run more than once.')) return;
+  toast('Importing… this can take ~20s');
+  try{ var r=await apiPost({ action:'import' }); toast('Imported '+(r.phones||0)+' phones, '+(r.accounts||0)+' accounts'); await loadState(); }
+  catch(e){ toast('Import failed'); }
+}
+async function refreshQuiet(){
+  try{ var s=await apiGet({ action:'state', date:STATE.date }); if(!s.error){ STATE=s; renderDevice(); } }catch(e){}
+}
+
+/* ---- tabs ---- */
+function showTab(p){
+  ['device','posting','sourcing'].forEach(function(x){
+    $('page-'+x).classList.toggle('on', x===p);
+  });
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('on', t.getAttribute('data-page')===p); });
+}
+
+/* ---- restore session ---- */
+(function(){
+  try{ var raw=sessionStorage.getItem('altr_user'); if(raw){ var o=JSON.parse(raw); enterApp(o.u, o.a); } }catch(e){}
+})();
+</script>
+</body>
+</html>
