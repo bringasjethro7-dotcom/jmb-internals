@@ -736,35 +736,39 @@ function renderSourcing(){
   $('sourcing-list').innerHTML=phones.map(function(ph){ return groupHTML('src', ph, byPhone[ph], map, {}); }).join('');
 }
 /* minimized per-sourcer target table */
-/* per-phone daily targets:
-   Assigned = # accounts on the phone ; Target = red boxes that were red today (red now + sourced today)
-   Sourced  = red that turned orange today ; Completion = Sourced / Target */
+/* 6 employee rows; each is assigned multiple phones. Metrics sum across the assigned phones.
+   Assigned = # accounts ; Target = red today (red now + sourced today) ; Sourced = red->orange today */
+function phoneStats_(ph){
+  var map=sourceMap(), red=0, sourced=0, accounts=0;
+  (STATE.accounts||[]).forEach(function(a){ if(String(a.phone)!==String(ph)) return; accounts++; var r=map[srcKey(a)]; if(!r) return; var n=srcLen(r); red+=countAt(r.cells,n,1); sourced+=countTodaySrc(r.cells,r.gdates,n); });
+  return { accounts:accounts, red:red, sourced:sourced };
+}
 function renderTargets(){
-  var accts=(STATE.accounts||[]), map=sourceMap();
-  var empByPhone={}; (STATE.phones||[]).forEach(function(p){ empByPhone[String(p.phone)]=p.employee||''; });
-  var byPhone={}; accts.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
-  var phones=Object.keys(byPhone).sort(function(a,b){ return fnum(a)-fnum(b); });
+  var sourcers=(STATE.sourcers||[]).slice().sort(function(a,b){ return fnum(a.id)-fnum(b.id); });
   var totT=0, totS=0, html='';
-  phones.forEach(function(ph){
-    var list=byPhone[ph], red=0, sourced=0, accounts=list.length;
-    list.forEach(function(a){ var r=map[srcKey(a)]; if(!r) return; var n=srcLen(r); red+=countAt(r.cells,n,1); sourced+=countTodaySrc(r.cells,r.gdates,n); });
-    var target=red+sourced;   // today's red target (still red + already sourced today)
-    totT+=target; totS+=sourced;
+  sourcers.forEach(function(srx){
+    var phones=String(srx.phones||'').split(',').map(function(x){return x.trim();}).filter(function(x){return x!==''; });
+    var accounts=0, red=0, sourced=0;
+    phones.forEach(function(ph){ var st=phoneStats_(ph); accounts+=st.accounts; red+=st.red; sourced+=st.sourced; });
+    var target=red+sourced; totT+=target; totS+=sourced;
     var p=target?Math.round(sourced/target*100):0, pc=p>=100?'ok':(p>=70?'mid':'low');
-    var emp=empByPhone[String(ph)]||'';
-    var empCell = ISADMIN
-      ? '<input class="empin" value="'+escAttr(emp)+'" placeholder="—" onchange="setPhoneEmployee(\''+esc(ph)+'\',this.value)">'
-      : (emp?esc(emp):'<span style="color:var(--t3)">—</span>');
-    html+='<tr><td>'+empCell+'</td><td class="nm">Phone '+esc(ph)+'</td><td>'+accounts+'</td><td><b>'+target+'</b></td><td>'+sourced+'</td>'+
+    var nameCell = ISADMIN
+      ? '<input class="empin" value="'+escAttr(srx.name||'')+'" placeholder="Employee" onchange="setSourcer(\''+esc(srx.id)+'\',\'name\',this.value)">'
+      : esc(srx.name||'—');
+    var phoneCell = ISADMIN
+      ? '<input class="empin" value="'+escAttr(String(srx.phones||''))+'" placeholder="e.g. 1, 4, 7" onchange="setSourcer(\''+esc(srx.id)+'\',\'phones\',this.value)">'
+      : (phones.length?esc(phones.map(function(x){return 'P'+x;}).join(', ')):'<span style="color:var(--t3)">—</span>');
+    html+='<tr><td>'+nameCell+'</td><td>'+phoneCell+'</td><td>'+accounts+'</td><td><b>'+target+'</b></td><td>'+sourced+'</td>'+
       '<td><div style="display:flex;align-items:center;gap:10px"><span class="pct '+pc+'">'+p+'%</span><div class="pbar"><i style="width:'+Math.min(100,p)+'%"></i></div></div></td></tr>';
   });
   var sum=$('targ-sum'); if(sum) sum.textContent=totS+' / '+totT+' sourced · '+(totT?Math.round(totS/totT*100):0)+'%';
-  var body=$('src-body'); if(body) body.innerHTML = html || '<tr><td colspan="6" class="muted">No accounts yet.</td></tr>';
+  var body=$('src-body'); if(body) body.innerHTML = html || '<tr><td colspan="6" class="muted">No sourcers.</td></tr>';
 }
-async function setPhoneEmployee(ph, val){
-  var p=(STATE.phones||[]).filter(function(x){ return String(x.phone)===String(ph); })[0];
-  if(p){ p.employee=val; }
-  try{ await apiPost({ action:'phone_employee', phone:ph, employee:val }); }catch(e){ toast('Save failed'); }
+function setSourcer(id, field, val){
+  var s=(STATE.sourcers||[]).filter(function(x){ return String(x.id)===String(id); })[0]; if(s){ s[field]=val; }
+  var obj={ action:'sourcer_set', id:id }; obj[field]=val;
+  renderTargets();
+  apiPost(obj).catch(function(){ toast('Save failed'); });
 }
 async function setSrc(va, field, val){
   val=fnum(val);
