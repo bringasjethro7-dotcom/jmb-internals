@@ -507,7 +507,7 @@ function acctRow(kind, a, r){
   var meta='<div class="ah"><b>@'+esc(a.handle)+'</b><span>P'+esc(a.phone)+' · U'+esc(a.user)+' · A'+esc(a.acct)+(a.followers?' · '+esc(a.followers)+' followers':'')+'</span></div>';
   var vaTag = va?'<span class="vacode" title="'+esc(va)+'">'+esc(firstName(va))+'</span>':'';
   var kebab='<button class="kebab" title="Mark suspended / logged out" onclick="cycleAcctStatus(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>';
-  var boxes=''; for(var i=0;i<n;i++){ var lbl=(kind==='src')?(gdGet(nums,i)||(i+1)):''; boxes+='<i class="cell s'+cellAt(cells,i)+'" data-i="'+i+'">'+lbl+'</i>'; }
+  var boxes=''; for(var i=0;i<n;i++){ var lbl=(kind==='src')?(gdGet(nums,i)||(i+1)):''; var tt=(kind==='src'&&ISADMIN)?' title="Click: cycle status · Right-click: edit/delete"':''; boxes+='<i class="cell s'+cellAt(cells,i)+'" data-i="'+i+'"'+tt+'>'+lbl+'</i>'; }
   if(kind==='src' && ISADMIN){ boxes += '<button class="addbox" title="Add next cycle (red)" onclick="addSrcBox(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')">+</button>'; }
   var cellsDiv='<div class="cells'+(locked?' locked':'')+'" data-kind="'+kind+'" data-p="'+esc(a.phone)+'" data-u="'+esc(a.user)+'" data-a="'+esc(a.acct)+'" data-h="'+esc(a.handle)+'">'+boxes+'</div>';
   if(kind==='post'){  // compact single line: box sits inline
@@ -564,9 +564,44 @@ async function setSrcBox(phone,user,acct,handle,idx,state,num){
 }
 function addSrcBox(phone,user,acct,handle){
   var r=sourceMap()[[phone,user,acct,handle].join('|')];
-  var idx=srcLen(r), maxNum=0;
-  if(r){ String(r.nums||'').split(',').forEach(function(p){ var x=parseInt(p,10); if(!isNaN(x)&&x>maxNum) maxNum=x; }); }
-  setSrcBox(phone,user,acct,handle,idx,1,maxNum+1);
+  var idx=srcLen(r), maxNum=0, hasNum=false;
+  if(r){ String(r.nums||'').split(',').forEach(function(p){ var x=parseInt(p,10); if(!isNaN(x)){ hasNum=true; if(x>maxNum) maxNum=x; } }); }
+  var nextNum;
+  if(!hasNum){   // first box on this account -> ask for the starting cycle number
+    var inp=prompt('Starting cycle number for @'+handle+':','1');
+    if(inp===null) return;
+    nextNum=parseInt(String(inp).trim(),10);
+    if(isNaN(nextNum)||nextNum<0){ toast('Enter a valid number'); return; }
+  } else { nextNum=maxNum+1; }   // next boxes continue from the last number
+  setSrcBox(phone,user,acct,handle,idx,1,nextNum);
+}
+// admin edit/delete: parse account into boxes, mutate, save whole account
+function srcBoxes(r){ var out=[], n=srcLen(r); for(var i=0;i<n;i++){ out.push({ s:cellAt(r&&r.cells,i), num:gdGet(r&&r.nums,i), gd:gdGet(r&&r.gdates,i) }); } return out; }
+function srcSaveBoxes(phone,user,acct,handle, boxes){
+  var cells=''; for(var i=0;i<boxes.length;i++) cells+=boxes[i].s;
+  var nums=boxes.map(function(b){return b.num||'';}).join(',');
+  var gds=boxes.map(function(b){return b.gd||'';}).join(',');
+  var k=[phone,user,acct,handle].join('|'); var r=sourceMap()[k];
+  if(r){ r.cells=cells; r.nums=nums; r.gdates=gds; }
+  else { r={ phone:phone,user:user,acct:acct,handle:handle, va_code:MYVA, cells:cells, nums:nums, gdates:gds }; STATE.sourcelog.push(r); }
+  renderSourcing();
+  apiPost({ action:'src_set_account', phone:phone, user:user, acct:acct, handle:handle, cells:cells, nums:nums, gdates:gds, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) }).catch(function(){ toast('Save failed'); });
+}
+function editSrcBox(phone,user,acct,handle,idx){
+  var r=sourceMap()[[phone,user,acct,handle].join('|')]; var boxes=srcBoxes(r); if(idx>=boxes.length) return;
+  var ans=prompt('Cycle number for this box (leave blank to DELETE it):', boxes[idx].num||'');
+  if(ans===null) return;
+  ans=String(ans).trim();
+  if(ans===''){ boxes.splice(idx,1); }
+  else { var n=parseInt(ans,10); if(isNaN(n)||n<0){ toast('Enter a valid number'); return; } boxes[idx].num=String(n); }
+  srcSaveBoxes(phone,user,acct,handle,boxes);
+}
+function onCellsContext(e){
+  if(!ISADMIN) return;
+  var cell=e.target.closest ? e.target.closest('.cell') : null; if(!cell) return;
+  var strip=cell.parentNode; if(!strip || !strip.classList || !strip.classList.contains('cells') || strip.getAttribute('data-kind')!=='src') return;
+  e.preventDefault();
+  editSrcBox(strip.getAttribute('data-p'), strip.getAttribute('data-u'), strip.getAttribute('data-a'), strip.getAttribute('data-h'), parseInt(cell.getAttribute('data-i'),10));
 }
 function onCellsClick(e){
   var cell=e.target.closest ? e.target.closest('.cell') : null; if(!cell) return;
@@ -707,6 +742,7 @@ function showTab(p){
 
 /* ---- cell-grid click delegation (boxes cycle blank → orange → green) ---- */
 ['posting','sourcing-list'].forEach(function(id){ var el=$(id); if(el) el.addEventListener('click', onCellsClick); });
+var _srcList=$('sourcing-list'); if(_srcList) _srcList.addEventListener('contextmenu', onCellsContext);  // admin right-click edit/delete
 
 /* ---- restore session ---- */
 (function(){
