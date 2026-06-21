@@ -311,19 +311,49 @@ function sceneDur(el){ if(narrator){ var w=sceneVO(el).trim().split(/\s+/).lengt
 /* ambient background music — synthesized (Web Audio), license-free, kept low under the narration */
 var ICON_MUS='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
 var ICON_MUSOFF='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/><line x1="2" y1="2" x2="22" y2="22"/></svg>';
-var actx=null, mGain=null, musicOnPref=true, musicBuilt=false;
+var actx=null, mGain=null, mLP=null, mDelay=null, musicOnPref=true, musicBuilt=false, schedTimer=null, mstep=0;
+// upbeat pop progression — C · G · Am · F (arpeggiated, with echo + soft kick)
+var CHORDS=[[261.63,329.63,392.00,523.25],[196.00,246.94,293.66,392.00],[220.00,261.63,329.63,440.00],[174.61,220.00,261.63,349.23]];
 function buildMusic(){
   if(musicBuilt) return; var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
   actx=new AC(); mGain=actx.createGain(); mGain.gain.value=0; mGain.connect(actx.destination);
-  var filt=actx.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=1800; filt.Q.value=0.6; filt.connect(mGain);
-  // mid-range pad (A3 C#4 E4 A4 + E5 shimmer) so it's clearly audible on laptop speakers
-  var freqs=[220,277.18,329.63,440,659.25], gains=[0.18,0.14,0.13,0.10,0.06], types=['sine','triangle','sine','triangle','sine'];
-  freqs.forEach(function(f,i){ var o=actx.createOscillator(); o.type=types[i]; o.frequency.value=f; o.detune.value=(i-2)*5; var g=actx.createGain(); g.gain.value=gains[i]; o.connect(g); g.connect(filt); o.start(); });
-  var lfo=actx.createOscillator(); lfo.frequency.value=0.06; var lg=actx.createGain(); lg.gain.value=600; lfo.connect(lg); lg.connect(filt.frequency); lfo.start();
+  mLP=actx.createBiquadFilter(); mLP.type='lowpass'; mLP.frequency.value=3200; mLP.Q.value=0.4; mLP.connect(mGain);
+  mDelay=actx.createDelay(); mDelay.delayTime.value=0.36; var fb=actx.createGain(); fb.gain.value=0.34;
+  mDelay.connect(fb); fb.connect(mDelay); mDelay.connect(mLP);   // feedback echo for space
   musicBuilt=true;
 }
-function musicOn(){ if(!musicOnPref) return; buildMusic(); if(!actx) return; if(actx.state==='suspended'){ try{ actx.resume(); }catch(e){} } var n=actx.currentTime; mGain.gain.cancelScheduledValues(n); mGain.gain.setValueAtTime(mGain.gain.value,n); mGain.gain.linearRampToValueAtTime(0.30, n+1.2); }
-function musicOff(){ if(!actx||!mGain) return; var n=actx.currentTime; mGain.gain.cancelScheduledValues(n); mGain.gain.setValueAtTime(mGain.gain.value,n); mGain.gain.linearRampToValueAtTime(0, n+0.7); }
+function pluck(freq,dur,vel,type){
+  if(!actx) return; var t=actx.currentTime;
+  var o=actx.createOscillator(); o.type=type||'triangle'; o.frequency.value=freq;
+  var g=actx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vel,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g); g.connect(mLP); g.connect(mDelay);
+  o.start(t); o.stop(t+dur+0.06);
+}
+function kick(){
+  if(!actx) return; var t=actx.currentTime;
+  var o=actx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(145,t); o.frequency.exponentialRampToValueAtTime(48,t+0.12);
+  var g=actx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.5,t+0.005); g.gain.exponentialRampToValueAtTime(0.0001,t+0.18);
+  o.connect(g); g.connect(mGain); o.start(t); o.stop(t+0.2);   // punchy, bypasses the echo
+}
+function step(){
+  var chord=CHORDS[Math.floor(mstep/8)%CHORDS.length];
+  var f=chord[mstep%4]; if(mstep%8>=4) f*=2;            // lift an octave in the 2nd half of the bar
+  pluck(f, 0.7, 0.15, 'triangle');                      // brighter, snappier melody
+  if(mstep%2===0) kick();                                // steady upbeat pulse
+  if(mstep%8===0) pluck(chord[0]/2, 1.1, 0.12, 'sine');  // bass on each chord
+  if(mstep%8===4) pluck(chord[2]*2, 0.45, 0.06, 'sine'); // shimmer
+  mstep++;
+}
+function musicOn(){
+  if(!musicOnPref) return; buildMusic(); if(!actx) return;
+  if(actx.state==='suspended'){ try{ actx.resume(); }catch(e){} }
+  var n=actx.currentTime; mGain.gain.cancelScheduledValues(n); mGain.gain.setValueAtTime(mGain.gain.value,n); mGain.gain.linearRampToValueAtTime(0.5, n+1.0);
+  if(!schedTimer){ step(); schedTimer=setInterval(step, 235); }
+}
+function musicOff(){
+  if(!actx||!mGain) return; var n=actx.currentTime; mGain.gain.cancelScheduledValues(n); mGain.gain.setValueAtTime(mGain.gain.value,n); mGain.gain.linearRampToValueAtTime(0, n+0.6);
+  if(schedTimer){ clearInterval(schedTimer); schedTimer=null; }
+}
 
 var idx=0, playing=false, t0=0, dur=0, rem=0, raf=null;
 function totalDur(){ return scenes.reduce(function(s,el){ return s+sceneDur(el); },0); }
