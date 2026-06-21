@@ -204,6 +204,11 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .sbadge{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;border-radius:20px;padding:4px 10px;cursor:pointer;border:1px solid;font-weight:600}
 .sbadge.prog{color:var(--amber);border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.1)}
 .sbadge.done{color:var(--green);border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.1)}
+.igc{cursor:pointer;border-bottom:1px dashed transparent;font-weight:600}
+.igc:hover{border-bottom-color:var(--t3);color:var(--o3)}
+.igref{background:none;border:1px solid var(--line);color:var(--t3);cursor:pointer;border-radius:6px;padding:3px;vertical-align:middle;margin-left:4px}
+.igref:hover{color:var(--o1);border-color:var(--line-hi)}
+.igref svg{width:13px;height:13px;display:block}
 .delx{background:none;border:none;color:var(--t3);cursor:pointer;font-size:14px;padding:4px 6px;border-radius:6px}
 .delx:hover{color:var(--red);background:rgba(239,68,68,.1)}
 .srctable td a{color:var(--o3);text-decoration:none;border-bottom:1px solid rgba(255,154,92,.3)}
@@ -937,14 +942,31 @@ function renderAudios(){
   var audios=(STATE.audios||[]).slice().reverse();
   var html='';
   if(!audios.length){ html='<div class="muted">No audio promotions yet.</div>'; }
-  else { html='<table class="srctable"><thead><tr><th>Audio</th><th>Status</th><th>Reach</th><th></th></tr></thead><tbody>'+
+  else { html='<table class="srctable"><thead><tr><th>Audio</th><th>Status</th><th>Reels using</th><th></th></tr></thead><tbody>'+
     audios.map(function(a){
       var st=String(a.status).toLowerCase();
       var badge='<button class="sbadge '+(st==='done'?'done':'prog')+'" onclick="toggleAudio(\''+esc(a.id)+'\',\''+st+'\')">'+(st==='done'?'Done':'In progress')+'</button>';
       var title=a.link?'<a href="'+esc(a.link)+'" target="_blank" rel="noopener">'+esc(a.title||a.link)+'</a>':esc(a.title||'—');
-      return '<tr><td class="nm">'+title+'</td><td>'+badge+'</td><td>'+(a.reach?esc(a.reach):'')+'</td><td><button class="delx" title="Delete" onclick="delAudio(\''+esc(a.id)+'\')">✕</button></td></tr>';
+      var num='<span class="igc" onclick="editAudioNum(\''+esc(a.id)+'\',\''+escAttr(a.reach||'')+'\')" title="Click to edit">'+(a.reach?esc(a.reach):'—')+'</span>';
+      var refresh=a.link?'<button class="igref" title="Re-fetch latest count" onclick="refreshAudio(\''+esc(a.id)+'\',\''+escAttr(a.link)+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>':'';
+      return '<tr><td class="nm">'+title+'</td><td>'+badge+'</td><td>'+num+' '+refresh+'</td><td><button class="delx" title="Delete" onclick="delAudio(\''+esc(a.id)+'\')">✕</button></td></tr>';
     }).join('')+'</tbody></table>'; }
   $('ins-audios').innerHTML=html;
+}
+function editAudioNum(id, cur){
+  var v=prompt('Reels using this audio (number):', cur); if(v===null) return;
+  apiPost({ action:'audio_save', id:id, reach:String(v).trim(), by:firstName(USER.full_name||USER.employee_id) }).then(refreshQuiet).catch(function(){ toast('Save failed'); });
+}
+async function refreshAudio(id, link){
+  if(!link){ toast('No link'); return; }
+  toast('Checking Instagram…');
+  try{
+    var f=await apiPost({ action:'ig_fetch', link:link });
+    if(f && f.ok && f.count!=='' && f.count!=null){
+      await apiPost({ action:'audio_save', id:id, reach:String(f.count), by:firstName(USER.full_name||USER.employee_id) });
+      await refreshQuiet(); toast('Updated: '+f.count);
+    } else { toast(f&&f.blocked?'Instagram blocked the read — enter it manually':'Couldn’t read a number — enter it manually'); }
+  }catch(e){ toast('Fetch failed'); }
 }
 function renderReposts(){
   var reposts=(STATE.reposts||[]).slice().reverse();
@@ -953,16 +975,22 @@ function renderReposts(){
   else { html='<table class="srctable"><thead><tr><th>Date</th><th>Reel</th><th>Reposts</th><th>Reach</th><th></th></tr></thead><tbody>'+
     reposts.map(function(r){
       var link=r.link?'<a href="'+esc(r.link)+'" target="_blank" rel="noopener">link</a>':'—';
-      return '<tr><td class="nm">'+esc(r.date||'')+'</td><td>'+link+'</td><td><b>'+esc(r.count||'')+'</b></td><td>'+(r.reach?esc(r.reach):'')+'</td><td><button class="delx" title="Delete" onclick="delRepost(\''+esc(r.id)+'\')">✕</button></td></tr>';
+      var reach='<span class="igc" onclick="editRepostReach(\''+esc(r.id)+'\',\''+escAttr(r.reach||'')+'\')" title="Click to edit">'+(r.reach?esc(r.reach):'—')+'</span>';
+      var refresh=r.link?'<button class="igref" title="Re-fetch reach" onclick="refreshRepost(\''+esc(r.id)+'\',\''+escAttr(r.link)+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>':'';
+      return '<tr><td class="nm">'+esc(r.date||'')+'</td><td>'+link+'</td><td><b>'+esc(r.count||'')+'</b></td><td>'+reach+' '+refresh+'</td><td><button class="delx" title="Delete" onclick="delRepost(\''+esc(r.id)+'\')">✕</button></td></tr>';
     }).join('')+'</tbody></table>'; }
   $('ins-reposts').innerHTML=html;
 }
 async function addAudio(){
   var title=prompt('Audio / song title:'); if(title===null||!title.trim()) return;
-  var link=prompt('IG audio link (optional):','')||'';
-  var reach=prompt('Reach so far (optional number):','')||'';
-  try{ await apiPost({ action:'audio_save', title:title.trim(), link:link.trim(), status:'progress', reach:reach.trim(), by:firstName(USER.full_name||USER.employee_id) }); await refreshQuiet(); }
-  catch(e){ toast('Save failed'); }
+  var link=prompt('Paste the IG audio or reel link:','')||''; link=link.trim();
+  var reach='';
+  if(link){ toast('Checking Instagram…'); try{ var f=await apiPost({ action:'ig_fetch', link:link }); if(f&&f.ok&&f.count!==''&&f.count!=null) reach=String(f.count); }catch(e){} }
+  try{
+    await apiPost({ action:'audio_save', title:title.trim(), link:link, status:'progress', reach:reach, by:firstName(USER.full_name||USER.employee_id) });
+    await refreshQuiet();
+    toast(reach ? ('Saved — '+reach+' reels') : (link ? 'Saved. Couldn’t auto-read the count — edit it manually.' : 'Saved.'));
+  }catch(e){ toast('Save failed'); }
 }
 async function toggleAudio(id, st){
   try{ await apiPost({ action:'audio_save', id:id, status:(st==='done'?'progress':'done'), by:firstName(USER.full_name||USER.employee_id) }); await refreshQuiet(); }
@@ -982,6 +1010,19 @@ async function addRepost(){
 async function delRepost(id){
   if(!confirm('Delete this repost entry?')) return;
   try{ await apiPost({ action:'repost_del', id:id }); await refreshQuiet(); }catch(e){ toast('Delete failed'); }
+}
+function editRepostReach(id, cur){
+  var v=prompt('Reach (number):', cur); if(v===null) return;
+  apiPost({ action:'repost_save', id:id, reach:String(v).trim(), by:firstName(USER.full_name||USER.employee_id) }).then(refreshQuiet).catch(function(){ toast('Save failed'); });
+}
+async function refreshRepost(id, link){
+  if(!link){ toast('No link'); return; }
+  toast('Checking Instagram…');
+  try{
+    var f=await apiPost({ action:'ig_fetch', link:link });
+    if(f && f.ok && f.count!=='' && f.count!=null){ await apiPost({ action:'repost_save', id:id, reach:String(f.count), by:firstName(USER.full_name||USER.employee_id) }); await refreshQuiet(); toast('Updated: '+f.count); }
+    else { toast(f&&f.blocked?'Instagram blocked the read — enter it manually':'Couldn’t read a number — enter it manually'); }
+  }catch(e){ toast('Fetch failed'); }
 }
 
 /* ---- tabs ---- */
