@@ -107,6 +107,8 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .agh .agbar i{display:block;height:100%;background:linear-gradient(90deg,var(--o3),var(--o1))}
 .agbody{display:none}
 .agbody.open{display:block}
+.acctgroup.disc{opacity:.5}
+.agh .discb{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--red);border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.1);border-radius:20px;padding:2px 8px;white-space:nowrap}
 .arow{display:flex;align-items:center;gap:12px;padding:9px 15px;border-top:1px solid var(--line)}
 .arow .ah{flex:1;min-width:0}
 .arow .ah b{font-size:13.5px;font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -135,6 +137,14 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .pbar{height:7px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden;width:120px}
 .pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--o3),var(--o1))}
 .srcadd{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.targbox{margin-top:1.6rem;background:rgba(21,27,36,.4);border:1px solid var(--line);border-radius:var(--r)}
+.targhead{display:flex;align-items:center;gap:10px;padding:13px 16px;cursor:pointer}
+.targhead b{font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700}
+.targhead svg{width:15px;height:15px;color:var(--t3);transition:transform .2s;flex-shrink:0}
+.targbox.open .targhead svg{transform:rotate(90deg)}
+.targsum{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t3);margin-left:auto}
+.targbody{display:none;padding:0 14px 16px}
+.targbox.open .targbody{display:block}
 
 .muted{color:var(--t3);font-size:13px;text-align:center;padding:2rem}
 .note{font-size:12px;color:var(--t3);margin-top:10px}
@@ -218,13 +228,26 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
     <div class="page" id="page-sourcing">
       <div class="toolbar">
         <input type="date" class="dt" id="src-date" onchange="onDateChange()" />
+        <select class="sel" id="src-phone" onchange="renderSourcing()"><option value="">All phones</option></select>
+        <select class="sel" id="src-filter" onchange="renderSourcing()"><option value="all">All accounts</option><option value="todo">Not sourced</option><option value="done">Sourced</option><option value="active">Active only</option></select>
+        <input class="search" id="src-search" placeholder="Search handle…" oninput="renderSourcing()" />
       </div>
       <div class="stats" id="src-stats"></div>
-      <table class="srctable"><thead><tr><th>Sourcer</th><th>Daily target</th><th>Sourced</th><th>Completion</th><th></th></tr></thead><tbody id="src-body"></tbody></table>
-      <div class="srcadd" id="src-add" style="display:none">
-        <input class="search" id="src-name" placeholder="Add sourcer name…" style="flex:0 0 220px" />
-        <input class="numin" id="src-target" placeholder="target" />
-        <button class="adminbtn" onclick="addSourcer()">Add sourcer</button>
+      <div id="sourcing-list"><div class="muted">Loading accounts…</div></div>
+
+      <div class="targbox" id="targbox">
+        <div class="targhead" onclick="document.getElementById('targbox').classList.toggle('open')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          <b>Daily targets</b><span class="targsum" id="targ-sum"></span>
+        </div>
+        <div class="targbody">
+          <table class="srctable"><thead><tr><th>Sourcer</th><th>Daily target</th><th>Sourced</th><th>Completion</th><th></th></tr></thead><tbody id="src-body"></tbody></table>
+          <div class="srcadd" id="src-add" style="display:none">
+            <input class="search" id="src-name" placeholder="Add sourcer name…" style="flex:0 0 220px" />
+            <input class="numin" id="src-target" placeholder="target" />
+            <button class="adminbtn" onclick="addSourcer()">Add sourcer</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -314,6 +337,7 @@ async function loadState(){
   try{
     STATE = await apiGet({ action:'state', date:d });
     if(STATE.error) throw new Error(STATE.error);
+    STATE.phones=STATE.phones||[]; STATE.accounts=STATE.accounts||[]; STATE.posting=STATE.posting||[]; STATE.sourcing=STATE.sourcing||[]; STATE.sourcelog=STATE.sourcelog||[];
     if(!$('post-date').value){ $('post-date').value=STATE.date; $('src-date').value=STATE.date; }
     buildPhoneFilter();
     renderDevice(); renderPosting(); renderSourcing();
@@ -375,25 +399,33 @@ function postingMap(){
   var m={}; (STATE.posting||[]).forEach(function(r){ m[[r.phone,r.user,r.acct,r.handle].join('|')]=r; }); return m;
 }
 function buildPhoneFilter(){
-  var sel=$('post-phone'); var cur=sel.value;
   var ph={}; (STATE.accounts||[]).forEach(function(a){ ph[a.phone]=true; });
   var ks=Object.keys(ph).sort(function(a,b){return fnum(a)-fnum(b);});
-  sel.innerHTML='<option value="">All phones</option>'+ks.map(function(k){ return '<option value="'+esc(k)+'">Phone '+esc(k)+'</option>'; }).join('');
-  sel.value=cur;
+  var opts='<option value="">All phones</option>'+ks.map(function(k){ return '<option value="'+esc(k)+'">Phone '+esc(k)+'</option>'; }).join('');
+  ['post-phone','src-phone'].forEach(function(id){ var sel=$(id); if(sel){ var cur=sel.value; sel.innerHTML=opts; sel.value=cur; } });
 }
 function renderPosting(){
   if(!STATE){ return; }
   var accts=(STATE.accounts||[]), map=postingMap();
   var fp=$('post-phone').value, ff=$('post-filter').value, q=$('post-search').value.trim().toLowerCase();
-  // stats
-  var doneAll=0, vaCount={}, phoneCount={};
-  (STATE.posting||[]).forEach(function(r){ if(String(r.posted).toUpperCase()==='TRUE'){ doneAll++; vaCount[r.va_code]=(vaCount[r.va_code]||0)+1; phoneCount[r.phone]=(phoneCount[r.phone]||0)+1; } });
-  var mine=vaCount[MYVA]||0;
+  // disconnected phones are excluded from the posting totals
+  var disc = disconnectedPhones();
+  function postable(a){ return !disc[String(a.phone)] && (!a.status || a.status==='active'); }
+  var postableCount = accts.filter(postable).length;
+  // stats (only count posts on connected phones toward the totals)
+  var posted=0, mine=0;
+  (STATE.posting||[]).forEach(function(r){
+    if(String(r.posted).toUpperCase()!=='TRUE') return;
+    if(disc[String(r.phone)]) return;            // skip disconnected-phone posts
+    posted++; if(r.va_code===MYVA) mine++;
+  });
+  var discCount = Object.keys(disc).length;
   $('post-stats').innerHTML=
-    statCard('Posted today', doneAll, 'g')+
+    statCard('Posted today', posted, 'g')+
     statCard('Your posts ('+MYVA+')', mine, 'o')+
-    statCard('Accounts', accts.length, '')+
-    statCard('Remaining', Math.max(0, countActive(accts)-doneAll), 'a');
+    statCard('Postable', postableCount, '')+
+    statCard('Remaining', Math.max(0, postableCount-posted), 'a')+
+    (discCount? statCard('Disconnected', discCount+' phone'+(discCount>1?'s':''), 'r') : '');
   // filter + group by phone
   var rows=accts.filter(function(a){
     if(fp && String(a.phone)!==String(fp)) return false;
@@ -407,16 +439,20 @@ function renderPosting(){
   if(!rows.length){ $('posting').innerHTML='<div class="muted">No accounts match.</div>'; return; }
   var byPhone={}; rows.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
   var phones=Object.keys(byPhone).sort(function(a,b){return fnum(a)-fnum(b);});
+  var disc2 = disconnectedPhones();
   $('posting').innerHTML=phones.map(function(ph){
     var list=byPhone[ph], done=0; list.forEach(function(a){ var pr=map[postKey(a)]; if(pr&&String(pr.posted).toUpperCase()==='TRUE') done++; });
     var pct=list.length?Math.round(done/list.length*100):0;
     var open = (phones.length<=2) ? 'open' : '';
-    return '<div class="acctgroup"><div class="agh" onclick="this.nextElementSibling.classList.toggle(\'open\')">'+
-      '<b>Phone '+esc(ph)+'</b><div class="agbar"><i style="width:'+pct+'%"></i></div>'+
+    var isDisc = !!disc2[String(ph)];
+    var badge = isDisc ? '<span class="discb">disconnected · not counted</span>' : '';
+    return '<div class="acctgroup'+(isDisc?' disc':'')+'"><div class="agh" onclick="this.nextElementSibling.classList.toggle(\'open\')">'+
+      '<b>Phone '+esc(ph)+'</b>'+badge+'<div class="agbar"><i style="width:'+pct+'%"></i></div>'+
       '<span class="agc">'+done+'/'+list.length+'</span></div>'+
       '<div class="agbody '+open+'">'+list.map(function(a){ return postRow(a, map[postKey(a)]); }).join('')+'</div></div>';
   }).join('');
 }
+function disconnectedPhones(){ var d={}; (STATE&&STATE.phones||[]).forEach(function(p){ if((p.status||'')==='disconnected') d[String(p.phone)]=true; }); return d; }
 function countActive(accts){ return accts.filter(function(a){ return !a.status || a.status==='active'; }).length; }
 function postRow(a, pr){
   var done = pr && String(pr.posted).toUpperCase()==='TRUE';
@@ -464,19 +500,73 @@ function srcRows(){
   Object.keys(byVa).forEach(function(k){ rows.push(byVa[k]); });
   return rows;
 }
+function srcKey(a){ return [a.phone,a.user,a.acct,a.handle].join('|'); }
+function sourceMap(){ var m={}; (STATE.sourcelog||[]).forEach(function(r){ m[[r.phone,r.user,r.acct,r.handle].join('|')]=r; }); return m; }
 function renderSourcing(){
   if(!STATE) return;
-  var rows=srcRows();
-  var totT=0,totS=0;
-  rows.forEach(function(r){ totT+=fnum(r.target); totS+=fnum(r.sourced); });
-  var pct=totT?Math.round(totS/totT*100):0;
+  renderTargets();
+  var accts=(STATE.accounts||[]), map=sourceMap();
+  var fp=$('src-phone')?$('src-phone').value:'', ff=$('src-filter')?$('src-filter').value:'all', q=$('src-search')?$('src-search').value.trim().toLowerCase():'';
+  // stats over every account (sourcing isn't tied to phone connectivity)
+  var sourced=0, mine=0;
+  (STATE.sourcelog||[]).forEach(function(r){ if(String(r.sourced).toUpperCase()==='TRUE'){ sourced++; if(r.va_code===MYVA) mine++; } });
+  var activeCount=countActive(accts);
   $('src-stats').innerHTML=
-    statCard('Total target', totT, 'o')+
-    statCard('Sourced', totS, 'g')+
-    statCard('Remaining', Math.max(0,totT-totS), 'a')+
-    statCard('Completion', pct+'%', pct>=100?'g':(pct>=70?'a':'r'));
-  var dis = ISADMIN ? '' : '';
-  $('src-body').innerHTML=rows.map(function(r){
+    statCard('Sourced today', sourced, 'g')+
+    statCard('You ('+MYVA+')', mine, 'o')+
+    statCard('Accounts', accts.length, '')+
+    statCard('Remaining', Math.max(0, activeCount-sourced), 'a');
+  var rows=accts.filter(function(a){
+    if(fp && String(a.phone)!==String(fp)) return false;
+    var pr=map[srcKey(a)], done=pr&&String(pr.sourced).toUpperCase()==='TRUE';
+    if(ff==='todo' && done) return false;
+    if(ff==='done' && !done) return false;
+    if(ff==='active' && (a.status&&a.status!=='active')) return false;
+    if(q && esc(a.handle).toLowerCase().indexOf(q)<0) return false;
+    return true;
+  });
+  if(!rows.length){ $('sourcing-list').innerHTML='<div class="muted">No accounts match.</div>'; return; }
+  var byPhone={}; rows.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
+  var phones=Object.keys(byPhone).sort(function(a,b){return fnum(a)-fnum(b);});
+  $('sourcing-list').innerHTML=phones.map(function(ph){
+    var list=byPhone[ph], done=0; list.forEach(function(a){ var pr=map[srcKey(a)]; if(pr&&String(pr.sourced).toUpperCase()==='TRUE') done++; });
+    var pct=list.length?Math.round(done/list.length*100):0;
+    var open=(phones.length<=2)?'open':'';
+    return '<div class="acctgroup"><div class="agh" onclick="this.nextElementSibling.classList.toggle(\'open\')">'+
+      '<b>Phone '+esc(ph)+'</b><div class="agbar"><i style="width:'+pct+'%"></i></div>'+
+      '<span class="agc">'+done+'/'+list.length+'</span></div>'+
+      '<div class="agbody '+open+'">'+list.map(function(a){ return sourceRow(a, map[srcKey(a)]); }).join('')+'</div></div>';
+  }).join('');
+}
+function sourceRow(a, pr){
+  var done = pr && String(pr.sourced).toUpperCase()==='TRUE';
+  var va = pr && pr.va_code ? pr.va_code : '';
+  var susp = a.status && a.status!=='active' ? '<span class="susp">'+esc(a.status==='logged_out'?'logged out':a.status)+'</span>' : '';
+  return '<div class="arow">'+
+    '<button class="check '+(done?'on':'')+'" onclick="toggleSource(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"></button>'+
+    '<div class="ah"><b>@'+esc(a.handle)+'</b><span>P'+esc(a.phone)+' · U'+esc(a.user)+' · A'+esc(a.acct)+(a.followers?' · '+esc(a.followers)+' followers':'')+'</span></div>'+
+    susp+
+    (va?'<span class="vacode">'+esc(va)+'</span>':'')+
+    '<button class="kebab" title="Mark suspended / logged out" onclick="cycleAcctStatus(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>'+
+    '</div>';
+}
+async function toggleSource(phone,user,acct,handle){
+  var k=[phone,user,acct,handle].join('|'); var map=sourceMap(); var pr=map[k];
+  var done = pr && String(pr.sourced).toUpperCase()==='TRUE'; var next=!done;
+  if(pr){ pr.sourced=next?'TRUE':'FALSE'; pr.va_code=MYVA; }
+  else { STATE.sourcelog.push({ date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, sourced:next?'TRUE':'FALSE' }); }
+  renderSourcing();
+  try{ await apiPost({ action:'source_toggle', date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, sourced:next, by:firstName(USER.full_name||USER.employee_id) }); }
+  catch(e){ toast('Save failed'); }
+}
+/* minimized per-sourcer target table */
+function renderTargets(){
+  var rows=srcRows();
+  var totT=0,totS=0; rows.forEach(function(r){ totT+=fnum(r.target); totS+=fnum(r.sourced); });
+  var pct=totT?Math.round(totS/totT*100):0;
+  var sum=$('targ-sum'); if(sum) sum.textContent=totS+' / '+totT+' clips · '+pct+'%';
+  var body=$('src-body'); if(!body) return;
+  body.innerHTML=rows.map(function(r){
     var t=fnum(r.target), s=fnum(r.sourced), p=t?Math.round(s/t*100):0;
     var pc = p>=100?'ok':(p>=70?'mid':'low');
     return '<tr>'+
