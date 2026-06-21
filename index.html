@@ -173,6 +173,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 <script>
 /* ====== CONFIG — edit these freely ====== */
 var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzoalT_9SYhSPciWdjDI6bv0qjKL7SWn0Rmkgt6CMJMzGs9pKCydCJChz6-ZuM_Srdj/exec";
+var ADMIN_PASS = "JMBeast_020298";   // sign in as "ADMIN" + this password (same as the admin panel)
 var LOGO = document.querySelector('link[rel="icon"]').href;
 
 var QUICK_LINKS = [
@@ -220,6 +221,15 @@ async function doLogin(){
   var err=document.getElementById('lerr'), btn=document.getElementById('lbtn');
   err.style.display='none';
   if(!id||!pin){ err.textContent='Enter your employee ID and PIN.'; err.style.display='block'; return; }
+  // Admin shortcut: sign in with "ADMIN" + the admin password
+  if(id.toUpperCase()==='ADMIN'){
+    if(pin===ADMIN_PASS){
+      var au={ full_name:'Admin (JMB Virtuals)', employee_id:'ADMIN', position:'Administrator', department:'Management', photo:'' };
+      sessionStorage.setItem('internals_user', JSON.stringify(au));
+      enterApp(au);
+    } else { err.textContent='Invalid admin password.'; err.style.display='block'; }
+    return;
+  }
   btn.disabled=true; btn.textContent='Signing in…';
   try{
     var res=await fetch(APPS_SCRIPT_URL+'?id='+encodeURIComponent(id)+'&pin='+encodeURIComponent(pin));
