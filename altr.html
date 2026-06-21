@@ -172,6 +172,8 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .numin:disabled{opacity:.55;cursor:not-allowed}
 .empin{width:100%;max-width:200px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;color:var(--t1);font-family:inherit;font-size:13px;padding:7px 10px;outline:none}
 .empin:focus{border-color:var(--o1)}
+.empwrap{display:flex;align-items:center;gap:9px}
+.empchk{width:17px;height:17px;accent-color:var(--o1);cursor:pointer;flex-shrink:0}
 .pct{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px}
 .pct.ok{color:var(--green)}.pct.mid{color:var(--amber)}.pct.low{color:var(--red)}
 .pbar{height:7px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden;width:120px}
@@ -282,6 +284,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
         <button class="adminbtn" id="src-record-btn" style="display:none" onclick="recordDay()">Record day</button>
         <button class="ghost" id="src-import-btn" style="display:none" onclick="importSourcingHistory()">Import history</button>
         <button class="ghost" id="src-clear-btn" style="display:none" onclick="clearBoard()">Clear board</button>
+        <button class="adminbtn" id="src-assign-btn" style="display:none" onclick="autoAssign()">Auto-assign phones</button>
       </div>
       <div class="stats" id="src-stats"></div>
 
@@ -291,7 +294,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
           <b>Daily targets</b><span class="targsum" id="targ-sum"></span>
         </div>
         <div class="targbody">
-          <table class="srctable"><thead><tr><th>Employee</th><th>Phone</th><th>Assigned</th><th>Target</th><th>Sourced</th><th>Completion</th></tr></thead><tbody id="src-body"></tbody></table>
+          <table class="srctable"><thead><tr><th>Employee</th><th>Phone</th><th>Target</th><th>Sourced</th><th>Completion</th></tr></thead><tbody id="src-body"></tbody></table>
         </div>
       </div>
 
@@ -388,7 +391,7 @@ function enterApp(user, admin){
   if(!configured()){ $('setup').style.display='block'; return; }
   $('app').style.display='block';
   $('who-name').textContent=firstName(user.full_name||user.employee_id);
-  if(ISADMIN){ $('import-btn').style.display=''; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; $('src-clear-btn').style.display=''; }
+  if(ISADMIN){ $('import-btn').style.display=''; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; $('src-clear-btn').style.display=''; $('src-assign-btn').style.display=''; }
   // record the marker's name (the signed-in person)
   MYVA = ISADMIN ? 'Admin' : (user.full_name || user.employee_id || '');
   // dates default today (filled after state load)
@@ -590,7 +593,13 @@ async function cycleCell(kind,phone,user,acct,handle,idx){
   var isSrc=kind==='src'; var map=isSrc?sourceMap():postingMap();
   var k=[phone,user,acct,handle].join('|'); var r=map[k];
   var cells=r?String(r.cells||''):''; var cur=cellAt(cells,idx); var next;
-  if(kind==='src'){ var nn=parseInt(cur,10)||0; nn=(nn>=maxState('src'))?0:nn+1; next=String(nn); }   // blank→red→orange→green→blank
+  if(kind==='src'){
+    if(ISADMIN){ var nn=parseInt(cur,10)||0; nn=(nn>=maxState('src'))?0:nn+1; next=String(nn); }   // admin: blank→red→orange→blank
+    else {                                                                                          // employee: only source (red↔orange), can't create or remove
+      if(cur==='0'){ toast('Only an admin can assign boxes'); return; }
+      next = (cur==='1') ? '2' : '1';
+    }
+  }
   else { next = (cur===String(greenState('post'))) ? '0' : String(greenState('post')); }              // posting: blank↔green
   cells=setCellAt(cells,idx,next);
   var gs=String(greenState('src'));
@@ -748,27 +757,49 @@ function renderTargets(){
   var totT=0, totS=0, html='';
   sourcers.forEach(function(srx){
     var phones=String(srx.phones||'').split(',').map(function(x){return x.trim();}).filter(function(x){return x!==''; });
-    var accounts=0, red=0, sourced=0;
-    phones.forEach(function(ph){ var st=phoneStats_(ph); accounts+=st.accounts; red+=st.red; sourced+=st.sourced; });
+    var red=0, sourced=0;
+    phones.forEach(function(ph){ var st=phoneStats_(ph); red+=st.red; sourced+=st.sourced; });
     var target=red+sourced; totT+=target; totS+=sourced;
     var p=target?Math.round(sourced/target*100):0, pc=p>=100?'ok':(p>=70?'mid':'low');
+    var active = String(srx.active||'').toUpperCase()!=='FALSE';   // default working unless explicitly FALSE
+    var chk = ISADMIN ? '<input type="checkbox" class="empchk" title="Working today" '+(active?'checked':'')+' onchange="setSourcer(\''+esc(srx.id)+'\',\'active\',this.checked?\'TRUE\':\'FALSE\')">' : '';
     var nameCell = ISADMIN
-      ? '<input class="empin" value="'+escAttr(srx.name||'')+'" placeholder="Employee" onchange="setSourcer(\''+esc(srx.id)+'\',\'name\',this.value)">'
+      ? '<div class="empwrap">'+chk+'<input class="empin" value="'+escAttr(srx.name||'')+'" placeholder="Employee" onchange="setSourcer(\''+esc(srx.id)+'\',\'name\',this.value)"></div>'
       : esc(srx.name||'—');
     var phoneCell = ISADMIN
       ? '<input class="empin" value="'+escAttr(String(srx.phones||''))+'" placeholder="e.g. 1, 4, 7" onchange="setSourcer(\''+esc(srx.id)+'\',\'phones\',this.value)">'
       : (phones.length?esc(phones.map(function(x){return 'P'+x;}).join(', ')):'<span style="color:var(--t3)">—</span>');
-    html+='<tr><td>'+nameCell+'</td><td>'+phoneCell+'</td><td>'+accounts+'</td><td><b>'+target+'</b></td><td>'+sourced+'</td>'+
+    html+='<tr'+(active?'':' style="opacity:.45"')+'><td>'+nameCell+'</td><td>'+phoneCell+'</td><td><b>'+target+'</b></td><td>'+sourced+'</td>'+
       '<td><div style="display:flex;align-items:center;gap:10px"><span class="pct '+pc+'">'+p+'%</span><div class="pbar"><i style="width:'+Math.min(100,p)+'%"></i></div></div></td></tr>';
   });
   var sum=$('targ-sum'); if(sum) sum.textContent=totS+' / '+totT+' sourced · '+(totT?Math.round(totS/totT*100):0)+'%';
-  var body=$('src-body'); if(body) body.innerHTML = html || '<tr><td colspan="6" class="muted">No sourcers.</td></tr>';
+  var body=$('src-body'); if(body) body.innerHTML = html || '<tr><td colspan="5" class="muted">No sourcers.</td></tr>';
 }
 function setSourcer(id, field, val){
   var s=(STATE.sourcers||[]).filter(function(x){ return String(x.id)===String(id); })[0]; if(s){ s[field]=val; }
   var obj={ action:'sourcer_set', id:id }; obj[field]=val;
   renderTargets();
   apiPost(obj).catch(function(){ toast('Save failed'); });
+}
+/* fairly scatter all phones across the employees, balanced by red-box workload (greedy LPT) */
+async function autoAssign(){
+  if(!confirm('Auto-assign all phones across the employees, balanced by their red-box targets?\nThis overwrites the current phone assignments.')) return;
+  var redByPhone={}, phonesSet={};
+  (STATE.accounts||[]).forEach(function(a){ phonesSet[String(a.phone)]=true; });
+  Object.keys(phonesSet).forEach(function(ph){ redByPhone[ph]=phoneStats_(ph).red; });
+  var phones=Object.keys(phonesSet).sort(function(a,b){ return (redByPhone[b]-redByPhone[a]) || (fnum(a)-fnum(b)); });
+  var sourcers=(STATE.sourcers||[]).filter(function(s){ return String(s.active||'').toUpperCase()!=='FALSE'; }).sort(function(a,b){ return fnum(a.id)-fnum(b.id); });
+  if(!sourcers.length){ toast('Tick the employees working today first'); return; }
+  var buckets=sourcers.map(function(s){ return { id:s.id, sum:0, phones:[] }; });
+  phones.forEach(function(ph){
+    var best=buckets[0];
+    for(var i=1;i<buckets.length;i++){ if(buckets[i].sum<best.sum || (buckets[i].sum===best.sum && buckets[i].phones.length<best.phones.length)) best=buckets[i]; }
+    best.phones.push(ph); best.sum += (redByPhone[ph]||0);
+  });
+  buckets.forEach(function(b){ b.list=b.phones.sort(function(a,c){ return fnum(a)-fnum(c); }).join(', '); var s=(STATE.sourcers||[]).filter(function(x){ return String(x.id)===String(b.id); })[0]; if(s) s.phones=b.list; });
+  renderTargets();
+  try{ for(var i=0;i<buckets.length;i++){ await apiPost({ action:'sourcer_set', id:buckets[i].id, phones:buckets[i].list }); } toast('Phones auto-assigned across '+buckets.length+' employees'); }
+  catch(e){ toast('Save failed'); }
 }
 async function setSrc(va, field, val){
   val=fnum(val);
