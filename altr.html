@@ -473,8 +473,8 @@ var POST_BOXES = 1;    // posting = one box per account
 var SRC_BOXES  = 50;   // (legacy cap, unused)
 var CELLS_N    = 100;  // max box positions stored per account
 var OPEN = { post:{}, src:{} };
-function maxState(kind){ return kind==='src'?3:2; }
-function greenState(kind){ return kind==='src'?3:2; }
+function maxState(kind){ return 2; }       // sourcing cycle: blank(0) -> red(1,target) -> orange(2,done) -> blank
+function greenState(kind){ return 2; }     // "done" state = 2 (orange for sourcing, green for posting)
 function cellAt(cells,i){ var c=String(cells||''); return c.charAt(i)||'0'; }
 function setCellAt(cells,i,ch){ var c=String(cells||''); while(c.length<=i) c+='0'; return c.substr(0,i)+ch+c.substr(i+1); }
 function srcLen(r){ if(!r) return 0; var cells=String(r.cells||''), nums=String(r.nums||''), mx=-1; for(var i=0;i<CELLS_N;i++){ if(cellAt(cells,i)!=='0' || gdGet(nums,i)!=='') mx=i; } return mx+1; }
@@ -665,7 +665,7 @@ async function recordDay(){
 }
 
 async function importSourcingHistory(){
-  if(!confirm('Import the "Import here" sheet?\nEach listed cycle number is added as an ORANGE box on the matching account. Safe to run once.')) return;
+  if(!confirm('Import the "Import here" sheet?\nEach listed cycle number is added as an ORANGE (done) box on the matching account. Safe to run once.')) return;
   toast('Importing sourcing history… this can take ~20s');
   try{
     var r=await apiPost({ action:'import_sourcing' });
