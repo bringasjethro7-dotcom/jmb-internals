@@ -109,7 +109,23 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .agbody.open{display:block}
 .acctgroup.disc{opacity:.5}
 .agh .discb{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--red);border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.1);border-radius:20px;padding:2px 8px;white-space:nowrap}
-.arow{display:flex;align-items:center;gap:12px;padding:9px 15px;border-top:1px solid var(--line)}
+.arow{display:flex;flex-direction:column;gap:9px;padding:11px 15px;border-top:1px solid var(--line)}
+.atop{display:flex;align-items:center;gap:12px}
+.cells{display:flex;flex-wrap:wrap;gap:4px}
+.cells.locked{pointer-events:none;opacity:.4;filter:grayscale(.6)}
+.cell{width:17px;height:17px;border-radius:5px;border:1.6px solid var(--t3);background:transparent;cursor:pointer;transition:transform .1s,background .1s,border-color .1s}
+.cell:hover{border-color:var(--o1);transform:scale(1.15)}
+.cell.s1{background:var(--o1);border-color:var(--o1)}
+.cell.s2{background:var(--green);border-color:var(--green)}
+/* sourcing: blank -> red -> orange -> green */
+.cells[data-kind="src"] .cell.s1{background:var(--red);border-color:var(--red)}
+.cells[data-kind="src"] .cell.s2{background:var(--o1);border-color:var(--o1)}
+.cells[data-kind="src"] .cell.s3{background:var(--green);border-color:var(--green)}
+.cellcount{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--t2);white-space:nowrap}
+.cellcount b{color:var(--green);font-weight:700}
+.tgtin{width:60px;background:var(--bg2);border:1px solid var(--o1);border-radius:8px;color:var(--o3);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;padding:5px 7px;outline:none;text-align:center}
+.tgtin:focus{border-color:var(--o3);box-shadow:0 0 0 2px rgba(255,107,26,.2)}
+.noassign{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t3);padding:2px 0}
 .arow .ah{flex:1;min-width:0}
 .arow .ah b{font-size:13.5px;font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .arow .ah span{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--t3)}
@@ -191,7 +207,6 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
   <header>
     <div class="hl"><img id="hdr-logo" alt="" /><b>ALTR TRACKER</b><span class="pill">JMB</span></div>
     <div class="hr">
-      <span class="who" id="who-wrap">VA&nbsp;<select class="selva" id="va-select" title="Your VA code"></select></span>
       <span class="who">Hi, <b id="who-name">—</b></span>
       <button class="mini" id="import-btn" style="display:none" onclick="doImport()">Import inventory</button>
       <button class="mini" onclick="doLogout()">Sign out</button>
@@ -233,9 +248,8 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
         <input class="search" id="src-search" placeholder="Search handle…" oninput="renderSourcing()" />
       </div>
       <div class="stats" id="src-stats"></div>
-      <div id="sourcing-list"><div class="muted">Loading accounts…</div></div>
 
-      <div class="targbox" id="targbox">
+      <div class="targbox open" id="targbox" style="margin-top:0;margin-bottom:1.2rem">
         <div class="targhead" onclick="document.getElementById('targbox').classList.toggle('open')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           <b>Daily targets</b><span class="targsum" id="targ-sum"></span>
@@ -249,6 +263,8 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
           </div>
         </div>
       </div>
+
+      <div id="sourcing-list"><div class="muted">Loading accounts…</div></div>
     </div>
   </div>
 </div>
@@ -273,7 +289,7 @@ var LOGO = document.querySelector('link[rel="icon"]').href;
 document.getElementById('login-logo').src = LOGO;
 document.getElementById('hdr-logo').src = LOGO;
 
-var USER=null, ISADMIN=false, STATE=null, MYVA='P01';
+var USER=null, ISADMIN=false, STATE=null, MYVA='';  // MYVA now holds the marker's name
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove('show');},1800); }
@@ -323,10 +339,8 @@ function enterApp(user, admin){
   $('app').style.display='block';
   $('who-name').textContent=firstName(user.full_name||user.employee_id);
   if(ISADMIN){ $('import-btn').style.display=''; $('src-add').style.display='flex'; }
-  // VA code selector
-  MYVA = localStorage.getItem('altr_myva') || 'P01';
-  var sel=$('va-select'); sel.innerHTML=['P01','P02','P03','P04','P05','P06'].map(function(c){ return '<option'+(c===MYVA?' selected':'')+'>'+c+'</option>'; }).join('');
-  sel.onchange=function(){ MYVA=sel.value; localStorage.setItem('altr_myva',MYVA); };
+  // record the marker's name (the signed-in person)
+  MYVA = ISADMIN ? 'Admin' : (user.full_name || user.employee_id || '');
   // dates default today (filled after state load)
   loadState();
 }
@@ -388,7 +402,7 @@ async function cyclePhone(phone){
   var p=(STATE.phones||[]).filter(function(x){ return String(x.phone)===String(phone); })[0]; if(!p) return;
   var i=STATUS_CYCLE.indexOf(p.status||'disconnected'); var next=STATUS_CYCLE[(i+1)%STATUS_CYCLE.length];
   p.status=next; p.updated_by=firstName(USER.full_name||USER.employee_id); p.updated_at='saving…';
-  renderDevice();
+  renderAll();   // instant: device + posting (disconnected totals) + sourcing
   try{ await apiPost({ action:'phone_status', phone:phone, status:next, by:p.updated_by }); await refreshQuiet(); }
   catch(e){ toast('Save failed'); }
 }
@@ -405,88 +419,115 @@ function buildPhoneFilter(){
   ['post-phone','src-phone'].forEach(function(id){ var sel=$(id); if(sel){ var cur=sel.value; sel.innerHTML=opts; sel.value=cur; } });
 }
 function renderPosting(){
-  if(!STATE){ return; }
-  var accts=(STATE.accounts||[]), map=postingMap();
+  if(!STATE) return;
+  var accts=(STATE.accounts||[]), map=postingMap(), disc=disconnectedPhones();
   var fp=$('post-phone').value, ff=$('post-filter').value, q=$('post-search').value.trim().toLowerCase();
-  // disconnected phones are excluded from the posting totals
-  var disc = disconnectedPhones();
-  function postable(a){ return !disc[String(a.phone)] && (!a.status || a.status==='active'); }
-  var postableCount = accts.filter(postable).length;
-  // stats (only count posts on connected phones toward the totals)
-  var posted=0, mine=0;
-  (STATE.posting||[]).forEach(function(r){
-    if(String(r.posted).toUpperCase()!=='TRUE') return;
-    if(disc[String(r.phone)]) return;            // skip disconnected-phone posts
-    posted++; if(r.va_code===MYVA) mine++;
-  });
-  var discCount = Object.keys(disc).length;
+  // stats — disconnected phones excluded from totals
+  var green=0, orange=0, mine=0;
+  accts.forEach(function(a){ if(disc[String(a.phone)]) return; var r=map[postKey(a)]; if(!r) return; var n=boxesFor('post',a); green+=countAt(r.cells,n,2); orange+=countAt(r.cells,n,1); if(r.va_code===MYVA) mine+=countAt(r.cells,n,2); });
+  var postable = accts.filter(function(a){ return !disc[String(a.phone)] && (!a.status||a.status==='active'); }).length;
+  var discCount=Object.keys(disc).length;
   $('post-stats').innerHTML=
-    statCard('Posted today', posted, 'g')+
-    statCard('Your posts ('+MYVA+')', mine, 'o')+
-    statCard('Postable', postableCount, '')+
-    statCard('Remaining', Math.max(0, postableCount-posted), 'a')+
+    statCard('Green (done)', green, 'g')+
+    statCard('Your green ('+esc(firstName(MYVA))+')', mine, 'o')+
+    statCard('Orange (in prog)', orange, 'a')+
+    statCard('Postable', postable, '')+
     (discCount? statCard('Disconnected', discCount+' phone'+(discCount>1?'s':''), 'r') : '');
-  // filter + group by phone
-  var rows=accts.filter(function(a){
-    if(fp && String(a.phone)!==String(fp)) return false;
-    var k=postKey(a), pr=map[k], done=pr&&String(pr.posted).toUpperCase()==='TRUE';
-    if(ff==='todo' && done) return false;
-    if(ff==='done' && !done) return false;
-    if(ff==='active' && (a.status&&a.status!=='active')) return false;
-    if(q && esc(a.handle).toLowerCase().indexOf(q)<0) return false;
-    return true;
-  });
+  var rows=filterAccounts('post', accts, map, fp, ff, q);
   if(!rows.length){ $('posting').innerHTML='<div class="muted">No accounts match.</div>'; return; }
   var byPhone={}; rows.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
   var phones=Object.keys(byPhone).sort(function(a,b){return fnum(a)-fnum(b);});
-  var disc2 = disconnectedPhones();
-  $('posting').innerHTML=phones.map(function(ph){
-    var list=byPhone[ph], done=0; list.forEach(function(a){ var pr=map[postKey(a)]; if(pr&&String(pr.posted).toUpperCase()==='TRUE') done++; });
-    var pct=list.length?Math.round(done/list.length*100):0;
-    var open = (phones.length<=2) ? 'open' : '';
-    var isDisc = !!disc2[String(ph)];
-    var badge = isDisc ? '<span class="discb">disconnected · not counted</span>' : '';
-    return '<div class="acctgroup'+(isDisc?' disc':'')+'"><div class="agh" onclick="this.nextElementSibling.classList.toggle(\'open\')">'+
-      '<b>Phone '+esc(ph)+'</b>'+badge+'<div class="agbar"><i style="width:'+pct+'%"></i></div>'+
-      '<span class="agc">'+done+'/'+list.length+'</span></div>'+
-      '<div class="agbody '+open+'">'+list.map(function(a){ return postRow(a, map[postKey(a)]); }).join('')+'</div></div>';
-  }).join('');
+  if(Object.keys(OPEN.post).length===0 && phones.length<=2){ phones.forEach(function(p){ OPEN.post[p]=true; }); }
+  $('posting').innerHTML=phones.map(function(ph){ return groupHTML('post', ph, byPhone[ph], map, disc); }).join('');
 }
 function disconnectedPhones(){ var d={}; (STATE&&STATE.phones||[]).forEach(function(p){ if((p.status||'')==='disconnected') d[String(p.phone)]=true; }); return d; }
 function countActive(accts){ return accts.filter(function(a){ return !a.status || a.status==='active'; }).length; }
-function postRow(a, pr){
-  var done = pr && String(pr.posted).toUpperCase()==='TRUE';
-  var serial = pr && pr.serial ? pr.serial : '';
-  var va = pr && pr.va_code ? pr.va_code : '';
+/* ---- shared cell grid — posting: 50 boxes (blank→orange→green) ;
+        sourcing: per-account admin target boxes (blank→red→orange→green) ---- */
+var POST_BOXES = 50;
+var OPEN = { post:{}, src:{} };
+function maxState(kind){ return kind==='src'?3:2; }
+function greenState(kind){ return kind==='src'?3:2; }
+function cellAt(cells,i){ var c=String(cells||''); return c.charAt(i)||'0'; }
+function setCellAt(cells,i,ch){ var c=String(cells||''); while(c.length<=i) c+='0'; return c.substr(0,i)+ch+c.substr(i+1); }
+function boxesFor(kind,a){ if(kind==='src'){ var t=fnum(a&&a.src_target); return t<0?0:(t>100?100:t); } return POST_BOXES; }
+function countAt(cells,n,state){ var ss=String(state), c=0; for(var i=0;i<n;i++) if(cellAt(cells,i)===ss) c++; return c; }
+function greenCount(kind,cells,n){ return countAt(cells,n,greenState(kind)); }
+function keyOf(a){ return [a.phone,a.user,a.acct,a.handle].join('|'); }
+function filterAccounts(kind, accts, map, fp, ff, q){
+  return accts.filter(function(a){
+    if(kind==='src' && !ISADMIN && boxesFor('src',a)<=0) return false;   // VAs only see assigned accounts
+    if(fp && String(a.phone)!==String(fp)) return false;
+    if(ff==='active' && (a.status&&a.status!=='active')) return false;
+    if(ff==='todo' || ff==='done'){ var n=boxesFor(kind,a); var has=greenCount(kind,(map[keyOf(a)]||{}).cells,n)>0; if(ff==='todo'&&has)return false; if(ff==='done'&&!has)return false; }
+    if(q && esc(a.handle).toLowerCase().indexOf(q)<0) return false;
+    return true;
+  });
+}
+function acctRow(kind, a, r){
+  var cells=r?String(r.cells||''):''; var n=boxesFor(kind,a); var g=greenCount(kind,cells,n);
+  var va=r&&r.va_code?r.va_code:'';
+  var locked = (kind==='post') && !!disconnectedPhones()[String(a.phone)];
   var susp = a.status && a.status!=='active' ? '<span class="susp">'+esc(a.status==='logged_out'?'logged out':a.status)+'</span>' : '';
-  return '<div class="arow">'+
-    '<button class="check '+(done?'on':'')+'" onclick="togglePost(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"></button>'+
+  var tgtVal = (a.src_target!==undefined&&a.src_target!==''&&a.src_target!==null)?fnum(a.src_target):'';
+  var tgt = (kind==='src' && ISADMIN) ? '<input class="tgtin" type="number" min="0" title="Contents to source for this account" placeholder="0" value="'+tgtVal+'" onclick="event.stopPropagation()" onchange="setAcctTarget(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\',this.value)">' : '';
+  var head = '<div class="atop">'+
     '<div class="ah"><b>@'+esc(a.handle)+'</b><span>P'+esc(a.phone)+' · U'+esc(a.user)+' · A'+esc(a.acct)+(a.followers?' · '+esc(a.followers)+' followers':'')+'</span></div>'+
-    susp+
-    (va?'<span class="vacode">'+esc(va)+'</span>':'')+
-    '<span class="serial">'+(serial?'#'+esc(serial):'')+'</span>'+
+    susp+(va?'<span class="vacode" title="'+esc(va)+'">'+esc(firstName(va))+'</span>':'')+tgt+
+    '<span class="cellcount"><b>'+g+'</b>/'+n+'</span>'+
     '<button class="kebab" title="Mark suspended / logged out" onclick="cycleAcctStatus(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>'+
     '</div>';
+  var body;
+  if(n>0){ var boxes=''; for(var i=0;i<n;i++){ boxes+='<i class="cell s'+cellAt(cells,i)+'" data-i="'+i+'"></i>'; }
+    body='<div class="cells'+(locked?' locked':'')+'" data-kind="'+kind+'" data-p="'+esc(a.phone)+'" data-u="'+esc(a.user)+'" data-a="'+esc(a.acct)+'" data-h="'+esc(a.handle)+'">'+boxes+'</div>';
+  } else { body = (kind==='src') ? '<div class="noassign">No contents assigned'+(ISADMIN?' — set a number above':'')+'</div>' : ''; }
+  return '<div class="arow">'+head+body+'</div>';
+}
+function groupHTML(kind, ph, list, map, disc){
+  var green=0, withGreen=0;
+  list.forEach(function(a){ var n=boxesFor(kind,a); var g=greenCount(kind,(map[keyOf(a)]||{}).cells,n); green+=g; if(g>0) withGreen++; });
+  var pct=list.length?Math.round(withGreen/list.length*100):0;
+  var isDisc = kind==='post' && !!disc[String(ph)];
+  var badge = isDisc ? '<span class="discb">disconnected · not counted</span>' : '';
+  var open = !!OPEN[kind][ph];
+  var body = open ? list.map(function(a){ return acctRow(kind, a, map[keyOf(a)]); }).join('') : '';
+  return '<div class="acctgroup'+(isDisc?' disc':'')+'"><div class="agh" onclick="toggleGroup(\''+kind+'\',\''+esc(ph)+'\')">'+
+    '<b>Phone '+esc(ph)+'</b>'+badge+'<div class="agbar"><i style="width:'+pct+'%"></i></div>'+
+    '<span class="agc">'+green+' ✓ · '+withGreen+'/'+list.length+'</span></div>'+
+    '<div class="agbody'+(open?' open':'')+'">'+body+'</div></div>';
+}
+function toggleGroup(kind, ph){ OPEN[kind][ph]=!OPEN[kind][ph]; if(kind==='src') renderSourcing(); else renderPosting(); }
+async function setAcctTarget(phone,user,acct,handle,val){
+  val=Math.max(0, fnum(val));
+  var a=(STATE.accounts||[]).filter(function(x){ return String(x.phone)===String(phone)&&String(x.user)===String(user)&&String(x.acct)===String(acct)&&String(x.handle)===String(handle); })[0];
+  if(a){ a.src_target=val; }
+  renderSourcing();
+  try{ await apiPost({ action:'account_target', phone:phone, user:user, acct:acct, handle:handle, target:val }); }
+  catch(e){ toast('Save failed'); }
 }
 function escAttr(s){ return String(s==null?'':s).replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
-async function togglePost(phone,user,acct,handle){
-  var k=[phone,user,acct,handle].join('|'); var map=postingMap(); var pr=map[k];
-  var done = pr && String(pr.posted).toUpperCase()==='TRUE';
-  var next=!done;
-  // optimistic
-  if(pr){ pr.posted=next?'TRUE':'FALSE'; pr.va_code=MYVA; }
-  else { STATE.posting.push({ date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, posted:next?'TRUE':'FALSE', serial:'' }); }
-  renderPosting();
-  try{
-    var r=await apiPost({ action:'post_toggle', date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, posted:next, by:firstName(USER.full_name||USER.employee_id) });
-    if(r && r.serial!==undefined){ var pr2=postingMap()[k]; if(pr2){ pr2.serial=r.serial; } renderPosting(); }
-  }catch(e){ toast('Save failed'); }
+async function cycleCell(kind,phone,user,acct,handle,idx){
+  var isSrc=kind==='src'; var map=isSrc?sourceMap():postingMap();
+  var k=[phone,user,acct,handle].join('|'); var r=map[k];
+  var cells=r?String(r.cells||''):''; var nn=parseInt(cellAt(cells,idx),10)||0; nn=(nn>=maxState(kind))?0:nn+1; var next=String(nn);
+  cells=setCellAt(cells,idx,next);
+  if(r){ r.cells=cells; r.va_code=MYVA; }
+  else { r={ date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, cells:cells }; (isSrc?STATE.sourcelog:STATE.posting).push(r); }
+  if(isSrc) renderSourcing(); else renderPosting();
+  try{ await apiPost({ action:'cell_set', kind:kind, date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, index:idx, state:next, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) }); }
+  catch(e){ toast('Save failed'); }
+}
+function onCellsClick(e){
+  var cell=e.target.closest ? e.target.closest('.cell') : null; if(!cell) return;
+  var strip=cell.parentNode; if(!strip || !strip.classList || !strip.classList.contains('cells')) return;
+  if(strip.classList.contains('locked')) return;   // disconnected phone — not tickable
+  cycleCell(strip.getAttribute('data-kind'), strip.getAttribute('data-p'), strip.getAttribute('data-u'), strip.getAttribute('data-a'), strip.getAttribute('data-h'), parseInt(cell.getAttribute('data-i'),10));
 }
 var ACCT_STATUS_CYCLE=['active','suspended','logged_out'];
 async function cycleAcctStatus(phone,user,acct,handle){
   var a=(STATE.accounts||[]).filter(function(x){ return String(x.phone)===String(phone)&&String(x.user)===String(user)&&String(x.acct)===String(acct)&&String(x.handle)===String(handle); })[0]; if(!a) return;
   var i=ACCT_STATUS_CYCLE.indexOf(a.status||'active'); var next=ACCT_STATUS_CYCLE[(i+1)%ACCT_STATUS_CYCLE.length];
-  a.status=next; renderPosting();
+  a.status=next; renderPosting(); renderSourcing();
   try{ await apiPost({ action:'account_status', phone:phone, user:user, acct:acct, handle:handle, status:next }); toast('@'+handle+' → '+next.replace('_',' ')); }
   catch(e){ toast('Save failed'); }
 }
@@ -507,57 +548,20 @@ function renderSourcing(){
   renderTargets();
   var accts=(STATE.accounts||[]), map=sourceMap();
   var fp=$('src-phone')?$('src-phone').value:'', ff=$('src-filter')?$('src-filter').value:'all', q=$('src-search')?$('src-search').value.trim().toLowerCase():'';
-  // stats over every account (sourcing isn't tied to phone connectivity)
-  var sourced=0, mine=0;
-  (STATE.sourcelog||[]).forEach(function(r){ if(String(r.sourced).toUpperCase()==='TRUE'){ sourced++; if(r.va_code===MYVA) mine++; } });
-  var activeCount=countActive(accts);
+  // sourcing target = sum of per-account admin assignments; sourced = green boxes
+  var target=0, sourced=0, mine=0;
+  accts.forEach(function(a){ var n=boxesFor('src',a); if(n<=0) return; target+=n; var r=map[srcKey(a)]; if(!r) return; var gg=greenCount('src',r.cells,n); sourced+=gg; if(r.va_code===MYVA) mine+=gg; });
   $('src-stats').innerHTML=
-    statCard('Sourced today', sourced, 'g')+
-    statCard('You ('+MYVA+')', mine, 'o')+
-    statCard('Accounts', accts.length, '')+
-    statCard('Remaining', Math.max(0, activeCount-sourced), 'a');
-  var rows=accts.filter(function(a){
-    if(fp && String(a.phone)!==String(fp)) return false;
-    var pr=map[srcKey(a)], done=pr&&String(pr.sourced).toUpperCase()==='TRUE';
-    if(ff==='todo' && done) return false;
-    if(ff==='done' && !done) return false;
-    if(ff==='active' && (a.status&&a.status!=='active')) return false;
-    if(q && esc(a.handle).toLowerCase().indexOf(q)<0) return false;
-    return true;
-  });
+    statCard('Target', target, 'o')+
+    statCard('Sourced', sourced, 'g')+
+    statCard('Remaining', Math.max(0, target-sourced), 'a')+
+    statCard('You ('+esc(firstName(MYVA))+')', mine, '');
+  var rows=filterAccounts('src', accts, map, fp, ff, q);
   if(!rows.length){ $('sourcing-list').innerHTML='<div class="muted">No accounts match.</div>'; return; }
   var byPhone={}; rows.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
   var phones=Object.keys(byPhone).sort(function(a,b){return fnum(a)-fnum(b);});
-  $('sourcing-list').innerHTML=phones.map(function(ph){
-    var list=byPhone[ph], done=0; list.forEach(function(a){ var pr=map[srcKey(a)]; if(pr&&String(pr.sourced).toUpperCase()==='TRUE') done++; });
-    var pct=list.length?Math.round(done/list.length*100):0;
-    var open=(phones.length<=2)?'open':'';
-    return '<div class="acctgroup"><div class="agh" onclick="this.nextElementSibling.classList.toggle(\'open\')">'+
-      '<b>Phone '+esc(ph)+'</b><div class="agbar"><i style="width:'+pct+'%"></i></div>'+
-      '<span class="agc">'+done+'/'+list.length+'</span></div>'+
-      '<div class="agbody '+open+'">'+list.map(function(a){ return sourceRow(a, map[srcKey(a)]); }).join('')+'</div></div>';
-  }).join('');
-}
-function sourceRow(a, pr){
-  var done = pr && String(pr.sourced).toUpperCase()==='TRUE';
-  var va = pr && pr.va_code ? pr.va_code : '';
-  var susp = a.status && a.status!=='active' ? '<span class="susp">'+esc(a.status==='logged_out'?'logged out':a.status)+'</span>' : '';
-  return '<div class="arow">'+
-    '<button class="check '+(done?'on':'')+'" onclick="toggleSource(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"></button>'+
-    '<div class="ah"><b>@'+esc(a.handle)+'</b><span>P'+esc(a.phone)+' · U'+esc(a.user)+' · A'+esc(a.acct)+(a.followers?' · '+esc(a.followers)+' followers':'')+'</span></div>'+
-    susp+
-    (va?'<span class="vacode">'+esc(va)+'</span>':'')+
-    '<button class="kebab" title="Mark suspended / logged out" onclick="cycleAcctStatus(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>'+
-    '</div>';
-}
-async function toggleSource(phone,user,acct,handle){
-  var k=[phone,user,acct,handle].join('|'); var map=sourceMap(); var pr=map[k];
-  var done = pr && String(pr.sourced).toUpperCase()==='TRUE'; var next=!done;
-  if(pr){ pr.sourced=next?'TRUE':'FALSE'; pr.va_code=MYVA; }
-  else { STATE.sourcelog.push({ date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, sourced:next?'TRUE':'FALSE' }); }
-  renderSourcing();
-  try{ await apiPost({ action:'source_toggle', date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, sourced:next, by:firstName(USER.full_name||USER.employee_id) }); }
-  catch(e){ toast('Save failed'); }
+  if(Object.keys(OPEN.src).length===0 && phones.length<=2){ phones.forEach(function(p){ OPEN.src[p]=true; }); }
+  $('sourcing-list').innerHTML=phones.map(function(ph){ return groupHTML('src', ph, byPhone[ph], map, {}); }).join('');
 }
 /* minimized per-sourcer target table */
 function renderTargets(){
@@ -608,8 +612,12 @@ async function doImport(){
   catch(e){ toast('Import failed'); }
 }
 async function refreshQuiet(){
-  try{ var s=await apiGet({ action:'state', date:STATE.date }); if(!s.error){ STATE=s; renderDevice(); } }catch(e){}
+  try{ var s=await apiGet({ action:'state', date:STATE.date }); if(!s.error){
+    s.phones=s.phones||[]; s.accounts=s.accounts||[]; s.posting=s.posting||[]; s.sourcing=s.sourcing||[]; s.sourcelog=s.sourcelog||[];
+    STATE=s; renderAll();
+  } }catch(e){}
 }
+function renderAll(){ renderDevice(); renderPosting(); renderSourcing(); }
 
 /* ---- tabs ---- */
 function showTab(p){
@@ -617,7 +625,11 @@ function showTab(p){
     $('page-'+x).classList.toggle('on', x===p);
   });
   document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('on', t.getAttribute('data-page')===p); });
+  if(STATE){ if(p==='device') renderDevice(); else if(p==='posting') renderPosting(); else renderSourcing(); }
 }
+
+/* ---- cell-grid click delegation (boxes cycle blank → orange → green) ---- */
+['posting','sourcing-list'].forEach(function(id){ var el=$(id); if(el) el.addEventListener('click', onCellsClick); });
 
 /* ---- restore session ---- */
 (function(){
