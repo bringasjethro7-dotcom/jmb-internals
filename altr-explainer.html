@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex, nofollow"/>
+<title>ALTR Media Tracker — How it works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0b0e14; --bg2:#0d1117; --card:#151b24; --line:rgba(255,255,255,.09); --line-hi:rgba(255,122,41,.4);
+  --o1:#ff6b1a; --o2:#e84e00; --o3:#ff9a5c; --t1:#f4f6fa; --t2:#a6adba; --t3:#5f6672;
+  --green:#22c55e; --red:#ef4444; --amber:#f59e0b;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;color:var(--t1);background:var(--bg);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1.2rem;-webkit-font-smoothing:antialiased;overflow:hidden}
+#bg{position:fixed;inset:0;z-index:-2;overflow:hidden}
+#bg .orb{position:absolute;border-radius:50%;filter:blur(90px)}
+#bg .o1{width:560px;height:560px;top:-200px;right:-150px;background:radial-gradient(circle,rgba(255,107,26,.4),transparent 68%)}
+#bg .o2{width:480px;height:480px;bottom:-220px;left:-160px;background:radial-gradient(circle,rgba(59,130,246,.18),transparent 70%)}
+#bg .grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:48px 48px;-webkit-mask-image:radial-gradient(ellipse 80% 70% at 50% 30%,#000 30%,transparent 80%);mask-image:radial-gradient(ellipse 80% 70% at 50% 30%,#000 30%,transparent 80%)}
+
+.player{width:100%;max-width:920px}
+.frame{position:relative;aspect-ratio:16/9;background:linear-gradient(180deg,#10141c,#0c0f16);border:1px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.55)}
+.brand{position:absolute;top:14px;left:18px;z-index:6;display:flex;align-items:center;gap:9px;opacity:.85}
+.brand img{width:24px;height:24px}
+.brand b{font-family:'Rajdhani',sans-serif;font-size:14px;letter-spacing:.04em}
+.brand small{font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--o3)}
+.scene-no{position:absolute;top:16px;right:18px;z-index:6;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t3)}
+
+.stage{position:absolute;inset:0}
+.scene{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:44px 56px 96px;opacity:0;transition:opacity .5s ease;pointer-events:none}
+.scene.on{opacity:1}
+.scene h2{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:clamp(20px,3.4vw,30px);text-align:center;margin-bottom:6px}
+.scene .sub{color:var(--t2);font-size:13.5px;text-align:center;max-width:560px;margin-bottom:18px}
+.kicker{font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--o1);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.kicker::before{content:'';width:18px;height:1.5px;background:var(--o1)}
+
+.scene .a{opacity:0;transform:translateY(14px)}
+.scene.on .a{animation:rise .6s ease forwards}
+@keyframes rise{to{opacity:1;transform:none}}
+.scene.on .a.d1{animation-delay:.15s}.scene.on .a.d2{animation-delay:.4s}.scene.on .a.d3{animation-delay:.7s}
+.scene.on .a.d4{animation-delay:1s}.scene.on .a.d5{animation-delay:1.3s}.scene.on .a.d6{animation-delay:1.6s}
+
+.caption{position:absolute;left:0;right:0;bottom:56px;z-index:5;display:flex;justify-content:center;padding:0 40px}
+.caption span{background:rgba(8,10,14,.8);border:1px solid var(--line);border-radius:10px;padding:9px 16px;font-size:13.5px;color:var(--t1);max-width:780px;text-align:center;line-height:1.45;backdrop-filter:blur(6px)}
+
+.bar{position:absolute;left:0;right:0;bottom:0;height:46px;z-index:7;display:flex;align-items:center;gap:11px;padding:0 14px;background:rgba(8,10,14,.62);border-top:1px solid var(--line);backdrop-filter:blur(8px)}
+.bar button{background:none;border:none;color:var(--t2);cursor:pointer;display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px}
+.bar button:hover{color:#fff;background:rgba(255,255,255,.07)}
+.bar button.act{color:var(--o1)}
+.bar button svg{width:17px;height:17px}
+.prog{flex:1;height:5px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden}
+.prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--o3),var(--o1))}
+.dots{display:flex;gap:5px}
+.dots i{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.18);cursor:pointer;transition:.2s}
+.dots i.on{background:var(--o1);transform:scale(1.25)}
+.tlabel{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t3);min-width:38px;text-align:right}
+
+/* start overlay (needed so the browser allows narrator audio) */
+.poster{position:absolute;inset:0;z-index:9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:radial-gradient(ellipse at 50% 40%,rgba(255,107,26,.12),transparent 70%),rgba(8,10,14,.6);backdrop-filter:blur(3px);cursor:pointer;transition:opacity .4s}
+.poster.hide{opacity:0;pointer-events:none}
+.poster img{width:70px;height:70px;filter:drop-shadow(0 0 16px rgba(255,107,26,.5))}
+.poster h1{font-family:'Rajdhani',sans-serif;font-size:26px;font-weight:700}
+.poster .pbtn{display:inline-flex;align-items:center;gap:10px;background:linear-gradient(135deg,var(--o1),var(--o2));color:#fff;border:none;border-radius:12px;padding:13px 22px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 12px 30px rgba(232,78,0,.4)}
+.poster .pbtn svg{width:18px;height:18px}
+.poster small{color:var(--t3);font-size:12px;font-family:'JetBrains Mono',monospace}
+
+/* mock visuals */
+.logoBig{width:84px;height:84px;filter:drop-shadow(0 0 18px rgba(255,107,26,.5))}
+.tagrow{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:18px}
+.pill{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--o3);border:1px solid var(--line-hi);background:rgba(255,107,26,.08);border-radius:20px;padding:6px 12px}
+.tabsrow{display:flex;gap:8px;margin-bottom:20px}
+.tabm{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--t2);background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:10px;padding:7px 13px}
+.tabm.on{color:#fff;background:linear-gradient(135deg,rgba(255,107,26,.25),rgba(232,78,0,.12));border-color:var(--line-hi)}
+.phgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;width:100%;max-width:540px}
+.phc{display:flex;align-items:center;gap:10px;background:rgba(21,27,36,.7);border:1px solid var(--line);border-radius:11px;padding:10px 12px}
+.phc .pn{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;width:22px;text-align:center}
+.phc .dot{width:18px;height:18px;border-radius:50%;background:var(--t3);margin-left:auto}
+.scene.on .phc .dot.toGreen{animation:toGreen .6s ease forwards}
+.scene.on .phc .dot.toRed{animation:toRed .6s ease forwards}
+.scene.on .phc .dot.toAmber{animation:toAmber .6s ease forwards}
+@keyframes toGreen{to{background:var(--green);box-shadow:0 0 12px rgba(34,197,94,.5)}}
+@keyframes toRed{to{background:var(--red)}}
+@keyframes toAmber{to{background:var(--amber);box-shadow:0 0 12px rgba(245,158,11,.5)}}
+.tap{position:absolute;width:26px;height:26px;border:2px solid #fff;border-radius:50%;opacity:0}
+.scene.on .tap{animation:tap 1.1s ease forwards}
+@keyframes tap{0%{opacity:0;transform:scale(1.6)}30%{opacity:.9}55%{opacity:.9;transform:scale(.85)}100%{opacity:0;transform:scale(1.3)}}
+.acctrow{width:100%;max-width:560px;background:rgba(21,27,36,.7);border:1px solid var(--line);border-radius:12px;padding:13px 15px}
+.acctrow .h{font-weight:700;font-size:14px}
+.acctrow .m{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--t3);margin:2px 0 10px}
+.boxes{display:flex;gap:6px;flex-wrap:wrap}
+.bx{width:30px;height:30px;border-radius:7px;border:1.6px solid var(--t3);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--t3);background:transparent}
+.scene.on .bx.red{animation:bxRed .5s ease forwards}
+.scene.on .bx.toOrange{animation:bxOrange .5s ease forwards}
+.scene.on .bx.toGreen2{animation:bxGreen .5s ease forwards}
+@keyframes bxRed{to{background:var(--red);border-color:var(--red);color:rgba(0,0,0,.7);font-weight:700}}
+@keyframes bxOrange{to{background:var(--o1);border-color:var(--o1);color:rgba(0,0,0,.7);font-weight:700}}
+@keyframes bxGreen{to{background:var(--green);border-color:var(--green);color:rgba(0,0,0,.7);font-weight:700}}
+.scene.on .bx.red{animation-delay:.6s}.scene.on .bx.red.r2{animation-delay:.8s}.scene.on .bx.red.r3{animation-delay:1s}
+.scene.on .bx.toOrange{animation-delay:2.4s}.scene.on .bx.toOrange.o2{animation-delay:3s}
+.legendrow{display:flex;gap:16px;justify-content:center;margin-top:18px;flex-wrap:wrap}
+.lg{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--t2)}
+.lg i{width:14px;height:14px;border-radius:4px;display:inline-block}
+.lg .r{background:var(--red)}.lg .o{background:var(--o1)}.lg .g{background:var(--green)}
+.flow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+.fstep{display:flex;flex-direction:column;align-items:center;gap:8px;width:118px}
+.fstep .ic{width:54px;height:54px;border-radius:14px;background:rgba(255,107,26,.12);border:1px solid var(--line-hi);display:flex;align-items:center;justify-content:center;color:var(--o1)}
+.fstep .ic svg{width:26px;height:26px}
+.fstep .t{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px}
+.fstep .d{font-size:11px;color:var(--t3);text-align:center}
+.farrow{color:var(--t3)}
+.chartbox{width:100%;max-width:580px;background:rgba(21,27,36,.6);border:1px solid var(--line);border-radius:14px;padding:16px}
+.chartbox .ct{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.chartbox .ct svg{width:16px;height:16px;color:var(--o1)}
+.scene.on .drawline{stroke-dasharray:600;stroke-dashoffset:600;animation:draw 2.4s ease forwards .5s}
+@keyframes draw{to{stroke-dashoffset:0}}
+.postrow{display:flex;align-items:center;gap:13px;width:100%;max-width:520px;background:rgba(21,27,36,.7);border:1px solid var(--line);border-radius:12px;padding:13px 15px}
+.chk{width:30px;height:30px;border-radius:8px;border:2px solid var(--t3);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:9px;color:transparent;flex-shrink:0}
+.scene.on .chk.tick{animation:tick .6s ease forwards 1.5s}
+@keyframes tick{to{background:var(--green);border-color:var(--green);color:rgba(0,0,0,.75);font-weight:700}}
+.linkarrow{display:flex;align-items:center;gap:8px;color:var(--o3);font-size:12px;font-family:'JetBrains Mono',monospace;margin:14px 0;opacity:0}
+.scene.on .linkarrow{animation:rise .5s ease forwards 2.1s}
+.report{width:100%;max-width:520px;background:#11161e;border:1px solid var(--line-hi);border-radius:14px;padding:16px 18px;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.7;color:var(--t1)}
+.report .big{font-size:15px;color:var(--green);font-weight:600}
+.report .muted{color:var(--t3)}
+.toastm{position:absolute;bottom:100px;left:50%;transform:translateX(-50%) translateY(10px);background:#1b222d;border:1px solid var(--line-hi);border-radius:10px;padding:9px 16px;font-size:12.5px;opacity:0}
+.scene.on .toastm{animation:toastIn .5s ease forwards 2.6s}
+@keyframes toastIn{to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.btnrow{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+.mb{font-size:12.5px;font-weight:600;border-radius:9px;padding:9px 14px;border:1px solid var(--line)}
+.mb.pri{color:#fff;background:linear-gradient(135deg,var(--o1),var(--o2));border:none}
+.mb.gh{color:var(--t2);background:rgba(255,255,255,.03)}
+.emini{width:100%;max-width:420px;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:16px;font-size:12.5px}
+.emini .er{display:grid;grid-template-columns:1.3fr 1fr .8fr .9fr;padding:9px 13px;border-top:1px solid var(--line)}
+.emini .er.hd{color:var(--t3);font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;text-transform:uppercase;border-top:none}
+.emini .er b{color:var(--green)}
+@media(max-width:640px){ .scene{padding:34px 22px 92px} .phgrid{grid-template-columns:repeat(2,1fr)} .fstep{width:84px} }
+</style>
+</head>
+<body>
+<div id="bg"><div class="grid"></div><div class="orb o1"></div><div class="orb o2"></div></div>
+
+<div class="player">
+  <div class="frame">
+    <div class="brand"><img id="blogo" alt=""><div><b>ALTR TRACKER</b><br><small>by JMB Virtuals</small></div></div>
+    <div class="scene-no"><span id="sno">1</span> / 10</div>
+
+    <div class="stage" id="stage">
+      <section class="scene on" data-vo="Welcome to the ALTR Media Tracker — the daily command center for your whole operation. In a few minutes you'll see how the team checks phones, sources content, posts it, promotes music, and reports to clients, all from one screen." data-cap="The ALTR Media Tracker — your team's daily command center.">
+        <img class="logoBig a" id="ilogo" alt="">
+        <h2 class="a d1" style="margin-top:18px">ALTR Media Tracker</h2>
+        <div class="sub a d2">Your daily command center for the whole operation</div>
+        <div class="tagrow"><span class="pill a d3">Digital</span><span class="pill a d3">Goal / Insights</span><span class="pill a d4">Sourcing</span><span class="pill a d4">Posting</span></div>
+      </section>
+
+      <section class="scene" data-vo="Getting in is simple — your Employee ID and your PIN. The very first time you open the tool each day, a reminder appears: check your phones first. It's important, because any phone marked disconnected is automatically left out of the day's targets and the end-of-day report." data-cap="Sign in with your ID and PIN. First open each day reminds you to check the phones.">
+        <div class="kicker a">Step 1 · Sign in</div>
+        <h2 class="a d1">Log in &amp; the daily reminder</h2>
+        <div class="report a d2" style="font-family:'Inter',sans-serif;max-width:440px;text-align:center;border-color:var(--amber)">
+          <div style="font-size:22px;margin-bottom:8px">📱</div>
+          <b style="color:var(--amber)">Check your phones first</b>
+          <div style="color:var(--t2);font-size:13px;margin-top:8px;line-height:1.55">Before posting, open the Digital tab and update each phone — connected, disconnected, or with issue.</div>
+        </div>
+        <div class="sub a d4" style="margin-top:16px">Disconnected phones are excluded from targets &amp; the end-of-day report.</div>
+      </section>
+
+      <section class="scene" data-vo="The Digital tab is your phone health board. Each phone shows a status light. Tap it to cycle through green for connected, red for disconnected, and amber for an issue. The tool stamps who updated it and the time, and keeps a running count — so the whole team always sees the real state of the devices." data-cap="Digital — tap each phone: green connected, red disconnected, amber issue.">
+        <div class="tabsrow a"><span class="tabm on">Digital</span><span class="tabm">Goal</span><span class="tabm">Sourcing</span><span class="tabm">Posting</span></div>
+        <h2 class="a d1">Digital — phone health</h2>
+        <div class="sub a d1">Tap a phone to cycle 🟢 connected · 🔴 disconnected · 🟡 issue</div>
+        <div class="phgrid a d2" style="position:relative">
+          <div class="phc"><span class="pn">1</span><span class="dot toGreen" style="animation-delay:1s"></span></div>
+          <div class="phc"><span class="pn">3</span><span class="dot toGreen" style="animation-delay:1.3s"></span></div>
+          <div class="phc"><span class="pn">4</span><span class="dot toRed" style="animation-delay:1.7s"></span></div>
+          <div class="phc"><span class="pn">5</span><span class="dot toGreen" style="animation-delay:2s"></span></div>
+          <div class="phc"><span class="pn">6</span><span class="dot toGreen" style="animation-delay:2.3s"></span></div>
+          <div class="phc"><span class="pn">7</span><span class="dot toAmber" style="animation-delay:2.7s"></span></div>
+          <div class="phc"><span class="pn">8</span><span class="dot toGreen" style="animation-delay:3s"></span></div>
+          <div class="phc"><span class="pn">9</span><span class="dot toGreen" style="animation-delay:3.3s"></span></div>
+          <div class="tap" style="left:64%;top:8px;animation-delay:1.4s"></div>
+        </div>
+      </section>
+
+      <section class="scene" data-vo="Next is Goal and Insights, where you track music promotion. Paste an Instagram audio or reel link, and the trend chart shows how many reels are using that audio over time. Each line is one promoted track. When a line climbs, the promotion is working — the sound is spreading." data-cap="Goal / Insights — paste an audio link; the trend chart shows reels using it over time.">
+        <div class="tabsrow a"><span class="tabm">Digital</span><span class="tabm on">Goal</span><span class="tabm">Sourcing</span><span class="tabm">Posting</span></div>
+        <h2 class="a d1">Goal / Insights — audio trend</h2>
+        <div class="chartbox a d2">
+          <div class="ct"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>Reels using promoted audios</div>
+          <svg viewBox="0 0 540 200" style="width:100%">
+            <line x1="40" y1="170" x2="520" y2="170" stroke="rgba(255,255,255,.12)"/>
+            <line x1="40" y1="20" x2="40" y2="170" stroke="rgba(255,255,255,.12)"/>
+            <polyline class="drawline" points="40,160 130,150 220,120 310,95 400,60 490,30" fill="none" stroke="var(--o1)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+            <polyline class="drawline" points="40,168 130,164 220,150 310,130 400,118 490,90" fill="none" stroke="var(--green)" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" style="animation-delay:1.1s"/>
+          </svg>
+        </div>
+        <div class="sub a d4">A rising line means the promotion is working — more reels are using your audio.</div>
+      </section>
+
+      <section class="scene" data-vo="Sourcing runs on a simple color system. A red box is a target — content that still needs to be sourced. Orange means it's been sourced and is ready to post. And green means it's already been posted. So at a glance: red is to-do, orange is ready, green is done." data-cap="The color system: red = target, orange = sourced/ready, green = posted.">
+        <div class="tabsrow a"><span class="tabm">Digital</span><span class="tabm">Goal</span><span class="tabm on">Sourcing</span><span class="tabm">Posting</span></div>
+        <h2 class="a d1">Sourcing — the color system</h2>
+        <div class="acctrow a d2">
+          <div class="h">@floridamanmoments</div><div class="m">P1 · U1 · A1 — cycle boxes</div>
+          <div class="boxes"><div class="bx red">369</div><div class="bx red r2 toOrange">370</div><div class="bx red r3 toGreen2" style="animation-delay:3s">371</div></div>
+        </div>
+        <div class="legendrow a d4"><span class="lg"><i class="r"></i>red = target</span><span class="lg"><i class="o"></i>orange = sourced</span><span class="lg"><i class="g"></i>green = posted</span></div>
+      </section>
+
+      <section class="scene" data-vo="Admins set the day up. They assign targets — adding red boxes to accounts, one click at a time, or a whole phone at once. Then Auto-assign phones spreads the workload fairly across only the employees who are working that day. Each employee's target, what they've sourced, and their completion rate roll up in one table." data-cap="Admins assign red targets and Auto-assign phones across the day's employees.">
+        <div class="kicker a">Admin setup</div>
+        <h2 class="a d1">Assign targets &amp; the team</h2>
+        <div class="btnrow a d2"><span class="mb pri">+ Add target (red)</span><span class="mb gh">Auto-assign phones</span></div>
+        <div class="emini a d3">
+          <div class="er hd"><span>Employee</span><span>Phone</span><span>Target</span><span>Completion</span></div>
+          <div class="er"><span>Chyrajane</span><span>P1, P4</span><span>40</span><span><b>100%</b></span></div>
+          <div class="er"><span>Cherry Rose</span><span>P5, P8</span><span>36</span><span>92%</span></div>
+          <div class="er"><span>Felilou</span><span>P11, P13</span><span>54</span><span>88%</span></div>
+        </div>
+      </section>
+
+      <section class="scene" data-vo="Posting is one tick per account. When you tick it, the tool grabs the next ready — orange — item from the sourcing queue. The posting box turns green and shows its cycle number, and the matching box on the sourcing board turns green too. Source it once, post it once, and the two boards stay perfectly in sync." data-cap="Posting — tick an account; it consumes the next sourced item and turns both boxes green.">
+        <div class="tabsrow a"><span class="tabm">Digital</span><span class="tabm">Goal</span><span class="tabm">Sourcing</span><span class="tabm on">Posting</span></div>
+        <h2 class="a d1">Posting — one tick, fully linked</h2>
+        <div class="postrow a d2"><div class="chk tick">369</div><div><div class="h">@floridamanmoments</div><div class="m">tick when posted →</div></div></div>
+        <div class="linkarrow a">↓ &nbsp;automatically marks the sourced item as posted</div>
+        <div class="acctrow a d2" style="max-width:340px">
+          <div class="m" style="margin:0 0 8px">Sourcing board</div>
+          <div class="boxes"><div class="bx toGreen2" style="animation-delay:2.1s">369</div><div class="bx" style="background:var(--o1);border-color:var(--o1);color:rgba(0,0,0,.7);font-weight:700">370</div><div class="bx" style="background:var(--o1);border-color:var(--o1);color:rgba(0,0,0,.7);font-weight:700">371</div></div>
+        </div>
+      </section>
+
+      <section class="scene" data-vo="When the shift ends, press End of Day. The tool records the day's completion, clears the posted items from the queue, and writes a client-ready report — the completion percentage, plus any phones that were down to explain anything under one hundred percent. Copy it, and send it straight to the client group chat." data-cap="End of Day — records completion, clears posted items, and gives a client-ready report to copy.">
+        <div class="kicker a">End of shift</div>
+        <h2 class="a d1">End of Day report</h2>
+        <div class="report a d2">
+          ALTR Daily Posting Report — 2026-06-22<br><br>
+          <span class="big">Completion: 92%  (24/26 posted)</span><br><br>
+          <span class="muted">Reason below 100%:</span><br>• Disconnected phone(s): 4<br>• Phone(s) with issues: 7
+        </div>
+        <div class="toastm">✓ Copied — paste into the client group chat</div>
+      </section>
+
+      <section class="scene" data-vo="A few admin tools keep everything tidy. Import inventory loads the phones and accounts. Import history brings in existing sourcing data. Record day snapshots the numbers, and Clear board resets the sourcing slate. Most of the team will never touch these — they're there for setup and the end of the day." data-cap="Admin tools: Import inventory, Import history, Record day, Clear board — for setup only.">
+        <div class="kicker a">For admins</div>
+        <h2 class="a d1">Admin tools</h2>
+        <div class="sub a d1">One-time setup &amp; housekeeping — most of the team never needs these</div>
+        <div class="btnrow a d2"><span class="mb pri">Import inventory</span><span class="mb gh">Import history</span></div>
+        <div class="btnrow a d3"><span class="mb gh">Record day</span><span class="mb gh">Clear board</span><span class="mb gh">IG session</span></div>
+      </section>
+
+      <section class="scene" data-vo="And that's the rhythm: check your phones, source the targets, post the queue, and send the report. One tool, the whole operation. You'll find it any time at internals dot jmbvirtuals dot com, under Tools. Thanks for watching." data-cap="The daily flow: check phones → source → post → report. One tool, the whole operation.">
+        <h2 class="a">Your daily flow</h2>
+        <div class="flow">
+          <div class="fstep a d1"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/></svg></div><div class="t">Check</div><div class="d">phones in Digital</div></div>
+          <div class="farrow a d2">→</div>
+          <div class="fstep a d2"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><div class="t">Source</div><div class="d">red → orange</div></div>
+          <div class="farrow a d3">→</div>
+          <div class="fstep a d3"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="t">Post</div><div class="d">orange → green</div></div>
+          <div class="farrow a d4">→</div>
+          <div class="fstep a d4"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div class="t">Report</div><div class="d">End of Day</div></div>
+        </div>
+        <div class="sub a d5" style="margin-top:22px">internals.jmbvirtuals.com → Tools → ALTR Media Tracker</div>
+      </section>
+    </div>
+
+    <div class="caption"><span id="cap"></span></div>
+
+    <div class="bar">
+      <button id="replay" title="Restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v6h6"/><path d="M3 13a9 9 0 1 0 3-7.7L3 8"/></svg></button>
+      <button id="prev" title="Previous"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zm12 0v14l-9-7z"/></svg></button>
+      <button id="play" title="Play / Pause"></button>
+      <button id="next" title="Next"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM6 5l9 7-9 7z"/></svg></button>
+      <button id="mute" class="act" title="Narrator on/off"></button>
+      <div class="prog"><i id="progbar"></i></div>
+      <div class="dots" id="dots"></div>
+      <div class="tlabel" id="tlabel">0:00</div>
+    </div>
+
+    <div class="poster" id="poster">
+      <img id="plogo" alt="">
+      <h1>ALTR Media Tracker — How it works</h1>
+      <button class="pbtn" id="startbtn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Watch the guide</button>
+      <small>~2 min · with narration (turn your sound on)</small>
+    </div>
+  </div>
+</div>
+
+<script>
+var LOGO="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%2276%2082%20360%20360%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22m%22%20x1%3D%220%22%20y1%3D%22.05%22%20x2%3D%220%22%20y2%3D%22.95%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23FFE0BE%22%2F%3E%3Cstop%20offset%3D%22.46%22%20stop-color%3D%22%23FF7A29%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23C3380A%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22b%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23FF8E45%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23A52E08%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20x%3D%22241%22%20y%3D%22110%22%20width%3D%2230%22%20height%3D%22304%22%20rx%3D%2215%22%20fill%3D%22url%28%23m%29%22%2F%3E%3Cpath%20d%3D%22M256%20226Q341%20264%20398%20320Q341%20376%20256%20414Q171%20376%20114%20320Q171%20264%20256%20226Z%22%20fill%3D%22none%22%20stroke%3D%22url%28%23b%29%22%20stroke-width%3D%2250%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%2F%3E%3Cpath%20d%3D%22M256%20110Q341%20148%20398%20204Q341%20260%20256%20298Q171%20260%20114%20204Q171%20148%20256%20110Z%22%20fill%3D%22none%22%20stroke%3D%22url%28%23m%29%22%20stroke-width%3D%2250%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E";
+['blogo','ilogo','plogo'].forEach(function(id){ var e=document.getElementById(id); if(e) e.src=LOGO; });
+
+var scenes=[].slice.call(document.querySelectorAll('.scene'));
+var ICON_PLAY='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+var ICON_PAUSE='<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+var ICON_VOL='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>';
+var ICON_MUTE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
+var $=function(id){return document.getElementById(id);};
+
+var SS=window.speechSynthesis||null, voice=null, narrator=!!SS;
+function pickVoice(){ if(!SS) return; var vs=SS.getVoices()||[]; voice = vs.filter(function(v){return /^en[-_]?(US|GB)/i.test(v.lang)&&/female|samantha|google|zira|aria|jenny|natural/i.test(v.name);})[0] || vs.filter(function(v){return /^en/i.test(v.lang);})[0] || vs[0] || null; }
+if(SS){ pickVoice(); SS.onvoiceschanged=pickVoice; }
+function speak(text){ if(!SS||!narrator||!text) return; try{ SS.cancel(); var u=new SpeechSynthesisUtterance(text); if(voice)u.voice=voice; u.rate=0.98; u.pitch=1; u.volume=1; SS.speak(u); }catch(e){} }
+function stopSpeech(){ if(SS){ try{ SS.cancel(); }catch(e){} } }
+function sceneVO(el){ return el.getAttribute('data-vo')||el.getAttribute('data-cap')||''; }
+function sceneDur(el){ if(narrator){ var w=sceneVO(el).trim().split(/\s+/).length; return Math.max(6000, Math.round(w/2.2*1000)+1600); } return +el.getAttribute('data-dur')||7000; }
+
+var idx=0, playing=false, t0=0, dur=0, rem=0, raf=null;
+function totalDur(){ return scenes.reduce(function(s,el){ return s+sceneDur(el); },0); }
+function fmt(ms){ var s=Math.round(ms/1000); return Math.floor(s/60)+':'+('0'+(s%60)).slice(-2); }
+
+scenes.forEach(function(_,i){ var d=document.createElement('i'); d.onclick=function(){ go(i,true); }; $('dots').appendChild(d); });
+
+function setActive(i){
+  scenes.forEach(function(el,k){ el.classList.toggle('on', k===i); });
+  var el=scenes[i]; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on');
+  $('cap').textContent=el.getAttribute('data-cap')||'';
+  $('sno').textContent=(i+1);
+  $('dots').querySelectorAll('i').forEach(function(d,k){ d.classList.toggle('on',k===i); });
+}
+function go(i,forcePlay){
+  idx=(i+scenes.length)%scenes.length;
+  setActive(idx);
+  dur=sceneDur(scenes[idx]); rem=dur; t0=performance.now();
+  cancelAnimationFrame(raf); stopSpeech();
+  if(forcePlay) playing=true;
+  if(playing){ $('play').innerHTML=ICON_PAUSE; speak(sceneVO(scenes[idx])); loop(); }
+  else { $('play').innerHTML=ICON_PLAY; }
+}
+function loop(){
+  var now=performance.now(), el=now-t0, left=Math.max(0,rem-el);
+  var before=scenes.slice(0,idx).reduce(function(s,x){ return s+sceneDur(x); },0);
+  $('progbar').style.width=Math.min(100,((before+(dur-left))/totalDur())*100)+'%';
+  $('tlabel').textContent=fmt(before+(dur-left));
+  if(left<=0){ if(idx===scenes.length-1){ pause(true); return; } go(idx+1); return; }
+  raf=requestAnimationFrame(loop);
+}
+function pause(ended){ playing=false; if(!ended) rem=Math.max(0,rem-(performance.now()-t0)); cancelAnimationFrame(raf); stopSpeech(); $('play').innerHTML=ICON_PLAY; }
+function play(){ playing=true; t0=performance.now(); $('play').innerHTML=ICON_PAUSE; speak(sceneVO(scenes[idx])); loop(); }
+
+$('play').onclick=function(){ playing?pause():play(); };
+$('next').onclick=function(){ go(idx+1,true); };
+$('prev').onclick=function(){ go(idx-1,true); };
+$('replay').onclick=function(){ go(0,true); };
+$('mute').onclick=function(){ narrator=!narrator; $('mute').innerHTML=narrator?ICON_VOL:ICON_MUTE; $('mute').classList.toggle('act',narrator); if(!narrator) stopSpeech(); else if(playing) speak(sceneVO(scenes[idx])); };
+$('mute').innerHTML=narrator?ICON_VOL:ICON_MUTE;
+$('play').innerHTML=ICON_PLAY;
+
+function start(){ $('poster').classList.add('hide'); if(SS){ try{ SS.cancel(); }catch(e){} } go(0,true); }
+$('startbtn').onclick=function(e){ e.stopPropagation(); start(); };
+$('poster').onclick=start;
+
+setActive(0); $('cap').textContent=scenes[0].getAttribute('data-cap')||'';
+</script>
+</body>
+</html>
