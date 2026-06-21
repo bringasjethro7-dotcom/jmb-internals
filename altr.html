@@ -136,6 +136,8 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .cells[data-kind="src"] .cell.s1{background:var(--red);border-color:var(--red);color:rgba(0,0,0,.72);font-weight:600}
 .cells[data-kind="src"] .cell.s2{background:var(--o1);border-color:var(--o1);color:rgba(0,0,0,.72);font-weight:600}
 .cells[data-kind="src"] .cell.s3{background:var(--green);border-color:var(--green);color:rgba(0,0,0,.72);font-weight:600}
+.cells .addbox{width:27px;height:27px;border-radius:5px;border:1.6px dashed var(--t3);background:transparent;color:var(--t3);cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;font-family:inherit}
+.cells .addbox:hover{border-color:var(--o1);color:var(--o1)}
 .cellcount{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--t2);white-space:nowrap}
 .cellcount b{color:var(--green);font-weight:700}
 .tgtin{width:60px;background:var(--bg2);border:1px solid var(--o1);border-radius:8px;color:var(--o3);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;padding:5px 7px;outline:none;text-align:center}
@@ -467,13 +469,15 @@ function countActive(accts){ return accts.filter(function(a){ return !a.status |
 /* ---- shared cell grid — posting: 50 boxes (blank→orange→green) ;
         sourcing: per-account admin target boxes (blank→red→orange→green) ---- */
 var POST_BOXES = 1;    // posting = one box per account
-var SRC_BOXES  = 50;   // sourcing = up to 50 assignable boxes per account (admin marks red)
+var SRC_BOXES  = 50;   // (legacy cap, unused)
+var CELLS_N    = 100;  // max box positions stored per account
 var OPEN = { post:{}, src:{} };
 function maxState(kind){ return kind==='src'?3:2; }
 function greenState(kind){ return kind==='src'?3:2; }
 function cellAt(cells,i){ var c=String(cells||''); return c.charAt(i)||'0'; }
 function setCellAt(cells,i,ch){ var c=String(cells||''); while(c.length<=i) c+='0'; return c.substr(0,i)+ch+c.substr(i+1); }
-function boxesFor(kind,a){ return kind==='src' ? SRC_BOXES : POST_BOXES; }
+function srcLen(r){ if(!r) return 0; var cells=String(r.cells||''), nums=String(r.nums||''), mx=-1; for(var i=0;i<CELLS_N;i++){ if(cellAt(cells,i)!=='0' || gdGet(nums,i)!=='') mx=i; } return mx+1; }
+function boxesFor(kind,a,r){ return kind==='src' ? srcLen(r) : POST_BOXES; }
 function countAt(cells,n,state){ var ss=String(state), c=0; for(var i=0;i<n;i++) if(cellAt(cells,i)===ss) c++; return c; }
 function greenCount(kind,cells,n){ return countAt(cells,n,greenState(kind)); }
 function countNonBlank(cells,n){ var c=0; for(var i=0;i<n;i++) if(cellAt(cells,i)!=='0') c++; return c; }
@@ -486,15 +490,15 @@ function filterAccounts(kind, accts, map, ff, q){
   var sel=PHFILTER[kind]||[];
   return accts.filter(function(a){
     if(sel.length && sel.indexOf(String(a.phone))<0) return false;   // multi-phone filter
-    if(kind==='src' && !ISADMIN){ var rr=map[keyOf(a)]; if(countNonBlank(rr?rr.cells:'', SRC_BOXES)<=0) return false; }  // VAs only see accounts with assignments
+    if(kind==='src' && !ISADMIN){ var rr=map[keyOf(a)]; if(countNonBlank(rr?rr.cells:'', srcLen(rr))<=0) return false; }  // VAs only see accounts with assignments
     if(ff==='active' && (a.status&&a.status!=='active')) return false;
-    if(ff==='todo' || ff==='done'){ var n=boxesFor(kind,a); var has=greenCount(kind,(map[keyOf(a)]||{}).cells,n)>0; if(ff==='todo'&&has)return false; if(ff==='done'&&!has)return false; }
+    if(ff==='todo' || ff==='done'){ var r2=map[keyOf(a)]; var n=boxesFor(kind,a,r2); var has=greenCount(kind,r2&&r2.cells,n)>0; if(ff==='todo'&&has)return false; if(ff==='done'&&!has)return false; }
     if(q && esc(a.handle).toLowerCase().indexOf(q)<0) return false;
     return true;
   });
 }
 function acctRow(kind, a, r){
-  var cells=r?String(r.cells||''):''; var n=boxesFor(kind,a); var g=greenCount(kind,cells,n);
+  var cells=r?String(r.cells||''):''; var nums=r?String(r.nums||''):''; var n=boxesFor(kind,a,r); var g=greenCount(kind,cells,n);
   var va=r&&r.va_code?r.va_code:'';
   var locked = (kind==='post') && !!disconnectedPhones()[String(a.phone)];
   var susp = a.status && a.status!=='active' ? '<span class="susp">'+esc(a.status==='logged_out'?'logged out':a.status)+'</span>' : '';
@@ -502,7 +506,8 @@ function acctRow(kind, a, r){
   var meta='<div class="ah"><b>@'+esc(a.handle)+'</b><span>P'+esc(a.phone)+' · U'+esc(a.user)+' · A'+esc(a.acct)+(a.followers?' · '+esc(a.followers)+' followers':'')+'</span></div>';
   var vaTag = va?'<span class="vacode" title="'+esc(va)+'">'+esc(firstName(va))+'</span>':'';
   var kebab='<button class="kebab" title="Mark suspended / logged out" onclick="cycleAcctStatus(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>';
-  var boxes=''; for(var i=0;i<n;i++){ boxes+='<i class="cell s'+cellAt(cells,i)+'" data-i="'+i+'">'+(kind==='src'?(i+1):'')+'</i>'; }
+  var boxes=''; for(var i=0;i<n;i++){ var lbl=(kind==='src')?(gdGet(nums,i)||(i+1)):''; boxes+='<i class="cell s'+cellAt(cells,i)+'" data-i="'+i+'">'+lbl+'</i>'; }
+  if(kind==='src' && ISADMIN){ boxes += '<button class="addbox" title="Add next cycle (red)" onclick="addSrcBox(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')">+</button>'; }
   var cellsDiv='<div class="cells'+(locked?' locked':'')+'" data-kind="'+kind+'" data-p="'+esc(a.phone)+'" data-u="'+esc(a.user)+'" data-a="'+esc(a.acct)+'" data-h="'+esc(a.handle)+'">'+boxes+'</div>';
   if(kind==='post'){  // compact single line: box sits inline
     return '<div class="arow post"><div class="atop">'+meta+susp+vaTag+cellsDiv+kebab+'</div></div>';
@@ -512,7 +517,7 @@ function acctRow(kind, a, r){
 }
 function groupHTML(kind, ph, list, map, disc){
   var green=0, withGreen=0;
-  list.forEach(function(a){ var n=boxesFor(kind,a); var g=greenCount(kind,(map[keyOf(a)]||{}).cells,n); green+=g; if(g>0) withGreen++; });
+  list.forEach(function(a){ var rr=map[keyOf(a)]; var n=boxesFor(kind,a,rr); var g=greenCount(kind,rr&&rr.cells,n); green+=g; if(g>0) withGreen++; });
   var pct=list.length?Math.round(withGreen/list.length*100):0;
   var isDisc = kind==='post' && !!disc[String(ph)];
   var badge = isDisc ? '<span class="discb">disconnected · not counted</span>' : '';
@@ -537,13 +542,30 @@ async function cycleCell(kind,phone,user,acct,handle,idx){
     r.cells=cells; r.va_code=MYVA;
     if(isSrc){ if(next===gs && cur!==gs) r.gdates=gdSet(r.gdates,idx,srcToday()); else if(next!==gs) r.gdates=gdSet(r.gdates,idx,''); }
   } else if(isSrc){
-    r={ phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, cells:cells, gdates:(next===gs?gdSet('',idx,srcToday()):'') }; STATE.sourcelog.push(r);
+    r={ phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, cells:cells, nums:'', gdates:(next===gs?gdSet('',idx,srcToday()):'') }; STATE.sourcelog.push(r);
   } else {
     r={ date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, cells:cells }; STATE.posting.push(r);
   }
   if(isSrc) renderSourcing(); else renderPosting();
   try{ await apiPost({ action:'cell_set', kind:kind, date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, index:idx, state:next, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) }); }
   catch(e){ toast('Save failed'); }
+}
+// admin: set/add a sourcing box with an explicit number
+async function setSrcBox(phone,user,acct,handle,idx,state,num){
+  var k=[phone,user,acct,handle].join('|'); var r=sourceMap()[k];
+  if(!r){ r={ phone:phone,user:user,acct:acct,handle:handle, va_code:MYVA, cells:'', nums:'', gdates:'' }; STATE.sourcelog.push(r); }
+  r.cells=setCellAt(r.cells,idx,String(state)); r.va_code=MYVA;
+  if(num!==undefined && num!==null && num!=='') r.nums=gdSet(r.nums,idx,String(num));
+  if(String(state)===String(greenState('src'))) r.gdates=gdSet(r.gdates,idx,srcToday()); else r.gdates=gdSet(r.gdates,idx,'');
+  renderSourcing();
+  try{ await apiPost({ action:'cell_set', kind:'src', phone:phone, user:user, acct:acct, handle:handle, index:idx, state:state, num:num, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) }); }
+  catch(e){ toast('Save failed'); }
+}
+function addSrcBox(phone,user,acct,handle){
+  var r=sourceMap()[[phone,user,acct,handle].join('|')];
+  var idx=srcLen(r), maxNum=0;
+  if(r){ String(r.nums||'').split(',').forEach(function(p){ var x=parseInt(p,10); if(!isNaN(x)&&x>maxNum) maxNum=x; }); }
+  setSrcBox(phone,user,acct,handle,idx,1,maxNum+1);
 }
 function onCellsClick(e){
   var cell=e.target.closest ? e.target.closest('.cell') : null; if(!cell) return;
@@ -578,7 +600,7 @@ function renderSourcing(){
   var ff=$('src-filter')?$('src-filter').value:'all', q=$('src-search')?$('src-search').value.trim().toLowerCase():'';
   // continuous board: Target = assigned (non-blank) ; Sourced today = greens stamped today
   var assigned=0, doneTot=0, today=0;
-  accts.forEach(function(a){ var r=map[srcKey(a)]; if(!r) return; var n=boxesFor('src',a); assigned+=countNonBlank(r.cells,n); doneTot+=greenCount('src',r.cells,n); today+=countTodaySrc(r.cells,r.gdates,n); });
+  accts.forEach(function(a){ var r=map[srcKey(a)]; if(!r) return; var n=srcLen(r); assigned+=countNonBlank(r.cells,n); doneTot+=greenCount('src',r.cells,n); today+=countTodaySrc(r.cells,r.gdates,n); });
   $('src-stats').innerHTML=
     statCard('Target', assigned, 'o')+
     statCard('Sourced today', today, 'g')+
@@ -642,11 +664,11 @@ async function recordDay(){
 }
 
 async function importSourcingHistory(){
-  if(!confirm('Import existing Sourcing Dashboard data?\nGrey checks (☑️) become ORANGE boxes. Green checks are ignored. Safe to run once.')) return;
+  if(!confirm('Import the "Import here" sheet?\nEach listed cycle number is added as an ORANGE box on the matching account. Safe to run once.')) return;
   toast('Importing sourcing history… this can take ~20s');
   try{
     var r=await apiPost({ action:'import_sourcing' });
-    if(r&&r.ok) toast('Imported '+r.boxes+' orange boxes across '+r.accounts+' accounts');
+    if(r&&r.ok) toast('Imported '+r.boxes+' boxes across '+r.accounts+' accounts'+(r.unmatched?' ('+r.unmatched+' handles unmatched)':''));
     else toast('Import failed'+(r&&r.error?': '+r.error:''));
     await loadState();
   }catch(e){ toast('Import failed'); }
