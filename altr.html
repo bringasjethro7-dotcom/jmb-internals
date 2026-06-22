@@ -1037,11 +1037,12 @@ function runEOD(){ $('eod-warn').classList.add('open'); }       // show the warn
 function closeEodWarn(){ $('eod-warn').classList.remove('open'); }
 async function confirmEOD(){
   closeEodWarn();
+  toast('Ending the day… please wait');
   try{
     var r=await apiPost({ action:'eod', date:STATE.date, by:firstName(USER.full_name||USER.employee_id) });
-    if(r && r.ok){ showEod(r.message); await refreshQuiet(); }
-    else toast('EOD failed'+(r&&r.error?': '+r.error:''));
-  }catch(e){ toast('EOD failed'); }
+    if(r && r.ok){ showEod(r.message); refreshQuiet(); }
+    else { alert('Couldn’t end the day'+(r&&r.error?(':\n\n'+r.error):'.')+'\n\nPlease try again in a moment.'); }
+  }catch(e){ alert('Couldn’t end the day — network error. Please try again.'); }
 }
 function showEod(msg){ $('eod-text').value=msg||''; $('eod-modal').classList.add('open'); }
 function closeEod(){ $('eod-modal').classList.remove('open'); }
