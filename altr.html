@@ -289,6 +289,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
       <div class="tab" data-page="insights" onclick="showTab('insights')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Goal / Insights</div>
       <div class="tab" data-page="sourcing" onclick="showTab('sourcing')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Sourcing</div>
       <div class="tab" data-page="posting" onclick="showTab('posting')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Posting</div>
+      <div class="tab" data-page="accounts" onclick="showTab('accounts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-3-3.87"/><path d="M4 21v-2a4 4 0 0 1 3-3.87"/><circle cx="12" cy="7" r="4"/><path d="M9 11H7a2 2 0 0 0-2 2"/></svg>Accounts</div>
     </div>
 
     <!-- DEVICE -->
@@ -351,6 +352,17 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
           <div id="ins-reposts"></div>
         </div>
       </div>
+    </div>
+
+    <!-- IG ACCOUNTS -->
+    <div class="page" id="page-accounts">
+      <div class="toolbar">
+        <select class="sel" id="acct-statusf" onchange="renderAccountsTab()"><option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="logged_out">Logged out</option></select>
+        <input class="search" id="acct-search" placeholder="Search handle / phone…" oninput="renderAccountsTab()" />
+        <button class="adminbtn" id="acct-add-btn" style="display:none" onclick="addAccountPrompt()">+ Add account</button>
+      </div>
+      <div class="stats" id="acct-stats"></div>
+      <div id="accounts-list"><div class="muted">Loading accounts…</div></div>
     </div>
   </div>
 </div>
@@ -534,7 +546,7 @@ function enterApp(user, admin){
   if(!configured()){ $('setup').style.display='block'; return; }
   $('app').style.display='block';
   $('who-name').textContent=firstName(user.full_name||user.employee_id);
-  if(ISADMIN){ $('import-btn').style.display=''; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; $('src-reset-btn').style.display=''; $('src-clear-btn').style.display=''; $('src-assign-btn').style.display=''; $('ig-cookie-btn').style.display=''; }
+  if(ISADMIN){ $('import-btn').style.display=''; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; $('src-reset-btn').style.display=''; $('src-clear-btn').style.display=''; $('src-assign-btn').style.display=''; $('ig-cookie-btn').style.display=''; var ab=$('acct-add-btn'); if(ab) ab.style.display=''; }
   // record the marker's name (the signed-in person)
   MYVA = ISADMIN ? 'Admin' : (user.full_name || user.employee_id || '');
   // dates default today (filled after state load)
@@ -800,6 +812,53 @@ function srcSaveBoxes(phone,user,acct,handle, boxes){
   renderSourcing();
   apiPost({ action:'src_set_account', phone:phone, user:user, acct:acct, handle:handle, cells:cells, nums:nums, gdates:gds, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) }).catch(function(){ toast('Save failed'); });
 }
+/* ======================= IG ACCOUNTS ======================= */
+function acctStatusBadge(a){
+  var s=String(a.status||'active');
+  var label=(s==='logged_out')?'Logged out':(s.charAt(0).toUpperCase()+s.slice(1));
+  var col=(s==='active')?'var(--green)':((s==='suspended')?'var(--amber)':'var(--red)');
+  var bg=(s==='active')?'rgba(34,197,94,.12)':((s==='suspended')?'rgba(245,158,11,.12)':'rgba(239,68,68,.14)');
+  var sty='display:inline-block;font-size:11px;font-weight:600;padding:3px 10px;border-radius:8px;color:'+col+';background:'+bg+';';
+  if(ISADMIN){ return '<button title="Click to change" style="'+sty+'border:none;cursor:pointer;font:inherit" onclick="cycleAcctStatus(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')">'+label+'</button>'; }
+  return '<span style="'+sty+'">'+label+'</span>';
+}
+function renderAccountsTab(){
+  if(!STATE || !$('accounts-list')) return;
+  var accts=(STATE.accounts||[]).slice();
+  var sf=$('acct-statusf')?$('acct-statusf').value:'all';
+  var q=$('acct-search')?$('acct-search').value.trim().toLowerCase():'';
+  var total=accts.length, act=0, susp=0, lo=0;
+  accts.forEach(function(a){ var s=String(a.status||'active'); if(s==='active')act++; else if(s==='suspended')susp++; else lo++; });
+  $('acct-stats').innerHTML = statCard('Accounts',total,'')+statCard('Active',act,'g')+statCard('Suspended',susp,'a')+statCard('Logged out',lo,'r');
+  var rows=accts.filter(function(a){
+    if(sf!=='all' && String(a.status||'active')!==sf) return false;
+    if(q){ var hay=('p'+a.phone+' u'+a.user+' a'+a.acct+' @'+(a.handle||'')).toLowerCase(); if(hay.indexOf(q)<0) return false; }
+    return true;
+  });
+  rows.sort(function(x,y){ return (fnum(x.phone)-fnum(y.phone)) || (fnum(x.user)-fnum(y.user)) || (fnum(x.acct)-fnum(y.acct)); });
+  if(!rows.length){ $('accounts-list').innerHTML='<div class="muted">No accounts match.</div>'; return; }
+  var body=rows.map(function(a){
+    var url=a.link?esc(a.link):('https://instagram.com/'+esc(a.handle||''));
+    var handle=a.handle?('<a href="'+url+'" target="_blank" rel="noopener" style="color:var(--o2);text-decoration:none">@'+esc(a.handle)+'</a>'):'<span class="muted">—</span>';
+    return '<tr><td>P'+esc(a.phone)+'</td><td>U'+esc(a.user)+'</td><td>A'+esc(a.acct)+'</td><td class="nm">'+handle+'</td><td>'+(a.followers?esc(a.followers):'—')+'</td><td>'+acctStatusBadge(a)+'</td></tr>';
+  }).join('');
+  $('accounts-list').innerHTML='<table class="srctable"><thead><tr><th>Phone</th><th>User</th><th>Acct</th><th>Handle</th><th>Followers</th><th>Status</th></tr></thead><tbody>'+body+'</tbody></table>';
+}
+async function addAccountPrompt(){
+  if(!ISADMIN){ toast('Admins only'); return; }
+  var phone=prompt('Phone number (e.g. 4):'); if(phone===null) return; phone=String(phone).trim(); if(!phone){ toast('Phone number required'); return; }
+  var user=prompt('User number (e.g. 2):'); if(user===null) return; user=String(user).trim(); if(!user){ toast('User number required'); return; }
+  var acct=prompt('Account number (e.g. 3):'); if(acct===null) return; acct=String(acct).trim(); if(!acct){ toast('Account number required'); return; }
+  var handle=prompt('IG handle — optional (without @):','')||''; handle=handle.replace(/^@/,'').trim();
+  var followers=prompt('Followers — optional:','')||''; followers=followers.trim();
+  var dup=(STATE.accounts||[]).some(function(a){ return String(a.phone)===phone && String(a.user)===user && String(a.acct)===acct; });
+  if(dup && !confirm('An account with P'+phone+' · U'+user+' · A'+acct+' already exists. Add another anyway?')) return;
+  try{
+    var r=await apiPost({ action:'add_account', phone:phone, user:user, acct:acct, handle:handle, followers:followers, status:'active', by:firstName(USER.full_name||USER.employee_id) });
+    if(r && r.error){ toast(r.error); return; }
+    await refreshQuiet(); renderAccountsTab(); toast('Account added');
+  }catch(e){ toast('Failed to add'); }
+}
 function editSrcBox(phone,user,acct,handle,idx){
   var r=sourceMap()[[phone,user,acct,handle].join('|')]; var boxes=srcBoxes(r); if(idx>=boxes.length) return;
   var ans=prompt('Cycle number for this box (leave blank to DELETE it):', boxes[idx].num||'');
@@ -890,7 +949,7 @@ var ACCT_STATUS_CYCLE=['active','suspended','logged_out'];
 async function cycleAcctStatus(phone,user,acct,handle){
   var a=(STATE.accounts||[]).filter(function(x){ return String(x.phone)===String(phone)&&String(x.user)===String(user)&&String(x.acct)===String(acct)&&String(x.handle)===String(handle); })[0]; if(!a) return;
   var i=ACCT_STATUS_CYCLE.indexOf(a.status||'active'); var next=ACCT_STATUS_CYCLE[(i+1)%ACCT_STATUS_CYCLE.length];
-  a.status=next; renderPosting(); renderSourcing();
+  a.status=next; renderPosting(); renderSourcing(); if(typeof renderAccountsTab==='function') renderAccountsTab();
   try{ await apiPost({ action:'account_status', phone:phone, user:user, acct:acct, handle:handle, status:next }); toast('@'+handle+' → '+next.replace('_',' ')); }
   catch(e){ toast('Save failed'); }
 }
@@ -1055,7 +1114,7 @@ async function refreshQuiet(){
     STATE=s; renderAll();
   } }catch(e){}
 }
-function renderAll(){ renderDevice(); renderPosting(); renderSourcing(); renderInsights(); }
+function renderAll(){ renderDevice(); renderPosting(); renderSourcing(); renderInsights(); renderAccountsTab(); }
 
 /* ======================= GOAL / INSIGHTS ======================= */
 function goalTarget(key){ var g=(STATE.goals||[]).filter(function(x){ return String(x.key)===key; })[0]; return g?fnum(g.target):0; }
@@ -1244,11 +1303,11 @@ async function refreshRepost(id, link){
 
 /* ---- tabs ---- */
 function showTab(p){
-  ['device','posting','sourcing','insights'].forEach(function(x){
+  ['device','posting','sourcing','insights','accounts'].forEach(function(x){
     $('page-'+x).classList.toggle('on', x===p);
   });
   document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('on', t.getAttribute('data-page')===p); });
-  if(STATE){ if(p==='device') renderDevice(); else if(p==='posting') renderPosting(); else if(p==='insights'){ ANIMATE_AUDIO=true; renderInsights(); } else renderSourcing(); }
+  if(STATE){ if(p==='device') renderDevice(); else if(p==='posting') renderPosting(); else if(p==='insights'){ ANIMATE_AUDIO=true; renderInsights(); } else if(p==='accounts') renderAccountsTab(); else renderSourcing(); }
 }
 
 /* ---- cell-grid click delegation (boxes cycle blank → orange → green) ---- */
