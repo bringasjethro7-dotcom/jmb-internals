@@ -593,7 +593,7 @@ function filterAccounts(kind, accts, map, ff, q){
 function acctRow(kind, a, r){
   var cells=r?String(r.cells||''):''; var nums=r?String(r.nums||''):''; var n=boxesFor(kind,a,r); var g=greenCount(kind,cells,n);
   var va=r&&r.va_code?r.va_code:'';
-  var locked = (kind==='post') && !!disconnectedPhones()[String(a.phone)];
+  var locked = (kind==='post') && (!!disconnectedPhones()[String(a.phone)] || (a.status && a.status!=='active'));  // disconnected OR suspended/logged-out → not tickable
   var susp = a.status && a.status!=='active' ? '<span class="susp">'+esc(a.status==='logged_out'?'logged out':a.status)+'</span>' : '';
   var assigned = countNonBlank(cells,n);
   var meta='<div class="ah"><b>@'+esc(a.handle)+'</b><span>P'+esc(a.phone)+' · U'+esc(a.user)+' · A'+esc(a.acct)+(a.followers?' · '+esc(a.followers)+' followers':'')+'</span></div>';
@@ -615,9 +615,12 @@ function acctRow(kind, a, r){
   return '<div class="arow"><div class="atop">'+meta+susp+vaTag+counter+kebab+'</div>'+cellsDiv+'</div>';
 }
 function groupHTML(kind, ph, list, map, disc){
-  var green=0, withGreen=0;
-  list.forEach(function(a){ var rr=map[keyOf(a)]; var n=boxesFor(kind,a,rr); var g=greenCount(kind,rr&&rr.cells,n); green+=g; if(g>0) withGreen++; });
-  var pct=list.length?Math.round(withGreen/list.length*100):0;
+  var green=0, withGreen=0, denom=0;
+  list.forEach(function(a){
+    if(kind==='post' && a.status && a.status!=='active') return;   // posting: suspended/logged-out not counted
+    var rr=map[keyOf(a)]; var n=boxesFor(kind,a,rr); var g=greenCount(kind,rr&&rr.cells,n); green+=g; if(g>0) withGreen++; denom++;
+  });
+  var pct=denom?Math.round(withGreen/denom*100):0;
   var isDisc = kind==='post' && !!disc[String(ph)];
   var badge = isDisc ? '<span class="discb">disconnected · not counted</span>' : '';
   var open = !!OPEN[kind][ph];
@@ -627,7 +630,7 @@ function groupHTML(kind, ph, list, map, disc){
     '<button class="phbtn" title="Undo last added cycle for this phone" onclick="event.stopPropagation();undoPhoneCycle(\''+esc(ph)+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg></button>' : '';
   return '<div class="acctgroup'+(isDisc?' disc':'')+'"><div class="agh" onclick="toggleGroup(\''+kind+'\',\''+esc(ph)+'\')">'+
     '<div class="aghl"><b>Phone '+esc(ph)+'</b>'+phctrl+badge+'</div><div class="agbar"><i style="width:'+pct+'%"></i></div>'+
-    '<span class="agc">'+green+' ✓ · '+withGreen+'/'+list.length+'</span></div>'+
+    '<span class="agc">'+green+' ✓ · '+withGreen+'/'+denom+'</span></div>'+
     '<div class="agbody'+(open?' open':'')+'">'+body+'</div></div>';
 }
 function toggleGroup(kind, ph){ OPEN[kind][ph]=!OPEN[kind][ph]; if(kind==='src') renderSourcing(); else renderPosting(); }
