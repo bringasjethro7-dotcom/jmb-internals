@@ -987,7 +987,7 @@ function renderSourcing(){
   var ff=$('src-filter')?$('src-filter').value:'all', q=$('src-search')?$('src-search').value.trim().toLowerCase():'';
   // states: red(1)=target, orange(2)=queued/sourced, green(3)=posted
   var red=0, orange=0, green=0, today=0;
-  accts.forEach(function(a){ var r=map[srcKey(a)]; if(!r) return; var n=srcLen(r); red+=countAt(r.cells,n,1); orange+=countAt(r.cells,n,2); green+=countAt(r.cells,n,3); today+=countTodaySrc(r.cells,r.gdates,n); });
+  accts.forEach(function(a){ if(a.status && a.status!=='active') return; var r=map[srcKey(a)]; if(!r) return; var n=srcLen(r); red+=countAt(r.cells,n,1); orange+=countAt(r.cells,n,2); green+=countAt(r.cells,n,3); today+=countTodaySrc(r.cells,r.gdates,n); });
   $('src-stats').innerHTML=
     statCard('Target', red+today, 'r')+   // stable daily target = still-red + already-sourced-today (matches per-employee total)
     statCard('Queued', orange, 'a')+
@@ -1005,7 +1005,12 @@ function renderSourcing(){
    Assigned = # accounts ; Target = red today (red now + sourced today) ; Sourced = red->orange today */
 function phoneStats_(ph){
   var map=sourceMap(), red=0, sourced=0, accounts=0;
-  (STATE.accounts||[]).forEach(function(a){ if(String(a.phone)!==String(ph)) return; accounts++; var r=map[srcKey(a)]; if(!r) return; var n=srcLen(r); red+=countAt(r.cells,n,1); sourced+=countTodaySrc(r.cells,r.gdates,n); });
+  (STATE.accounts||[]).forEach(function(a){
+    if(String(a.phone)!==String(ph)) return;
+    if(a.status && a.status!=='active') return;     // suspended / logged-out accounts don't count toward target
+    accounts++; var r=map[srcKey(a)]; if(!r) return; var n=srcLen(r);
+    red+=countAt(r.cells,n,1); sourced+=countTodaySrc(r.cells,r.gdates,n);
+  });
   return { accounts:accounts, red:red, sourced:sourced };
 }
 function renderTargets(){
