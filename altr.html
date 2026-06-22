@@ -223,8 +223,10 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .adminbtn:hover{opacity:.92}
 .ghost{font-size:12px;font-weight:600;color:var(--t2);background:none;border:1px solid var(--line);border-radius:9px;padding:8px 13px;cursor:pointer;font-family:inherit}
 .ghost:hover{color:var(--t1);border-color:var(--line-hi)}
-#eod-modal,#eod-warn,#phone-reminder,#reels-alarm{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(7,9,13,.8);backdrop-filter:blur(8px);padding:1.5rem}
-#eod-modal.open,#eod-warn.open,#phone-reminder.open,#reels-alarm.open{display:flex;animation:docFade .2s ease}
+#eod-modal,#eod-warn,#phone-reminder,#reels-alarm,#acct-edit-modal{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(7,9,13,.8);backdrop-filter:blur(8px);padding:1.5rem}
+#eod-modal.open,#eod-warn.open,#phone-reminder.open,#reels-alarm.open,#acct-edit-modal.open{display:flex;animation:docFade .2s ease}
+#acct-edit-modal .ae-field{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em}
+#acct-edit-modal .ae-field input{background:#0c0f15;border:1px solid var(--line);border-radius:8px;color:#fff;padding:8px 11px;font:14px/1 inherit;text-transform:none;letter-spacing:0}
 #reels-alarm .eodbox{max-width:560px}
 #reels-alarm .alarm-in{width:130px;background:#0c0f15;border:1px solid var(--line);border-radius:8px;color:#fff;padding:7px 10px;font:inherit}
 @keyframes alarmPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
@@ -394,6 +396,22 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
     <div class="eodsub">Scheduled check-in (PHT). For each promoted audio, open its Instagram page (↗), read the “X reels” number, and enter the latest figure below. You can type <b>2300</b> or <b>2.3K</b>.</div>
     <div id="reels-alarm-list" style="margin:.6rem 0 .2rem"></div>
     <div class="eodbtns"><button class="ghost" onclick="dismissReelsAlarm()">Later</button><button class="adminbtn" onclick="saveReelsAlarm()">Save counts</button></div>
+  </div>
+</div>
+
+<!-- Edit IG account (admin) -->
+<div id="acct-edit-modal">
+  <div class="eodbox" style="max-width:480px">
+    <div class="eodhd">Edit account</div>
+    <div class="eodsub">Update this IG account's details.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:.6rem 0">
+      <label class="ae-field">Phone <input id="ae-phone" inputmode="numeric"></label>
+      <label class="ae-field">User <input id="ae-user" inputmode="numeric"></label>
+      <label class="ae-field">Acct <input id="ae-acct" inputmode="numeric"></label>
+      <label class="ae-field" style="grid-column:1/3">Handle (without @) <input id="ae-handle"></label>
+      <label class="ae-field">Followers <input id="ae-foll" inputmode="numeric"></label>
+    </div>
+    <div class="eodbtns"><button class="ghost" style="color:var(--red);border-color:rgba(239,68,68,.4)" onclick="delAccountFromEdit()">Delete</button><button class="ghost" onclick="closeAcctEdit()">Cancel</button><button class="adminbtn" onclick="saveAcctEdit()">Save</button></div>
   </div>
 </div>
 
@@ -843,11 +861,47 @@ function renderAccountsTab(){
   rows.sort(function(x,y){ return (fnum(x.phone)-fnum(y.phone)) || (fnum(x.user)-fnum(y.user)) || (fnum(x.acct)-fnum(y.acct)); });
   if(!rows.length){ $('accounts-list').innerHTML='<div class="muted">No accounts match.</div>'; return; }
   var body=rows.map(function(a){
-    var url=a.link?esc(a.link):('https://instagram.com/'+esc(a.handle||''));
-    var handle=a.handle?('<a href="'+url+'" target="_blank" rel="noopener" style="color:var(--o2);text-decoration:none">@'+esc(a.handle)+'</a>'):'<span class="muted">—</span>';
-    return '<tr><td>P'+esc(a.phone)+'</td><td>U'+esc(a.user)+'</td><td>A'+esc(a.acct)+'</td><td class="nm">'+handle+'</td><td>'+(a.followers?esc(a.followers):'—')+'</td><td>'+acctStatusBadge(a)+'</td></tr>';
+    var hh=String(a.handle||'').replace(/^@/,'');
+    var url = (a.link && /^https?:\/\//i.test(a.link)) ? a.link : (hh ? ('https://www.instagram.com/'+hh+'/') : '');
+    var handle=hh?('<a href="'+esc(url)+'" target="_blank" rel="noopener" style="color:var(--o2);text-decoration:none">@'+esc(hh)+'</a>'):'<span class="muted">—</span>';
+    var actions = ISADMIN ? ('<td style="text-align:right;white-space:nowrap">'
+      + '<button title="Edit" style="background:none;border:none;color:var(--t2);cursor:pointer;padding:4px" onclick="editAccount(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>'
+      + '<button title="Delete" style="background:none;border:none;color:var(--red);cursor:pointer;padding:4px" onclick="delAccount(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')">✕</button></td>') : '';
+    return '<tr><td>P'+esc(a.phone)+'</td><td>U'+esc(a.user)+'</td><td>A'+esc(a.acct)+'</td><td class="nm">'+handle+'</td><td>'+(a.followers?esc(a.followers):'—')+'</td><td>'+acctStatusBadge(a)+'</td>'+actions+'</tr>';
   }).join('');
-  $('accounts-list').innerHTML='<table class="srctable"><thead><tr><th>Phone</th><th>User</th><th>Acct</th><th>Handle</th><th>Followers</th><th>Status</th></tr></thead><tbody>'+body+'</tbody></table>';
+  $('accounts-list').innerHTML='<table class="srctable"><thead><tr><th>Phone</th><th>User</th><th>Acct</th><th>Handle</th><th>Followers</th><th>Status</th>'+(ISADMIN?'<th></th>':'')+'</tr></thead><tbody>'+body+'</tbody></table>';
+}
+var EDIT_ACCT=null;
+function editAccount(phone,user,acct,handle){
+  if(!ISADMIN) return;
+  var a=(STATE.accounts||[]).filter(function(x){ return String(x.phone)===String(phone)&&String(x.user)===String(user)&&String(x.acct)===String(acct)&&String(x.handle)===String(handle); })[0];
+  if(!a) return;
+  EDIT_ACCT={ phone:String(a.phone), user:String(a.user), acct:String(a.acct), handle:String(a.handle||'') };
+  $('ae-phone').value=a.phone; $('ae-user').value=a.user; $('ae-acct').value=a.acct; $('ae-handle').value=a.handle||''; $('ae-foll').value=a.followers||'';
+  $('acct-edit-modal').classList.add('open');
+}
+function closeAcctEdit(){ $('acct-edit-modal').classList.remove('open'); EDIT_ACCT=null; }
+function delAccountFromEdit(){ if(EDIT_ACCT) delAccount(EDIT_ACCT.phone, EDIT_ACCT.user, EDIT_ACCT.acct, EDIT_ACCT.handle); }
+async function saveAcctEdit(){
+  if(!EDIT_ACCT) return;
+  var phone=$('ae-phone').value.trim(), user=$('ae-user').value.trim(), acct=$('ae-acct').value.trim();
+  if(!phone||!user||!acct){ toast('Phone, user and account number are required'); return; }
+  var handle=$('ae-handle').value.replace(/^@/,'').trim(), followers=$('ae-foll').value.trim();
+  try{
+    var r=await apiPost({ action:'account_edit', old:EDIT_ACCT, phone:phone, user:user, acct:acct, handle:handle, followers:followers, by:firstName(USER.full_name||USER.employee_id) });
+    if(r && r.error){ toast(r.error); return; }
+    closeAcctEdit(); await refreshQuiet(); renderAccountsTab(); toast('Account updated');
+  }catch(e){ toast('Save failed'); }
+}
+async function delAccount(phone,user,acct,handle){
+  if(!ISADMIN) return;
+  if(!confirm('Delete account P'+phone+' · U'+user+' · A'+acct+(handle?' (@'+handle+')':'')+'?\nThis removes it from the tracker.')) return;
+  try{
+    var r=await apiPost({ action:'account_del', phone:phone, user:user, acct:acct, handle:handle, by:firstName(USER.full_name||USER.employee_id) });
+    if(r && r.error){ toast(r.error); return; }
+    if($('acct-edit-modal')) closeAcctEdit();
+    await refreshQuiet(); renderAccountsTab(); toast('Account deleted');
+  }catch(e){ toast('Delete failed'); }
 }
 async function addAccountPrompt(){
   if(!ISADMIN){ toast('Admins only'); return; }
