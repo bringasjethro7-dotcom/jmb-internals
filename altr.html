@@ -1224,24 +1224,38 @@ function renderInsights(){
   var igb=$('ig-cookie-btn'); if(igb && ISADMIN){ var on=!!STATE.ig_cookie; igb.textContent='IG session: '+(on?'on':'off'); igb.style.borderColor=on?'rgba(34,197,94,.4)':''; igb.style.color=on?'var(--green)':''; }
   var audios=STATE.audios||[];
   var inprog=audios.filter(function(a){ return String(a.status).toLowerCase()!=='done'; }).length;
+  var reposts=STATE.reposts||[];
+  var chartIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>';
   $('ins-stats').innerHTML=
-    '<div class="inscard"><div class="inshd"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg> Audio promotion trend</span>'+
-    '<span class="goalsub" style="margin:0">reels using promoted audios · '+audios.length+' tracked · '+inprog+' in progress</span></div>'+buildAudioChart()+'</div>';
+    '<div class="inscard"><div class="inshd"><span>'+chartIcon+' Audio promotion trend</span>'+
+    '<span class="goalsub" style="margin:0">reels using promoted audios · '+audios.length+' tracked · '+inprog+' in progress</span></div>'+buildAudioChart()+'</div>'+
+    '<div class="inscard" style="margin-top:1.2rem"><div class="inshd"><span>'+chartIcon+' IG reels trend</span>'+
+    '<span class="goalsub" style="margin:0">reach of reposted reels · '+reposts.length+' tracked</span></div>'+buildReelsChart()+'</div>';
+  ANIMATE_AUDIO=false;   // consume the one-shot animate flag after both charts have rendered
   renderAudios(); renderReposts();
 }
 function buildAudioChart(){
-  var hist=STATE.audio_history||[];
-  if(!hist.length) return '<div class="muted">No trend yet — update an audio’s reels count over time and each change plots a point to build the line.</div>';
-  var titles={}; (STATE.audios||[]).forEach(function(a){ titles[String(a.id)]=a.title||('Audio '+a.id); });
+  return buildTrendChart(STATE.audio_history||[], (function(){ var t={}; (STATE.audios||[]).forEach(function(a){ t[String(a.id)]=a.title||('Audio '+a.id); }); return t; })(),
+    { idKey:'audio_id', fixedMax:10000, glow:'audglow', def:'Audio ', empty:'No trend yet — update an audio’s reels count over time and each change plots a point to build the line.' });
+}
+function buildReelsChart(){
+  return buildTrendChart(STATE.repost_history||[], (function(){ var t={}; (STATE.reposts||[]).forEach(function(r){ t[String(r.id)]=('Reel '+r.id); }); return t; })(),
+    { idKey:'repost_id', fixedMax:2000, glow:'reelglow', def:'Reel ', empty:'No trend yet — log a reel repost and update its reach over time to build the line.' });
+}
+function buildTrendChart(hist, titles, opt){
+  if(!hist.length) return '<div class="muted">'+opt.empty+'</div>';
   // each history row is its OWN point (in order). Same-date rows no longer collapse, so a line forms.
   var byAud={};
-  hist.forEach(function(h,seq){ var id=String(h.audio_id); (byAud[id]=byAud[id]||[]).push({ d:String(h.date), v:fnum(h.count), seq:seq }); });
+  hist.forEach(function(h,seq){ var id=String(h[opt.idKey]); (byAud[id]=byAud[id]||[]).push({ d:String(h.date), v:fnum(h.count), seq:seq }); });
   var ids=Object.keys(byAud).filter(function(id){ return titles[id]!==undefined; });
   ids.forEach(function(id){ byAud[id].sort(function(a,b){ return (a.d<b.d?-1:a.d>b.d?1:0) || (a.seq-b.seq); }); }); // chronological (timestamp, then save order)
   function latest(id){ var a=byAud[id]; return a.length?a[a.length-1].v:0; }
   ids.sort(function(a,b){ return latest(b)-latest(a); }); ids=ids.slice(0,8);
-  // ----- fixed Y to 10,000 ; X = a 7-day week starting at the first reading -----
-  var DAY=86400000, MAXY=10000, WEEK=7;
+  // ----- Y: fixed 10,000 (audio) or auto nice-max (reels) ; X = a 7-day week from the first reading -----
+  var DAY=86400000, WEEK=7;
+  var GMAX=1; ids.forEach(function(id){ byAud[id].forEach(function(p){ if(p.v>GMAX) GMAX=p.v; }); });
+  function niceMax(v){ var pow=Math.pow(10,Math.floor(Math.log10(v))); var n=v/pow; var m=n<=1?1:n<=1.5?1.5:n<=2?2:n<=2.5?2.5:n<=3?3:n<=4?4:n<=5?5:n<=8?8:10; return m*pow; }
+  var MAXY = opt.fixedMax || niceMax(GMAX), GLINES = opt.fixedMax?10:5, GSTEP = MAXY/GLINES;
   function dayMs(s){ return Date.parse(String(s).slice(0,10)+'T00:00:00Z'); }   // UTC midnight — matches the UTC day labels
   var startMs=Infinity; ids.forEach(function(id){ byAud[id].forEach(function(p){ var d=dayMs(p.d); if(!isNaN(d)&&d<startMs) startMs=d; }); });
   if(!isFinite(startMs)) startMs=dayMs(new Date().toISOString());
@@ -1255,9 +1269,10 @@ function buildAudioChart(){
   function yAt(v){ return padT + plotH - (Math.min(v,MAXY)/MAXY)*plotH; }
   var colors=['#ff6b1a','#22c55e','#3b82f6','#f59e0b','#a855f7','#ef4444','#14b8a6','#eab308'];
   var animate = ANIMATE_AUDIO;   // draw the line when the tab is opened, not on every background refresh
+  var GLOW=opt.glow;
   var svg='<svg viewBox="0 0 '+W+' '+H+'" class="trendsvg" preserveAspectRatio="xMidYMid meet">';
-  svg+='<defs><filter id="audglow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="4.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
-  for(var g=1;g<=10;g++){ var yv=g*1000, yy=yAt(yv); svg+='<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="rgba(255,255,255,.06)"/><text x="'+(padL-8)+'" y="'+(yy+4)+'" text-anchor="end" class="axt">'+yv.toLocaleString()+'</text>'; }
+  svg+='<defs><filter id="'+GLOW+'" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="4.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
+  for(var g=1;g<=GLINES;g++){ var yv=Math.round(g*GSTEP), yy=yAt(yv); svg+='<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="rgba(255,255,255,.06)"/><text x="'+(padL-8)+'" y="'+(yy+4)+'" text-anchor="end" class="axt">'+yv.toLocaleString()+'</text>'; }
   for(var di=0; di<WEEK; di++){ var lbl=new Date(startMs+di*DAY); var mm=('0'+(lbl.getUTCMonth()+1)).slice(-2), dd=('0'+lbl.getUTCDate()).slice(-2); svg+='<text x="'+xAt(di+0.5)+'" y="'+(H-padB+20)+'" text-anchor="middle" class="axt">'+mm+'-'+dd+'</text>'; }
   function polyLen(pts){ var L=0; for(var i=1;i<pts.length;i++){ var dx=pts[i][0]-pts[i-1][0], dy=pts[i][1]-pts[i-1][1]; L+=Math.sqrt(dx*dx+dy*dy); } return L; }
   ids.forEach(function(id,ci){ var col=colors[ci%colors.length]; var pts=byAud[id].map(function(p){ return [xAt(p.frac),yAt(p.v)]; });
@@ -1265,15 +1280,14 @@ function buildAudioChart(){
     var dstr='M'+pts.map(function(p){return p[0]+' '+p[1];}).join(' L'), len=Math.max(1,polyLen(pts)), dur=Math.min(2.2,Math.max(0.8,len/700));
     var draw = animate ? ' stroke-dasharray="'+len+'" stroke-dashoffset="'+len+'"' : '';
     var anim = animate ? '<animate attributeName="stroke-dashoffset" from="'+len+'" to="0" dur="'+dur+'s" begin="0.1s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="0.4 0 0.2 1" values="'+len+';0"/>' : '';
-    svg+='<path d="'+dstr+'" fill="none" stroke="'+col+'" stroke-width="2.8" filter="url(#audglow)" stroke-linejoin="round" stroke-linecap="round"'+draw+'>'+anim+'</path>';
+    svg+='<path d="'+dstr+'" fill="none" stroke="'+col+'" stroke-width="2.8" filter="url(#'+GLOW+')" stroke-linejoin="round" stroke-linecap="round"'+draw+'>'+anim+'</path>';
     pts.forEach(function(p,pi){
       var capp = animate ? '<animate attributeName="opacity" from="0" to="1" dur="0.25s" begin="'+(0.1 + dur*(pts.length>1?pi/(pts.length-1):1)).toFixed(2)+'s" fill="freeze"/>' : '';
-      svg+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="3.6" fill="'+col+'" filter="url(#audglow)"'+(animate?' opacity="0"':'')+'>'+capp+'</circle>';
+      svg+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="3.6" fill="'+col+'" filter="url(#'+GLOW+')"'+(animate?' opacity="0"':'')+'>'+capp+'</circle>';
     });
   });
   svg+='</svg>';
-  ANIMATE_AUDIO=false;   // consume the one-shot animate flag
-  var leg='<div class="trendleg">'+ids.map(function(id,ci){ return '<span class="lgi"><i style="background:'+colors[ci%colors.length]+'"></i>'+esc(titles[id]||('Audio '+id))+' ('+latest(id)+')</span>'; }).join('')+'</div>';
+  var leg='<div class="trendleg">'+ids.map(function(id,ci){ return '<span class="lgi"><i style="background:'+colors[ci%colors.length]+'"></i>'+esc(titles[id]||(opt.def+id))+' ('+Number(latest(id)).toLocaleString()+')</span>'; }).join('')+'</div>';
   return svg+leg;
 }
 function goalCard(label, val, target, key, pct){
