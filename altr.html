@@ -223,8 +223,12 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .adminbtn:hover{opacity:.92}
 .ghost{font-size:12px;font-weight:600;color:var(--t2);background:none;border:1px solid var(--line);border-radius:9px;padding:8px 13px;cursor:pointer;font-family:inherit}
 .ghost:hover{color:var(--t1);border-color:var(--line-hi)}
-#eod-modal,#eod-warn,#phone-reminder{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(7,9,13,.8);backdrop-filter:blur(8px);padding:1.5rem}
-#eod-modal.open,#eod-warn.open,#phone-reminder.open{display:flex;animation:docFade .2s ease}
+#eod-modal,#eod-warn,#phone-reminder,#reels-alarm{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(7,9,13,.8);backdrop-filter:blur(8px);padding:1.5rem}
+#eod-modal.open,#eod-warn.open,#phone-reminder.open,#reels-alarm.open{display:flex;animation:docFade .2s ease}
+#reels-alarm .eodbox{max-width:560px}
+#reels-alarm .alarm-in{width:130px;background:#0c0f15;border:1px solid var(--line);border-radius:8px;color:#fff;padding:7px 10px;font:inherit}
+@keyframes alarmPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+#reels-alarm .eodhd.ring{animation:alarmPulse 1s ease-in-out infinite}
 .eodhd.warn{color:#f59e0b}
 @keyframes docFade{from{opacity:0}to{opacity:1}}
 .eodbox{width:100%;max-width:480px;background:#12161e;border:1px solid var(--line-hi);border-radius:16px;padding:1.6rem;box-shadow:0 24px 70px rgba(0,0,0,.6)}
@@ -371,6 +375,16 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
   </div>
 </div>
 
+<!-- Scheduled reels-count reminder alarm -->
+<div id="reels-alarm">
+  <div class="eodbox">
+    <div class="eodhd warn ring">🔔 Time to update reels counts</div>
+    <div class="eodsub">Scheduled check-in (PHT). For each promoted audio, open its Instagram page (↗), read the “X reels” number, and enter the latest figure below. You can type <b>2300</b> or <b>2.3K</b>.</div>
+    <div id="reels-alarm-list" style="margin:.6rem 0 .2rem"></div>
+    <div class="eodbtns"><button class="ghost" onclick="dismissReelsAlarm()">Later</button><button class="adminbtn" onclick="saveReelsAlarm()">Save counts</button></div>
+  </div>
+</div>
+
 <!-- EOD report modal -->
 <div id="eod-modal">
   <div class="eodbox">
@@ -430,6 +444,61 @@ function livePoll(){
 }
 setInterval(livePoll, 10000);   // every 10s when idle & visible
 document.addEventListener('visibilitychange', function(){ if(!document.hidden) livePoll(); });
+
+/* ===== Scheduled reels-count reminder alarm (PHT) ===== */
+var ALARM_TIMES=['10:00','11:50','15:00','16:30'];   // Asia/Manila
+function phtNow(){
+  var f=new Intl.DateTimeFormat('en-CA',{ timeZone:'Asia/Manila', year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false });
+  var p={}; f.formatToParts(new Date()).forEach(function(x){ p[x.type]=x.value; });
+  var hh=(p.hour==='24')?'00':p.hour;
+  return { date:p.year+'-'+p.month+'-'+p.day, hm:hh+':'+p.minute };
+}
+function ringAlarm(){
+  try{
+    var Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return;
+    var ac=new Ctx(); if(ac.state==='suspended'){ try{ac.resume();}catch(e){} }
+    var t0=ac.currentTime+0.02, end=t0+5;            // ~5 second ring
+    for(var t=t0; t<end; t+=0.6){
+      var o=ac.createOscillator(), g=ac.createGain();
+      o.type='sine'; o.frequency.setValueAtTime(880,t); o.frequency.setValueAtTime(1320,t+0.15);
+      g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.5,t+0.03); g.gain.exponentialRampToValueAtTime(0.0001,t+0.34);
+      o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t+0.36);
+    }
+    setTimeout(function(){ try{ac.close();}catch(e){} }, 5400);
+  }catch(e){}
+}
+function renderReelsAlarmList(){
+  var audios=(STATE&&STATE.audios)||[];
+  if(!audios.length){ $('reels-alarm-list').innerHTML='<div class="muted">No audio promotions to update.</div>'; return; }
+  var lk='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
+  $('reels-alarm-list').innerHTML='<table class="srctable"><thead><tr><th>Audio</th><th>Current</th><th>New count</th></tr></thead><tbody>'+
+    audios.map(function(a){
+      var open=a.link?'<a href="'+esc(a.link)+'" target="_blank" rel="noopener" title="Open IG audio page" style="color:var(--o2);margin-left:6px">'+lk+'</a>':'';
+      return '<tr><td class="nm">'+esc(a.title||'—')+open+'</td><td>'+(a.reach?esc(a.reach):'—')+'</td><td><input class="alarm-in" data-id="'+esc(a.id)+'" placeholder="e.g. 2300 or 2.3K"></td></tr>';
+    }).join('')+'</tbody></table>';
+}
+function fireReelsAlarm(){ ringAlarm(); renderReelsAlarmList(); $('reels-alarm').classList.add('open'); }
+function dismissReelsAlarm(){ $('reels-alarm').classList.remove('open'); }
+async function saveReelsAlarm(){
+  var inputs=document.querySelectorAll('#reels-alarm-list .alarm-in'), saved=0, bad=0;
+  for(var i=0;i<inputs.length;i++){
+    var v=String(inputs[i].value||'').trim(); if(!v) continue;
+    var n=parseNumLoose(v); if(n===null){ bad++; continue; }
+    try{ await apiPost({ action:'audio_save', id:inputs[i].getAttribute('data-id'), reach:String(n), by:firstName(USER.full_name||USER.employee_id) }); saved++; }catch(e){ bad++; }
+  }
+  if(saved) await refreshQuiet();
+  toast(saved?(saved+' count'+(saved>1?'s':'')+' updated'):(bad?'Check the numbers entered':'Nothing entered'));
+  if(!bad) dismissReelsAlarm();
+}
+function reelsAlarmTick(){
+  if(typeof STATE==='undefined' || !STATE || !USER) return;       // only when signed in
+  if($('reels-alarm').classList.contains('open')) return;          // already showing
+  var now=phtNow(); if(ALARM_TIMES.indexOf(now.hm)<0) return;
+  var key='altr_reelsalarm_'+now.date+'_'+now.hm;
+  try{ if(localStorage.getItem(key)) return; localStorage.setItem(key,'1'); }catch(e){}
+  fireReelsAlarm();
+}
+setInterval(reelsAlarmTick, 20000);   // check every 20s; fires once per scheduled slot per day
 
 /* ---- LOGIN ---- */
 $('lpin').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
