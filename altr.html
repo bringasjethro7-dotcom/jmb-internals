@@ -760,13 +760,37 @@ function copyEod(){
   toast(done?'Copied to clipboard':'Select the text and copy manually');
 }
 async function togglePostBox(phone,user,acct,handle){
-  var r=postingMap()[[phone,user,acct,handle].join('|')];
-  var posted = r && cellAt(r.cells,0)===String(greenState('post'));
-  try{
-    var resp=await apiPost({ action:'post_tick', date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, posted:!posted, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) });
-    if(resp && resp.error){ toast(resp.error); return; }
-    await refreshQuiet();   // re-sync posting + sourcing (a box moved orange->green)
-  }catch(e){ toast('Save failed'); }
+  var key=[phone,user,acct,handle].join('|');
+  var pr=postingMap()[key], sr=sourceMap()[key];
+  var posted = pr && cellAt(pr.cells,0)===String(greenState('post'));
+  var GP=String(greenState('post'));                 // posting green = '2'
+  if(!posted){
+    // pick next in queue = lowest CYCLE NUMBER among orange (2) boxes
+    if(!sr){ toast('No sourced content queued for @'+handle); return; }
+    var n=srcLen(sr), idx=-1, best=Infinity;
+    for(var i=0;i<n;i++){ if(cellAt(sr.cells,i)==='2'){ var nv=parseInt(gdGet(sr.nums,i),10); if(isNaN(nv)) nv=i; if(nv<best){ best=nv; idx=i; } } }
+    if(idx<0){ toast('No queued (orange) content left for @'+handle); return; }
+    var num=gdGet(sr.nums,idx)||String(idx+1);
+    // optimistic: posting box -> green w/ number, sourcing box -> green(3, posted) — render instantly
+    if(!pr){ pr={ date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, cells:'', num:'' }; STATE.posting.push(pr); }
+    pr.cells=setCellAt(pr.cells,0,GP); pr.num=num; pr.va_code=MYVA;
+    sr.cells=setCellAt(sr.cells,idx,'3');
+    renderPosting(); renderSourcing();
+  } else {
+    // optimistic untick: posting box -> blank, revert that number's sourcing box green->orange
+    var pnum = pr ? String(pr.num||'') : '';
+    pr.cells=setCellAt(pr.cells,0,'0'); pr.num='';
+    if(sr){ var n2=srcLen(sr), ri=-1;
+      if(pnum){ for(var j=0;j<n2;j++){ if(cellAt(sr.cells,j)==='3' && String(gdGet(sr.nums,j))===pnum){ ri=j; break; } } }
+      if(ri<0){ for(var k=n2-1;k>=0;k--){ if(cellAt(sr.cells,k)==='3'){ ri=k; break; } } }
+      if(ri>=0) sr.cells=setCellAt(sr.cells,ri,'2');
+    }
+    renderPosting(); renderSourcing();
+  }
+  // persist in background; only reconcile on error
+  apiPost({ action:'post_tick', date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, posted:!posted, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) })
+    .then(function(resp){ if(resp && resp.error){ toast(resp.error); refreshQuiet(); } })
+    .catch(function(){ toast('Save failed'); refreshQuiet(); });
 }
 var ACCT_STATUS_CYCLE=['active','suspended','logged_out'];
 async function cycleAcctStatus(phone,user,acct,handle){
@@ -955,7 +979,7 @@ function buildAudioChart(){
   hist.forEach(function(h){ var id=String(h.audio_id); (byAud[id]=byAud[id]||{})[String(h.date)]=fnum(h.count); dateSet[String(h.date)]=true; });
   var dates=Object.keys(dateSet).sort();
   function latest(id){ for(var i=dates.length-1;i>=0;i--){ if(byAud[id][dates[i]]!==undefined) return byAud[id][dates[i]]; } return 0; }
-  var ids=Object.keys(byAud).sort(function(a,b){ return latest(b)-latest(a); }).slice(0,8);
+  var ids=Object.keys(byAud).filter(function(id){ return titles[id]!==undefined; }).sort(function(a,b){ return latest(b)-latest(a); }).slice(0,8);  // only audios that still exist
   var maxY=1; ids.forEach(function(id){ dates.forEach(function(d){ var v=byAud[id][d]; if(v!==undefined&&v>maxY) maxY=v; }); });
   var W=860,H=320,padL=54,padR=14,padT=14,padB=46, plotW=W-padL-padR, plotH=H-padT-padB, n=dates.length;
   function xAt(i){ return padL + (n<=1? plotW/2 : (i/(n-1))*plotW); }
