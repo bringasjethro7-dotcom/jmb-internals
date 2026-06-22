@@ -1055,14 +1055,31 @@ function renderAudios(){
       var badge='<button class="sbadge '+(st==='done'?'done':'prog')+'" onclick="toggleAudio(\''+esc(a.id)+'\',\''+st+'\')">'+(st==='done'?'Done':'In progress')+'</button>';
       var title=a.link?'<a href="'+esc(a.link)+'" target="_blank" rel="noopener">'+esc(a.title||a.link)+'</a>':esc(a.title||'—');
       var num='<span class="igc" onclick="editAudioNum(\''+esc(a.id)+'\',\''+escAttr(a.reach||'')+'\')" title="Click to edit">'+(a.reach?esc(a.reach):'—')+'</span>';
-      var refresh=a.link?'<button class="igref" title="Re-fetch latest count" onclick="refreshAudio(\''+esc(a.id)+'\',\''+escAttr(a.link)+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>':'';
+      var refresh=a.link?'<button class="igref" title="Open the IG audio page, then enter the latest reels count" onclick="checkAudio(\''+esc(a.id)+'\',\''+escAttr(a.link)+'\',\''+escAttr(a.reach||'')+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg></button>':'';
       return '<tr><td class="nm">'+title+'</td><td>'+badge+'</td><td>'+num+' '+refresh+'</td><td><button class="delx" title="Delete" onclick="delAudio(\''+esc(a.id)+'\')">✕</button></td></tr>';
     }).join('')+'</tbody></table>'; }
   $('ins-audios').innerHTML=html;
 }
+function parseNumLoose(s){
+  s=String(s||'').replace(/,/g,'').replace(/reels/i,'').trim(); if(!s) return null;
+  var m=s.match(/^([\d.]+)\s*([KMB])?$/i); if(!m) return null;
+  var mult=1; if(m[2]){ var u=m[2].toUpperCase(); mult=(u==='K')?1e3:(u==='M')?1e6:1e9; }
+  var n=parseFloat(m[1]); return isNaN(n)?null:Math.round(n*mult);
+}
 function editAudioNum(id, cur){
-  var v=prompt('Reels using this audio (number):', cur); if(v===null) return;
-  apiPost({ action:'audio_save', id:id, reach:String(v).trim(), by:firstName(USER.full_name||USER.employee_id) }).then(refreshQuiet).catch(function(){ toast('Save failed'); });
+  var v=prompt('Reels using this audio (you can type 2300 or 2.3K):', cur); if(v===null) return;
+  var n=parseNumLoose(v); if(n===null){ toast('Enter a valid number (e.g. 2300 or 2.3K)'); return; }
+  apiPost({ action:'audio_save', id:id, reach:String(n), by:firstName(USER.full_name||USER.employee_id) }).then(refreshQuiet).catch(function(){ toast('Save failed'); });
+}
+/* open the audio's IG page, then pop the entry box — two quick clicks, always accurate */
+function checkAudio(id, link, cur){
+  if(link){ try{ window.open(link, '_blank', 'noopener'); }catch(e){} }
+  setTimeout(function(){
+    var v=prompt('On the Instagram tab that just opened, read the "X reels" number under the title.\n\nEnter it here (e.g. 2300 or 2.3K):', cur||'');
+    if(v===null) return;
+    var n=parseNumLoose(v); if(n===null){ toast('Enter a valid number (e.g. 2300 or 2.3K)'); return; }
+    apiPost({ action:'audio_save', id:id, reach:String(n), by:firstName(USER.full_name||USER.employee_id) }).then(refreshQuiet).catch(function(){ toast('Save failed'); });
+  }, 300);
 }
 async function refreshAudio(id, link){
   if(!link){ toast('No link'); return; }
