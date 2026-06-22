@@ -374,6 +374,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
       <div class="toolbar">
         <select class="sel" id="acct-statusf" onchange="renderAccountsTab()"><option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="logged_out">Logged out</option></select>
         <input class="search" id="acct-search" placeholder="Search handle / phone…" oninput="renderAccountsTab()" />
+        <button class="ghost" onclick="refreshFollowersBulk()" title="Pull latest followers &amp; bio for the accounts shown">↻ Followers &amp; bio</button>
         <button class="adminbtn" id="acct-add-btn" style="display:none" onclick="addAccountPrompt()">+ Add account</button>
       </div>
       <div class="stats" id="acct-stats"></div>
@@ -940,19 +941,51 @@ function renderAccountsTab(){
     return true;
   });
   rows.sort(function(x,y){ return (fnum(x.phone)-fnum(y.phone)) || (fnum(x.user)-fnum(y.user)) || (fnum(x.acct)-fnum(y.acct)); });
+  ACCT_ROWS=rows;
   if(!rows.length){ $('accounts-list').innerHTML='<div class="muted">No accounts match.</div>'; return; }
+  var fref='<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>';
   var body=rows.map(function(a){
     var hh=String(a.handle||'').replace(/^@/,'');
     var url = (a.link && /^https?:\/\//i.test(a.link)) ? a.link : (hh ? ('https://www.instagram.com/'+hh+'/') : '');
     var handle=hh?('<a href="'+esc(url)+'" target="_blank" rel="noopener" style="color:var(--o2);text-decoration:none">@'+esc(hh)+'</a>'):'<span class="muted">—</span>';
+    var folBtn = hh?(' <button title="Pull latest followers &amp; bio from Instagram" style="background:none;border:none;color:var(--t3);cursor:pointer;padding:2px" onclick="refreshFollowers(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')">'+fref+'</button>'):'';
     var actions = ISADMIN ? ('<td style="text-align:right;white-space:nowrap">'
       + '<button title="Edit" style="background:none;border:none;color:var(--t2);cursor:pointer;padding:4px" onclick="editAccount(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>'
       + '<button title="Delete" style="background:none;border:none;color:var(--red);cursor:pointer;padding:4px" onclick="delAccount(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')">✕</button></td>') : '';
-    return '<tr><td>P'+esc(a.phone)+'</td><td>U'+esc(a.user)+'</td><td>A'+esc(a.acct)+'</td><td class="nm">'+handle+'</td><td>'+(a.followers?esc(a.followers):'—')+'</td><td>'+acctStatusBadge(a)+'</td>'+actions+'</tr>';
+    var bioFull=String(a.bio||'').trim();
+    var bioShort=bioFull.length>48?bioFull.slice(0,48)+'…':bioFull;
+    var bioCell=bioFull?('<span title="'+escAttr(bioFull)+'" style="color:var(--t2)">'+esc(bioShort)+'</span>'):'<span class="muted">—</span>';
+    return '<tr><td>P'+esc(a.phone)+'</td><td>U'+esc(a.user)+'</td><td>A'+esc(a.acct)+'</td><td class="nm">'+handle+'</td><td>'+(a.followers?esc(Number(a.followers).toLocaleString?Number(a.followers).toLocaleString():a.followers):'—')+folBtn+'</td><td style="max-width:260px;white-space:normal;line-height:1.35">'+bioCell+'</td><td>'+acctStatusBadge(a)+'</td>'+actions+'</tr>';
   }).join('');
-  $('accounts-list').innerHTML='<table class="srctable"><thead><tr><th>Phone</th><th>User</th><th>Acct</th><th>Handle</th><th>Followers</th><th>Status</th>'+(ISADMIN?'<th></th>':'')+'</tr></thead><tbody>'+body+'</tbody></table>';
+  $('accounts-list').innerHTML='<table class="srctable"><thead><tr><th>Phone</th><th>User</th><th>Acct</th><th>Handle</th><th>Followers</th><th>Bio</th><th>Status</th>'+(ISADMIN?'<th></th>':'')+'</tr></thead><tbody>'+body+'</tbody></table>';
 }
-var EDIT_ACCT=null;
+var EDIT_ACCT=null, ACCT_ROWS=[];
+async function refreshFollowers(phone,user,acct,handle){
+  toast('Checking @'+handle+'…');
+  try{
+    var r=await apiPost({ action:'ig_followers', phone:phone, user:user, acct:acct, handle:handle });
+    var got = r && r.ok && ((r.count!=='' && r.count!=null) || (r.bio!=='' && r.bio!=null));
+    if(got){
+      var a=(STATE.accounts||[]).filter(function(x){ return String(x.phone)===String(phone)&&String(x.user)===String(user)&&String(x.acct)===String(acct)&&String(x.handle)===String(handle); })[0];
+      if(a){ if(r.count!==''&&r.count!=null) a.followers=r.count; if(r.bio!==''&&r.bio!=null) a.bio=r.bio; }
+      renderAccountsTab(); toast('@'+handle+' updated'+(r.count!==''&&r.count!=null?(' · '+Number(r.count).toLocaleString()+' followers'):''));
+    } else { toast(r&&r.blocked?'Instagram blocked the read — set the IG session':'Couldn’t read @'+handle); }
+  }catch(e){ toast('Failed'); }
+}
+async function refreshFollowersBulk(){
+  var rows=ACCT_ROWS.filter(function(a){ return String(a.handle||'').trim()!==''; });
+  if(!rows.length){ toast('No accounts to refresh'); return; }
+  if(!confirm('Pull latest followers for '+rows.length+' account'+(rows.length>1?'s':'')+' (the ones currently shown)?\nInstagram is queried one at a time, so this can take a while.')) return;
+  var ok=0, fail=0;
+  for(var i=0;i<rows.length;i++){
+    var a=rows[i]; toast('Followers '+(i+1)+'/'+rows.length+' — @'+a.handle);
+    try{ var r=await apiPost({ action:'ig_followers', phone:a.phone, user:a.user, acct:a.acct, handle:a.handle });
+      if(r && r.ok && ((r.count!==''&&r.count!=null)||(r.bio!==''&&r.bio!=null))){ if(r.count!==''&&r.count!=null) a.followers=r.count; if(r.bio!==''&&r.bio!=null) a.bio=r.bio; ok++; renderAccountsTab(); } else fail++;
+    }catch(e){ fail++; }
+    await new Promise(function(res){ setTimeout(res, 700); });   // gentle pacing to avoid IG rate limits
+  }
+  toast('Followers updated: '+ok+(fail?(' · '+fail+' failed'):''));
+}
 function editAccount(phone,user,acct,handle){
   if(!ISADMIN) return;
   var a=(STATE.accounts||[]).filter(function(x){ return String(x.phone)===String(phone)&&String(x.user)===String(user)&&String(x.acct)===String(acct)&&String(x.handle)===String(handle); })[0];
