@@ -1010,21 +1010,25 @@ function buildAudioChart(){
   var hist=STATE.audio_history||[];
   if(!hist.length) return '<div class="muted">No trend yet — update an audio’s reels count over time and each change plots a point to build the line.</div>';
   var titles={}; (STATE.audios||[]).forEach(function(a){ titles[String(a.id)]=a.title||('Audio '+a.id); });
-  var byAud={}, dateSet={};
-  hist.forEach(function(h){ var id=String(h.audio_id); (byAud[id]=byAud[id]||{})[String(h.date)]=fnum(h.count); dateSet[String(h.date)]=true; });
-  var dates=Object.keys(dateSet).sort();
-  function latest(id){ for(var i=dates.length-1;i>=0;i--){ if(byAud[id][dates[i]]!==undefined) return byAud[id][dates[i]]; } return 0; }
-  var ids=Object.keys(byAud).filter(function(id){ return titles[id]!==undefined; }).sort(function(a,b){ return latest(b)-latest(a); }).slice(0,8);  // only audios that still exist
-  var maxY=1; ids.forEach(function(id){ dates.forEach(function(d){ var v=byAud[id][d]; if(v!==undefined&&v>maxY) maxY=v; }); });
-  var W=860,H=320,padL=54,padR=14,padT=14,padB=46, plotW=W-padL-padR, plotH=H-padT-padB, n=dates.length;
+  // each history row is its OWN point (in order). Same-date rows no longer collapse, so a line forms.
+  var byAud={};
+  hist.forEach(function(h,seq){ var id=String(h.audio_id); (byAud[id]=byAud[id]||[]).push({ d:String(h.date), v:fnum(h.count), seq:seq }); });
+  var ids=Object.keys(byAud).filter(function(id){ return titles[id]!==undefined; });
+  ids.forEach(function(id){ byAud[id].sort(function(a,b){ return (a.d<b.d?-1:a.d>b.d?1:0) || (a.seq-b.seq); }); }); // chronological (timestamp, then save order)
+  function latest(id){ var a=byAud[id]; return a.length?a[a.length-1].v:0; }
+  ids.sort(function(a,b){ return latest(b)-latest(a); }); ids=ids.slice(0,8);
+  var maxLen=1, maxY=1;
+  ids.forEach(function(id){ var a=byAud[id]; if(a.length>maxLen) maxLen=a.length; a.forEach(function(p){ if(p.v>maxY) maxY=p.v; }); });
+  var labelSeries=[]; ids.forEach(function(id){ if(byAud[id].length>labelSeries.length) labelSeries=byAud[id]; }); // longest series drives x labels
+  var W=860,H=320,padL=54,padR=14,padT=14,padB=46, plotW=W-padL-padR, plotH=H-padT-padB, n=maxLen;
   function xAt(i){ return padL + (n<=1? plotW/2 : (i/(n-1))*plotW); }
   function yAt(v){ return padT + plotH - (v/maxY)*plotH; }
   var colors=['#ff6b1a','#22c55e','#3b82f6','#f59e0b','#a855f7','#ef4444','#14b8a6','#eab308'];
   var svg='<svg viewBox="0 0 '+W+' '+H+'" class="trendsvg" preserveAspectRatio="xMidYMid meet">';
   for(var g=0;g<=4;g++){ var yv=Math.round(maxY*g/4), yy=yAt(yv); svg+='<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="rgba(255,255,255,.06)"/><text x="'+(padL-8)+'" y="'+(yy+4)+'" text-anchor="end" class="axt">'+yv+'</text>'; }
-  dates.forEach(function(d,i){ if(n>10 && i%Math.ceil(n/8)!==0 && i!==n-1) return; svg+='<text x="'+xAt(i)+'" y="'+(H-padB+20)+'" text-anchor="middle" class="axt">'+esc(d.slice(5))+'</text>'; });
-  ids.forEach(function(id,ci){ var col=colors[ci%colors.length], pts=[]; dates.forEach(function(d,i){ var v=byAud[id][d]; if(v===undefined) return; pts.push([xAt(i),yAt(v)]); });
-    if(pts.length){ svg+='<path d="M'+pts.map(function(p){return p[0]+' '+p[1];}).join(' L')+'" fill="none" stroke="'+col+'" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'; pts.forEach(function(p){ svg+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="3" fill="'+col+'"/>'; }); }
+  labelSeries.forEach(function(p,i){ if(n>10 && i%Math.ceil(n/8)!==0 && i!==n-1) return; svg+='<text x="'+xAt(i)+'" y="'+(H-padB+20)+'" text-anchor="middle" class="axt">'+esc(String(p.d).slice(5))+'</text>'; });
+  ids.forEach(function(id,ci){ var col=colors[ci%colors.length]; var pts=byAud[id].map(function(p,i){ return [xAt(i),yAt(p.v)]; });
+    if(pts.length){ svg+='<path d="M'+pts.map(function(p){return p[0]+' '+p[1];}).join(' L')+'" fill="none" stroke="'+col+'" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'; pts.forEach(function(p){ svg+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="3.4" fill="'+col+'"/>'; }); }
   });
   svg+='</svg>';
   var leg='<div class="trendleg">'+ids.map(function(id,ci){ return '<span class="lgi"><i style="background:'+colors[ci%colors.length]+'"></i>'+esc(titles[id]||('Audio '+id))+' ('+latest(id)+')</span>'; }).join('')+'</div>';
