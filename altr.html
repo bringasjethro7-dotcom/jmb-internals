@@ -414,6 +414,7 @@ document.getElementById('login-logo').src = LOGO;
 document.getElementById('hdr-logo').src = LOGO;
 
 var USER=null, ISADMIN=false, STATE=null, MYVA='';  // MYVA now holds the marker's name
+var ANIMATE_AUDIO=false;   // set true when the Insights tab is opened so the trend line draws in
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove('show');},1800); }
@@ -1100,13 +1101,25 @@ function buildAudioChart(){
   function xAt(frac){ return padL + (frac/WEEK)*plotW; }
   function yAt(v){ return padT + plotH - (Math.min(v,MAXY)/MAXY)*plotH; }
   var colors=['#ff6b1a','#22c55e','#3b82f6','#f59e0b','#a855f7','#ef4444','#14b8a6','#eab308'];
+  var animate = ANIMATE_AUDIO;   // draw the line when the tab is opened, not on every background refresh
   var svg='<svg viewBox="0 0 '+W+' '+H+'" class="trendsvg" preserveAspectRatio="xMidYMid meet">';
+  svg+='<defs><filter id="audglow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="4.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
   for(var g=1;g<=10;g++){ var yv=g*1000, yy=yAt(yv); svg+='<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="rgba(255,255,255,.06)"/><text x="'+(padL-8)+'" y="'+(yy+4)+'" text-anchor="end" class="axt">'+yv.toLocaleString()+'</text>'; }
   for(var di=0; di<WEEK; di++){ var lbl=new Date(startMs+di*DAY); var mm=('0'+(lbl.getUTCMonth()+1)).slice(-2), dd=('0'+lbl.getUTCDate()).slice(-2); svg+='<text x="'+xAt(di+0.5)+'" y="'+(H-padB+20)+'" text-anchor="middle" class="axt">'+mm+'-'+dd+'</text>'; }
+  function polyLen(pts){ var L=0; for(var i=1;i<pts.length;i++){ var dx=pts[i][0]-pts[i-1][0], dy=pts[i][1]-pts[i-1][1]; L+=Math.sqrt(dx*dx+dy*dy); } return L; }
   ids.forEach(function(id,ci){ var col=colors[ci%colors.length]; var pts=byAud[id].map(function(p){ return [xAt(p.frac),yAt(p.v)]; });
-    if(pts.length){ svg+='<path d="M'+pts.map(function(p){return p[0]+' '+p[1];}).join(' L')+'" fill="none" stroke="'+col+'" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'; pts.forEach(function(p){ svg+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="3.4" fill="'+col+'"/>'; }); }
+    if(!pts.length) return;
+    var dstr='M'+pts.map(function(p){return p[0]+' '+p[1];}).join(' L'), len=Math.max(1,polyLen(pts)), dur=Math.min(2.2,Math.max(0.8,len/700));
+    var draw = animate ? ' stroke-dasharray="'+len+'" stroke-dashoffset="'+len+'"' : '';
+    var anim = animate ? '<animate attributeName="stroke-dashoffset" from="'+len+'" to="0" dur="'+dur+'s" begin="0.1s" fill="freeze" calcMode="spline" keyTimes="0;1" keySplines="0.4 0 0.2 1" values="'+len+';0"/>' : '';
+    svg+='<path d="'+dstr+'" fill="none" stroke="'+col+'" stroke-width="2.8" filter="url(#audglow)" stroke-linejoin="round" stroke-linecap="round"'+draw+'>'+anim+'</path>';
+    pts.forEach(function(p,pi){
+      var capp = animate ? '<animate attributeName="opacity" from="0" to="1" dur="0.25s" begin="'+(0.1 + dur*(pts.length>1?pi/(pts.length-1):1)).toFixed(2)+'s" fill="freeze"/>' : '';
+      svg+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="3.6" fill="'+col+'" filter="url(#audglow)"'+(animate?' opacity="0"':'')+'>'+capp+'</circle>';
+    });
   });
   svg+='</svg>';
+  ANIMATE_AUDIO=false;   // consume the one-shot animate flag
   var leg='<div class="trendleg">'+ids.map(function(id,ci){ return '<span class="lgi"><i style="background:'+colors[ci%colors.length]+'"></i>'+esc(titles[id]||('Audio '+id))+' ('+latest(id)+')</span>'; }).join('')+'</div>';
   return svg+leg;
 }
@@ -1235,7 +1248,7 @@ function showTab(p){
     $('page-'+x).classList.toggle('on', x===p);
   });
   document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('on', t.getAttribute('data-page')===p); });
-  if(STATE){ if(p==='device') renderDevice(); else if(p==='posting') renderPosting(); else if(p==='insights') renderInsights(); else renderSourcing(); }
+  if(STATE){ if(p==='device') renderDevice(); else if(p==='posting') renderPosting(); else if(p==='insights'){ ANIMATE_AUDIO=true; renderInsights(); } else renderSourcing(); }
 }
 
 /* ---- cell-grid click delegation (boxes cycle blank → orange → green) ---- */
