@@ -315,6 +315,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
         <input class="search" id="src-search" placeholder="Search handle…" oninput="renderSourcing()" />
         <button class="adminbtn" id="src-record-btn" style="display:none" onclick="recordDay()">Record day</button>
         <button class="ghost" id="src-import-btn" style="display:none" onclick="importSourcingHistory()">Import history</button>
+        <button class="ghost" id="src-reset-btn" style="display:none" onclick="resetTodaySourced()">Reset today's sourced</button>
         <button class="ghost" id="src-clear-btn" style="display:none" onclick="clearBoard()">Clear board</button>
         <button class="adminbtn" id="src-assign-btn" style="display:none" onclick="autoAssign()">Auto-assign phones</button>
       </div>
@@ -447,7 +448,7 @@ function enterApp(user, admin){
   if(!configured()){ $('setup').style.display='block'; return; }
   $('app').style.display='block';
   $('who-name').textContent=firstName(user.full_name||user.employee_id);
-  if(ISADMIN){ $('import-btn').style.display=''; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; $('src-clear-btn').style.display=''; $('src-assign-btn').style.display=''; $('ig-cookie-btn').style.display=''; }
+  if(ISADMIN){ $('import-btn').style.display=''; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; $('src-reset-btn').style.display=''; $('src-clear-btn').style.display=''; $('src-assign-btn').style.display=''; $('ig-cookie-btn').style.display=''; }
   // record the marker's name (the signed-in person)
   MYVA = ISADMIN ? 'Admin' : (user.full_name || user.employee_id || '');
   // dates default today (filled after state load)
@@ -664,16 +665,17 @@ async function cycleCell(kind,phone,user,acct,handle,idx){
   else { next = (cur===String(greenState('post'))) ? '0' : String(greenState('post')); }              // posting: blank↔green
   cells=setCellAt(cells,idx,next);
   var gs=String(greenState('src'));
+  var stamp = (isSrc && ISADMIN) ? '#'+srcToday() : srcToday();   // admin-sourced is tagged (#) so it's NOT counted in "sourced today"
   if(r){
     r.cells=cells; r.va_code=MYVA;
-    if(isSrc){ if(next===gs && cur!==gs) r.gdates=gdSet(r.gdates,idx,srcToday()); else if(next!==gs) r.gdates=gdSet(r.gdates,idx,''); }
+    if(isSrc){ if(next===gs && cur!==gs) r.gdates=gdSet(r.gdates,idx,stamp); else if(next!==gs) r.gdates=gdSet(r.gdates,idx,''); }
   } else if(isSrc){
-    r={ phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, cells:cells, nums:'', gdates:(next===gs?gdSet('',idx,srcToday()):'') }; STATE.sourcelog.push(r);
+    r={ phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, cells:cells, nums:'', gdates:(next===gs?gdSet('',idx,stamp):'') }; STATE.sourcelog.push(r);
   } else {
     r={ date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, cells:cells }; STATE.posting.push(r);
   }
   if(isSrc) renderSourcing(); else renderPosting();
-  try{ await apiPost({ action:'cell_set', kind:kind, date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, index:idx, state:next, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) }); }
+  try{ await apiPost({ action:'cell_set', kind:kind, date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, index:idx, state:next, va_code:MYVA, admin:(ISADMIN?1:0), by:firstName(USER.full_name||USER.employee_id) }); }
   catch(e){ toast('Save failed'); }
 }
 // admin: set/add a sourcing box with an explicit number
@@ -876,6 +878,15 @@ function setSourcer(id, field, val){
   apiPost(obj).catch(function(){ toast('Save failed'); });
 }
 /* fairly scatter all phones across the employees, balanced by red-box workload (greedy LPT) */
+async function resetTodaySourced(){
+  if(!ISADMIN) return;
+  if(!confirm('Reset today’s "Sourced today" count to 0?\nBoxes stay orange/queued — only today’s sourcing credit is cleared.')) return;
+  try{
+    var r=await apiPost({ action:'src_reset_today', by:firstName(USER.full_name||USER.employee_id) });
+    if(r && r.ok){ toast('Today’s sourced reset'+(r.cleared!=null?' ('+r.cleared+' cleared)':'')); await refreshQuiet(); }
+    else toast((r&&r.error)||'Failed');
+  }catch(e){ toast('Failed'); }
+}
 async function autoAssign(){
   if(!confirm('Auto-assign all phones across the employees, balanced by their red-box targets?\nThis overwrites the current phone assignments.')) return;
   var redByPhone={}, phonesSet={};
