@@ -318,7 +318,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
     <div class="page" id="page-sourcing">
       <div class="toolbar">
         <div class="msel" id="ms-src"><button type="button" class="msel-btn" onclick="toggleMsel('src',event)"><span id="ms-src-lbl">All phones</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button><div class="msel-pan" id="ms-src-pan" onclick="event.stopPropagation()"></div></div>
-        <select class="sel" id="src-filter" onchange="renderSourcing()"><option value="all">All accounts</option><option value="todo">Not sourced</option><option value="done">Sourced</option><option value="active">Active only</option></select>
+        <select class="sel" id="src-filter" onchange="renderSourcing()"><option value="all">All accounts</option><option value="red">Has red (targets)</option><option value="todo">Not sourced</option><option value="done">Sourced</option><option value="active">Active only</option></select>
         <input class="search" id="src-search" placeholder="Search handle…" oninput="renderSourcing()" />
         <button class="adminbtn" id="src-record-btn" style="display:none" onclick="recordDay()">Record day</button>
         <button class="ghost" id="src-import-btn" style="display:none" onclick="importSourcingHistory()">Import history</button>
@@ -705,6 +705,7 @@ function filterAccounts(kind, accts, map, ff, q){
     if(kind==='src' && !ISADMIN){ var rr=map[keyOf(a)]; if(countNonBlank(rr?rr.cells:'', srcLen(rr))<=0) return false; }  // VAs only see accounts with assignments
     if(ff==='active' && (a.status&&a.status!=='active')) return false;
     if(ff==='todo' || ff==='done'){ var r2=map[keyOf(a)]; var n=boxesFor(kind,a,r2); var has=greenCount(kind,r2&&r2.cells,n)>0; if(ff==='todo'&&has)return false; if(ff==='done'&&!has)return false; }
+    if(ff==='red'){ var rr3=map[keyOf(a)]; if(!rr3 || countAt(rr3.cells, srcLen(rr3), 1)<=0) return false; }   // only accounts with remaining red targets
     if(q && esc(a.handle).toLowerCase().indexOf(q)<0) return false;
     return true;
   });
