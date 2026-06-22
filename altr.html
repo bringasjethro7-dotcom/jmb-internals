@@ -1069,11 +1069,15 @@ function phoneStats_(ph){
 }
 function renderTargets(){
   var sourcers=(STATE.sourcers||[]).slice().sort(function(a,b){ return fnum(a.id)-fnum(b.id); });
-  var totT=0, totS=0, html='';
+  var totT=0, totS=0, html='', claimed={};   // a phone counts for only ONE employee (no double-count if it's in two lists)
   sourcers.forEach(function(srx){
     var phones=String(srx.phones||'').split(',').map(function(x){return x.trim();}).filter(function(x){return x!==''; });
     var red=0, sourced=0;
-    phones.forEach(function(ph){ var st=phoneStats_(ph); red+=st.red; sourced+=st.sourced; });
+    phones.forEach(function(ph){
+      if(claimed[ph]) return;          // already counted for an earlier employee — skip so we don't inflate
+      claimed[ph]=true;
+      var st=phoneStats_(ph); red+=st.red; sourced+=st.sourced;
+    });
     var target=red+sourced; totT+=target; totS+=sourced;
     var p=target?Math.round(sourced/target*100):0, pc=p>=100?'ok':(p>=70?'mid':'low');
     var active = String(srx.active||'').toUpperCase()!=='FALSE';   // default working unless explicitly FALSE
