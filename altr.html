@@ -674,10 +674,10 @@ function renderPosting(){
   renderPostTeam();
   var accts=(STATE.accounts||[]), map=postingMap(), disc=disconnectedPhones();
   var ff=$('post-filter').value, q=$('post-search').value.trim().toLowerCase();
-  // stats — disconnected phones excluded from totals
+  // stats — target counts ALL active accounts across phones (connected OR disconnected)
   var green=0, orange=0, mine=0;
-  accts.forEach(function(a){ if(disc[String(a.phone)]) return; var r=map[postKey(a)]; if(!r) return; var n=boxesFor('post',a); green+=countAt(r.cells,n,2); orange+=countAt(r.cells,n,1); if(r.va_code===MYVA) mine+=countAt(r.cells,n,2); });
-  var postable = accts.filter(function(a){ return !disc[String(a.phone)] && (!a.status||a.status==='active'); }).length;
+  accts.forEach(function(a){ if(a.status && a.status!=='active') return; var r=map[postKey(a)]; if(!r) return; var n=boxesFor('post',a); green+=countAt(r.cells,n,2); orange+=countAt(r.cells,n,1); if(r.va_code===MYVA) mine+=countAt(r.cells,n,2); });
+  var postable = accts.filter(function(a){ return (!a.status||a.status==='active'); }).length;
   var pct = postable ? Math.round(green/postable*100) : 0;
   $('post-stats').innerHTML=
     statCard('Posted', green, 'g')+
@@ -822,7 +822,7 @@ function groupHTML(kind, ph, list, map, disc){
   });
   var pct=denom?Math.round(withGreen/denom*100):0;
   var isDisc = kind==='post' && !!disc[String(ph)];
-  var badge = isDisc ? '<span class="discb">disconnected · not counted</span>' : '';
+  var badge = isDisc ? '<span class="discb">disconnected · can’t post yet</span>' : '';
   var open = !!OPEN[kind][ph];
   var body = open ? list.map(function(a){ return acctRow(kind, a, map[keyOf(a)]); }).join('') : '';
   var phctrl = (kind==='src' && ISADMIN) ?
