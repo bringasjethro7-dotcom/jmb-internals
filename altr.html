@@ -891,8 +891,10 @@ async function autoAssign(){
   if(!confirm('Auto-assign all phones across the employees, balanced by their red-box targets?\nThis overwrites the current phone assignments.')) return;
   var redByPhone={}, phonesSet={};
   (STATE.accounts||[]).forEach(function(a){ phonesSet[String(a.phone)]=true; });
-  Object.keys(phonesSet).forEach(function(ph){ redByPhone[ph]=phoneStats_(ph).red; });
-  var phones=Object.keys(phonesSet).sort(function(a,b){ return (redByPhone[b]-redByPhone[a]) || (fnum(a)-fnum(b)); });
+  Object.keys(phonesSet).forEach(function(ph){ var st=phoneStats_(ph); redByPhone[ph]=st.red; redByPhone['_t'+ph]=st.red+st.sourced; });
+  // only assign phones that actually have a target (red + sourced today); skip empty phones so the lists aren't cluttered
+  var phones=Object.keys(phonesSet).filter(function(ph){ return (redByPhone['_t'+ph]||0)>0; }).sort(function(a,b){ return (redByPhone[b]-redByPhone[a]) || (fnum(a)-fnum(b)); });
+  if(!phones.length){ toast('No phones have a target yet — assign red boxes first'); return; }
   var sourcers=(STATE.sourcers||[]).filter(function(s){ return String(s.active||'').toUpperCase()!=='FALSE'; }).sort(function(a,b){ return fnum(a.id)-fnum(b.id); });
   if(!sourcers.length){ toast('Tick the employees working today first'); return; }
   var buckets=sourcers.map(function(s){ return { id:s.id, sum:0, phones:[] }; });
