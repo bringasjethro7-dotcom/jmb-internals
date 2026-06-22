@@ -577,7 +577,7 @@ function countNonBlank(cells,n){ var c=0; for(var i=0;i<n;i++) if(cellAt(cells,i
 function gdGet(gd,i){ var a=String(gd||'').split(','); return a[i]||''; }
 function gdSet(gd,i,v){ var a=String(gd||'').split(','); while(a.length<=i) a.push(''); a[i]=v; return a.join(','); }
 function srcToday(){ return (STATE&&STATE.src_today)||(STATE&&STATE.today)||''; }
-function countTodaySrc(cells,gd,n){ var gs=String(greenState('src')), t=srcToday(), c=0; for(var i=0;i<n;i++){ if(cellAt(cells,i)===gs && gdGet(gd,i)===t) c++; } return c; }
+function countTodaySrc(cells,gd,n){ var t=srcToday(), c=0; for(var i=0;i<n;i++){ var s=cellAt(cells,i); if((s==='2'||s==='3') && gdGet(gd,i)===t) c++; } return c; } // sourced today = orange OR posted-today green (posting must not un-count it)
 function keyOf(a){ return [a.phone,a.user,a.acct,a.handle].join('|'); }
 function filterAccounts(kind, accts, map, ff, q){
   var sel=PHFILTER[kind]||[];
@@ -824,7 +824,7 @@ function renderSourcing(){
   var red=0, orange=0, green=0, today=0;
   accts.forEach(function(a){ var r=map[srcKey(a)]; if(!r) return; var n=srcLen(r); red+=countAt(r.cells,n,1); orange+=countAt(r.cells,n,2); green+=countAt(r.cells,n,3); today+=countTodaySrc(r.cells,r.gdates,n); });
   $('src-stats').innerHTML=
-    statCard('Target', red, 'r')+
+    statCard('Target', red+today, 'r')+   // stable daily target = still-red + already-sourced-today (matches per-employee total)
     statCard('Queued', orange, 'a')+
     statCard('Posted', green, 'g')+
     statCard('Sourced today', today, '');
