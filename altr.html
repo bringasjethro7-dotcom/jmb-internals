@@ -226,7 +226,8 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 #eod-modal,#eod-warn,#phone-reminder,#reels-alarm,#acct-edit-modal{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(7,9,13,.8);backdrop-filter:blur(8px);padding:1.5rem}
 #eod-modal.open,#eod-warn.open,#phone-reminder.open,#reels-alarm.open,#acct-edit-modal.open{display:flex;animation:docFade .2s ease}
 #acct-edit-modal .ae-field{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em}
-#acct-edit-modal .ae-field input{background:#0c0f15;border:1px solid var(--line);border-radius:8px;color:#fff;padding:8px 11px;font:14px/1 inherit;text-transform:none;letter-spacing:0}
+#acct-edit-modal .ae-field input{width:100%;min-width:0;box-sizing:border-box;background:#0c0f15;border:1px solid var(--line);border-radius:8px;color:#fff;padding:9px 12px;font:14px/1.2 inherit;text-transform:none;letter-spacing:0}
+#acct-edit-modal .ae-field input:focus{outline:none;border-color:var(--o2)}
 #reels-alarm .eodbox{max-width:560px}
 #reels-alarm .alarm-in{width:130px;background:#0c0f15;border:1px solid var(--line);border-radius:8px;color:#fff;padding:7px 10px;font:inherit}
 @keyframes alarmPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
@@ -308,9 +309,21 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
         <div class="msel" id="ms-post"><button type="button" class="msel-btn" onclick="toggleMsel('post',event)"><span id="ms-post-lbl">All phones</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button><div class="msel-pan" id="ms-post-pan" onclick="event.stopPropagation()"></div></div>
         <select class="sel" id="post-filter" onchange="renderPosting()"><option value="all">All accounts</option><option value="todo">Not posted</option><option value="done">Posted</option><option value="active">Active only</option></select>
         <input class="search" id="post-search" placeholder="Search handle…" oninput="renderPosting()" />
+        <button class="adminbtn" id="post-assign-btn" style="display:none" onclick="autoAssignPosting()">Auto-assign phones</button>
         <button class="adminbtn" onclick="runEOD()">End of day</button>
       </div>
       <div class="stats" id="post-stats"></div>
+
+      <div class="targbox open" id="postteambox" style="margin-top:0;margin-bottom:1.2rem">
+        <div class="targhead" onclick="document.getElementById('postteambox').classList.toggle('open')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          <b>Posting team</b><span class="targsum" id="postteam-sum"></span>
+        </div>
+        <div class="targbody">
+          <table class="srctable"><thead><tr><th>Employee</th><th>Phone</th><th>Target</th><th>Posted</th><th>Completion</th></tr></thead><tbody id="postteam-body"></tbody></table>
+        </div>
+      </div>
+
       <div id="posting"><div class="muted">Loading accounts…</div></div>
     </div>
 
@@ -566,7 +579,7 @@ function enterApp(user, admin){
   if(!configured()){ $('setup').style.display='block'; return; }
   $('app').style.display='block';
   $('who-name').textContent=firstName(user.full_name||user.employee_id);
-  if(ISADMIN){ $('import-btn').style.display=''; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; $('src-reset-btn').style.display=''; $('src-clear-btn').style.display=''; $('src-assign-btn').style.display=''; $('ig-cookie-btn').style.display=''; var ab=$('acct-add-btn'); if(ab) ab.style.display=''; }
+  if(ISADMIN){ $('import-btn').style.display=''; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; $('src-reset-btn').style.display=''; $('src-clear-btn').style.display=''; $('src-assign-btn').style.display=''; $('ig-cookie-btn').style.display=''; var ab=$('acct-add-btn'); if(ab) ab.style.display=''; var pab=$('post-assign-btn'); if(pab) pab.style.display=''; }
   // record the marker's name (the signed-in person)
   MYVA = ISADMIN ? 'Admin' : (user.full_name || user.employee_id || '');
   // dates default today (filled after state load)
@@ -658,6 +671,7 @@ function setAllPhones(kind,on){ PHFILTER[kind]=[]; buildPhoneFilter(); if(kind==
 document.addEventListener('click', function(){ document.querySelectorAll('.msel.open').forEach(function(m){ m.classList.remove('open'); }); });
 function renderPosting(){
   if(!STATE) return;
+  renderPostTeam();
   var accts=(STATE.accounts||[]), map=postingMap(), disc=disconnectedPhones();
   var ff=$('post-filter').value, q=$('post-search').value.trim().toLowerCase();
   // stats — disconnected phones excluded from totals
@@ -677,6 +691,72 @@ function renderPosting(){
   $('posting').innerHTML=phones.map(function(ph){ return groupHTML('post', ph, byPhone[ph], map, disc); }).join('');
 }
 function disconnectedPhones(){ var d={}; (STATE&&STATE.phones||[]).forEach(function(p){ if((p.status||'')==='disconnected') d[String(p.phone)]=true; }); return d; }
+/* ---- POSTING TEAM (auto-assign connected phones by active-account count) ---- */
+function phonePostStats_(ph){
+  var map=postingMap(), gp=String(greenState('post')), active=0, posted=0;
+  (STATE.accounts||[]).forEach(function(a){
+    if(String(a.phone)!==String(ph)) return;
+    if(a.status && a.status!=='active') return;     // only active accounts count
+    active++; var r=map[postKey(a)]; if(r && cellAt(r.cells,0)===gp) posted++;
+  });
+  return { active:active, posted:posted };
+}
+function renderPostTeam(){
+  var posters=(STATE.posters||[]).slice().sort(function(a,b){ return fnum(a.id)-fnum(b.id); });
+  var disc=disconnectedPhones(), totT=0, totP=0, html='', claimed={};
+  posters.forEach(function(px){
+    var phones=String(px.phones||'').split(',').map(function(x){return x.trim();}).filter(function(x){return x!==''; });
+    var target=0, posted=0;
+    phones.forEach(function(ph){
+      if(claimed[ph]) return; claimed[ph]=true;       // a phone counts for only one poster
+      if(disc[String(ph)]) return;                    // disconnected phones excluded
+      var st=phonePostStats_(ph); target+=st.active; posted+=st.posted;
+    });
+    totT+=target; totP+=posted;
+    var p=target?Math.round(posted/target*100):0, pc=p>=100?'ok':(p>=70?'mid':'low');
+    var active = String(px.active||'').toUpperCase()!=='FALSE';
+    var chk = ISADMIN ? '<input type="checkbox" class="empchk" title="Working today" '+(active?'checked':'')+' onchange="setPoster(\''+esc(px.id)+'\',\'active\',this.checked?\'TRUE\':\'FALSE\')">' : '';
+    var nameCell = ISADMIN
+      ? '<div class="empwrap">'+chk+'<input class="empin" value="'+escAttr(px.name||'')+'" placeholder="Employee" onchange="setPoster(\''+esc(px.id)+'\',\'name\',this.value)"></div>'
+      : esc(px.name||'—');
+    var phoneCell = ISADMIN
+      ? '<input class="empin" value="'+escAttr(String(px.phones||''))+'" placeholder="e.g. 1, 4, 7" onchange="setPoster(\''+esc(px.id)+'\',\'phones\',this.value)">'
+      : (phones.length?esc(phones.map(function(x){return 'P'+x;}).join(', ')):'<span style="color:var(--t3)">—</span>');
+    html+='<tr'+(active?'':' style="opacity:.45"')+'><td>'+nameCell+'</td><td>'+phoneCell+'</td><td><b>'+target+'</b></td><td>'+posted+'</td>'+
+      '<td><div style="display:flex;align-items:center;gap:10px"><span class="pct '+pc+'">'+p+'%</span><div class="pbar"><i style="width:'+Math.min(100,p)+'%"></i></div></div></td></tr>';
+  });
+  var sum=$('postteam-sum'); if(sum) sum.textContent=totP+' / '+totT+' posted · '+(totT?Math.round(totP/totT*100):0)+'%';
+  var body=$('postteam-body'); if(body) body.innerHTML = html || '<tr><td colspan="5" class="muted">No posting team.</td></tr>';
+}
+function setPoster(id, field, val){
+  var s=(STATE.posters||[]).filter(function(x){ return String(x.id)===String(id); })[0]; if(s){ s[field]=val; }
+  var obj={ action:'poster_set', id:id }; obj[field]=val;
+  renderPostTeam();
+  apiPost(obj).catch(function(){ toast('Save failed'); });
+}
+async function autoAssignPosting(){
+  if(!confirm('Auto-assign all CONNECTED phones across the posting team, balanced by active-account count?\nThis overwrites the current posting-team phone assignments.\n\nTip: update phone statuses in Digital first — disconnected phones are skipped.')) return;
+  var disc=disconnectedPhones(), acctByPhone={}, phonesSet={};
+  (STATE.accounts||[]).forEach(function(a){
+    if(a.status && a.status!=='active') return;        // only active accounts
+    var ph=String(a.phone); if(disc[ph]) return;        // only connected (non-disconnected) phones
+    phonesSet[ph]=true; acctByPhone[ph]=(acctByPhone[ph]||0)+1;
+  });
+  var phones=Object.keys(phonesSet).filter(function(ph){ return (acctByPhone[ph]||0)>0; }).sort(function(a,b){ return (acctByPhone[b]-acctByPhone[a]) || (fnum(a)-fnum(b)); });
+  if(!phones.length){ toast('No connected phones with active accounts — check Digital first'); return; }
+  var team=(STATE.posters||[]).filter(function(s){ return String(s.active||'').toUpperCase()!=='FALSE'; }).sort(function(a,b){ return fnum(a.id)-fnum(b.id); });
+  if(!team.length){ toast('Tick the posting-team members working today first'); return; }
+  var buckets=team.map(function(s){ return { id:s.id, sum:0, phones:[] }; });
+  phones.forEach(function(ph){
+    var best=buckets[0];
+    for(var i=1;i<buckets.length;i++){ if(buckets[i].sum<best.sum || (buckets[i].sum===best.sum && buckets[i].phones.length<best.phones.length)) best=buckets[i]; }
+    best.phones.push(ph); best.sum += (acctByPhone[ph]||0);
+  });
+  buckets.forEach(function(b){ b.list=b.phones.sort(function(a,c){ return fnum(a)-fnum(c); }).join(', '); var s=(STATE.posters||[]).filter(function(x){ return String(x.id)===String(b.id); })[0]; if(s) s.phones=b.list; });
+  renderPostTeam();
+  try{ for(var i=0;i<buckets.length;i++){ await apiPost({ action:'poster_set', id:buckets[i].id, phones:buckets[i].list }); } toast('Connected phones assigned across '+buckets.length+' team members'); }
+  catch(e){ toast('Save failed'); }
+}
 function countActive(accts){ return accts.filter(function(a){ return !a.status || a.status==='active'; }).length; }
 /* ---- shared cell grid — posting: 50 boxes (blank→orange→green) ;
         sourcing: per-account admin target boxes (blank→red→orange→green) ---- */
