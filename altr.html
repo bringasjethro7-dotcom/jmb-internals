@@ -411,9 +411,25 @@ function apiGet(params){
   var qs = Object.keys(params).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(params[k]); }).join('&');
   return fetch(ALTR_URL+'?'+qs).then(function(r){ return r.json(); });
 }
+var PENDING=0, LAST_ACT=0;
 function apiPost(obj){
-  return fetch(ALTR_URL, { method:'POST', body: JSON.stringify(obj) }).then(function(r){ return r.json(); });
+  PENDING++; LAST_ACT=Date.now();
+  return fetch(ALTR_URL, { method:'POST', body: JSON.stringify(obj) }).then(function(r){ return r.json(); })
+    .finally(function(){ PENDING=Math.max(0,PENDING-1); LAST_ACT=Date.now(); });
 }
+/* live auto-refresh so admin & employees see each other's progress in near real-time,
+   without ever clobbering an edit-in-progress */
+function livePoll(){
+  if(typeof STATE==='undefined' || !STATE || !STATE.date) return;
+  if(document.hidden) return;
+  if(PENDING>0) return;                                   // a write is in flight
+  if(Date.now()-LAST_ACT < 4000) return;                 // just acted — let it settle first
+  var ae=document.activeElement;
+  if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA') && ae.type!=='checkbox') return;  // someone's typing
+  refreshQuiet();
+}
+setInterval(livePoll, 10000);   // every 10s when idle & visible
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) livePoll(); });
 
 /* ---- LOGIN ---- */
 $('lpin').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
