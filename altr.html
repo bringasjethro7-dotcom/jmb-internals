@@ -427,6 +427,8 @@ document.getElementById('hdr-logo').src = LOGO;
 
 var USER=null, ISADMIN=false, STATE=null, MYVA='';  // MYVA now holds the marker's name
 var ANIMATE_AUDIO=false;   // set true when the Insights tab is opened so the trend line draws in
+var DIRTY={};              // account-key -> timestamp of last local edit (protects against poll races)
+function markDirty(k){ DIRTY[k]=Date.now(); }
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove('show');},1800); }
@@ -772,8 +774,9 @@ async function cycleCell(kind,phone,user,acct,handle,idx){
   } else {
     r={ date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, cells:cells }; STATE.posting.push(r);
   }
+  markDirty(k);
   if(isSrc) renderSourcing(); else renderPosting();
-  try{ await apiPost({ action:'cell_set', kind:kind, date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, index:idx, state:next, va_code:MYVA, admin:(ISADMIN?1:0), by:firstName(USER.full_name||USER.employee_id) }); }
+  try{ await apiPost({ action:'cell_set', kind:kind, date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, index:idx, state:next, va_code:MYVA, admin:(ISADMIN?1:0), by:firstName(USER.full_name||USER.employee_id) }); markDirty(k); }
   catch(e){ toast('Save failed'); }
 }
 // admin: set/add a sourcing box with an explicit number
@@ -783,8 +786,9 @@ async function setSrcBox(phone,user,acct,handle,idx,state,num){
   r.cells=setCellAt(r.cells,idx,String(state)); r.va_code=MYVA;
   if(num!==undefined && num!==null && num!=='') r.nums=gdSet(r.nums,idx,String(num));
   if(String(state)===String(greenState('src'))) r.gdates=gdSet(r.gdates,idx,srcToday()); else r.gdates=gdSet(r.gdates,idx,'');
+  markDirty(k);
   renderSourcing();
-  try{ await apiPost({ action:'cell_set', kind:'src', phone:phone, user:user, acct:acct, handle:handle, index:idx, state:state, num:num, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) }); }
+  try{ await apiPost({ action:'cell_set', kind:'src', phone:phone, user:user, acct:acct, handle:handle, index:idx, state:state, num:num, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) }); markDirty(k); }
   catch(e){ toast('Save failed'); }
 }
 function addSrcBox(phone,user,acct,handle){
@@ -809,8 +813,9 @@ function srcSaveBoxes(phone,user,acct,handle, boxes){
   var k=[phone,user,acct,handle].join('|'); var r=sourceMap()[k];
   if(r){ r.cells=cells; r.nums=nums; r.gdates=gds; }
   else { r={ phone:phone,user:user,acct:acct,handle:handle, va_code:MYVA, cells:cells, nums:nums, gdates:gds }; STATE.sourcelog.push(r); }
+  markDirty(k);
   renderSourcing();
-  apiPost({ action:'src_set_account', phone:phone, user:user, acct:acct, handle:handle, cells:cells, nums:nums, gdates:gds, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) }).catch(function(){ toast('Save failed'); });
+  apiPost({ action:'src_set_account', phone:phone, user:user, acct:acct, handle:handle, cells:cells, nums:nums, gdates:gds, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) }).then(function(){ markDirty(k); }).catch(function(){ toast('Save failed'); });
 }
 /* ======================= IG ACCOUNTS ======================= */
 function acctStatusBadge(a){
@@ -940,10 +945,20 @@ async function togglePostBox(phone,user,acct,handle){
     }
     renderPosting(); renderSourcing();
   }
-  // persist in background; only reconcile on error
-  apiPost({ action:'post_tick', date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, posted:!posted, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) })
-    .then(function(resp){ if(resp && resp.error){ toast(resp.error); refreshQuiet(); } })
-    .catch(function(){ toast('Save failed'); refreshQuiet(); });
+  markDirty(key);
+  // persist and apply the AUTHORITATIVE server result (exact cycle number + sourcing cells)
+  try{
+    var resp=await apiPost({ action:'post_tick', date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, posted:!posted, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) });
+    if(resp && resp.error){ toast(resp.error); await refreshQuiet(); return; }
+    var prc=postingMap()[key];
+    if(prc){
+      if(!posted){ prc.cells=setCellAt(prc.cells,0,GP); if(resp.num!=null && resp.num!=='') prc.num=String(resp.num); }
+      else { prc.cells=setCellAt(prc.cells,0,'0'); prc.num=''; }
+    }
+    if(resp.src_cells!=null){ var src=sourceMap()[key]; if(src) src.cells=String(resp.src_cells); }
+    markDirty(key);
+    renderPosting(); renderSourcing();
+  }catch(e){ toast('Save failed'); await refreshQuiet(); }
 }
 var ACCT_STATUS_CYCLE=['active','suspended','logged_out'];
 async function cycleAcctStatus(phone,user,acct,handle){
@@ -1111,6 +1126,21 @@ async function doImport(){
 async function refreshQuiet(){
   try{ var s=await apiGet({ action:'state', date:STATE.date }); if(!s.error){
     s.phones=s.phones||[]; s.accounts=s.accounts||[]; s.posting=s.posting||[]; s.sourcing=s.sourcing||[]; s.sourcelog=s.sourcelog||[];
+    // Protect very-recent local edits: if a box was changed in the last 8s, keep the local row so a
+    // poll that raced ahead of the server write can't revert the colour / number.
+    var now=Date.now(), GRACE=8000;
+    var pk=function(r){ return [r.phone,r.user,r.acct,r.handle].join('|'); };
+    function keepFresh(serverArr, localArr){
+      var loc={}; (localArr||[]).forEach(function(r){ loc[pk(r)]=r; });
+      var seen={};
+      var out=serverArr.map(function(r){ var k=pk(r); seen[k]=1; return (DIRTY[k] && (now-DIRTY[k])<GRACE && loc[k]) ? loc[k] : r; });
+      // keep local-only rows that were just created and may not be on the server yet
+      (localArr||[]).forEach(function(r){ var k=pk(r); if(!seen[k] && DIRTY[k] && (now-DIRTY[k])<GRACE) out.push(r); });
+      return out;
+    }
+    s.posting   = keepFresh(s.posting,   STATE.posting);
+    s.sourcelog = keepFresh(s.sourcelog, STATE.sourcelog);
+    Object.keys(DIRTY).forEach(function(k){ if(now-DIRTY[k]>GRACE) delete DIRTY[k]; });   // prune
     STATE=s; renderAll();
   } }catch(e){}
 }
