@@ -969,7 +969,8 @@ async function refreshFollowers(phone,user,acct,handle){
       var a=(STATE.accounts||[]).filter(function(x){ return String(x.phone)===String(phone)&&String(x.user)===String(user)&&String(x.acct)===String(acct)&&String(x.handle)===String(handle); })[0];
       if(a){ if(r.count!==''&&r.count!=null) a.followers=r.count; if(r.bio!==''&&r.bio!=null) a.bio=r.bio; }
       renderAccountsTab(); toast('@'+handle+' updated'+(r.count!==''&&r.count!=null?(' · '+Number(r.count).toLocaleString()+' followers'):''));
-    } else { toast(r&&r.blocked?'Instagram blocked the read — set the IG session':'Couldn’t read @'+handle); }
+    } else if(r&&r.no_cookie){ toast('No IG session set — open Goal/Insights → IG session and paste a fresh sessionid.'); }
+    else { toast(r&&r.blocked?'IG blocked / session expired — refresh the IG session on Goal/Insights.':'Couldn’t read @'+handle); }
   }catch(e){ toast('Failed'); }
 }
 async function refreshFollowersBulk(){
