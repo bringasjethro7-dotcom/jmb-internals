@@ -719,10 +719,14 @@ function renderPosting(){
     statCard('Completion', pct+'%', pct>=100?'g':(pct>=50?'a':'r'));
   var rows=filterAccounts('post', accts, map, ff, q);
   if(!rows.length){ $('posting').innerHTML='<div class="muted">No accounts match.</div>'; return; }
-  var byPhone={}; rows.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
+  var activeRows=rows.filter(function(a){ return !a.status||a.status==='active'; });
+  var inactiveRows=rows.filter(function(a){ return a.status&&a.status!=='active'; });   // suspended / logged out
+  var byPhone={}; activeRows.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
   var phones=Object.keys(byPhone).sort(function(a,b){return fnum(a)-fnum(b);});
   if(Object.keys(OPEN.post).length===0 && phones.length<=2){ phones.forEach(function(p){ OPEN.post[p]=true; }); }
-  $('posting').innerHTML=phones.map(function(ph){ return groupHTML('post', ph, byPhone[ph], map, disc); }).join('');
+  var html=phones.map(function(ph){ return groupHTML('post', ph, byPhone[ph], map, disc); }).join('');
+  html+=inactiveSection('post', inactiveRows, map);
+  $('posting').innerHTML = html || '<div class="muted">No accounts match.</div>';
 }
 function disconnectedPhones(){ var d={}; (STATE&&STATE.phones||[]).forEach(function(p){ if((p.status||'')==='disconnected') d[String(p.phone)]=true; }); return d; }
 /* ---- POSTING TEAM (auto-assign connected phones by active-account count) ---- */
@@ -869,6 +873,18 @@ function groupHTML(kind, ph, list, map, disc){
     '<div class="agbody'+(open?' open':'')+'">'+body+'</div></div>';
 }
 function toggleGroup(kind, ph){ OPEN[kind][ph]=!OPEN[kind][ph]; if(kind==='src') renderSourcing(); else renderPosting(); }
+/* bottom "Inactive" section — suspended / logged-out accounts, excluded from the active list & targets */
+function inactiveSection(kind, list, map){
+  if(!list || !list.length) return '';
+  var key='__inactive', open=!!OPEN[kind][key];
+  var sorted=list.slice().sort(function(a,b){ return (fnum(a.phone)-fnum(b.phone)) || (fnum(a.user)-fnum(b.user)) || (fnum(a.acct)-fnum(b.acct)); });
+  var body=open ? sorted.map(function(a){ return acctRow(kind, a, map[keyOf(a)]); }).join('') : '';
+  return '<div class="acctgroup" style="margin-top:1.3rem;opacity:.85">'
+    +'<div class="agh" onclick="toggleGroup(\''+kind+'\',\''+key+'\')">'
+    +'<div class="aghl"><b>Inactive</b><span class="discb">suspended / logged out — excluded from targets</span></div>'
+    +'<div class="agbar"></div><span class="agc">'+list.length+'</span></div>'
+    +'<div class="agbody'+(open?' open':'')+'">'+body+'</div></div>';
+}
 async function addPhoneCycle(ph){
   try{
     var r=await apiPost({ action:'phone_cycle', phone:ph, remove:false, by:firstName(USER.full_name||USER.employee_id) });
@@ -1251,10 +1267,14 @@ function renderSourcing(){
     statCard('Sourced today', today, '');
   var rows=filterAccounts('src', accts, map, ff, q);
   if(!rows.length){ $('sourcing-list').innerHTML='<div class="muted">No accounts match.</div>'; return; }
-  var byPhone={}; rows.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
+  var activeRows=rows.filter(function(a){ return !a.status||a.status==='active'; });
+  var inactiveRows=rows.filter(function(a){ return a.status&&a.status!=='active'; });   // suspended / logged out
+  var byPhone={}; activeRows.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
   var phones=Object.keys(byPhone).sort(function(a,b){return fnum(a)-fnum(b);});
   if(Object.keys(OPEN.src).length===0 && phones.length<=2){ phones.forEach(function(p){ OPEN.src[p]=true; }); }
-  $('sourcing-list').innerHTML=phones.map(function(ph){ return groupHTML('src', ph, byPhone[ph], map, {}); }).join('');
+  var html=phones.map(function(ph){ return groupHTML('src', ph, byPhone[ph], map, {}); }).join('');
+  html+=inactiveSection('src', inactiveRows, map);
+  $('sourcing-list').innerHTML = html || '<div class="muted">No accounts match.</div>';
 }
 /* minimized per-sourcer target table */
 /* 6 employee rows; each is assigned multiple phones. Metrics sum across the assigned phones.
