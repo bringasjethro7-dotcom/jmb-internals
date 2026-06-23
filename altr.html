@@ -1449,7 +1449,13 @@ function buildTrendChart(hist, titles, opt){
   var startMs=Infinity; ids.forEach(function(id){ byAud[id].forEach(function(p){ var d=dayMs(p.d); if(!isNaN(d)&&d<startMs) startMs=d; }); });
   if(!isFinite(startMs)) startMs=dayMs(new Date().toISOString());
   // place each point by its real date + time-of-day, so spacing reflects when it was actually logged
-  function timeFrac(s){ var m=String(s).match(/\d{4}-\d{2}-\d{2}[ T](\d{2}):(\d{2})/); return m?((parseInt(m[1],10)*60+parseInt(m[2],10))/1440):0; }
+  // map the day to the 08:00–20:00 PHT posting window (12 hours); anything outside clamps to the edges
+  function timeFrac(s){
+    var m=String(s).match(/\d{4}-\d{2}-\d{2}[ T](\d{2}):(\d{2})/);
+    var mins = m ? (parseInt(m[1],10)*60+parseInt(m[2],10)) : 480;
+    var START=480, END=1200, f=(mins-START)/(END-START);   // 8:00 AM → 8:00 PM
+    return f<0?0:(f>1?1:f);
+  }
   ids.forEach(function(id){
     byAud[id].forEach(function(p){ var di=Math.round((dayMs(p.d)-startMs)/DAY); if(di<0)di=0; if(di>WEEK-1)di=WEEK-1; p.frac=di+timeFrac(p.d); });
     byAud[id].sort(function(a,b){ return a.frac-b.frac; });   // keep the line drawing left-to-right
