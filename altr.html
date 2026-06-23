@@ -1391,7 +1391,10 @@ function setIgWorker(){
   var msg='Paste your Cloudflare Worker URL (the bio proxy on a non-Google IP).\n\nExample: https://altr-ig.yourname.workers.dev\n\nLeave blank and OK to DISCONNECT (falls back to direct fetch).';
   var u=prompt(msg, STATE&&STATE.ig_worker?'':''); if(u===null) return;
   apiPost({ action:'ig_worker_set', pass:ADMIN_PASS, url:u.trim() })
-    .then(function(r){ if(r&&r.error){ toast('Unauthorized'); return; } toast(u.trim()?'Bio proxy saved':'Bio proxy cleared'); return refreshQuiet(); })
+    .then(function(r){
+      if(r&&r.error){ toast(r.error==='unauthorized' ? 'Unauthorized — admin pass mismatch' : ('Save failed: '+r.error+(/unknown action/i.test(r.error)?' (redeploy the ALTR script)':''))); return; }
+      toast(u.trim()?'Bio proxy saved':'Bio proxy cleared'); return refreshQuiet();
+    })
     .catch(function(){ toast('Save failed'); });
 }
 function renderInsights(){
