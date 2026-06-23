@@ -609,7 +609,11 @@ async function loadTeam(){
   try{
     var res=await fetch(APPS_SCRIPT_URL+'?action=get_all_employees');
     var d=await res.json();
-    var list=((d&&d.employees)||[]).filter(function(e){ return e&&e.employee_id; });
+    var list=((d&&d.employees)||[]).filter(function(e){
+      if(!e||!e.employee_id) return false;
+      var st=String(e.status||'').toLowerCase();
+      return st!=='inactive' && st!=='deactivated' && st!=='disabled';   // hide deactivated employees from the team
+    });
     if(!list.length){ el.innerHTML='<div class="muted">No team members found.</div>'; return; }
     list.sort(function(a,b){ return (a.employee_id||'').localeCompare(b.employee_id||''); });
     el.innerHTML=list.map(function(e){
