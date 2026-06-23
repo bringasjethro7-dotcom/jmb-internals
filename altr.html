@@ -375,6 +375,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
         <select class="sel" id="acct-statusf" onchange="renderAccountsTab()"><option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="logged_out">Logged out</option></select>
         <input class="search" id="acct-search" placeholder="Search handle / phone…" oninput="renderAccountsTab()" />
         <button class="ghost" onclick="refreshFollowersBulk()" title="Pull latest followers &amp; bio for the accounts shown">↻ Followers &amp; bio</button>
+        <button class="ghost" onclick="refreshFollowersBulk(true)" title="Only pull accounts that have no bio yet — saves RapidAPI calls">↻ Missing bios</button>
         <button class="adminbtn" id="acct-add-btn" style="display:none" onclick="addAccountPrompt()">+ Add account</button>
       </div>
       <div id="acct-progress" style="display:none;margin:12px 0 4px">
@@ -942,9 +943,11 @@ function renderAccountsTab(){
   var accts=(STATE.accounts||[]).slice();
   var sf=$('acct-statusf')?$('acct-statusf').value:'all';
   var q=$('acct-search')?$('acct-search').value.trim().toLowerCase():'';
-  var total=accts.length, act=0, susp=0, lo=0;
-  accts.forEach(function(a){ var s=String(a.status||'active'); if(s==='active')act++; else if(s==='suspended')susp++; else lo++; });
-  $('acct-stats').innerHTML = statCard('Accounts',total,'')+statCard('Active',act,'g')+statCard('Suspended',susp,'a')+statCard('Logged out',lo,'r');
+  var total=accts.length, act=0, susp=0, lo=0, eligible=0, withBio=0;
+  accts.forEach(function(a){ var s=String(a.status||'active'); if(s==='active')act++; else if(s==='suspended')susp++; else lo++;
+    if(String(a.handle||'').trim()!==''){ eligible++; if(String(a.bio||'').trim()!=='') withBio++; } });
+  var missingBio = eligible - withBio;
+  $('acct-stats').innerHTML = statCard('Accounts',total,'')+statCard('Active',act,'g')+statCard('Suspended',susp,'a')+statCard('Logged out',lo,'r')+statCard('Bios missing',missingBio,missingBio>0?'a':'g');
   var rows=accts.filter(function(a){
     if(sf!=='all' && String(a.status||'active')!==sf) return false;
     if(q){ var hay=('p'+a.phone+' u'+a.user+' a'+a.acct+' @'+(a.handle||'')).toLowerCase(); if(hay.indexOf(q)<0) return false; }
@@ -1013,10 +1016,11 @@ async function refreshFollowers(phone,user,acct,handle){
     else { toast(r&&r.blocked?'IG blocked / session expired — refresh the IG session on Goal/Insights.':'Couldn’t read @'+handle); }
   }catch(e){ toast('Failed'); }
 }
-async function refreshFollowersBulk(){
+async function refreshFollowersBulk(missingOnly){
   var rows=ACCT_ROWS.filter(function(a){ return String(a.handle||'').trim()!==''; });
-  if(!rows.length){ toast('No accounts to refresh'); return; }
-  if(!confirm('Pull latest followers & bio for '+rows.length+' account'+(rows.length>1?'s':'')+' (the ones currently shown)?\nInstagram is queried one at a time, so this can take a while.')) return;
+  if(missingOnly) rows=rows.filter(function(a){ return String(a.bio||'').trim()===''; });   // only accounts with no bio yet
+  if(!rows.length){ toast(missingOnly?'All shown accounts already have a bio 🎉':'No accounts to refresh'); return; }
+  if(!confirm((missingOnly?'Pull BIOS for '+rows.length+' account'+(rows.length>1?'s':'')+' missing a bio':'Pull latest followers & bio for '+rows.length+' account'+(rows.length>1?'s':''))+' (the ones currently shown)?\nEach account = 1 RapidAPI call. Instagram is queried one at a time, so this can take a while.')) return;
   var ok=0, fail=0, bios=0, rl=0;
   var box=$('acct-progress'), fill=$('acct-progress-fill'), lab=$('acct-progress-label');
   function setProg(done,total,handle,done2){
