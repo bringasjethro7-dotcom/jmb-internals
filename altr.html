@@ -1448,10 +1448,11 @@ function buildTrendChart(hist, titles, opt){
   function dayMs(s){ return Date.parse(String(s).slice(0,10)+'T00:00:00Z'); }   // UTC midnight — matches the UTC day labels
   var startMs=Infinity; ids.forEach(function(id){ byAud[id].forEach(function(p){ var d=dayMs(p.d); if(!isNaN(d)&&d<startMs) startMs=d; }); });
   if(!isFinite(startMs)) startMs=dayMs(new Date().toISOString());
-  // place each point: dayIndex within the week + spread inside its day (so same-day points still draw a line)
+  // place each point by its real date + time-of-day, so spacing reflects when it was actually logged
+  function timeFrac(s){ var m=String(s).match(/\d{4}-\d{2}-\d{2}[ T](\d{2}):(\d{2})/); return m?((parseInt(m[1],10)*60+parseInt(m[2],10))/1440):0; }
   ids.forEach(function(id){
-    var byDay={}; byAud[id].forEach(function(p){ var di=Math.round((dayMs(p.d)-startMs)/DAY); if(di<0)di=0; if(di>WEEK-1)di=WEEK-1; (byDay[di]=byDay[di]||[]).push(p); });
-    Object.keys(byDay).forEach(function(di){ var arr=byDay[di], k=arr.length; arr.forEach(function(p,j){ p.frac=(+di)+(k===1?0.5:(j+0.5)/k); }); });
+    byAud[id].forEach(function(p){ var di=Math.round((dayMs(p.d)-startMs)/DAY); if(di<0)di=0; if(di>WEEK-1)di=WEEK-1; p.frac=di+timeFrac(p.d); });
+    byAud[id].sort(function(a,b){ return a.frac-b.frac; });   // keep the line drawing left-to-right
   });
   var W=860,H=320,padL=54,padR=14,padT=14,padB=46, plotW=W-padL-padR, plotH=H-padT-padB;
   function xAt(frac){ return padL + (frac/WEEK)*plotW; }
