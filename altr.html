@@ -359,7 +359,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
       <div id="ins-stats"></div>
       <div class="inscols">
         <div class="inscard">
-          <div class="inshd"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> Music / Audio promotions</span><span style="display:flex;gap:8px;align-items:center"><button class="ghost" id="ig-cookie-btn" style="display:none;font-size:11px;padding:6px 10px" onclick="setIgCookie()">IG session</button><button class="adminbtn" onclick="addAudio()">+ Add</button></span></div>
+          <div class="inshd"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg> Music / Audio promotions</span><span style="display:flex;gap:8px;align-items:center"><button class="ghost" id="ig-cookie-btn" style="display:none;font-size:11px;padding:6px 10px" onclick="setIgCookie()">IG session</button><button class="ghost" id="ig-worker-btn" style="display:none;font-size:11px;padding:6px 10px" onclick="setIgWorker()">Bio proxy</button><button class="adminbtn" onclick="addAudio()">+ Add</button></span></div>
           <div id="ins-audios"></div>
         </div>
         <div class="inscard">
@@ -586,7 +586,7 @@ function enterApp(user, admin){
   if(!configured()){ $('setup').style.display='block'; return; }
   $('app').style.display='block';
   $('who-name').textContent=firstName(user.full_name||user.employee_id);
-  if(ISADMIN){ $('import-btn').style.display=''; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; $('src-reset-btn').style.display=''; $('src-clear-btn').style.display=''; $('src-assign-btn').style.display=''; $('ig-cookie-btn').style.display=''; var ab=$('acct-add-btn'); if(ab) ab.style.display=''; var pab=$('post-assign-btn'); if(pab) pab.style.display=''; }
+  if(ISADMIN){ $('import-btn').style.display=''; $('src-record-btn').style.display=''; $('src-import-btn').style.display=''; $('src-reset-btn').style.display=''; $('src-clear-btn').style.display=''; $('src-assign-btn').style.display=''; $('ig-cookie-btn').style.display=''; var iwb0=$('ig-worker-btn'); if(iwb0) iwb0.style.display=''; var ab=$('acct-add-btn'); if(ab) ab.style.display=''; var pab=$('post-assign-btn'); if(pab) pab.style.display=''; }
   // record the marker's name (the signed-in person)
   MYVA = ISADMIN ? 'Admin' : (user.full_name || user.employee_id || '');
   // dates default to the user's local today
@@ -1387,9 +1387,17 @@ function setIgCookie(){
     .then(function(r){ if(r&&r.error){ toast('Unauthorized'); return; } toast(ck.trim()?'IG session saved':'IG session cleared'); return refreshQuiet(); })
     .catch(function(){ toast('Save failed'); });
 }
+function setIgWorker(){
+  var msg='Paste your Cloudflare Worker URL (the bio proxy on a non-Google IP).\n\nExample: https://altr-ig.yourname.workers.dev\n\nLeave blank and OK to DISCONNECT (falls back to direct fetch).';
+  var u=prompt(msg, STATE&&STATE.ig_worker?'':''); if(u===null) return;
+  apiPost({ action:'ig_worker_set', pass:ADMIN_PASS, url:u.trim() })
+    .then(function(r){ if(r&&r.error){ toast('Unauthorized'); return; } toast(u.trim()?'Bio proxy saved':'Bio proxy cleared'); return refreshQuiet(); })
+    .catch(function(){ toast('Save failed'); });
+}
 function renderInsights(){
   if(!STATE) return;
   var igb=$('ig-cookie-btn'); if(igb && ISADMIN){ var on=!!STATE.ig_cookie; igb.textContent='IG session: '+(on?'on':'off'); igb.style.borderColor=on?'rgba(34,197,94,.4)':''; igb.style.color=on?'var(--green)':''; }
+  var iwb=$('ig-worker-btn'); if(iwb && ISADMIN){ var won=!!STATE.ig_worker; iwb.textContent='Bio proxy: '+(won?'on':'off'); iwb.style.borderColor=won?'rgba(34,197,94,.4)':''; iwb.style.color=won?'var(--green)':''; }
   var audios=STATE.audios||[];
   var inprog=audios.filter(function(a){ return String(a.status).toLowerCase()!=='done'; }).length;
   var reposts=STATE.reposts||[];
