@@ -1021,7 +1021,7 @@ async function refreshFollowersBulk(missingOnly){
   if(missingOnly) rows=rows.filter(function(a){ return String(a.bio||'').trim()===''; });   // only accounts with no bio yet
   if(!rows.length){ toast(missingOnly?'All shown accounts already have a bio 🎉':'No accounts to refresh'); return; }
   if(!confirm((missingOnly?'Pull BIOS for '+rows.length+' account'+(rows.length>1?'s':'')+' missing a bio':'Pull latest followers & bio for '+rows.length+' account'+(rows.length>1?'s':''))+' (the ones currently shown)?\nEach account = 1 RapidAPI call. Instagram is queried one at a time, so this can take a while.')) return;
-  var ok=0, fail=0, bios=0, rl=0;
+  var ok=0, fail=0, bios=0, rl=0, consecRL=0, stopped=false, doneCount=0;
   var box=$('acct-progress'), fill=$('acct-progress-fill'), lab=$('acct-progress-label');
   function setProg(done,total,handle,done2){
     var pct=Math.round(done/total*100);
@@ -1035,14 +1035,20 @@ async function refreshFollowersBulk(missingOnly){
     setProg(i, rows.length, a.handle);
     try{ var r=await apiPost({ action:'ig_followers', phone:a.phone, user:a.user, acct:a.acct, handle:a.handle });
       if(r && r.ok && ((r.count!==''&&r.count!=null)||(r.bio!==''&&r.bio!=null))){ if(r.count!==''&&r.count!=null) a.followers=r.count; if(r.bio!==''&&r.bio!=null){ a.bio=r.bio; bios++; } ok++; renderAccountsTab(); } else fail++;
-      if(r && r.rate_limited) rl++;
+      if(r && r.rate_limited){ rl++; consecRL++; } else { consecRL=0; }
     }catch(e){ fail++; }
-    setProg(i+1, rows.length, '');
+    doneCount=i+1;
+    setProg(doneCount, rows.length, '');
+    if(consecRL>=6){ stopped=true; break; }   // stop once the API keeps rate-limiting — protects quota, avoids false "filling"
     await new Promise(function(res){ setTimeout(res, 1100); });   // gentle pacing to avoid IG 429s
   }
-  setProg(rows.length, rows.length, '', 'Done — '+ok+' updated · '+bios+' bios'+(rl?(' · '+rl+' rate-limited'):''));
-  setTimeout(function(){ if(box) box.style.display='none'; if(fill) fill.style.width='0%'; }, 3400);
-  toast('Updated '+ok+' · '+bios+' bios'+(rl?(' · '+rl+' rate-limited (429) — retry those later'):'')+(fail?(' · '+fail+' failed'):''));
+  var summary = (stopped ? 'Stopped at '+doneCount+'/'+rows.length+' — rate limit reached' : 'Done')
+    + ' — '+ok+' updated · '+bios+' bios'+(rl?(' · '+rl+' rate-limited'):'');
+  setProg(rows.length, rows.length, '', summary);
+  setTimeout(function(){ if(box) box.style.display='none'; if(fill) fill.style.width='0%'; }, 4200);
+  toast(stopped
+    ? ('Stopped — RapidAPI quota/rate limit hit after '+ok+' done ('+bios+' bios). Check your RapidAPI plan, then retry the rest later.')
+    : ('Updated '+ok+' · '+bios+' bios'+(rl?(' · '+rl+' rate-limited (429) — retry those later'):'')+(fail?(' · '+fail+' failed'):'')));
 }
 function editAccount(phone,user,acct,handle){
   if(!ISADMIN) return;
