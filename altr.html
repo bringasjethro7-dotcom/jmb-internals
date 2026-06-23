@@ -818,8 +818,9 @@ function acctRow(kind, a, r){
   }
   if(kind==='src' && ISADMIN){ boxes += '<button class="addbox" title="Add next cycle (red)" onclick="addSrcBox(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')">+</button>'; }
   var cellsDiv='<div class="cells'+(locked?' locked':'')+'" data-kind="'+kind+'" data-p="'+esc(a.phone)+'" data-u="'+esc(a.user)+'" data-a="'+esc(a.acct)+'" data-h="'+esc(a.handle)+'">'+boxes+'</div>';
+  var tagB = (typeof acctTagBadge==='function') ? acctTagBadge(a, true) : '';   // admin-set issue flag, employee taps to clear
   if(kind==='post'){  // compact single line: box sits inline
-    return '<div class="arow post"><div class="atop">'+meta+susp+vaTag+cellsDiv+kebab+'</div></div>';
+    return '<div class="arow post"><div class="atop">'+meta+susp+vaTag+tagB+cellsDiv+kebab+'</div></div>';
   }
   var counter='<span class="cellcount"><b>'+g+'</b>/'+assigned+'</span>';
   return '<div class="arow"><div class="atop">'+meta+susp+vaTag+counter+kebab+'</div>'+cellsDiv+'</div>';
@@ -964,9 +965,35 @@ function renderAccountsTab(){
     var bioFull=String(a.bio||'').trim();
     var bioShort=bioFull.length>48?bioFull.slice(0,48)+'…':bioFull;
     var bioCell=bioFull?('<span title="'+escAttr(bioFull)+'" style="color:var(--t2)">'+esc(bioShort)+'</span>'):'<span class="muted">—</span>';
-    return '<tr><td>P'+esc(a.phone)+'</td><td>U'+esc(a.user)+'</td><td>A'+esc(a.acct)+'</td><td class="nm">'+handle+'</td><td>'+(a.followers?esc(Number(a.followers).toLocaleString?Number(a.followers).toLocaleString():a.followers):'—')+folBtn+'</td><td style="max-width:260px;white-space:normal;line-height:1.35">'+bioCell+'</td><td>'+acctStatusBadge(a)+'</td>'+actions+'</tr>';
+    var tagCell = ISADMIN
+      ? ('<select class="tagsel" onchange="setAcctTag(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\',this.value)" style="background:#171a22;color:var(--t1);border:1px solid rgba(255,255,255,.16);border-radius:8px;padding:4px 6px;font-size:12px">'
+          + '<option value="">— none —</option>'
+          + ACCT_TAGS.map(function(t){ return '<option'+(String(a.tag||'')===t?' selected':'')+'>'+esc(t)+'</option>'; }).join('')
+          + '</select>')
+      : (String(a.tag||'').trim()?acctTagBadge(a,false):'<span class="muted">—</span>');
+    return '<tr><td>P'+esc(a.phone)+'</td><td>U'+esc(a.user)+'</td><td>A'+esc(a.acct)+'</td><td class="nm">'+handle+'</td><td>'+(a.followers?esc(Number(a.followers).toLocaleString?Number(a.followers).toLocaleString():a.followers):'—')+folBtn+'</td><td style="max-width:260px;white-space:normal;line-height:1.35">'+bioCell+'</td><td>'+acctStatusBadge(a)+'</td><td>'+tagCell+'</td>'+actions+'</tr>';
   }).join('');
-  $('accounts-list').innerHTML='<table class="srctable"><thead><tr><th>Phone</th><th>User</th><th>Acct</th><th>Handle</th><th>Followers</th><th>Bio</th><th>Status</th>'+(ISADMIN?'<th></th>':'')+'</tr></thead><tbody>'+body+'</tbody></table>';
+  $('accounts-list').innerHTML='<table class="srctable"><thead><tr><th>Phone</th><th>User</th><th>Acct</th><th>Handle</th><th>Followers</th><th>Bio</th><th>Status</th><th>Tag</th>'+(ISADMIN?'<th></th>':'')+'</tr></thead><tbody>'+body+'</tbody></table>';
+}
+/* ---- account issue tags (admin sets, employee clears when fixed) ---- */
+var ACCT_TAGS = ['Incorrect bio','Incorrect username','Duplicate','Fix highlights'];
+function acctTagBadge(a, clickable){
+  var t=String(a.tag||'').trim(); if(!t) return '';
+  var attrs = clickable ? ('onclick="resolveAcctTag(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')" title="Tap when fixed to clear this flag"') : '';
+  var cur = clickable ? 'pointer' : 'default';
+  return '<span class="acttag" '+attrs+' style="display:inline-flex;align-items:center;gap:3px;background:rgba(239,68,68,.16);color:#ff8585;border:1px solid rgba(239,68,68,.45);border-radius:8px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap;margin-left:6px;cursor:'+cur+'">⚑ '+esc(t)+'</span>';
+}
+async function setAcctTag(phone,user,acct,handle,tag){
+  var a=(STATE.accounts||[]).filter(function(x){ return String(x.phone)===String(phone)&&String(x.user)===String(user)&&String(x.acct)===String(acct)&&String(x.handle)===String(handle); })[0];
+  if(a) a.tag=tag;
+  renderAccountsTab(); if(typeof renderPosting==='function') renderPosting();
+  try{ await apiPost({ action:'account_tag', phone:phone, user:user, acct:acct, handle:handle, tag:tag }); }
+  catch(e){ toast('Save failed'); }
+}
+function resolveAcctTag(phone,user,acct,handle){
+  if(!confirm('Mark this account’s issue as fixed and clear the flag?')) return;
+  setAcctTag(phone,user,acct,handle,'');
+  toast('Flag cleared');
 }
 var EDIT_ACCT=null, ACCT_ROWS=[];
 async function refreshFollowers(phone,user,acct,handle){
