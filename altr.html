@@ -571,6 +571,7 @@ async function doLogin(){
   try{
     var res=await fetch(PORTAL_URL+'?id='+encodeURIComponent(id)+'&pin='+encodeURIComponent(pin));
     var data=await res.json();
+    if(data && data.error==='DEACTIVATED'){ err.textContent='This account has been deactivated. Contact your admin.'; err.style.display='block'; btn.disabled=false; btn.textContent='Sign in'; return; }
     if(!data || data.error || !data.employee_id) throw new Error('bad');
     enterApp(data, false);
   }catch(e){ err.textContent='Invalid ID or PIN.'; err.style.display='block'; }
@@ -1618,9 +1619,24 @@ function showTab(p){
 ['posting','sourcing-list'].forEach(function(id){ var el=$(id); if(el) el.addEventListener('click', onCellsClick); });
 var _srcList=$('sourcing-list'); if(_srcList) _srcList.addEventListener('contextmenu', onCellsContext);  // admin right-click edit/delete
 
-/* ---- restore session ---- */
+/* ---- restore session (re-validate so deactivated employees are signed out) ---- */
+function _forceLogout(msg){
+  try{ sessionStorage.removeItem('altr_user'); }catch(e){}
+  var ap=$('app'); if(ap) ap.style.display='none';
+  var lg=$('login'); if(lg) lg.style.display='';
+  var le=$('lerr'); if(le && msg){ le.textContent=msg; le.style.display='block'; }
+}
+async function _validateRestoredUser(o){
+  // admins aren't portal employees — nothing to check
+  if(o.a || !o.u || !o.u.employee_id || String(o.u.employee_id).toUpperCase()==='ADMIN') return;
+  try{
+    var r=await fetch(PORTAL_URL+'?action=check_employee&id='+encodeURIComponent(o.u.employee_id));
+    var d=await r.json();
+    if(d && (d.active===false || d.error==='NOT_FOUND')) _forceLogout('This account has been deactivated. Contact your admin.');
+  }catch(e){}
+}
 (function(){
-  try{ var raw=sessionStorage.getItem('altr_user'); if(raw){ var o=JSON.parse(raw); enterApp(o.u, o.a); } }catch(e){}
+  try{ var raw=sessionStorage.getItem('altr_user'); if(raw){ var o=JSON.parse(raw); enterApp(o.u, o.a); _validateRestoredUser(o); } }catch(e){}
 })();
 </script>
 </body>
