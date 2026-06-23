@@ -394,6 +394,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
       <div class="toolbar">
         <input type="date" class="dt" id="qa-date" />
         <select class="sel" id="qa-scope"><option value="all">All posters</option></select>
+        <label style="color:var(--t2);font-size:13px;display:flex;align-items:center;gap:6px">Reels/acct/day <input id="qa-perday" type="number" min="1" value="4" onchange="if(_qaLast)qaRenderResults()" style="width:54px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;color:var(--t1);padding:6px 8px;font-size:13px;text-align:center;font-family:inherit"></label>
         <button class="adminbtn" onclick="runReelsQA()">▶ Run reels count</button>
       </div>
       <div id="qa-progress" style="display:none;margin:12px 0 4px">
@@ -1655,7 +1656,14 @@ function showTab(p){
 
 /* ===================== QA — REELS COUNT (per day, by poster) ===================== */
 var _qaRunning=false;
-function qaPhtDate(ms){ try{ return new Date(ms).toLocaleDateString('en-CA',{timeZone:'Asia/Manila'}); }catch(e){ return ''; } }
+/* a posting "day" runs 7:30 AM PHT to the next day 7:30 AM PHT (the shift window) */
+function qaWindow(date){
+  var start=Date.parse(date+'T07:30:00+08:00');
+  var dt=new Date(date+'T00:00:00Z'); dt.setUTCDate(dt.getUTCDate()+1);
+  var nd=dt.toISOString().slice(0,10);
+  var end=Date.parse(nd+'T07:30:00+08:00');
+  return { start:start, end:end };
+}
 function qaPosterForPhone(phone){
   var posters=(STATE&&STATE.posters)||[];
   for(var i=0;i<posters.length;i++){
@@ -1686,7 +1694,8 @@ async function runReelsQA(){
     accts=accts.filter(function(a){ return phs.indexOf(String(a.phone))>=0; });
   }
   if(!accts.length){ toast('No active accounts in scope.'); return; }
-  if(!confirm('Count reels posted on '+date+' for '+accts.length+' account'+(accts.length>1?'s':'')+'?\nEach account = 1 RapidAPI call.')) return;
+  var win=qaWindow(date);   // 7:30 AM PHT → next-day 7:30 AM PHT
+  if(!confirm('Count reels posted on '+date+' (7:30 AM PHT → next day 7:30 AM) for '+accts.length+' account'+(accts.length>1?'s':'')+'?\nEach account = 1 RapidAPI call.')) return;
   _qaRunning=true;
   var box=$('qa-progress'), fill=$('qa-progress-fill'), lab=$('qa-progress-label');
   if(box) box.style.display='block';
@@ -1700,14 +1709,16 @@ async function runReelsQA(){
       var r=await apiPost({ action:'ig_reels', handle:a.handle, amount:48 });
       if(r && r.ok && r.reels){
         fetched=true; ok++; consec=0;
-        r.reels.forEach(function(x){ if(x && x.ts && qaPhtDate(x.ts)===date) cnt++; });
+        r.reels.forEach(function(x){ if(x && x.ts && x.ts>=win.start && x.ts<win.end) cnt++; });
       } else { fail++; if(r && Number(r.code)===429){ rl++; consec++; } }
     }catch(e){ fail++; }
     if(fetched){
       total+=cnt;
       var poster2=qaPosterForPhone(a.phone);
+      var pid=poster2?String(poster2.id):'__none';
       var pname=poster2?(poster2.name||('Poster '+poster2.id)):'Unassigned';
-      perPoster[pname]=(perPoster[pname]||0)+cnt;
+      if(!perPoster[pid]) perPoster[pid]={ id:pid, name:pname, count:0, accounts:0 };
+      perPoster[pid].count+=cnt; perPoster[pid].accounts+=1;
       perAccount.push({ handle:a.handle, phone:a.phone, poster:pname, count:cnt });
     }
     if(consec>=6){ stopped=true; break; }
@@ -1716,21 +1727,36 @@ async function runReelsQA(){
   if(fill) fill.style.width='100%';
   setTimeout(function(){ if(box) box.style.display='none'; }, 1400);
   _qaRunning=false;
-  qaRenderResults(date, perPoster, perAccount, { ok:ok, fail:fail, rl:rl, total:total, stopped:stopped });
+  _qaLast={ date:date, perPoster:perPoster, perAccount:perAccount, meta:{ ok:ok, fail:fail, rl:rl, total:total, stopped:stopped } };
+  qaRenderResults();
 }
-function qaRenderResults(date, perPoster, perAccount, meta){
+var _qaLast=null;
+function qaPerDay(){ var v=parseFloat(($('qa-perday')||{}).value); return (isNaN(v)||v<=0)?4:v; }
+function qaAcc(actual, expected){   // accuracy % = actual ÷ expected
+  if(!expected||expected<=0) return null;
+  return Math.round((actual/expected)*100);
+}
+function qaRenderResults(){
+  if(!_qaLast) return;
+  var date=_qaLast.date, perPoster=_qaLast.perPoster, perAccount=_qaLast.perAccount, meta=_qaLast.meta;
+  var perDay=qaPerDay();
   var st=$('qa-stats');
   if(st) st.innerHTML = statCard('Reels on '+date, meta.total, 'g')+statCard('Accounts scanned', meta.ok, '')+statCard('Rate-limited', meta.rl, meta.rl?'a':'')+(meta.stopped?statCard('Stopped','yes','r'):'');
-  var posters=Object.keys(perPoster).sort(function(a,b){ return perPoster[b]-perPoster[a]; });
-  var grp = posters.length ? ('<table class="srctable"><thead><tr><th>Poster</th><th>Reels on '+esc(date)+'</th></tr></thead><tbody>'
-    + posters.map(function(p){ return '<tr><td style="color:var(--t1)">'+esc(p)+'</td><td style="font-weight:700;color:var(--o3)">'+perPoster[p]+'</td></tr>'; }).join('')
+  var list=Object.keys(perPoster).map(function(k){ return perPoster[k]; }).sort(function(a,b){ return b.count-a.count; });
+  var grp = list.length ? ('<table class="srctable"><thead><tr><th>Poster</th><th>Accounts</th><th>Expected</th><th>Actual reels</th><th>Accuracy</th></tr></thead><tbody>'
+    + list.map(function(p){
+        var expected=p.accounts*perDay;
+        var acc=qaAcc(p.count, expected);
+        var accCell = acc==null ? '<span class="muted">—</span>' : '<b style="color:'+(acc>=100?'#4ade80':(acc>=70?'#ffb066':'#f87171'))+'">'+acc+'%</b>';
+        return '<tr><td style="color:var(--t1)">'+esc(p.name)+'</td><td>'+p.accounts+'</td><td style="color:var(--t2)">'+expected+'</td><td style="font-weight:700;color:var(--o3)">'+p.count+'</td><td>'+accCell+'</td></tr>';
+      }).join('')
     + '</tbody></table>') : '<div class="muted">No reels found for that day'+(meta.stopped?' (run stopped early on rate-limit)':'')+'.</div>';
   var accSorted=perAccount.slice().sort(function(a,b){ return b.count-a.count; });
-  var acc = '<details style="margin-top:1rem"><summary style="cursor:pointer;color:var(--t2);font-size:13px">Per-account breakdown ('+perAccount.length+' accounts)</summary>'
+  var acc2 = '<details style="margin-top:1rem"><summary style="cursor:pointer;color:var(--t2);font-size:13px">Per-account breakdown ('+perAccount.length+' accounts)</summary>'
     + '<table class="srctable" style="margin-top:.5rem"><thead><tr><th>Handle</th><th>Phone</th><th>Poster</th><th>Reels</th></tr></thead><tbody>'
     + accSorted.map(function(a){ return '<tr><td>@'+esc(a.handle)+'</td><td>P'+esc(a.phone)+'</td><td>'+esc(a.poster)+'</td><td style="font-weight:700;color:'+(a.count>0?'#4ade80':'var(--t3)')+'">'+a.count+'</td></tr>'; }).join('')
     + '</tbody></table></details>';
-  var res=$('qa-results'); if(res) res.innerHTML='<div style="font-weight:700;margin:.4rem 0 .7rem;font-size:15px">Reels posted on '+esc(date)+' — by poster</div>'+grp+acc;
+  var res=$('qa-results'); if(res) res.innerHTML='<div style="font-weight:700;margin:.4rem 0 .3rem;font-size:15px">Reels posted on '+esc(date)+' — by poster</div><div style="color:var(--t3);font-size:12px;margin-bottom:.7rem">shift window: '+esc(date)+' 7:30 AM → next day 7:30 AM (PHT) · expected = accounts × '+perDay+'/day · accuracy = actual ÷ expected</div>'+grp+acc2;
 }
 
 /* ---- cell-grid click delegation (boxes cycle blank → orange → green) ---- */
