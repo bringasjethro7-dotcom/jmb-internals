@@ -392,7 +392,8 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
     <!-- QA CHECKER — reels posted per day, grouped by poster -->
     <div class="page" id="page-qa">
       <div class="toolbar">
-        <input type="date" class="dt" id="qa-date" />
+        <label style="color:var(--t2);font-size:12px;display:flex;align-items:center;gap:5px">From <input type="datetime-local" class="dt" id="qa-from"></label>
+        <label style="color:var(--t2);font-size:12px;display:flex;align-items:center;gap:5px">To <input type="datetime-local" class="dt" id="qa-to"></label>
         <select class="sel" id="qa-scope"><option value="all">All posters</option></select>
         <label style="color:var(--t2);font-size:13px;display:flex;align-items:center;gap:6px">Reels/acct/day <input id="qa-perday" type="number" min="1" value="4" onchange="if(_qaLast)qaRenderResults()" style="width:54px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;color:var(--t1);padding:6px 8px;font-size:13px;text-align:center;font-family:inherit"></label>
         <button class="adminbtn" onclick="runReelsQA()">▶ Run reels count</button>
@@ -1656,14 +1657,11 @@ function showTab(p){
 
 /* ===================== QA — REELS COUNT (per day, by poster) ===================== */
 var _qaRunning=false;
-/* a posting "day" runs 7:30 AM PHT to the next day 7:30 AM PHT (the shift window) */
-function qaWindow(date){
-  var start=Date.parse(date+'T07:30:00+08:00');
-  var dt=new Date(date+'T00:00:00Z'); dt.setUTCDate(dt.getUTCDate()+1);
-  var nd=dt.toISOString().slice(0,10);
-  var end=Date.parse(nd+'T07:30:00+08:00');
-  return { start:start, end:end };
-}
+function _qaPad(n){ return String(n).padStart(2,'0'); }
+function _qaLocalDate(d){ return d.getFullYear()+'-'+_qaPad(d.getMonth()+1)+'-'+_qaPad(d.getDate()); }
+/* a datetime-local value (no tz) is read as PHT so the window is consistent for any reviewer */
+function qaParsePHT(v){ return v ? Date.parse(v.length<=16 ? (v+':00+08:00') : (v+'+08:00')) : NaN; }
+function qaFmtRange(v){ return String(v||'').replace('T',' '); }
 function qaPosterForPhone(phone){
   var posters=(STATE&&STATE.posters)||[];
   for(var i=0;i<posters.length;i++){
@@ -1673,7 +1671,9 @@ function qaPosterForPhone(phone){
   return null;
 }
 function renderQA(){
-  var d=$('qa-date'); if(d && !d.value) d.value=todayPST();
+  var f=$('qa-from'), t=$('qa-to');
+  if(f && !f.value){ var now=new Date(); f.value=_qaLocalDate(now)+'T07:30'; }
+  if(t && !t.value){ var n2=new Date(); var nd=new Date(n2.getFullYear(),n2.getMonth(),n2.getDate()+1); t.value=_qaLocalDate(nd)+'T07:30'; }
   qaBuildScope();
 }
 function qaBuildScope(){
@@ -1685,7 +1685,10 @@ function qaBuildScope(){
 }
 async function runReelsQA(){
   if(_qaRunning) return;
-  var date=$('qa-date').value; if(!date){ toast('Pick a date.'); return; }
+  var fromV=$('qa-from').value, toV=$('qa-to').value;
+  if(!fromV || !toV){ toast('Pick a start and end time.'); return; }
+  var win={ start:qaParsePHT(fromV), end:qaParsePHT(toV) };
+  if(!(win.end>win.start)){ toast('End must be after start.'); return; }
   var scope=$('qa-scope').value;
   var accts=((STATE&&STATE.accounts)||[]).filter(function(a){ return (!a.status||a.status==='active') && String(a.handle||'').trim()!==''; });
   if(scope!=='all'){
@@ -1694,8 +1697,7 @@ async function runReelsQA(){
     accts=accts.filter(function(a){ return phs.indexOf(String(a.phone))>=0; });
   }
   if(!accts.length){ toast('No active accounts in scope.'); return; }
-  var win=qaWindow(date);   // 7:30 AM PHT → next-day 7:30 AM PHT
-  if(!confirm('Count reels posted on '+date+' (7:30 AM PHT → next day 7:30 AM) for '+accts.length+' account'+(accts.length>1?'s':'')+'?\nEach account = 1 RapidAPI call.')) return;
+  if(!confirm('Count reels posted between '+qaFmtRange(fromV)+' and '+qaFmtRange(toV)+' (PHT) for '+accts.length+' account'+(accts.length>1?'s':'')+'?\nEach account = 1 RapidAPI call.')) return;
   _qaRunning=true;
   var box=$('qa-progress'), fill=$('qa-progress-fill'), lab=$('qa-progress-label');
   if(box) box.style.display='block';
@@ -1727,7 +1729,7 @@ async function runReelsQA(){
   if(fill) fill.style.width='100%';
   setTimeout(function(){ if(box) box.style.display='none'; }, 1400);
   _qaRunning=false;
-  _qaLast={ date:date, perPoster:perPoster, perAccount:perAccount, meta:{ ok:ok, fail:fail, rl:rl, total:total, stopped:stopped } };
+  _qaLast={ fromV:fromV, toV:toV, perPoster:perPoster, perAccount:perAccount, meta:{ ok:ok, fail:fail, rl:rl, total:total, stopped:stopped } };
   qaRenderResults();
 }
 var _qaLast=null;
@@ -1738,10 +1740,11 @@ function qaAcc(actual, expected){   // accuracy % = actual ÷ expected
 }
 function qaRenderResults(){
   if(!_qaLast) return;
-  var date=_qaLast.date, perPoster=_qaLast.perPoster, perAccount=_qaLast.perAccount, meta=_qaLast.meta;
+  var perPoster=_qaLast.perPoster, perAccount=_qaLast.perAccount, meta=_qaLast.meta;
+  var rangeLabel=qaFmtRange(_qaLast.fromV)+' → '+qaFmtRange(_qaLast.toV);
   var perDay=qaPerDay();
   var st=$('qa-stats');
-  if(st) st.innerHTML = statCard('Reels on '+date, meta.total, 'g')+statCard('Accounts scanned', meta.ok, '')+statCard('Rate-limited', meta.rl, meta.rl?'a':'')+(meta.stopped?statCard('Stopped','yes','r'):'');
+  if(st) st.innerHTML = statCard('Reels in range', meta.total, 'g')+statCard('Accounts scanned', meta.ok, '')+statCard('Rate-limited', meta.rl, meta.rl?'a':'')+(meta.stopped?statCard('Stopped','yes','r'):'');
   var list=Object.keys(perPoster).map(function(k){ return perPoster[k]; }).sort(function(a,b){ return b.count-a.count; });
   var grp = list.length ? ('<table class="srctable"><thead><tr><th>Poster</th><th>Accounts</th><th>Expected</th><th>Actual reels</th><th>Accuracy</th></tr></thead><tbody>'
     + list.map(function(p){
@@ -1756,7 +1759,7 @@ function qaRenderResults(){
     + '<table class="srctable" style="margin-top:.5rem"><thead><tr><th>Handle</th><th>Phone</th><th>Poster</th><th>Reels</th></tr></thead><tbody>'
     + accSorted.map(function(a){ return '<tr><td>@'+esc(a.handle)+'</td><td>P'+esc(a.phone)+'</td><td>'+esc(a.poster)+'</td><td style="font-weight:700;color:'+(a.count>0?'#4ade80':'var(--t3)')+'">'+a.count+'</td></tr>'; }).join('')
     + '</tbody></table></details>';
-  var res=$('qa-results'); if(res) res.innerHTML='<div style="font-weight:700;margin:.4rem 0 .3rem;font-size:15px">Reels posted on '+esc(date)+' — by poster</div><div style="color:var(--t3);font-size:12px;margin-bottom:.7rem">shift window: '+esc(date)+' 7:30 AM → next day 7:30 AM (PHT) · expected = accounts × '+perDay+'/day · accuracy = actual ÷ expected</div>'+grp+acc2;
+  var res=$('qa-results'); if(res) res.innerHTML='<div style="font-weight:700;margin:.4rem 0 .3rem;font-size:15px">Reels posted '+esc(rangeLabel)+' (PHT) — by poster</div><div style="color:var(--t3);font-size:12px;margin-bottom:.7rem">expected = accounts × '+perDay+'/day · accuracy = actual ÷ expected</div>'+grp+acc2;
 }
 
 /* ---- cell-grid click delegation (boxes cycle blank → orange → green) ---- */
