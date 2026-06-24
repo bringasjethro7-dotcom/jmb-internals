@@ -312,7 +312,11 @@ async function screenCand(e, id, decision){
   toast(pass?'Passing — emailing assessment link…':'Sending rejection email…');
   try{
     var r=await apiPost({ action:'candidate_screen', id:id, decision:decision, by:firstName(USER.full_name||USER.employee_id) });
-    if(r && r.ok){ toast(r.emailed?('Email sent to '+(c.email||'applicant')):'Saved (email could not be sent — check Gmail auth).'); await loadState(); }
+    if(r && r.ok){
+      if(r.emailed){ toast('Email sent to '+(c.email||'applicant')); }
+      else { toast('Saved, but email failed — run authorizeHr in the HR Apps Script once.'); if(r.email_error) console.warn('HR email error:', r.email_error); }
+      await loadState();
+    }
     else toast((r&&r.error)?r.error:'Action failed');
   }catch(err){ toast('Action failed'); }
 }
