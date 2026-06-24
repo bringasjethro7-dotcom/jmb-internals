@@ -1468,20 +1468,31 @@ function renderInsights(){
   var igb=$('ig-cookie-btn'); if(igb && ISADMIN){ var on=!!STATE.ig_cookie; igb.textContent='IG session: '+(on?'on':'off'); igb.style.borderColor=on?'rgba(34,197,94,.4)':''; igb.style.color=on?'var(--green)':''; }
   var iwb=$('ig-worker-btn'); if(iwb && ISADMIN){ var won=!!STATE.ig_worker; iwb.textContent='Bio proxy: '+(won?'on':'off'); iwb.style.borderColor=won?'rgba(34,197,94,.4)':''; iwb.style.color=won?'var(--green)':''; }
   var audios=STATE.audios||[];
-  var inprog=audios.filter(function(a){ return String(a.status).toLowerCase()!=='done'; }).length;
+  function isPartial(a){ return String(a.kind||'full').toLowerCase()==='partial'; }
+  var fullA=audios.filter(function(a){ return !isPartial(a); });
+  var partA=audios.filter(isPartial);
+  function inprog(list){ return list.filter(function(a){ return String(a.status).toLowerCase()!=='done'; }).length; }
   var reposts=STATE.reposts||[];
   var chartIcon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>';
   $('ins-stats').innerHTML=
-    '<div class="inscard"><div class="inshd"><span>'+chartIcon+' Audio promotion trend</span>'+
-    '<span class="goalsub" style="margin:0">reels using promoted audios · '+audios.length+' tracked · '+inprog+' in progress</span></div>'+buildAudioChart()+'</div>'+
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1.2rem">'+
+      '<div class="inscard"><div class="inshd"><span>'+chartIcon+' Full promotion</span>'+
+      '<span class="goalsub" style="margin:0">'+fullA.length+' tracked · '+inprog(fullA)+' in progress</span></div>'+buildAudioChart('full')+'</div>'+
+      '<div class="inscard"><div class="inshd"><span>'+chartIcon+' Partial promotion</span>'+
+      '<span class="goalsub" style="margin:0">'+partA.length+' tracked · '+inprog(partA)+' in progress</span></div>'+buildAudioChart('partial')+'</div>'+
+    '</div>'+
     '<div class="inscard" style="margin-top:1.2rem"><div class="inshd"><span>'+chartIcon+' IG reels trend</span>'+
     '<span class="goalsub" style="margin:0">reach of reposted reels · '+reposts.length+' tracked</span></div>'+buildReelsChart()+'</div>';
   ANIMATE_AUDIO=false;   // consume the one-shot animate flag after both charts have rendered
   renderAudios(); renderReposts();
 }
-function buildAudioChart(){
-  return buildTrendChart(STATE.audio_history||[], (function(){ var t={}; (STATE.audios||[]).forEach(function(a){ t[String(a.id)]=a.title||('Audio '+a.id); }); return t; })(),
-    { idKey:'audio_id', fixedMax:10000, glow:'audglow', def:'Audio ', empty:'No trend yet — update an audio’s reels count over time and each change plots a point to build the line.' });
+function buildAudioChart(kind){
+  var ofKind=(STATE.audios||[]).filter(function(a){ var p=String(a.kind||'full').toLowerCase()==='partial'; return kind==='partial'?p:!p; });
+  var ids={}, titles={}; ofKind.forEach(function(a){ ids[String(a.id)]=true; titles[String(a.id)]=a.title||('Audio '+a.id); });
+  var hist=(STATE.audio_history||[]).filter(function(h){ return ids[String(h.audio_id)]; });
+  return buildTrendChart(hist, titles,
+    { idKey:'audio_id', fixedMax:10000, glow:(kind==='partial'?'audglowP':'audglowF'), def:'Audio ',
+      empty:'No '+kind+' promotions tracked yet — add one as “'+kind+'” and update its reels count to build the line.' });
 }
 function buildReelsChart(){
   return buildTrendChart(STATE.repost_history||[], (function(){ var t={}; (STATE.reposts||[]).forEach(function(r){ t[String(r.id)]=('Reel '+r.id); }); return t; })(),
@@ -1561,14 +1572,16 @@ function renderAudios(){
   var audios=(STATE.audios||[]).slice().reverse();
   var html='';
   if(!audios.length){ html='<div class="muted">No audio promotions yet.</div>'; }
-  else { html='<table class="srctable"><thead><tr><th>Audio</th><th>Status</th><th>Reels using</th><th></th></tr></thead><tbody>'+
+  else { html='<table class="srctable"><thead><tr><th>Audio</th><th>Type</th><th>Status</th><th>Reels using</th><th></th></tr></thead><tbody>'+
     audios.map(function(a){
       var st=String(a.status).toLowerCase();
+      var kind=String(a.kind||'full').toLowerCase();
       var badge='<button class="sbadge '+(st==='done'?'done':'prog')+'" onclick="toggleAudio(\''+esc(a.id)+'\',\''+st+'\')">'+(st==='done'?'Done':'In progress')+'</button>';
+      var kbadge='<button class="sbadge" style="border-color:'+(kind==='partial'?'rgba(168,85,247,.45)':'rgba(255,107,26,.45)')+';color:'+(kind==='partial'?'#a855f7':'#ff8a4a')+'" title="Click to switch Full / Partial" onclick="toggleAudioKind(\''+esc(a.id)+'\',\''+kind+'\')">'+(kind==='partial'?'Partial':'Full')+'</button>';
       var title=a.link?'<a href="'+esc(a.link)+'" target="_blank" rel="noopener">'+esc(a.title||a.link)+'</a>':esc(a.title||'—');
       var num='<span class="igc" onclick="editAudioNum(\''+esc(a.id)+'\',\''+escAttr(a.reach||'')+'\')" title="Click to edit">'+(a.reach?esc(a.reach):'—')+'</span>';
       var refresh=a.link?'<button class="igref" title="Open the IG audio page, then enter the latest reels count" onclick="checkAudio(\''+esc(a.id)+'\',\''+escAttr(a.link)+'\',\''+escAttr(a.reach||'')+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg></button>':'';
-      return '<tr><td class="nm">'+title+'</td><td>'+badge+'</td><td>'+num+' '+refresh+'</td><td><button class="delx" title="Delete" onclick="delAudio(\''+esc(a.id)+'\')">✕</button></td></tr>';
+      return '<tr><td class="nm">'+title+'</td><td>'+kbadge+'</td><td>'+badge+'</td><td>'+num+' '+refresh+'</td><td><button class="delx" title="Delete" onclick="delAudio(\''+esc(a.id)+'\')">✕</button></td></tr>';
     }).join('')+'</tbody></table>'; }
   $('ins-audios').innerHTML=html;
 }
@@ -1619,14 +1632,20 @@ function renderReposts(){
 }
 async function addAudio(){
   var title=prompt('Audio / song title:'); if(title===null||!title.trim()) return;
+  var kind = confirm('Promotion type for this audio:\n\n  OK = Full promotion\n  Cancel = Partial promotion') ? 'full' : 'partial';
   var link=prompt('Paste the IG audio or reel link:','')||''; link=link.trim();
   var reach='';
   if(link){ toast('Checking Instagram…'); try{ var f=await apiPost({ action:'ig_fetch', link:link }); if(f&&f.ok&&f.count!==''&&f.count!=null) reach=String(f.count); }catch(e){} }
   try{
-    await apiPost({ action:'audio_save', title:title.trim(), link:link, status:'progress', reach:reach, by:firstName(USER.full_name||USER.employee_id) });
+    await apiPost({ action:'audio_save', title:title.trim(), link:link, status:'progress', reach:reach, kind:kind, by:firstName(USER.full_name||USER.employee_id) });
     await refreshQuiet();
-    toast(reach ? ('Saved — '+reach+' reels') : (link ? 'Saved. Couldn’t auto-read the count — edit it manually.' : 'Saved.'));
+    toast('Saved as '+kind+' promotion'+(reach?(' — '+reach+' reels'):'.'));
   }catch(e){ toast('Save failed'); }
+}
+async function toggleAudioKind(id, kind){
+  var next=(String(kind).toLowerCase()==='partial')?'full':'partial';
+  try{ await apiPost({ action:'audio_save', id:id, kind:next, by:firstName(USER.full_name||USER.employee_id) }); await refreshQuiet(); }
+  catch(e){ toast('Save failed'); }
 }
 async function toggleAudio(id, st){
   try{ await apiPost({ action:'audio_save', id:id, status:(st==='done'?'progress':'done'), by:firstName(USER.full_name||USER.employee_id) }); await refreshQuiet(); }
