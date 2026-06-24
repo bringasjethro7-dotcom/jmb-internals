@@ -798,14 +798,15 @@ function countActive(accts){ return accts.filter(function(a){ return !a.status |
         sourcing: per-account admin target boxes (blank→red→orange→green) ---- */
 var POST_BOXES = 1;    // posting = one box per account
 var SRC_BOXES  = 50;   // (legacy cap, unused)
+var SRC_QUEUE  = 15;   // sourcing shows a fixed 15-box queue per account
 var CELLS_N    = 100;  // max box positions stored per account
 var OPEN = { post:{}, src:{} };
 function maxState(kind){ return 2; }       // sourcing cycle: blank(0) -> red(1,target) -> orange(2,done) -> blank
 function greenState(kind){ return 2; }     // "done" state = 2 (orange for sourcing, green for posting)
 function cellAt(cells,i){ var c=String(cells||''); return c.charAt(i)||'0'; }
 function setCellAt(cells,i,ch){ var c=String(cells||''); while(c.length<=i) c+='0'; return c.substr(0,i)+ch+c.substr(i+1); }
-function srcLen(r){ if(!r) return 0; var cells=String(r.cells||''), nums=String(r.nums||''), mx=-1; for(var i=0;i<CELLS_N;i++){ if(cellAt(cells,i)!=='0' || gdGet(nums,i)!=='') mx=i; } return mx+1; }
-function boxesFor(kind,a,r){ return kind==='src' ? srcLen(r) : POST_BOXES; }
+function srcLen(r){ if(!r) return 0; var cells=String(r.cells||''), nums=String(r.nums||''), mx=-1; for(var i=0;i<SRC_QUEUE;i++){ if(cellAt(cells,i)!=='0' || gdGet(nums,i)!=='') mx=i; } return mx+1; }
+function boxesFor(kind,a,r){ return kind==='src' ? SRC_QUEUE : POST_BOXES; }   // src: always render the 15-slot queue
 function countAt(cells,n,state){ var ss=String(state), c=0; for(var i=0;i<n;i++) if(cellAt(cells,i)===ss) c++; return c; }
 function greenCount(kind,cells,n){ return countAt(cells,n,greenState(kind)); }
 function countNonBlank(cells,n){ var c=0; for(var i=0;i<n;i++) if(cellAt(cells,i)!=='0') c++; return c; }
@@ -842,7 +843,7 @@ function acctRow(kind, a, r){
     var tt=(kind==='src'&&ISADMIN)?' title="Click: cycle status · Right-click: edit/delete"':'';
     boxes+='<i class="cell s'+cellAt(cells,i)+'" data-i="'+i+'"'+tt+'>'+lbl+'</i>';
   }
-  if(kind==='src' && ISADMIN){ boxes += '<button class="addbox" title="Add next cycle (red)" onclick="addSrcBox(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')">+</button>'; }
+  // fixed 15-box queue — no "+add" button needed; admin clicks boxes directly
   var cellsDiv='<div class="cells'+(locked?' locked':'')+'" data-kind="'+kind+'" data-p="'+esc(a.phone)+'" data-u="'+esc(a.user)+'" data-a="'+esc(a.acct)+'" data-h="'+esc(a.handle)+'">'+boxes+'</div>';
   var tagB = (typeof acctTagBadge==='function') ? acctTagBadge(a, true) : '';   // admin-set issue flag, employee taps to clear
   if(kind==='post'){  // compact single line: box sits inline
@@ -862,9 +863,7 @@ function groupHTML(kind, ph, list, map, disc){
   var badge = isDisc ? '<span class="discb">disconnected · can’t post yet</span>' : '';
   var open = !!OPEN[kind][ph];
   var body = open ? list.map(function(a){ return acctRow(kind, a, map[keyOf(a)]); }).join('') : '';
-  var phctrl = (kind==='src' && ISADMIN) ?
-    '<button class="phbtn" title="Add a red cycle to every account on this phone" onclick="event.stopPropagation();addPhoneCycle(\''+esc(ph)+'\')">+</button>'+
-    '<button class="phbtn" title="Undo last added cycle for this phone" onclick="event.stopPropagation();undoPhoneCycle(\''+esc(ph)+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg></button>' : '';
+  var phctrl = '';   // 15-box queue: admin sets boxes by clicking; no add/undo cycle buttons
   return '<div class="acctgroup'+(isDisc?' disc':'')+'"><div class="agh" onclick="toggleGroup(\''+kind+'\',\''+esc(ph)+'\')">'+
     '<div class="aghl"><b>Phone '+esc(ph)+'</b>'+phctrl+badge+'</div><div class="agbar"><i style="width:'+pct+'%"></i></div>'+
     '<span class="agc">'+green+' ✓ · '+withGreen+'/'+denom+'</span></div>'+
@@ -899,7 +898,7 @@ async function undoPhoneCycle(ph){
   }catch(e){ toast('Failed'); }
 }
 function escAttr(s){ return String(s==null?'':s).replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
-async function cycleCell(kind,phone,user,acct,handle,idx){
+async function cycleCell(kind,phone,user,acct,handle,idx,cellEl){
   var isSrc=kind==='src'; var map=isSrc?sourceMap():postingMap();
   var k=[phone,user,acct,handle].join('|'); var r=map[k];
   var cells=r?String(r.cells||''):''; var cur=cellAt(cells,idx); var next;
@@ -923,7 +922,15 @@ async function cycleCell(kind,phone,user,acct,handle,idx){
     r={ date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, va_code:MYVA, cells:cells }; STATE.posting.push(r);
   }
   markDirty(k);
-  if(isSrc) renderSourcing(); else renderPosting();
+  // instant in-place update for sourcing (no full re-render → no lag when clicking boxes fast)
+  if(isSrc && cellEl){
+    cellEl.className='cell s'+next;
+    var nums3=r?String(r.nums||''):'';
+    cellEl.textContent=gdGet(nums3,idx)||(idx+1);
+    var arow=cellEl.closest && cellEl.closest('.arow');
+    if(arow){ var n3=srcLen(r), cc=arow.querySelector('.cellcount'); if(cc) cc.innerHTML='<b>'+greenCount('src',r.cells,n3)+'</b>/'+countNonBlank(r.cells,n3); }
+    srcStats();
+  } else if(isSrc){ renderSourcing(); } else { renderPosting(); }
   try{ await apiPost({ action:'cell_set', kind:kind, date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, index:idx, state:next, va_code:MYVA, admin:(ISADMIN?1:0), by:firstName(USER.full_name||USER.employee_id) }); markDirty(k); }
   catch(e){ toast('Save failed'); }
 }
@@ -1159,7 +1166,7 @@ function onCellsClick(e){
   var kind=strip.getAttribute('data-kind');
   var p=strip.getAttribute('data-p'), u=strip.getAttribute('data-u'), a=strip.getAttribute('data-a'), h=strip.getAttribute('data-h');
   if(kind==='post'){ togglePostBox(p,u,a,h); return; }   // posting pulls next queued from sourcing
-  cycleCell(kind, p, u, a, h, parseInt(cell.getAttribute('data-i'),10));
+  cycleCell(kind, p, u, a, h, parseInt(cell.getAttribute('data-i'),10), cell);
 }
 function maybePhoneReminder(){
   try{ if(sessionStorage.getItem('altr_phonechk')) return; }catch(e){}
@@ -1250,19 +1257,23 @@ function srcRows(){
 }
 function srcKey(a){ return [a.phone,a.user,a.acct,a.handle].join('|'); }
 function sourceMap(){ var m={}; (STATE.sourcelog||[]).forEach(function(r){ m[[r.phone,r.user,r.acct,r.handle].join('|')]=r; }); return m; }
+function srcStats(){   // recompute the 4 stat cards only — cheap, used for instant updates on box clicks
+  if(!STATE) return;
+  var accts=(STATE.accounts||[]), map=sourceMap();
+  var red=0, orange=0, green=0, today=0;
+  accts.forEach(function(a){ if(a.status && a.status!=='active') return; var r=map[srcKey(a)]; if(!r) return; var n=srcLen(r); red+=countAt(r.cells,n,1); orange+=countAt(r.cells,n,2); green+=countAt(r.cells,n,3); today+=countTodaySrc(r.cells,r.gdates,n); });
+  var el=$('src-stats'); if(el) el.innerHTML=
+    statCard('Target', red+today, 'r')+   // stable daily target = still-red + already-sourced-today
+    statCard('Queued', orange, 'a')+
+    statCard('Posted', green, 'g')+
+    statCard('Sourced today', today, '');
+}
 function renderSourcing(){
   if(!STATE) return;
   renderTargets();
   var accts=(STATE.accounts||[]), map=sourceMap();
   var ff=$('src-filter')?$('src-filter').value:'all', q=$('src-search')?$('src-search').value.trim().toLowerCase():'';
-  // states: red(1)=target, orange(2)=queued/sourced, green(3)=posted
-  var red=0, orange=0, green=0, today=0;
-  accts.forEach(function(a){ if(a.status && a.status!=='active') return; var r=map[srcKey(a)]; if(!r) return; var n=srcLen(r); red+=countAt(r.cells,n,1); orange+=countAt(r.cells,n,2); green+=countAt(r.cells,n,3); today+=countTodaySrc(r.cells,r.gdates,n); });
-  $('src-stats').innerHTML=
-    statCard('Target', red+today, 'r')+   // stable daily target = still-red + already-sourced-today (matches per-employee total)
-    statCard('Queued', orange, 'a')+
-    statCard('Posted', green, 'g')+
-    statCard('Sourced today', today, '');
+  srcStats();
   var rows=filterAccounts('src', accts, map, ff, q);
   if(!rows.length){ $('sourcing-list').innerHTML='<div class="muted">No accounts match.</div>'; return; }
   var activeRows=rows.filter(function(a){ return !a.status||a.status==='active'; });
