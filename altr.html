@@ -229,8 +229,9 @@ select.promosel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
 .adminbtn:hover{opacity:.92}
 .ghost{font-size:12px;font-weight:600;color:var(--t2);background:none;border:1px solid var(--line);border-radius:9px;padding:8px 13px;cursor:pointer;font-family:inherit}
 .ghost:hover{color:var(--t1);border-color:var(--line-hi)}
-#eod-modal,#eod-warn,#phone-reminder,#reels-alarm,#acct-edit-modal,#audio-add-modal{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(7,9,13,.8);backdrop-filter:blur(8px);padding:1.5rem}
-#eod-modal.open,#eod-warn.open,#phone-reminder.open,#reels-alarm.open,#acct-edit-modal.open,#audio-add-modal.open{display:flex;animation:docFade .2s ease}
+#eod-modal,#eod-warn,#phone-reminder,#reels-alarm,#acct-edit-modal,#audio-add-modal,#alt-dialog{position:fixed;inset:0;z-index:340;display:none;align-items:center;justify-content:center;background:rgba(7,9,13,.8);backdrop-filter:blur(8px);padding:1.5rem}
+#eod-modal.open,#eod-warn.open,#phone-reminder.open,#reels-alarm.open,#acct-edit-modal.open,#audio-add-modal.open,#alt-dialog.open{display:flex;animation:docFade .2s ease}
+#alt-dialog .empin{box-sizing:border-box}
 #audio-add-modal .ae-field input{width:100%;box-sizing:border-box;background:#0c0f15;border:1px solid var(--line);border-radius:8px;color:#fff;padding:10px 12px;font:14px/1.2 inherit;text-transform:none;letter-spacing:0}
 #audio-add-modal .ae-field input:focus{outline:none;border-color:var(--o2)}
 .aa-seg{display:flex;gap:8px;margin-top:2px}
@@ -474,6 +475,16 @@ select.promosel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
     <div class="eodsub">Copy this and send it to the client group chat.</div>
     <textarea id="eod-text" readonly></textarea>
     <div class="eodbtns"><button class="adminbtn" onclick="copyEod()">Copy message</button><button class="ghost" onclick="closeEod()">Close</button></div>
+  </div>
+</div>
+
+<!-- Generic branded confirm / prompt dialog -->
+<div id="alt-dialog">
+  <div class="eodbox" style="max-width:400px">
+    <div class="eodhd" id="ad-title">Confirm</div>
+    <div class="eodsub" id="ad-msg" style="white-space:pre-line"></div>
+    <input id="ad-input" class="empin" style="width:100%;max-width:none;margin-top:.5rem;display:none" autocomplete="off">
+    <div class="eodbtns"><button class="ghost" id="ad-cancel">Cancel</button><button class="adminbtn" id="ad-ok">OK</button></div>
   </div>
 </div>
 
@@ -1652,8 +1663,8 @@ function goalCard(label, val, target, key, pct){
     '<div class="pbar" style="margin-top:9px"><i style="width:'+Math.min(100,pct)+'%"></i></div>'+
     '<div class="goalsub">'+tgt+' · '+pct+'%</div></div>';
 }
-function editGoal(key, cur){
-  var v=prompt('Monthly target for '+key+':', cur); if(v===null) return;
+async function editGoal(key, cur){
+  var v=await altPrompt('Monthly target for '+key+':', cur, { title:'Set monthly target', type:'number' }); if(v===null) return;
   var n=parseInt(v,10); if(isNaN(n)||n<0){ toast('Enter a valid number'); return; }
   var g=(STATE.goals||[]).filter(function(x){ return String(x.key)===key; })[0];
   if(g) g.target=n; else { STATE.goals=STATE.goals||[]; STATE.goals.push({key:key,target:n}); }
@@ -1683,20 +1694,18 @@ function parseNumLoose(s){
   var mult=1; if(m[2]){ var u=m[2].toUpperCase(); mult=(u==='K')?1e3:(u==='M')?1e6:1e9; }
   var n=parseFloat(m[1]); return isNaN(n)?null:Math.round(n*mult);
 }
-function editAudioNum(id, cur){
-  var v=prompt('Reels using this audio (you can type 2300 or 2.3K):', cur); if(v===null) return;
+async function editAudioNum(id, cur){
+  var v=await altPrompt('Reels using this audio (you can type 2300 or 2.3K):', cur, { title:'Update reels count', placeholder:'e.g. 2300 or 2.3K' }); if(v===null) return;
   var n=parseNumLoose(v); if(n===null){ toast('Enter a valid number (e.g. 2300 or 2.3K)'); return; }
   apiPost({ action:'audio_save', id:id, reach:String(n), by:firstName(USER.full_name||USER.employee_id) }).then(refreshQuiet).catch(function(){ toast('Save failed'); });
 }
 /* open the audio's IG page, then pop the entry box — two quick clicks, always accurate */
-function checkAudio(id, link, cur){
+async function checkAudio(id, link, cur){
   if(link){ try{ window.open(link, '_blank', 'noopener'); }catch(e){} }
-  setTimeout(function(){
-    var v=prompt('On the Instagram tab that just opened, read the "X reels" number under the title.\n\nEnter it here (e.g. 2300 or 2.3K):', cur||'');
-    if(v===null) return;
-    var n=parseNumLoose(v); if(n===null){ toast('Enter a valid number (e.g. 2300 or 2.3K)'); return; }
-    apiPost({ action:'audio_save', id:id, reach:String(n), by:firstName(USER.full_name||USER.employee_id) }).then(refreshQuiet).catch(function(){ toast('Save failed'); });
-  }, 300);
+  var v=await altPrompt('On the Instagram tab that just opened, read the "X reels" number under the title, then enter it here:', cur||'', { title:'Enter reels count', placeholder:'e.g. 2300 or 2.3K' });
+  if(v===null) return;
+  var n=parseNumLoose(v); if(n===null){ toast('Enter a valid number (e.g. 2300 or 2.3K)'); return; }
+  apiPost({ action:'audio_save', id:id, reach:String(n), by:firstName(USER.full_name||USER.employee_id) }).then(refreshQuiet).catch(function(){ toast('Save failed'); });
 }
 async function refreshAudio(id, link){
   if(!link){ toast('No link'); return; }
@@ -1722,6 +1731,40 @@ function renderReposts(){
     }).join('')+'</tbody></table>'; }
   $('ins-reposts').innerHTML=html;
 }
+/* ── Branded confirm / prompt dialogs (drop-in replacements) ── */
+var _adResolve=null, _adIsPrompt=false;
+function _adClose(val){ var d=$('alt-dialog'); if(d) d.classList.remove('open'); var r=_adResolve; _adResolve=null; if(r) r(val); }
+function altConfirm(msg, opts){
+  opts=opts||{};
+  return new Promise(function(res){
+    _adResolve=res; _adIsPrompt=false;
+    $('ad-title').textContent=opts.title||'Please confirm';
+    $('ad-msg').textContent=msg;
+    var inp=$('ad-input'); inp.style.display='none';
+    var ok=$('ad-ok'); ok.textContent=opts.ok||'Confirm';
+    ok.style.background=opts.danger?'linear-gradient(135deg,#ef4444,#dc2626)':'';
+    $('alt-dialog').classList.add('open');
+  });
+}
+function altPrompt(msg, def, opts){
+  opts=opts||{};
+  return new Promise(function(res){
+    _adResolve=res; _adIsPrompt=true;
+    $('ad-title').textContent=opts.title||'Enter a value';
+    $('ad-msg').textContent=msg;
+    var inp=$('ad-input'); inp.style.display=''; inp.value=(def==null?'':def); inp.placeholder=opts.placeholder||''; inp.type=opts.type||'text';
+    var ok=$('ad-ok'); ok.textContent=opts.ok||'Save'; ok.style.background='';
+    $('alt-dialog').classList.add('open');
+    setTimeout(function(){ inp.focus(); try{ inp.select(); }catch(e){} }, 60);
+  });
+}
+(function(){
+  var ok=$('ad-ok'), cancel=$('ad-cancel'), inp=$('ad-input');
+  if(!ok) return;
+  ok.onclick=function(){ _adClose(_adIsPrompt ? inp.value : true); };
+  cancel.onclick=function(){ _adClose(_adIsPrompt ? null : false); };
+  inp.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); ok.click(); } else if(e.key==='Escape'){ cancel.click(); } });
+})();
 var AA_KIND='full';
 function addAudio(){
   AA_KIND='full';
@@ -1759,22 +1802,22 @@ async function toggleAudio(id, st){
   catch(e){ toast('Save failed'); }
 }
 async function delAudio(id){
-  if(!confirm('Delete this audio promotion?')) return;
+  if(!await altConfirm('Delete this audio promotion?', { title:'Delete audio', ok:'Delete', danger:true })) return;
   try{ await apiPost({ action:'audio_del', id:id }); await refreshQuiet(); }catch(e){ toast('Delete failed'); }
 }
 async function addRepost(){
-  var link=prompt('IG reel link (optional):','')||'';
-  var count=prompt('Number of reposts:','1'); if(count===null) return;
-  var reach=prompt('Reach (optional number):','')||'';
-  try{ await apiPost({ action:'repost_save', date:STATE.src_today||STATE.today, link:link.trim(), count:parseInt(count,10)||1, reach:reach.trim(), by:firstName(USER.full_name||USER.employee_id) }); await refreshQuiet(); }
+  var link=await altPrompt('IG reel link (optional):', '', { title:'Log a reel repost', placeholder:'https://www.instagram.com/reel/…' }); if(link===null) return;
+  var count=await altPrompt('Number of reposts:', '1', { title:'Log a reel repost', type:'number' }); if(count===null) return;
+  var reach=await altPrompt('Reach (optional number):', '', { title:'Log a reel repost', type:'number' }); if(reach===null) reach='';
+  try{ await apiPost({ action:'repost_save', date:STATE.src_today||STATE.today, link:String(link).trim(), count:parseInt(count,10)||1, reach:String(reach).trim(), by:firstName(USER.full_name||USER.employee_id) }); await refreshQuiet(); }
   catch(e){ toast('Save failed'); }
 }
 async function delRepost(id){
-  if(!confirm('Delete this repost entry?')) return;
+  if(!await altConfirm('Delete this repost entry?', { title:'Delete repost', ok:'Delete', danger:true })) return;
   try{ await apiPost({ action:'repost_del', id:id }); await refreshQuiet(); }catch(e){ toast('Delete failed'); }
 }
-function editRepostReach(id, cur){
-  var v=prompt('Reach (number):', cur); if(v===null) return;
+async function editRepostReach(id, cur){
+  var v=await altPrompt('Reach (number):', cur, { title:'Update reach', type:'number' }); if(v===null) return;
   apiPost({ action:'repost_save', id:id, reach:String(v).trim(), by:firstName(USER.full_name||USER.employee_id) }).then(refreshQuiet).catch(function(){ toast('Save failed'); });
 }
 async function refreshRepost(id, link){
