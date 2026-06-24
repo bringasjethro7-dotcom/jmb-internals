@@ -49,6 +49,12 @@ a{color:var(--o2)}
 .cand .cp{font-size:12px;color:var(--t2);margin-top:2px}
 .cand .cmeta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--t3)}
 .cand .src{background:rgba(255,255,255,.06);border-radius:6px;padding:1px 7px}
+.cand .crow{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.cbtn{font-size:11px;font-weight:600;border-radius:7px;padding:5px 9px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--t2);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:4px;font-family:inherit;transition:filter .12s}
+.cbtn:hover{filter:brightness(1.25)}
+.cbtn.open{color:#8bc0f0;border-color:rgba(55,138,221,.4)}
+.cbtn.pass{flex:1;justify-content:center;color:#4ade80;border-color:rgba(74,222,128,.45);background:rgba(74,222,128,.10)}
+.cbtn.fail{flex:1;justify-content:center;color:#f87171;border-color:rgba(248,113,113,.45);background:rgba(248,113,113,.10)}
 .muted{color:var(--t3);font-size:13px;padding:1rem;text-align:center}
 /* onboarding */
 .onb-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.3rem;margin-bottom:1rem}
@@ -127,7 +133,8 @@ textarea.inp{min-height:72px;resize:vertical}
   <div class="tabs">
     <div class="tab on" id="tab-hire" onclick="showTab('hire')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg> Hiring pipeline</div>
     <div class="tab" id="tab-onb" onclick="showTab('onb')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Onboarding</div>
-    <button class="btn primary sm" style="margin-left:auto" onclick="openCandidate()">+ Add candidate</button>
+    <button class="btn ghost sm" style="margin-left:auto" onclick="copyApplyLink()" title="Copy the public application form link to share with applicants">🔗 Application link</button>
+    <button class="btn primary sm" onclick="openCandidate()">+ Add candidate</button>
   </div>
 
   <div class="page on" id="page-hire"><div class="board" id="board"><div class="muted">Loading…</div></div></div>
@@ -139,6 +146,7 @@ textarea.inp{min-height:72px;resize:vertical}
   <div class="modal">
     <div class="mh"><h3 id="cand-title">Add candidate</h3><button class="mx" onclick="closeCandidate()">✕</button></div>
     <div class="mbd">
+      <div id="c-applicant" style="display:none;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:14px;font-size:13px;line-height:1.7"></div>
       <div class="fg"><label>Full name *</label><input class="inp" id="c-name" placeholder="Juan Dela Cruz"></div>
       <div class="grid2">
         <div class="fg"><label>Position</label><input class="inp" id="c-pos" placeholder="SMM I"></div>
@@ -191,9 +199,9 @@ var PORTAL_URL = "https://script.google.com/macros/s/AKfycbzoalT_9SYhSPciWdjDI6b
 var ADMIN_PASS = "JMBeast_020298";
 
 var USER=null, ISADMIN=false, STATE={candidates:[]}, _editId=null, _acctCandId=null, _empCache=null;
-var STAGES=['applied','screening','interview','offer','hired','rejected'];
-var STAGE_LABEL={applied:'Applied',screening:'Screening',interview:'Interview',offer:'Offer',hired:'Hired',rejected:'Rejected'};
-var STAGE_COLOR={applied:'#60a5fa',screening:'#a78bfa',interview:'#ffb066',offer:'#ff8a3c',hired:'#4ade80',rejected:'#f87171'};
+var STAGES=['applied','screening','assessment','interview','offer','hired','rejected'];
+var STAGE_LABEL={applied:'Applied',screening:'Resume review',assessment:'Assessment',interview:'Interview',offer:'Offer',hired:'Hired',rejected:'Rejected'};
+var STAGE_COLOR={applied:'#60a5fa',screening:'#a78bfa',assessment:'#22d3ee',interview:'#ffb066',offer:'#ff8a3c',hired:'#4ade80',rejected:'#f87171'};
 var ONB_TASKS=['Signed contract','Submitted requirements / IDs','Company email created','Portal account created','Tools access (tracker · chat · voice)','Assigned to team / manager','Orientation & SOP walkthrough','First task assigned'];
 
 function $(id){ return document.getElementById(id); }
@@ -272,11 +280,41 @@ function renderBoard(){
   }).join('');
 }
 function candCard(c){
-  var meta=[]; if(c.position) meta.push(esc(c.position)); if(c.applied) meta.push('applied '+esc(String(c.applied).slice(0,10)));
+  var extra='';
+  if(c.resume){ extra+='<a class="cbtn open" href="'+esc(c.resume)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">📄 Resume</a>'; }
+  // assessment score badge once completed
+  if(c.assess_at && c.assess_score!=='' && c.assess_score!=null){
+    var sc=parseFloat(c.assess_score); var col=sc>=80?'#4ade80':(sc>=60?'#ffb066':'#f87171');
+    extra+='<span class="cbtn" style="cursor:default;border-color:'+col+'55;color:'+col+'" onclick="event.stopPropagation()">Assessment: '+Math.round(sc)+'%</span>';
+  }
+  // pass/fail for resume-review stage
+  var actions='';
+  if(String(c.stage)==='screening'){
+    actions='<div class="crow">'
+      +'<button class="cbtn pass" onclick="screenCand(event,\''+c.id+'\',\'pass\')">✓ Pass</button>'
+      +'<button class="cbtn fail" onclick="screenCand(event,\''+c.id+'\',\'fail\')">✕ Fail</button></div>';
+  }
   return '<div class="cand" draggable="true" ondragstart="onDragStart(event,\''+c.id+'\')" ondragend="onDragEnd(event)" onclick="openCandidate(\''+c.id+'\')">'
     +'<div class="cn">'+esc(c.name||'(no name)')+'</div>'
     +(c.position?'<div class="cp">'+esc(c.position)+'</div>':'')
-    +'<div class="cmeta">'+(c.source?'<span class="src">'+esc(c.source)+'</span>':'')+(c.applied?'<span>applied '+esc(String(c.applied).slice(0,10))+'</span>':'')+'</div></div>';
+    +'<div class="cmeta">'+(c.source?'<span class="src">'+esc(c.source)+'</span>':'')+(c.applied?'<span>applied '+esc(String(c.applied).slice(0,10))+'</span>':'')+'</div>'
+    +(extra?'<div class="crow">'+extra+'</div>':'')
+    +actions+'</div>';
+}
+async function screenCand(e, id, decision){
+  e.stopPropagation();
+  var c=(STATE.candidates||[]).filter(function(x){return String(x.id)===String(id);})[0]||{};
+  var pass=decision==='pass';
+  var msg=pass
+    ? 'Pass '+(c.name||'this applicant')+'? They will be emailed a link to the assessment and moved to the Assessment stage.'
+    : 'Fail '+(c.name||'this applicant')+'? They will be emailed a polite rejection and moved to Rejected.';
+  if(!confirm(msg)) return;
+  toast(pass?'Passing — emailing assessment link…':'Sending rejection email…');
+  try{
+    var r=await apiPost({ action:'candidate_screen', id:id, decision:decision, by:firstName(USER.full_name||USER.employee_id) });
+    if(r && r.ok){ toast(r.emailed?('Email sent to '+(c.email||'applicant')):'Saved (email could not be sent — check Gmail auth).'); await loadState(); }
+    else toast((r&&r.error)?r.error:'Action failed');
+  }catch(err){ toast('Action failed'); }
 }
 var _dragId=null;
 function onDragStart(e,id){ _dragId=id; e.dataTransfer.effectAllowed='move'; try{ e.dataTransfer.setData('text/plain',id); }catch(_){} var el=e.target.closest('.cand'); if(el) el.classList.add('dragging'); }
@@ -302,7 +340,27 @@ function openCandidate(id){
   $('c-name').value=c.name||''; $('c-pos').value=c.position||''; $('c-stage').value=(c.stage||'applied');
   $('c-email').value=c.email||''; $('c-phone').value=c.phone||''; $('c-source').value=c.source||''; $('c-notes').value=c.notes||'';
   $('c-del').style.display=id?'':'none';
+  // applicant info panel: resume link + assessment breakdown
+  var info=$('c-applicant'), bits=[];
+  if(c.resume) bits.push('<a href="'+esc(c.resume)+'" target="_blank" rel="noopener" style="color:#8bc0f0;font-weight:600">📄 Open resume</a>');
+  if(c.assess_at && c.assess_score!=='' && c.assess_score!=null){
+    var d={}; try{ d=JSON.parse(c.assess_detail||'{}'); }catch(_){}
+    var parts=[];
+    if(d.grammar!=null) parts.push('Grammar '+d.grammar+'%');
+    if(d.general!=null) parts.push('General '+d.general+'%');
+    if(d.math!=null) parts.push('Math '+d.math+'%');
+    if(d.typing!=null) parts.push('Typing '+d.typing+'%'+(d.wpm!=null?(' ('+d.wpm+' wpm, '+d.accuracy+'% acc)'):''));
+    bits.push('<b>Assessment: '+Math.round(parseFloat(c.assess_score))+'%</b>'+(parts.length?'<br><span style="color:var(--t3)">'+parts.join(' · ')+'</span>':'')+'<br><span style="color:var(--t3);font-size:11px">taken '+esc(c.assess_at)+'</span>');
+  } else if(c.token){ bits.push('<span style="color:var(--t3)">Assessment link sent — awaiting completion.</span>'); }
+  if(bits.length){ info.innerHTML=bits.join('<div style="height:8px"></div>'); info.style.display=''; } else { info.style.display='none'; }
   $('cand-modal').classList.add('open');
+}
+function applyLink(){ return location.href.replace(/[^\/]*$/,'')+'hr-apply.html'; }
+function copyApplyLink(){
+  var url=applyLink();
+  var done=false; try{ var t=document.createElement('textarea'); t.value=url; document.body.appendChild(t); t.select(); done=document.execCommand('copy'); document.body.removeChild(t); }catch(e){}
+  if(!done && navigator.clipboard){ navigator.clipboard.writeText(url).then(function(){ toast('Application link copied'); }).catch(function(){ prompt('Copy the application link:', url); }); return; }
+  toast(done?'Application link copied — share it with applicants':'Copy this link: '+url);
 }
 function closeCandidate(){ $('cand-modal').classList.remove('open'); }
 async function saveCandidate(){

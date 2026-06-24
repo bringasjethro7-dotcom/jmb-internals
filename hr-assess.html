@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JMB Virtuals — Applicant Assessment</title>
+<style>
+  :root{ --bg:#0d0d0f; --card:#16161a; --card2:#1d1d22; --t1:#f4f4f6; --t2:#b8b8c0; --t3:#7c7c86; --o3:#ff6b1a; --o2:#ff8a4a; --border:rgba(255,255,255,.08); --border-hi:rgba(255,107,26,.4); --g:#22c55e; --r:#ef4444; --b:#378add; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:radial-gradient(1200px 600px at 50% -10%, rgba(255,107,26,.10), transparent), var(--bg); color:var(--t1); font-family:'Segoe UI',system-ui,-apple-system,sans-serif; min-height:100vh; }
+  .wrap{ max-width:720px; margin:0 auto; padding:28px 20px 64px; }
+  .brand{ display:flex; align-items:center; gap:12px; }
+  .logo{ width:40px; height:40px; border-radius:11px; background:linear-gradient(135deg,var(--o3),var(--o2)); display:flex; align-items:center; justify-content:center; font-weight:800; color:#fff; }
+  h1{ font-size:24px; margin:16px 0 6px; }
+  .sub{ color:var(--t2); font-size:14px; line-height:1.6; }
+  .card{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:22px; margin-top:18px; }
+  .timer{ position:sticky; top:0; z-index:5; background:var(--card2); border:1px solid var(--border-hi); border-radius:10px; padding:9px 14px; font-size:14px; font-weight:700; display:inline-flex; gap:8px; align-items:center; }
+  .timer.warn{ border-color:var(--r); color:#fca5a5; }
+  .sec-h{ font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--o2); font-weight:700; margin:26px 0 4px; }
+  .sec-h:first-child{ margin-top:6px; }
+  .q{ margin:16px 0 4px; font-size:15px; line-height:1.5; }
+  .q b{ color:var(--t3); margin-right:6px; }
+  .opts{ display:grid; gap:8px; margin:10px 0 16px; }
+  .opt{ display:flex; align-items:center; gap:10px; background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:10px 13px; cursor:pointer; font-size:14px; transition:border-color .12s, background .12s; }
+  .opt:hover{ border-color:var(--border-hi); }
+  .opt.sel{ border-color:var(--o3); background:rgba(255,107,26,.10); }
+  .opt input{ accent-color:var(--o3); }
+  .btn{ background:linear-gradient(135deg,var(--o3),var(--o2)); color:#fff; border:none; border-radius:11px; padding:13px 22px; font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; }
+  .btn:disabled{ opacity:.55; cursor:not-allowed; }
+  .btn.ghost{ background:none; border:1px solid var(--border); color:var(--t2); }
+  .passage{ background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:14px; font-size:15px; line-height:1.7; color:var(--t2); user-select:none; }
+  textarea{ width:100%; min-height:120px; margin-top:12px; background:var(--card2); border:1px solid var(--border); border-radius:10px; color:var(--t1); padding:12px; font-size:15px; font-family:inherit; outline:none; }
+  textarea:focus{ border-color:var(--border-hi); }
+  .stat-row{ display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; }
+  .stat{ background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:9px 14px; font-size:13px; }
+  .stat b{ color:var(--o2); font-size:16px; }
+  .center{ text-align:center; }
+  .done .check{ width:64px; height:64px; border-radius:50%; background:rgba(34,197,94,.15); border:1px solid rgba(34,197,94,.4); display:flex; align-items:center; justify-content:center; margin:8px auto 18px; }
+  .muted{ color:var(--t3); font-size:13px; }
+  .err-box{ text-align:center; padding:40px 20px; }
+  .pill{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:12px; background:rgba(55,138,221,.15); color:#8bc0f0; margin-left:8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><div class="logo">JMB</div><div><div style="font-weight:700;font-size:15px;">JMB Virtuals</div><div style="font-size:12px;color:var(--t3);">Applicant Assessment</div></div></div>
+  <div id="root"></div>
+  <div class="center muted" style="margin-top:28px;">© JMB Virtuals · Recruitment</div>
+</div>
+
+<script>
+var HR_URL = "https://script.google.com/macros/s/AKfycbyf_V9JIV8x_MqT4eibw9okSWt9ZjyvEYM09nZBEMNLiiyximXIKX6ojc7aLpiRaffN/exec";
+var $ = function(id){ return document.getElementById(id); };
+function qs(k){ var m=new RegExp('[?&]'+k+'=([^&]*)').exec(location.search); return m?decodeURIComponent(m[1]):''; }
+var ID = qs('id'), TOKEN = qs('token');
+var CAND = null;
+
+/* ===== BRAND-NEW HR QUESTION BANK ===== */
+var BANK = {
+  grammar: [
+    { q:'Choose the correct sentence.', o:['She don’t like coffee.','She doesn’t likes coffee.','She doesn’t like coffee.','She not like coffee.'], a:2 },
+    { q:'Pick the correct word: "Please send the report to John and ___."', o:['I','me','myself','mine'], a:1 },
+    { q:'Which is spelled correctly?', o:['definately','definatly','definitely','definitley'], a:2 },
+    { q:'Choose the correct form: "If I ___ you, I would apologize."', o:['was','were','am','be'], a:1 },
+    { q:'Identify the correctly punctuated sentence.', o:['Its raining, so bring you’re umbrella.','It’s raining, so bring your umbrella.','Its raining, so bring your umbrella.','It’s raining, so bring you’re umbrella.'], a:1 },
+    { q:'Choose the correct verb: "The team ___ working hard this week."', o:['is','are','were','be'], a:0 },
+    { q:'Select the correct word: "We have lived here ___ 2015."', o:['for','since','from','during'], a:1 },
+    { q:'Which sentence uses the apostrophe correctly?', o:['The dog wagged it’s tail.','The dogs’ toys are missing.','The dog’s wagged their tail.','Its’ a sunny day.'], a:1 },
+    { q:'Choose the best word: "She spoke very ___ during the call."', o:['confident','confidence','confidently','confidant'], a:2 },
+    { q:'Pick the grammatically correct option.', o:['There going to there house.','They’re going to their house.','Their going to they’re house.','They’re going to there house.'], a:1 }
+  ],
+  general: [
+    { q:'How many continents are there on Earth?', o:['5','6','7','8'], a:2 },
+    { q:'What does "CEO" stand for?', o:['Chief Estate Officer','Chief Executive Officer','Central Executive Operator','Corporate Employment Officer'], a:1 },
+    { q:'Which planet is known as the Red Planet?', o:['Venus','Jupiter','Mars','Mercury'], a:2 },
+    { q:'What is the largest ocean on Earth?', o:['Atlantic','Indian','Arctic','Pacific'], a:3 },
+    { q:'Which of these is a web browser?', o:['Photoshop','Chrome','Excel','Slack'], a:1 },
+    { q:'How many hours are there in two days?', o:['24','36','48','72'], a:2 },
+    { q:'What does "URL" most relate to?', o:['A web address','A type of file','A keyboard shortcut','A printer setting'], a:0 },
+    { q:'Which currency is used in Japan?', o:['Won','Yuan','Yen','Ringgit'], a:2 },
+    { q:'What is the freezing point of water in Celsius?', o:['0°C','32°C','100°C','-10°C'], a:0 },
+    { q:'Which app is mainly used for video calls / meetings?', o:['Zoom','Notepad','Paint','Calculator'], a:0 }
+  ],
+  math: [
+    { q:'What is 15% of 200?', o:['20','25','30','35'], a:2 },
+    { q:'45 + 38 = ?', o:['73','81','83','93'], a:2 },
+    { q:'A task takes 3 hours. How many such tasks fit in a 12-hour day?', o:['3','4','5','6'], a:1 },
+    { q:'What is 144 ÷ 12?', o:['11','12','13','14'], a:1 },
+    { q:'A product costs $50. After a 20% discount, the new price is?', o:['$30','$40','$42','$45'], a:1 },
+    { q:'What comes next: 2, 4, 8, 16, ?', o:['18','24','32','64'], a:2 },
+    { q:'If you post 4 reels per day, how many in a 7-day week?', o:['21','24','28','32'], a:2 },
+    { q:'What is 7 × 8?', o:['54','56','58','64'], a:1 },
+    { q:'Convert 0.25 to a percentage.', o:['2.5%','25%','0.25%','250%'], a:1 },
+    { q:'You have 90 minutes and 6 equal tasks. Minutes per task?', o:['10','12','15','18'], a:2 }
+  ]
+};
+var TYPING_PASSAGE = "Working as a virtual assistant means staying organized, communicating clearly, and meeting deadlines every day. Small details matter, so always double check your work before sending it. A positive attitude and steady focus help the whole team succeed.";
+
+var QUIZ_SECONDS = 15*60, TYPE_SECONDS = 60;
+var state = { answers:{}, quizEnd:0, quizTimer:null, typeTimer:null, typeStart:0, scores:null };
+
+/* ---------- bootstrap ---------- */
+(function init(){
+  if(!ID || !TOKEN){ renderError('This assessment link is missing information. Please use the exact link from your email.'); return; }
+  fetch(HR_URL+'?action=assess_get&id='+encodeURIComponent(ID)+'&token='+encodeURIComponent(TOKEN))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.error==='already_done'){ renderError('You have already completed this assessment. Thank you!'); return; }
+      if(d.error || !d.ok){ renderError('This assessment link is invalid or has expired. Please check your email for the correct link.'); return; }
+      CAND = d; renderIntro();
+    })
+    .catch(function(){ renderError('We couldn’t load your assessment. Please check your connection and try again.'); });
+})();
+
+function renderError(msg){ $('root').innerHTML = '<div class="card err-box"><h1 style="margin-top:0;">Assessment unavailable</h1><p class="sub">'+msg+'</p></div>'; }
+
+function renderIntro(){
+  var total = BANK.grammar.length + BANK.general.length + BANK.math.length;
+  $('root').innerHTML =
+    '<h1>Welcome'+(CAND.name?(', '+esc(CAND.name.split(',').slice(-1)[0].trim()||CAND.name)):'')+'!</h1>'+
+    '<p class="sub">You passed the resume screening'+(CAND.position?(' for <b>'+esc(CAND.position)+'</b>'):'')+'. This assessment has two parts:</p>'+
+    '<div class="card">'+
+      '<p style="margin:0 0 10px;"><b>Part 1 — Knowledge quiz</b> <span class="pill">'+total+' questions · 15 min</span></p>'+
+      '<p class="muted" style="margin:0 0 16px;">Grammar, General Knowledge, and Mathematics. Multiple choice.</p>'+
+      '<p style="margin:0 0 10px;"><b>Part 2 — Typing test</b> <span class="pill">60 seconds</span></p>'+
+      '<p class="muted" style="margin:0 0 18px;">Type a short passage as accurately and quickly as you can.</p>'+
+      '<p class="muted" style="margin:0 0 18px;">Please complete it in one sitting. You have one attempt.</p>'+
+      '<button class="btn" onclick="startQuiz()">Start assessment</button>'+
+    '</div>';
+}
+
+/* ---------- quiz ---------- */
+function startQuiz(){
+  state.quizEnd = Date.now() + QUIZ_SECONDS*1000;
+  var html = '<div style="margin:6px 0 14px;"><span class="timer" id="qtimer">⏱ 15:00</span></div><div class="card">';
+  html += secBlock('Grammar','grammar') + secBlock('General Knowledge','general') + secBlock('Mathematics','math');
+  html += '<div style="margin-top:22px;display:flex;justify-content:flex-end;"><button class="btn" id="quiz-next" onclick="finishQuiz(false)">Continue to typing test</button></div>';
+  html += '</div>';
+  $('root').innerHTML = html;
+  tickQuiz();
+  state.quizTimer = setInterval(tickQuiz, 1000);
+}
+function secBlock(title, key){
+  var html = '<div class="sec-h">'+title+'</div>';
+  BANK[key].forEach(function(item, i){
+    var qid = key+'_'+i;
+    html += '<div class="q"><b>Q'+(i+1)+'.</b>'+esc(item.q)+'</div><div class="opts">';
+    item.o.forEach(function(opt, oi){
+      html += '<label class="opt" id="opt_'+qid+'_'+oi+'" onclick="pick(\''+qid+'\','+oi+')"><input type="radio" name="'+qid+'" '+(state.answers[qid]===oi?'checked':'')+'>'+esc(opt)+'</label>';
+    });
+    html += '</div>';
+  });
+  return html;
+}
+function pick(qid, oi){
+  state.answers[qid]=oi;
+  var grp = document.getElementsByName(qid);
+  for(var i=0;i<grp.length;i++){ var lab=$('opt_'+qid+'_'+i); if(lab) lab.classList.toggle('sel', i===oi); }
+}
+function tickQuiz(){
+  var left = Math.max(0, Math.round((state.quizEnd - Date.now())/1000));
+  var el=$('qtimer'); if(el){ el.textContent='⏱ '+mss(left); el.classList.toggle('warn', left<=60); }
+  if(left<=0){ finishQuiz(true); }
+}
+function scoreQuiz(){
+  var out={};
+  ['grammar','general','math'].forEach(function(key){
+    var c=0; BANK[key].forEach(function(item,i){ if(state.answers[key+'_'+i]===item.a) c++; });
+    out[key]=Math.round(c/BANK[key].length*100);
+  });
+  return out;
+}
+function finishQuiz(auto){
+  if(state.quizTimer){ clearInterval(state.quizTimer); state.quizTimer=null; }
+  state.quizScores = scoreQuiz();
+  startTyping(auto);
+}
+
+/* ---------- typing ---------- */
+function startTyping(auto){
+  $('root').innerHTML =
+    (auto?'<p class="sub" style="color:#fca5a5;">Quiz time is up — your answers were saved. Now the typing test.</p>':'')+
+    '<h1>Typing test</h1>'+
+    '<p class="sub">Type the passage below exactly. The 60-second timer starts when you begin typing.</p>'+
+    '<div class="card">'+
+      '<div class="passage" id="passage">'+esc(TYPING_PASSAGE)+'</div>'+
+      '<textarea id="type-in" placeholder="Start typing here…" oninput="onType()" onpaste="return false" spellcheck="false"></textarea>'+
+      '<div class="stat-row">'+
+        '<div class="stat">Time <b id="t-time">60</b>s</div>'+
+        '<div class="stat">WPM <b id="t-wpm">0</b></div>'+
+        '<div class="stat">Accuracy <b id="t-acc">100</b>%</div>'+
+      '</div>'+
+      '<div style="margin-top:18px;display:flex;justify-content:flex-end;"><button class="btn" id="finish-btn" onclick="finishAll(false)">Finish & submit</button></div>'+
+    '</div>';
+}
+function onType(){
+  if(!state.typeStart){
+    state.typeStart=Date.now();
+    state.typeTimer=setInterval(tickType,200);
+  }
+  updateTypeStats();
+}
+function tickType(){
+  var left=Math.max(0, TYPE_SECONDS - Math.round((Date.now()-state.typeStart)/1000));
+  var el=$('t-time'); if(el) el.textContent=left;
+  if(left<=0){ finishAll(true); }
+}
+function typingStats(){
+  var typed=$('type-in')?$('type-in').value:'';
+  var elapsedMin = state.typeStart ? Math.max((Date.now()-state.typeStart)/60000, 1/60) : 1;
+  var words = typed.trim()? typed.trim().split(/\s+/).length : 0;
+  var wpm = Math.round(words/elapsedMin);
+  // accuracy = matching chars vs the passage prefix
+  var correct=0; for(var i=0;i<typed.length;i++){ if(typed[i]===TYPING_PASSAGE[i]) correct++; }
+  var acc = typed.length? Math.round(correct/typed.length*100) : 100;
+  return { wpm:wpm, acc:acc, words:words };
+}
+function updateTypeStats(){
+  var s=typingStats();
+  if($('t-wpm')) $('t-wpm').textContent=s.wpm;
+  if($('t-acc')) $('t-acc').textContent=s.acc;
+}
+function typingScore(s){
+  // 40 WPM = 100 on speed; blend with accuracy
+  var speed=Math.max(0, Math.min(100, Math.round(s.wpm/40*100)));
+  return Math.round(speed*(s.acc/100));
+}
+
+/* ---------- submit ---------- */
+async function finishAll(auto){
+  if(state.typeTimer){ clearInterval(state.typeTimer); state.typeTimer=null; }
+  var btn=$('finish-btn'); if(btn){ btn.disabled=true; btn.textContent='Submitting…'; }
+  var ts=typingStats(), tScore=typingScore(ts), qs=state.quizScores||scoreQuiz();
+  var overall = Math.round((qs.grammar + qs.general + qs.math + tScore)/4);
+  var detail = JSON.stringify({ grammar:qs.grammar, general:qs.general, math:qs.math, typing:tScore, wpm:ts.wpm, accuracy:ts.acc });
+  var payload = { action:'assess_submit', id:ID, token:TOKEN, score:overall, detail:detail };
+  try{
+    var res=await fetch(HR_URL,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload) });
+    var d=await res.json();
+    if(d && d.ok){ renderDone(overall); }
+    else if(d && d.error==='already_done'){ renderError('You have already completed this assessment. Thank you!'); }
+    else { renderError('We couldn’t save your results. Please contact HR.'); }
+  }catch(e){ renderError('Network error while submitting. Please contact HR so we can record your result.'); }
+}
+function renderDone(score){
+  $('root').innerHTML =
+    '<div class="card done center">'+
+      '<div class="check"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>'+
+      '<h1 style="margin:0 0 8px;">Assessment complete!</h1>'+
+      '<p class="sub">Thank you for completing the JMB Virtuals assessment. Your results have been sent to our HR team, and we’ll be in touch about the next steps.</p>'+
+    '</div>';
+}
+
+/* ---------- utils ---------- */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function mss(sec){ sec=Math.max(0,sec); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
+</script>
+</body>
+</html>
