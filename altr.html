@@ -155,6 +155,9 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .arow .susp{font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--red);border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.1);border-radius:20px;padding:2px 7px}
 .arow .serial{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--o3);min-width:34px;text-align:right}
 .arow .vacode{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t2)}
+.arow.post .audsel{font-family:inherit;font-size:10.5px;color:var(--t2);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.14);border-radius:7px;padding:3px 7px;max-width:150px;cursor:pointer;outline:none}
+.arow.post .audsel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
+.arow.post .audsel:focus{border-color:var(--o1)}
 .check{width:26px;height:26px;border-radius:8px;border:2px solid var(--t3);background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.15s;position:relative}
 .check:hover{border-color:var(--o1)}
 .check.on{background:var(--green);border-color:var(--green)}
@@ -224,8 +227,13 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .adminbtn:hover{opacity:.92}
 .ghost{font-size:12px;font-weight:600;color:var(--t2);background:none;border:1px solid var(--line);border-radius:9px;padding:8px 13px;cursor:pointer;font-family:inherit}
 .ghost:hover{color:var(--t1);border-color:var(--line-hi)}
-#eod-modal,#eod-warn,#phone-reminder,#reels-alarm,#acct-edit-modal{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(7,9,13,.8);backdrop-filter:blur(8px);padding:1.5rem}
-#eod-modal.open,#eod-warn.open,#phone-reminder.open,#reels-alarm.open,#acct-edit-modal.open{display:flex;animation:docFade .2s ease}
+#eod-modal,#eod-warn,#phone-reminder,#reels-alarm,#acct-edit-modal,#audio-add-modal{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;background:rgba(7,9,13,.8);backdrop-filter:blur(8px);padding:1.5rem}
+#eod-modal.open,#eod-warn.open,#phone-reminder.open,#reels-alarm.open,#acct-edit-modal.open,#audio-add-modal.open{display:flex;animation:docFade .2s ease}
+#audio-add-modal .ae-field input{width:100%;box-sizing:border-box;background:#0c0f15;border:1px solid var(--line);border-radius:8px;color:#fff;padding:10px 12px;font:14px/1.2 inherit;text-transform:none;letter-spacing:0}
+#audio-add-modal .ae-field input:focus{outline:none;border-color:var(--o2)}
+.aa-seg{display:flex;gap:8px;margin-top:2px}
+.aa-opt{flex:1;padding:10px;border:1px solid var(--line);background:#0c0f15;color:var(--t2);border-radius:8px;cursor:pointer;font:13px/1 inherit;font-weight:600;transition:.15s}
+.aa-opt.on{border-color:var(--o2);background:rgba(255,107,26,.14);color:var(--o3)}
 #acct-edit-modal .ae-field{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em}
 #acct-edit-modal .ae-field input{width:100%;min-width:0;box-sizing:border-box;background:#0c0f15;border:1px solid var(--line);border-radius:8px;color:#fff;padding:9px 12px;font:14px/1.2 inherit;text-transform:none;letter-spacing:0}
 #acct-edit-modal .ae-field input:focus{outline:none;border-color:var(--o2)}
@@ -464,6 +472,30 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
     <div class="eodsub">Copy this and send it to the client group chat.</div>
     <textarea id="eod-text" readonly></textarea>
     <div class="eodbtns"><button class="adminbtn" onclick="copyEod()">Copy message</button><button class="ghost" onclick="closeEod()">Close</button></div>
+  </div>
+</div>
+
+<!-- Add audio promotion modal -->
+<div id="audio-add-modal">
+  <div class="eodbox" style="max-width:440px">
+    <div class="eodhd">Add audio promotion</div>
+    <div class="eodsub">Track a promoted audio and its reels-using count over time.</div>
+    <div style="display:flex;flex-direction:column;gap:13px;margin:.4rem 0 .2rem">
+      <label class="ae-field" style="text-transform:none;letter-spacing:0;color:var(--t2)">Audio / song title
+        <input id="aa-title" placeholder="e.g. Espresso – Sabrina Carpenter" autocomplete="off">
+      </label>
+      <label class="ae-field" style="text-transform:none;letter-spacing:0;color:var(--t2)">IG audio / reel link <span style="color:var(--t3)">(optional)</span>
+        <input id="aa-link" placeholder="https://www.instagram.com/reels/audio/…" autocomplete="off">
+      </label>
+      <div class="ae-field" style="text-transform:none;letter-spacing:0;color:var(--t2)">Promotion type
+        <div class="aa-seg" id="aa-kind">
+          <button type="button" class="aa-opt on" data-k="full" onclick="aaPickKind('full')">Full</button>
+          <button type="button" class="aa-opt" data-k="partial" onclick="aaPickKind('partial')">Partial</button>
+        </div>
+      </div>
+    </div>
+    <div id="aa-err" style="display:none;color:var(--red);font-size:12px;margin-top:6px"></div>
+    <div class="eodbtns"><button class="ghost" onclick="closeAddAudio()">Cancel</button><button class="adminbtn" id="aa-save" onclick="submitAddAudio()">Add promotion</button></div>
   </div>
 </div>
 
@@ -848,10 +880,29 @@ function acctRow(kind, a, r){
   var cellsDiv='<div class="cells'+(locked?' locked':'')+'" data-kind="'+kind+'" data-p="'+esc(a.phone)+'" data-u="'+esc(a.user)+'" data-a="'+esc(a.acct)+'" data-h="'+esc(a.handle)+'">'+boxes+'</div>';
   var tagB = (typeof acctTagBadge==='function') ? acctTagBadge(a, true) : '';   // admin-set issue flag, employee taps to clear
   if(kind==='post'){  // compact single line: box sits inline
-    return '<div class="arow post"><div class="atop">'+meta+susp+vaTag+tagB+cellsDiv+kebab+'</div></div>';
+    return '<div class="arow post"><div class="atop">'+meta+susp+vaTag+tagB+audioSelHTML(a)+cellsDiv+kebab+'</div></div>';
   }
   var counter='<span class="cellcount"><b>'+g+'</b>/'+assigned+'</span>';
   return '<div class="arow"><div class="atop">'+meta+susp+vaTag+counter+kebab+'</div>'+cellsDiv+'</div>';
+}
+/* Assigned-audio dropdown — options come from the current audio promotions */
+function audioSelHTML(a){
+  var audios=(STATE.audios||[]);
+  var cur=String(a.audio||'');
+  var opts='<option value="">♪ assign audio…</option>'+audios.map(function(au){
+    var k=(String(au.kind||'full').toLowerCase()==='partial')?'Partial':'Full';
+    return '<option value="'+esc(au.id)+'"'+(String(au.id)===cur?' selected':'')+'>'+esc(au.title||('Audio '+au.id))+' · '+k+'</option>';
+  }).join('');
+  return '<select class="audsel'+(cur?' has':'')+'" title="Assigned audio (from current promotions)" '+
+    'onchange="setAcctAudio(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\',this.value)" '+
+    'onclick="event.stopPropagation()">'+opts+'</select>';
+}
+function setAcctAudio(phone, user, acct, handle, audio){
+  var a=(STATE.accounts||[]).filter(function(x){ return String(x.phone)===String(phone)&&String(x.user)===String(user)&&String(x.acct)===String(acct)&&String(x.handle)===String(handle); })[0];
+  if(a) a.audio=audio;   // optimistic
+  apiPost({ action:'account_audio', phone:phone, user:user, acct:acct, handle:handle, audio:audio })
+    .then(function(){ toast(audio?'Audio assigned':'Audio cleared'); })
+    .catch(function(){ toast('Save failed'); });
 }
 function groupHTML(kind, ph, list, map, disc){
   var green=0, withGreen=0, denom=0;
@@ -1490,8 +1541,9 @@ function buildAudioChart(kind){
   var ofKind=(STATE.audios||[]).filter(function(a){ var p=String(a.kind||'full').toLowerCase()==='partial'; return kind==='partial'?p:!p; });
   var ids={}, titles={}; ofKind.forEach(function(a){ ids[String(a.id)]=true; titles[String(a.id)]=a.title||('Audio '+a.id); });
   var hist=(STATE.audio_history||[]).filter(function(h){ return ids[String(h.audio_id)]; });
+  var isP = (kind==='partial');
   return buildTrendChart(hist, titles,
-    { idKey:'audio_id', fixedMax:10000, glow:(kind==='partial'?'audglowP':'audglowF'), def:'Audio ',
+    { idKey:'audio_id', fixedMax:(isP?2000:10000), glines:(isP?4:10), glow:(isP?'audglowP':'audglowF'), def:'Audio ',
       empty:'No '+kind+' promotions tracked yet — add one as “'+kind+'” and update its reels count to build the line.' });
 }
 function buildReelsChart(){
@@ -1511,7 +1563,7 @@ function buildTrendChart(hist, titles, opt){
   var DAY=86400000, WEEK=7;
   var GMAX=1; ids.forEach(function(id){ byAud[id].forEach(function(p){ if(p.v>GMAX) GMAX=p.v; }); });
   function niceMax(v){ var pow=Math.pow(10,Math.floor(Math.log10(v))); var n=v/pow; var m=n<=1?1:n<=1.5?1.5:n<=2?2:n<=2.5?2.5:n<=3?3:n<=4?4:n<=5?5:n<=8?8:10; return m*pow; }
-  var MAXY = opt.fixedMax || niceMax(GMAX), GLINES = opt.fixedMax?10:5, GSTEP = MAXY/GLINES;
+  var MAXY = opt.fixedMax || niceMax(GMAX), GLINES = opt.glines || (opt.fixedMax?10:5), GSTEP = MAXY/GLINES;
   function dayMs(s){ return Date.parse(String(s).slice(0,10)+'T00:00:00Z'); }   // UTC midnight — matches the UTC day labels
   var startMs=Infinity; ids.forEach(function(id){ byAud[id].forEach(function(p){ var d=dayMs(p.d); if(!isNaN(d)&&d<startMs) startMs=d; }); });
   if(!isFinite(startMs)) startMs=dayMs(new Date().toISOString());
@@ -1527,7 +1579,7 @@ function buildTrendChart(hist, titles, opt){
     byAud[id].forEach(function(p){ var di=Math.round((dayMs(p.d)-startMs)/DAY); if(di<0)di=0; if(di>WEEK-1)di=WEEK-1; p.frac=di+timeFrac(p.d); });
     byAud[id].sort(function(a,b){ return a.frac-b.frac; });   // keep the line drawing left-to-right
   });
-  var W=860,H=320,padL=54,padR=14,padT=14,padB=46, plotW=W-padL-padR, plotH=H-padT-padB;
+  var W=860,H=560,padL=54,padR=14,padT=14,padB=46, plotW=W-padL-padR, plotH=H-padT-padB;   // H 1.75× taller
   function xAt(frac){ return padL + (frac/WEEK)*plotW; }
   function yAt(v){ return padT + plotH - (Math.min(v,MAXY)/MAXY)*plotH; }
   var colors=['#ff6b1a','#22c55e','#3b82f6','#f59e0b','#a855f7','#ef4444','#14b8a6','#eab308'];
@@ -1630,17 +1682,32 @@ function renderReposts(){
     }).join('')+'</tbody></table>'; }
   $('ins-reposts').innerHTML=html;
 }
-async function addAudio(){
-  var title=prompt('Audio / song title:'); if(title===null||!title.trim()) return;
-  var kind = confirm('Promotion type for this audio:\n\n  OK = Full promotion\n  Cancel = Partial promotion') ? 'full' : 'partial';
-  var link=prompt('Paste the IG audio or reel link:','')||''; link=link.trim();
+var AA_KIND='full';
+function addAudio(){
+  AA_KIND='full';
+  $('aa-title').value=''; $('aa-link').value='';
+  var err=$('aa-err'); if(err){ err.style.display='none'; err.textContent=''; }
+  document.querySelectorAll('#aa-kind .aa-opt').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-k')==='full'); });
+  $('audio-add-modal').classList.add('open');
+  setTimeout(function(){ var t=$('aa-title'); if(t) t.focus(); }, 60);
+}
+function aaPickKind(k){ AA_KIND=k; document.querySelectorAll('#aa-kind .aa-opt').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-k')===k); }); }
+function closeAddAudio(){ $('audio-add-modal').classList.remove('open'); }
+async function submitAddAudio(){
+  var title=($('aa-title').value||'').trim();
+  var err=$('aa-err'); function showErr(t){ if(err){ err.textContent=t; err.style.display='block'; } }
+  if(!title){ showErr('Please enter the audio / song title.'); $('aa-title').focus(); return; }
+  var link=($('aa-link').value||'').trim();
+  var btn=$('aa-save'); btn.disabled=true; var orig=btn.textContent; btn.textContent='Saving…';
   var reach='';
-  if(link){ toast('Checking Instagram…'); try{ var f=await apiPost({ action:'ig_fetch', link:link }); if(f&&f.ok&&f.count!==''&&f.count!=null) reach=String(f.count); }catch(e){} }
+  if(link){ btn.textContent='Checking Instagram…'; try{ var f=await apiPost({ action:'ig_fetch', link:link }); if(f&&f.ok&&f.count!==''&&f.count!=null) reach=String(f.count); }catch(e){} }
   try{
-    await apiPost({ action:'audio_save', title:title.trim(), link:link, status:'progress', reach:reach, kind:kind, by:firstName(USER.full_name||USER.employee_id) });
+    await apiPost({ action:'audio_save', title:title, link:link, status:'progress', reach:reach, kind:AA_KIND, by:firstName(USER.full_name||USER.employee_id) });
+    closeAddAudio();
     await refreshQuiet();
-    toast('Saved as '+kind+' promotion'+(reach?(' — '+reach+' reels'):'.'));
-  }catch(e){ toast('Save failed'); }
+    toast('Added as '+AA_KIND+' promotion'+(reach?(' — '+reach+' reels'):'.'));
+  }catch(e){ showErr('Save failed — please try again.'); }
+  finally{ btn.disabled=false; btn.textContent=orig; }
 }
 async function toggleAudioKind(id, kind){
   var next=(String(kind).toLowerCase()==='partial')?'full':'partial';
