@@ -807,7 +807,7 @@ function greenState(kind){ return 2; }     // "done" state = 2 (orange for sourc
 function cellAt(cells,i){ var c=String(cells||''); return c.charAt(i)||'0'; }
 function setCellAt(cells,i,ch){ var c=String(cells||''); while(c.length<=i) c+='0'; return c.substr(0,i)+ch+c.substr(i+1); }
 function srcLen(r){ if(!r) return 0; var cells=String(r.cells||''), nums=String(r.nums||''), mx=-1; for(var i=0;i<SRC_QUEUE;i++){ if(cellAt(cells,i)!=='0' || gdGet(nums,i)!=='') mx=i; } return mx+1; }
-function boxesFor(kind,a,r){ return kind==='src' ? SRC_QUEUE : POST_BOXES; }   // src: always render the 15-slot queue
+function boxesFor(kind,a,r){ return kind==='src' ? srcLen(r) : POST_BOXES; }   // src: only the boxes added so far (max 15)
 function countAt(cells,n,state){ var ss=String(state), c=0; for(var i=0;i<n;i++) if(cellAt(cells,i)===ss) c++; return c; }
 function greenCount(kind,cells,n){ return countAt(cells,n,greenState(kind)); }
 function countNonBlank(cells,n){ var c=0; for(var i=0;i<n;i++) if(cellAt(cells,i)!=='0') c++; return c; }
@@ -844,7 +844,7 @@ function acctRow(kind, a, r){
     var tt=(kind==='src'&&ISADMIN)?' title="Click: cycle status · Right-click: edit/delete"':'';
     boxes+='<i class="cell s'+cellAt(cells,i)+'" data-i="'+i+'"'+tt+'>'+lbl+'</i>';
   }
-  // fixed 15-box queue — no "+add" button needed; admin clicks boxes directly
+  if(kind==='src' && ISADMIN && srcLen(r) < SRC_QUEUE){ boxes += '<button class="addbox" title="Add next cycle (red) — max '+SRC_QUEUE+'" onclick="addSrcBox(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')">+</button>'; }
   var cellsDiv='<div class="cells'+(locked?' locked':'')+'" data-kind="'+kind+'" data-p="'+esc(a.phone)+'" data-u="'+esc(a.user)+'" data-a="'+esc(a.acct)+'" data-h="'+esc(a.handle)+'">'+boxes+'</div>';
   var tagB = (typeof acctTagBadge==='function') ? acctTagBadge(a, true) : '';   // admin-set issue flag, employee taps to clear
   if(kind==='post'){  // compact single line: box sits inline
@@ -864,7 +864,9 @@ function groupHTML(kind, ph, list, map, disc){
   var badge = isDisc ? '<span class="discb">disconnected · can’t post yet</span>' : '';
   var open = !!OPEN[kind][ph];
   var body = open ? list.map(function(a){ return acctRow(kind, a, map[keyOf(a)]); }).join('') : '';
-  var phctrl = '';   // 15-box queue: admin sets boxes by clicking; no add/undo cycle buttons
+  var phctrl = (kind==='src' && ISADMIN) ?
+    '<button class="phbtn" title="Add a red cycle to every account on this phone (max '+SRC_QUEUE+')" onclick="event.stopPropagation();addPhoneCycle(\''+esc(ph)+'\')">+</button>'+
+    '<button class="phbtn" title="Undo last added cycle for this phone" onclick="event.stopPropagation();undoPhoneCycle(\''+esc(ph)+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg></button>' : '';
   return '<div class="acctgroup'+(isDisc?' disc':'')+'"><div class="agh" onclick="toggleGroup(\''+kind+'\',\''+esc(ph)+'\')">'+
     '<div class="aghl"><b>Phone '+esc(ph)+'</b>'+phctrl+badge+'</div><div class="agbar"><i style="width:'+pct+'%"></i></div>'+
     '<span class="agc">'+green+' ✓ · '+withGreen+'/'+denom+'</span></div>'+
@@ -950,6 +952,7 @@ async function setSrcBox(phone,user,acct,handle,idx,state,num){
 function addSrcBox(phone,user,acct,handle){
   var r=sourceMap()[[phone,user,acct,handle].join('|')];
   var idx=srcLen(r), maxNum=0, hasNum=false;
+  if(idx>=SRC_QUEUE){ toast('Max '+SRC_QUEUE+' boxes per account'); return; }
   if(r){ String(r.nums||'').split(',').forEach(function(p){ var x=parseInt(p,10); if(!isNaN(x)){ hasNum=true; if(x>maxNum) maxNum=x; } }); }
   var nextNum;
   if(!hasNum){   // first box on this account -> ask for the starting cycle number
