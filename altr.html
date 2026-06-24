@@ -176,6 +176,8 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .numin:disabled{opacity:.55;cursor:not-allowed}
 .empin{width:100%;max-width:200px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;color:var(--t1);font-family:inherit;font-size:13px;padding:7px 10px;outline:none}
 .empin:focus{border-color:var(--o1)}
+select.promosel{max-width:200px;cursor:pointer}
+select.promosel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
 .empwrap{display:flex;align-items:center;gap:9px}
 .empchk{width:17px;height:17px;accent-color:var(--o1);cursor:pointer;flex-shrink:0}
 .pct{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px}
@@ -330,7 +332,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
           <b>Posting team</b><span class="targsum" id="postteam-sum"></span>
         </div>
         <div class="targbody">
-          <table class="srctable"><thead><tr><th>Employee</th><th>Phone</th><th>Target</th><th>Posted</th><th>Completion</th></tr></thead><tbody id="postteam-body"></tbody></table>
+          <table class="srctable"><thead><tr><th>Employee</th><th>Assigned Promotion</th><th>Phone</th><th>Target</th><th>Posted</th><th>Completion</th></tr></thead><tbody id="postteam-body"></tbody></table>
         </div>
       </div>
 
@@ -791,11 +793,26 @@ function renderPostTeam(){
     var phoneCell = ISADMIN
       ? '<input class="empin" value="'+escAttr(String(px.phones||''))+'" placeholder="e.g. 1, 4, 7" onchange="setPoster(\''+esc(px.id)+'\',\'phones\',this.value)">'
       : (phones.length?esc(phones.map(function(x){return 'P'+x;}).join(', ')):'<span style="color:var(--t3)">—</span>');
-    html+='<tr'+(active?'':' style="opacity:.45"')+'><td>'+nameCell+'</td><td>'+phoneCell+'</td><td><b>'+target+'</b></td><td>'+posted+'</td>'+
+    var promoCell = posterPromoCell(px);
+    html+='<tr'+(active?'':' style="opacity:.45"')+'><td>'+nameCell+'</td><td>'+promoCell+'</td><td>'+phoneCell+'</td><td><b>'+target+'</b></td><td>'+posted+'</td>'+
       '<td><div style="display:flex;align-items:center;gap:10px"><span class="pct '+pc+'">'+p+'%</span><div class="pbar"><i style="width:'+Math.min(100,p)+'%"></i></div></div></td></tr>';
   });
   var sum=$('postteam-sum'); if(sum) sum.textContent=totP+' / '+totT+' posted · '+(totT?Math.round(totP/totT*100):0)+'%';
-  var body=$('postteam-body'); if(body) body.innerHTML = html || '<tr><td colspan="5" class="muted">No posting team.</td></tr>';
+  var body=$('postteam-body'); if(body) body.innerHTML = html || '<tr><td colspan="6" class="muted">No posting team.</td></tr>';
+}
+/* Assigned-promotion cell for a poster — options from current audio promotions */
+function posterPromoCell(px){
+  var cur=String(px.audio||'');
+  if(ISADMIN){
+    var audios=(STATE.audios||[]);
+    var opts='<option value="">— assign promo —</option>'+audios.map(function(au){
+      var k=(String(au.kind||'full').toLowerCase()==='partial')?'Partial':'Full';
+      return '<option value="'+esc(au.id)+'"'+(String(au.id)===cur?' selected':'')+'>'+esc(au.title||('Audio '+au.id))+' · '+k+'</option>';
+    }).join('');
+    return '<select class="empin promosel'+(cur?' has':'')+'" onchange="setPoster(\''+esc(px.id)+'\',\'audio\',this.value)">'+opts+'</select>';
+  }
+  var au=(STATE.audios||[]).filter(function(x){ return String(x.id)===cur; })[0];
+  return au ? esc(au.title||('Audio '+au.id)) : '<span style="color:var(--t3)">—</span>';
 }
 function setPoster(id, field, val){
   var s=(STATE.posters||[]).filter(function(x){ return String(x.id)===String(id); })[0]; if(s){ s[field]=val; }
