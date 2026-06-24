@@ -523,6 +523,25 @@ var USER=null, ISADMIN=false, STATE=null, MYVA='';  // MYVA now holds the marker
 var ANIMATE_AUDIO=false;   // set true when the Insights tab is opened so the trend line draws in
 var DIRTY={};              // account-key -> timestamp of last local edit (protects against poll races)
 function markDirty(k){ DIRTY[k]=Date.now(); }
+/* ── Box write batching: collapse rapid clicks into one debounced server write ── */
+var _cellQ=[], _cellT=null, _lastCellEdit=0;
+function queueCell(item){
+  _cellQ.push(item); _lastCellEdit=Date.now();
+  if(_cellT) clearTimeout(_cellT);
+  if(_cellQ.length>=14){ flushCells(); }            // burst cap → flush now
+  else { _cellT=setTimeout(flushCells, 700); }      // otherwise flush after a short idle
+}
+function flushCells(){
+  if(_cellT){ clearTimeout(_cellT); _cellT=null; }
+  if(!_cellQ.length) return;
+  var batch=_cellQ.slice(); _cellQ=[];
+  apiPost({ action:'cells_batch', items: batch })
+    .then(function(r){ if(!(r&&(r.ok||r.applied!==undefined))){ _cellQ=batch.concat(_cellQ); if(!_cellT) _cellT=setTimeout(flushCells,1500); } })
+    .catch(function(){ _cellQ=batch.concat(_cellQ); if(!_cellT) _cellT=setTimeout(flushCells,1500); toast('Saving boxes… retrying'); });
+}
+document.addEventListener('visibilitychange', function(){ if(document.hidden) flushCells(); });
+window.addEventListener('pagehide', flushCells);
+function cellsBusy(){ return _cellQ.length>0 || (Date.now()-_lastCellEdit < 1600); }
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(function(){t.classList.remove('show');},1800); }
@@ -1002,8 +1021,9 @@ async function cycleCell(kind,phone,user,acct,handle,idx,cellEl){
     if(arow){ var n3=srcLen(r), cc=arow.querySelector('.cellcount'); if(cc) cc.innerHTML='<b>'+greenCount('src',r.cells,n3)+'</b>/'+countNonBlank(r.cells,n3); }
     srcStats();
   } else if(isSrc){ renderSourcing(); } else { renderPosting(); }
-  try{ await apiPost({ action:'cell_set', kind:kind, date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, index:idx, state:next, va_code:MYVA, admin:(ISADMIN?1:0), by:firstName(USER.full_name||USER.employee_id) }); markDirty(k); }
-  catch(e){ toast('Save failed'); }
+  // batched, debounced write (collapses fast clicking into one server call)
+  queueCell({ kind:kind, date:STATE.date, phone:phone, user:user, acct:acct, handle:handle, index:idx, state:next, va_code:MYVA, admin:(ISADMIN?1:0), by:firstName(USER.full_name||USER.employee_id) });
+  markDirty(k);
 }
 // admin: set/add a sourcing box with an explicit number
 async function setSrcBox(phone,user,acct,handle,idx,state,num){
@@ -1014,8 +1034,7 @@ async function setSrcBox(phone,user,acct,handle,idx,state,num){
   if(String(state)===String(greenState('src'))) r.gdates=gdSet(r.gdates,idx,srcToday()); else r.gdates=gdSet(r.gdates,idx,'');
   markDirty(k);
   renderSourcing();
-  try{ await apiPost({ action:'cell_set', kind:'src', phone:phone, user:user, acct:acct, handle:handle, index:idx, state:state, num:num, va_code:MYVA, by:firstName(USER.full_name||USER.employee_id) }); markDirty(k); }
-  catch(e){ toast('Save failed'); }
+  queueCell({ kind:'src', phone:phone, user:user, acct:acct, handle:handle, index:idx, state:state, num:num, va_code:MYVA, admin:(ISADMIN?1:0), by:firstName(USER.full_name||USER.employee_id) });
 }
 function addSrcBox(phone,user,acct,handle){
   var r=sourceMap()[[phone,user,acct,handle].join('|')];
@@ -1494,7 +1513,7 @@ async function refreshQuiet(){
     s.phones=s.phones||[]; s.accounts=s.accounts||[]; s.posting=s.posting||[]; s.sourcing=s.sourcing||[]; s.sourcelog=s.sourcelog||[];
     // Protect very-recent local edits: if a box was changed in the last 8s, keep the local row so a
     // poll that raced ahead of the server write can't revert the colour / number.
-    var now=Date.now(), GRACE=8000;
+    var now=Date.now(), GRACE=11000;   // a touch longer to cover the debounced batch write
     var pk=function(r){ return [r.phone,r.user,r.acct,r.handle].join('|'); };
     function keepFresh(serverArr, localArr){
       var loc={}; (localArr||[]).forEach(function(r){ loc[pk(r)]=r; });
@@ -1507,7 +1526,11 @@ async function refreshQuiet(){
     s.posting   = keepFresh(s.posting,   STATE.posting);
     s.sourcelog = keepFresh(s.sourcelog, STATE.sourcelog);
     Object.keys(DIRTY).forEach(function(k){ if(now-DIRTY[k]>GRACE) delete DIRTY[k]; });   // prune
-    STATE=s; renderAll();
+    STATE=s;
+    // While boxes are being clicked, update state silently but DON'T rebuild the grid
+    // (the optimistic in-place cells already show the right thing) → no flicker / no snap-back.
+    // Once clicking settles, the next poll reconciles everything in one clean render.
+    if(cellsBusy()){ renderDevice(); renderInsights(); } else { renderAll(); }
   } }catch(e){}
 }
 function renderAll(){ renderDevice(); renderPosting(); renderSourcing(); renderInsights(); renderAccountsTab(); }
