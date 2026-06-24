@@ -8,16 +8,21 @@
   :root{ --bg:#0d0d0f; --card:#16161a; --card2:#1d1d22; --t1:#f4f4f6; --t2:#b8b8c0; --t3:#7c7c86; --o3:#ff6b1a; --o2:#ff8a4a; --border:rgba(255,255,255,.08); --border-hi:rgba(255,107,26,.4); --g:#22c55e; --r:#ef4444; --b:#378add; }
   *{ box-sizing:border-box; }
   body{ margin:0; background:radial-gradient(1200px 600px at 50% -10%, rgba(255,107,26,.10), transparent), var(--bg); color:var(--t1); font-family:'Segoe UI',system-ui,-apple-system,sans-serif; min-height:100vh; }
-  .wrap{ max-width:720px; margin:0 auto; padding:28px 20px 64px; }
+  .wrap{ max-width:760px; margin:0 auto; padding:24px 18px 70px; }
   .brand{ display:flex; align-items:center; gap:12px; }
   .logo{ width:40px; height:40px; border-radius:11px; background:linear-gradient(135deg,var(--o3),var(--o2)); display:flex; align-items:center; justify-content:center; font-weight:800; color:#fff; }
   h1{ font-size:24px; margin:16px 0 6px; }
   .sub{ color:var(--t2); font-size:14px; line-height:1.6; }
   .card{ background:var(--card); border:1px solid var(--border); border-radius:16px; padding:22px; margin-top:18px; }
-  .timer{ position:sticky; top:0; z-index:5; background:var(--card2); border:1px solid var(--border-hi); border-radius:10px; padding:9px 14px; font-size:14px; font-weight:700; display:inline-flex; gap:8px; align-items:center; }
-  .timer.warn{ border-color:var(--r); color:#fca5a5; }
-  .sec-h{ font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--o2); font-weight:700; margin:26px 0 4px; }
-  .sec-h:first-child{ margin-top:6px; }
+  .bar{ position:sticky; top:0; z-index:6; background:rgba(13,13,15,.92); backdrop-filter:blur(6px); border:1px solid var(--border); border-radius:12px; padding:10px 14px; display:flex; align-items:center; gap:14px; margin:14px 0 2px; }
+  .timer{ font-size:15px; font-weight:800; display:inline-flex; gap:7px; align-items:center; white-space:nowrap; }
+  .timer.warn{ color:#fca5a5; }
+  .prog{ flex:1; height:8px; background:var(--card2); border-radius:6px; overflow:hidden; }
+  .prog i{ display:block; height:100%; width:0%; background:linear-gradient(90deg,var(--o3),var(--o2)); transition:width .25s; }
+  .pcount{ font-size:13px; color:var(--t2); white-space:nowrap; font-weight:600; }
+  .sec-h{ font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--o2); font-weight:700; margin:26px 0 4px; display:flex; align-items:center; gap:8px; }
+  .sec-h .n{ font-size:11px; color:var(--t3); font-weight:600; }
+  .sec-h:first-child{ margin-top:4px; }
   .q{ margin:16px 0 4px; font-size:15px; line-height:1.5; }
   .q b{ color:var(--t3); margin-right:6px; }
   .opts{ display:grid; gap:8px; margin:10px 0 16px; }
@@ -28,8 +33,8 @@
   .btn{ background:linear-gradient(135deg,var(--o3),var(--o2)); color:#fff; border:none; border-radius:11px; padding:13px 22px; font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; }
   .btn:disabled{ opacity:.55; cursor:not-allowed; }
   .btn.ghost{ background:none; border:1px solid var(--border); color:var(--t2); }
-  .passage{ background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:14px; font-size:15px; line-height:1.7; color:var(--t2); user-select:none; }
-  textarea{ width:100%; min-height:120px; margin-top:12px; background:var(--card2); border:1px solid var(--border); border-radius:10px; color:var(--t1); padding:12px; font-size:15px; font-family:inherit; outline:none; }
+  .passage{ background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:14px; font-size:15.5px; line-height:1.8; color:var(--t2); user-select:none; }
+  textarea{ width:100%; min-height:160px; margin-top:12px; background:var(--card2); border:1px solid var(--border); border-radius:10px; color:var(--t1); padding:12px; font-size:15.5px; line-height:1.7; font-family:inherit; outline:none; }
   textarea:focus{ border-color:var(--border-hi); }
   .stat-row{ display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; }
   .stat{ background:var(--card2); border:1px solid var(--border); border-radius:10px; padding:9px 14px; font-size:13px; }
@@ -37,8 +42,9 @@
   .center{ text-align:center; }
   .done .check{ width:64px; height:64px; border-radius:50%; background:rgba(34,197,94,.15); border:1px solid rgba(34,197,94,.4); display:flex; align-items:center; justify-content:center; margin:8px auto 18px; }
   .muted{ color:var(--t3); font-size:13px; }
-  .err-box{ text-align:center; padding:40px 20px; }
+  .err-box{ text-align:center; padding:36px 20px; }
   .pill{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:12px; background:rgba(55,138,221,.15); color:#8bc0f0; margin-left:8px; }
+  .note{ background:rgba(255,107,26,.08); border:1px solid var(--border-hi); border-radius:10px; padding:11px 13px; font-size:13px; color:var(--t2); margin-top:14px; }
 </style>
 </head>
 <body>
@@ -51,53 +57,76 @@
 <script>
 var HR_URL = "https://script.google.com/macros/s/AKfycbyf_V9JIV8x_MqT4eibw9okSWt9ZjyvEYM09nZBEMNLiiyximXIKX6ojc7aLpiRaffN/exec";
 var $ = function(id){ return document.getElementById(id); };
-function qs(k){ var m=new RegExp('[?&]'+k+'=([^&]*)').exec(location.search); return m?decodeURIComponent(m[1]):''; }
-var ID = qs('id'), TOKEN = qs('token');
-var CAND = null;
+function qsp(k){ var m=new RegExp('[?&]'+k+'=([^&]*)').exec(location.search); return m?decodeURIComponent(m[1]):''; }
+var ID = qsp('id'), TOKEN = qsp('token');
+var CAND = null, LSKEY = 'jmbhr_assess_'+ID+'_'+TOKEN;
 
-/* ===== BRAND-NEW HR QUESTION BANK ===== */
+/* ===== 50-QUESTION BANK · Senior High School level ===== */
 var BANK = {
   grammar: [
-    { q:'Choose the correct sentence.', o:['She don’t like coffee.','She doesn’t likes coffee.','She doesn’t like coffee.','She not like coffee.'], a:2 },
-    { q:'Pick the correct word: "Please send the report to John and ___."', o:['I','me','myself','mine'], a:1 },
-    { q:'Which is spelled correctly?', o:['definately','definatly','definitely','definitley'], a:2 },
-    { q:'Choose the correct form: "If I ___ you, I would apologize."', o:['was','were','am','be'], a:1 },
-    { q:'Identify the correctly punctuated sentence.', o:['Its raining, so bring you’re umbrella.','It’s raining, so bring your umbrella.','Its raining, so bring your umbrella.','It’s raining, so bring you’re umbrella.'], a:1 },
-    { q:'Choose the correct verb: "The team ___ working hard this week."', o:['is','are','were','be'], a:0 },
-    { q:'Select the correct word: "We have lived here ___ 2015."', o:['for','since','from','during'], a:1 },
-    { q:'Which sentence uses the apostrophe correctly?', o:['The dog wagged it’s tail.','The dogs’ toys are missing.','The dog’s wagged their tail.','Its’ a sunny day.'], a:1 },
-    { q:'Choose the best word: "She spoke very ___ during the call."', o:['confident','confidence','confidently','confidant'], a:2 },
-    { q:'Pick the grammatically correct option.', o:['There going to there house.','They’re going to their house.','Their going to they’re house.','They’re going to there house.'], a:1 }
+    { q:'Neither the manager nor the employees ___ aware of the schedule change.', o:['was','were','is','has'], a:1 },
+    { q:'Choose the synonym of "meticulous".', o:['careless','thorough','rushed','lazy'], a:1 },
+    { q:'"If she ___ harder, she would have passed the exam."', o:['studied','had studied','studies','study'], a:1 },
+    { q:'Select the correct word: "The new policy will ___ every department."', o:['effect','affect','affect on','effects'], a:1 },
+    { q:'"There are ___ cars on the road during holidays."', o:['less','fewer','lesser','little'], a:1 },
+    { q:'Which sentence is punctuated correctly?', o:['However we cannot proceed.','However, we cannot proceed.','However; we cannot proceed','However: we cannot proceed.'], a:1 },
+    { q:'Choose the antonym of "abundant".', o:['plentiful','scarce','ample','vast'], a:1 },
+    { q:'"The company increased ___ profits this year."', o:['it’s','its','its’','their'], a:1 },
+    { q:'Identify the adverb: "She finished the report quickly."', o:['She','finished','report','quickly'], a:3 },
+    { q:'Which word is spelled correctly?', o:['accomodate','acommodate','accommodate','acomodate'], a:2 },
+    { q:'"Each of the students ___ a personal laptop."', o:['have','has','having','were'], a:1 },
+    { q:'The idiom "to cut corners" means to…', o:['work carefully','do something cheaply or poorly','turn a vehicle','save time wisely'], a:1 },
+    { q:'Choose the grammatically correct sentence.', o:['Me and him went to the office.','He and I went to the office.','Him and I went to the office.','I and him went to the office.'], a:1 },
+    { q:'"We have lived in this city ___ 2018."', o:['for','since','from','during'], a:1 },
+    { q:'Which sentence is in the passive voice?', o:['The team finished the project.','The project was finished by the team.','The team is finishing the project.','The team will finish the project.'], a:1 },
+    { q:'Pick the correctly parallel sentence.', o:['She likes reading, to write, and jogging.','She likes reading, writing, and jogging.','She likes to read, writing, and to jog.','She likes read, write, and jogging.'], a:1 },
+    { q:'Choose the best word: "He spoke ___ during the interview."', o:['confident','confidence','confidently','confidant'], a:2 }
   ],
   general: [
-    { q:'How many continents are there on Earth?', o:['5','6','7','8'], a:2 },
-    { q:'What does "CEO" stand for?', o:['Chief Estate Officer','Chief Executive Officer','Central Executive Operator','Corporate Employment Officer'], a:1 },
-    { q:'Which planet is known as the Red Planet?', o:['Venus','Jupiter','Mars','Mercury'], a:2 },
-    { q:'What is the largest ocean on Earth?', o:['Atlantic','Indian','Arctic','Pacific'], a:3 },
-    { q:'Which of these is a web browser?', o:['Photoshop','Chrome','Excel','Slack'], a:1 },
-    { q:'How many hours are there in two days?', o:['24','36','48','72'], a:2 },
-    { q:'What does "URL" most relate to?', o:['A web address','A type of file','A keyboard shortcut','A printer setting'], a:0 },
-    { q:'Which currency is used in Japan?', o:['Won','Yuan','Yen','Ringgit'], a:2 },
-    { q:'What is the freezing point of water in Celsius?', o:['0°C','32°C','100°C','-10°C'], a:0 },
-    { q:'Which app is mainly used for video calls / meetings?', o:['Zoom','Notepad','Paint','Calculator'], a:0 }
+    { q:'Which planet is the largest in our solar system?', o:['Saturn','Earth','Jupiter','Neptune'], a:2 },
+    { q:'What is the chemical symbol for gold?', o:['Go','Gd','Au','Ag'], a:2 },
+    { q:'Which part of the cell is known as the "powerhouse"?', o:['Nucleus','Mitochondria','Ribosome','Membrane'], a:1 },
+    { q:'How many sides does a hexagon have?', o:['5','6','7','8'], a:1 },
+    { q:'Who wrote the play "Romeo and Juliet"?', o:['Charles Dickens','William Shakespeare','Mark Twain','Jane Austen'], a:1 },
+    { q:'What is the largest mammal on Earth?', o:['Elephant','Blue whale','Giraffe','Hippopotamus'], a:1 },
+    { q:'Which gas do plants absorb from the air for photosynthesis?', o:['Oxygen','Nitrogen','Carbon dioxide','Hydrogen'], a:2 },
+    { q:'Water boils at what temperature at sea level?', o:['90°C','100°C','110°C','120°C'], a:1 },
+    { q:'Which continent has the largest population?', o:['Africa','Europe','Asia','North America'], a:2 },
+    { q:'What is the capital city of Japan?', o:['Seoul','Beijing','Bangkok','Tokyo'], a:3 },
+    { q:'The process by which green plants make their own food is called…', o:['Respiration','Photosynthesis','Digestion','Fermentation'], a:1 },
+    { q:'Approximately how many bones are in the adult human body?', o:['186','206','226','246'], a:1 },
+    { q:'Which of these is a noble (inert) gas?', o:['Oxygen','Hydrogen','Helium','Chlorine'], a:2 },
+    { q:'What are the three primary colors of light?', o:['Red, Yellow, Blue','Red, Green, Blue','Cyan, Magenta, Yellow','Green, Orange, Violet'], a:1 },
+    { q:'Which ocean is the largest on Earth?', o:['Atlantic','Indian','Arctic','Pacific'], a:3 },
+    { q:'What does "www" stand for on the internet?', o:['World Web Wide','World Wide Web','Wide World Web','Web World Wide'], a:1 }
   ],
   math: [
-    { q:'What is 15% of 200?', o:['20','25','30','35'], a:2 },
-    { q:'45 + 38 = ?', o:['73','81','83','93'], a:2 },
-    { q:'A task takes 3 hours. How many such tasks fit in a 12-hour day?', o:['3','4','5','6'], a:1 },
-    { q:'What is 144 ÷ 12?', o:['11','12','13','14'], a:1 },
-    { q:'A product costs $50. After a 20% discount, the new price is?', o:['$30','$40','$42','$45'], a:1 },
-    { q:'What comes next: 2, 4, 8, 16, ?', o:['18','24','32','64'], a:2 },
-    { q:'If you post 4 reels per day, how many in a 7-day week?', o:['21','24','28','32'], a:2 },
-    { q:'What is 7 × 8?', o:['54','56','58','64'], a:1 },
-    { q:'Convert 0.25 to a percentage.', o:['2.5%','25%','0.25%','250%'], a:1 },
-    { q:'You have 90 minutes and 6 equal tasks. Minutes per task?', o:['10','12','15','18'], a:2 }
+    { q:'Solve for x: 3x + 7 = 22.', o:['3','5','6','7'], a:1 },
+    { q:'What is 25% of 320?', o:['64','72','80','96'], a:2 },
+    { q:'Find the area of a triangle with base 10 and height 6.', o:['16','30','60','36'], a:1 },
+    { q:'Simplify: 3/4 + 1/8.', o:['4/12','5/8','7/8','1'], a:2 },
+    { q:'If 5 workers finish a job in 8 days, how many days for 10 workers (same rate)?', o:['16','10','4','6'], a:2 },
+    { q:'What is the average of 12, 15, 18, and 15?', o:['14','15','16','17'], a:1 },
+    { q:'Evaluate 2⁵ (2 to the power of 5).', o:['10','16','25','32'], a:3 },
+    { q:'Solve for x: x ÷ 3 = 9.', o:['12','24','27','3'], a:2 },
+    { q:'A shirt costs $80 and is marked up 25%. What is the new price?', o:['$95','$100','$105','$110'], a:1 },
+    { q:'Find the perimeter of a rectangle 8 cm by 5 cm.', o:['13','26','40','20'], a:1 },
+    { q:'Write 0.2 as a fraction in lowest terms.', o:['1/2','1/4','1/5','2/5'], a:2 },
+    { q:'What is the square root of 144?', o:['11','12','13','14'], a:1 },
+    { q:'15 is what percent of 60?', o:['20%','25%','30%','40%'], a:1 },
+    { q:'What is the next number: 3, 6, 12, 24, ___ ?', o:['30','36','48','60'], a:2 },
+    { q:'Find the slope of the line through (0, 0) and (2, 4).', o:['1','2','4','½'], a:1 },
+    { q:'Convert 3/5 to a percentage.', o:['35%','53%','60%','65%'], a:2 },
+    { q:'A car travels 240 km in 4 hours. What is its average speed?', o:['50 km/h','60 km/h','70 km/h','80 km/h'], a:1 }
   ]
 };
-var TYPING_PASSAGE = "Working as a virtual assistant means staying organized, communicating clearly, and meeting deadlines every day. Small details matter, so always double check your work before sending it. A positive attitude and steady focus help the whole team succeed.";
+var SECTIONS=[['Grammar & English','grammar'],['General Knowledge','general'],['Mathematics','math']];
+var TOTAL_Q = BANK.grammar.length + BANK.general.length + BANK.math.length;  // 50
 
-var QUIZ_SECONDS = 15*60, TYPE_SECONDS = 60;
-var state = { answers:{}, quizEnd:0, quizTimer:null, typeTimer:null, typeStart:0, scores:null };
+var TYPING_PASSAGE = "A reliable virtual assistant keeps every project organized, communicates clearly, and consistently meets deadlines. Attention to detail separates good work from great work, so always proofread messages and double check numbers before sending anything to a client. When problems appear, a calm and solution focused attitude makes a real difference for the whole team. Staying dependable, honest, and easy to work with builds the kind of trust that turns a short engagement into a long term partnership. Take pride in small tasks, because doing the little things well is exactly what clients remember and reward over time.";
+
+var QUIZ_SECONDS = 30*60, TYPE_SECONDS = 5*60;
+var state = { answers:{}, quizEnd:0, quizTimer:null, typeTimer:null, typeStart:0, quizScores:null, result:null };
 
 /* ---------- bootstrap ---------- */
 (function init(){
@@ -105,61 +134,73 @@ var state = { answers:{}, quizEnd:0, quizTimer:null, typeTimer:null, typeStart:0
   fetch(HR_URL+'?action=assess_get&id='+encodeURIComponent(ID)+'&token='+encodeURIComponent(TOKEN))
     .then(function(r){ return r.json(); })
     .then(function(d){
-      if(d.error==='already_done'){ renderError('You have already completed this assessment. Thank you!'); return; }
+      if(d.error==='already_done'){ clearSaved(); renderError('You have already completed this assessment. Thank you!'); return; }
       if(d.error || !d.ok){ renderError('This assessment link is invalid or has expired. Please check your email for the correct link.'); return; }
       CAND = d; renderIntro();
     })
     .catch(function(){ renderError('We couldn’t load your assessment. Please check your connection and try again.'); });
 })();
 
-function renderError(msg){ $('root').innerHTML = '<div class="card err-box"><h1 style="margin-top:0;">Assessment unavailable</h1><p class="sub">'+msg+'</p></div>'; }
+function renderError(msg, retry){ $('root').innerHTML = '<div class="card err-box"><h1 style="margin-top:0;">Assessment unavailable</h1><p class="sub">'+msg+'</p>'+(retry?'<div style="margin-top:18px"><button class="btn" onclick="retrySubmit()">Retry submitting my results</button></div>':'')+'</div>'; }
 
 function renderIntro(){
-  var total = BANK.grammar.length + BANK.general.length + BANK.math.length;
   $('root').innerHTML =
-    '<h1>Welcome'+(CAND.name?(', '+esc(CAND.name.split(',').slice(-1)[0].trim()||CAND.name)):'')+'!</h1>'+
+    '<h1>Welcome'+(CAND.name?(', '+esc(firstName(CAND.name))):'')+'!</h1>'+
     '<p class="sub">You passed the resume screening'+(CAND.position?(' for <b>'+esc(CAND.position)+'</b>'):'')+'. This assessment has two parts:</p>'+
     '<div class="card">'+
-      '<p style="margin:0 0 10px;"><b>Part 1 — Knowledge quiz</b> <span class="pill">'+total+' questions · 15 min</span></p>'+
-      '<p class="muted" style="margin:0 0 16px;">Grammar, General Knowledge, and Mathematics. Multiple choice.</p>'+
-      '<p style="margin:0 0 10px;"><b>Part 2 — Typing test</b> <span class="pill">60 seconds</span></p>'+
-      '<p class="muted" style="margin:0 0 18px;">Type a short passage as accurately and quickly as you can.</p>'+
-      '<p class="muted" style="margin:0 0 18px;">Please complete it in one sitting. You have one attempt.</p>'+
-      '<button class="btn" onclick="startQuiz()">Start assessment</button>'+
+      '<p style="margin:0 0 10px;"><b>Part 1 — Knowledge quiz</b> <span class="pill">'+TOTAL_Q+' questions · 30 min</span></p>'+
+      '<p class="muted" style="margin:0 0 16px;">Senior–high-school level: Grammar &amp; English, General Knowledge, and Mathematics. Multiple choice.</p>'+
+      '<p style="margin:0 0 10px;"><b>Part 2 — Typing test</b> <span class="pill">5 minutes</span></p>'+
+      '<p class="muted" style="margin:0 0 18px;">Type a passage as accurately and quickly as you can. We measure words per minute and accuracy.</p>'+
+      '<div class="note">Please complete the assessment in one sitting, on a quiet connection. You have <b>one attempt</b>. Your answers are saved on this device as you go, so a brief refresh won’t lose your progress.</div>'+
+      '<div style="margin-top:18px"><button class="btn" onclick="startQuiz()">Start assessment</button></div>'+
     '</div>';
 }
 
 /* ---------- quiz ---------- */
 function startQuiz(){
-  state.quizEnd = Date.now() + QUIZ_SECONDS*1000;
-  var html = '<div style="margin:6px 0 14px;"><span class="timer" id="qtimer">⏱ 15:00</span></div><div class="card">';
-  html += secBlock('Grammar','grammar') + secBlock('General Knowledge','general') + secBlock('Mathematics','math');
-  html += '<div style="margin-top:22px;display:flex;justify-content:flex-end;"><button class="btn" id="quiz-next" onclick="finishQuiz(false)">Continue to typing test</button></div>';
+  var saved=loadSaved();
+  state.answers = (saved && saved.answers) ? saved.answers : {};
+  state.quizEnd = (saved && saved.quizEnd && saved.quizEnd>Date.now()) ? saved.quizEnd : (Date.now() + QUIZ_SECONDS*1000);
+  var html = '<div class="bar"><span class="timer" id="qtimer">⏱ 30:00</span><div class="prog"><i id="qprog"></i></div><span class="pcount" id="qcount">0 / '+TOTAL_Q+'</span></div><div class="card">';
+  SECTIONS.forEach(function(sec){ html += secBlock(sec[0], sec[1]); });
+  html += '<div style="margin-top:24px;display:flex;justify-content:flex-end;gap:10px;align-items:center;"><span class="muted" id="unanswered"></span><button class="btn" id="quiz-next" onclick="finishQuiz(false)">Continue to typing test</button></div>';
   html += '</div>';
   $('root').innerHTML = html;
+  // restore selections visually
+  Object.keys(state.answers).forEach(function(qid){ markSel(qid, state.answers[qid]); });
+  updateProgress();
   tickQuiz();
   state.quizTimer = setInterval(tickQuiz, 1000);
 }
 function secBlock(title, key){
-  var html = '<div class="sec-h">'+title+'</div>';
+  var html = '<div class="sec-h">'+title+' <span class="n">('+BANK[key].length+' questions)</span></div>';
   BANK[key].forEach(function(item, i){
     var qid = key+'_'+i;
     html += '<div class="q"><b>Q'+(i+1)+'.</b>'+esc(item.q)+'</div><div class="opts">';
     item.o.forEach(function(opt, oi){
-      html += '<label class="opt" id="opt_'+qid+'_'+oi+'" onclick="pick(\''+qid+'\','+oi+')"><input type="radio" name="'+qid+'" '+(state.answers[qid]===oi?'checked':'')+'>'+esc(opt)+'</label>';
+      html += '<label class="opt" id="opt_'+qid+'_'+oi+'" onclick="pick(\''+qid+'\','+oi+')"><input type="radio" name="'+qid+'">'+esc(opt)+'</label>';
     });
     html += '</div>';
   });
   return html;
 }
-function pick(qid, oi){
-  state.answers[qid]=oi;
-  var grp = document.getElementsByName(qid);
+function markSel(qid, oi){
+  var grp=document.getElementsByName(qid);
   for(var i=0;i<grp.length;i++){ var lab=$('opt_'+qid+'_'+i); if(lab) lab.classList.toggle('sel', i===oi); }
+  var radio=document.querySelector('#opt_'+qid+'_'+oi+' input'); if(radio) radio.checked=true;
+}
+function pick(qid, oi){ state.answers[qid]=oi; markSel(qid, oi); updateProgress(); saveProgress(); }
+function answeredCount(){ return Object.keys(state.answers).length; }
+function updateProgress(){
+  var n=answeredCount(), pct=Math.round(n/TOTAL_Q*100);
+  if($('qcount')) $('qcount').textContent=n+' / '+TOTAL_Q;
+  if($('qprog')) $('qprog').style.width=pct+'%';
+  if($('unanswered')) $('unanswered').textContent = n<TOTAL_Q ? ((TOTAL_Q-n)+' unanswered') : 'All answered ✓';
 }
 function tickQuiz(){
   var left = Math.max(0, Math.round((state.quizEnd - Date.now())/1000));
-  var el=$('qtimer'); if(el){ el.textContent='⏱ '+mss(left); el.classList.toggle('warn', left<=60); }
+  var el=$('qtimer'); if(el){ el.textContent='⏱ '+mss(left); el.classList.toggle('warn', left<=120); }
   if(left<=0){ finishQuiz(true); }
 }
 function scoreQuiz(){
@@ -171,38 +212,37 @@ function scoreQuiz(){
   return out;
 }
 function finishQuiz(auto){
+  if(!auto){
+    var miss=TOTAL_Q-answeredCount();
+    if(miss>0 && !confirm('You have '+miss+' unanswered question'+(miss>1?'s':'')+'. Unanswered questions are marked wrong. Continue to the typing test anyway?')) return;
+  }
   if(state.quizTimer){ clearInterval(state.quizTimer); state.quizTimer=null; }
   state.quizScores = scoreQuiz();
+  saveProgress();
   startTyping(auto);
 }
 
-/* ---------- typing ---------- */
+/* ---------- typing (5 minutes) ---------- */
 function startTyping(auto){
   $('root').innerHTML =
     (auto?'<p class="sub" style="color:#fca5a5;">Quiz time is up — your answers were saved. Now the typing test.</p>':'')+
-    '<h1>Typing test</h1>'+
-    '<p class="sub">Type the passage below exactly. The 60-second timer starts when you begin typing.</p>'+
+    '<div class="bar"><span class="timer" id="t-timer">⏱ 5:00</span><div class="prog"><i id="t-prog"></i></div><span class="pcount"><span id="t-wpm">0</span> wpm · <span id="t-acc">100</span>%</span></div>'+
+    '<h1 style="margin-top:14px;">Typing test</h1>'+
+    '<p class="sub">Type the passage below exactly. The 5-minute timer starts the moment you begin typing.</p>'+
     '<div class="card">'+
       '<div class="passage" id="passage">'+esc(TYPING_PASSAGE)+'</div>'+
-      '<textarea id="type-in" placeholder="Start typing here…" oninput="onType()" onpaste="return false" spellcheck="false"></textarea>'+
-      '<div class="stat-row">'+
-        '<div class="stat">Time <b id="t-time">60</b>s</div>'+
-        '<div class="stat">WPM <b id="t-wpm">0</b></div>'+
-        '<div class="stat">Accuracy <b id="t-acc">100</b>%</div>'+
-      '</div>'+
-      '<div style="margin-top:18px;display:flex;justify-content:flex-end;"><button class="btn" id="finish-btn" onclick="finishAll(false)">Finish & submit</button></div>'+
+      '<textarea id="type-in" placeholder="Start typing here…" oninput="onType()" onpaste="return false" oncontextmenu="return false" spellcheck="false"></textarea>'+
+      '<div style="margin-top:18px;display:flex;justify-content:flex-end;"><button class="btn" id="finish-btn" onclick="finishAll(false)">Finish &amp; submit</button></div>'+
     '</div>';
 }
 function onType(){
-  if(!state.typeStart){
-    state.typeStart=Date.now();
-    state.typeTimer=setInterval(tickType,200);
-  }
+  if(!state.typeStart){ state.typeStart=Date.now(); state.typeTimer=setInterval(tickType,200); }
   updateTypeStats();
 }
 function tickType(){
-  var left=Math.max(0, TYPE_SECONDS - Math.round((Date.now()-state.typeStart)/1000));
-  var el=$('t-time'); if(el) el.textContent=left;
+  var elapsed=Math.round((Date.now()-state.typeStart)/1000), left=Math.max(0, TYPE_SECONDS-elapsed);
+  if($('t-timer')){ $('t-timer').textContent='⏱ '+mss(left); $('t-timer').classList.toggle('warn', left<=30); }
+  if($('t-prog')) $('t-prog').style.width=Math.min(100, elapsed/TYPE_SECONDS*100)+'%';
   if(left<=0){ finishAll(true); }
 }
 function typingStats(){
@@ -210,39 +250,45 @@ function typingStats(){
   var elapsedMin = state.typeStart ? Math.max((Date.now()-state.typeStart)/60000, 1/60) : 1;
   var words = typed.trim()? typed.trim().split(/\s+/).length : 0;
   var wpm = Math.round(words/elapsedMin);
-  // accuracy = matching chars vs the passage prefix
   var correct=0; for(var i=0;i<typed.length;i++){ if(typed[i]===TYPING_PASSAGE[i]) correct++; }
   var acc = typed.length? Math.round(correct/typed.length*100) : 100;
   return { wpm:wpm, acc:acc, words:words };
 }
-function updateTypeStats(){
-  var s=typingStats();
-  if($('t-wpm')) $('t-wpm').textContent=s.wpm;
-  if($('t-acc')) $('t-acc').textContent=s.acc;
-}
-function typingScore(s){
-  // 40 WPM = 100 on speed; blend with accuracy
-  var speed=Math.max(0, Math.min(100, Math.round(s.wpm/40*100)));
-  return Math.round(speed*(s.acc/100));
-}
+function updateTypeStats(){ var s=typingStats(); if($('t-wpm')) $('t-wpm').textContent=s.wpm; if($('t-acc')) $('t-acc').textContent=s.acc; }
+function typingScore(s){ var speed=Math.max(0, Math.min(100, Math.round(s.wpm/40*100))); return Math.round(speed*(s.acc/100)); }
 
-/* ---------- submit ---------- */
+/* ---------- submit (GET + auto-retry, never loses results) ---------- */
 async function finishAll(auto){
   if(state.typeTimer){ clearInterval(state.typeTimer); state.typeTimer=null; }
-  var btn=$('finish-btn'); if(btn){ btn.disabled=true; btn.textContent='Submitting…'; }
-  var ts=typingStats(), tScore=typingScore(ts), qs=state.quizScores||scoreQuiz();
-  var overall = Math.round((qs.grammar + qs.general + qs.math + tScore)/4);
-  var detail = JSON.stringify({ grammar:qs.grammar, general:qs.general, math:qs.math, typing:tScore, wpm:ts.wpm, accuracy:ts.acc });
-  var payload = { action:'assess_submit', id:ID, token:TOKEN, score:overall, detail:detail };
-  try{
-    var res=await fetch(HR_URL,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload) });
-    var d=await res.json();
-    if(d && d.ok){ renderDone(overall); }
-    else if(d && d.error==='already_done'){ renderError('You have already completed this assessment. Thank you!'); }
-    else { renderError('We couldn’t save your results. Please contact HR.'); }
-  }catch(e){ renderError('Network error while submitting. Please contact HR so we can record your result.'); }
+  var ts=typingStats(), tScore=typingScore(ts), qz=state.quizScores||scoreQuiz();
+  var overall = Math.round((qz.grammar + qz.general + qz.math + tScore)/4);
+  var detail = JSON.stringify({ grammar:qz.grammar, general:qz.general, math:qz.math, typing:tScore, wpm:ts.wpm, accuracy:ts.acc });
+  state.result = { score:overall, detail:detail };
+  renderSubmitting();
+  doSubmit();
 }
-function renderDone(score){
+function renderSubmitting(){
+  $('root').innerHTML='<div class="card center"><h1 style="margin-top:0;">Submitting your results…</h1><p class="sub" id="sub-status">Please keep this page open.</p></div>';
+}
+async function doSubmit(){
+  var r=state.result; if(!r) return;
+  var url=HR_URL+'?action=assess_submit&id='+encodeURIComponent(ID)+'&token='+encodeURIComponent(TOKEN)+'&score='+encodeURIComponent(r.score)+'&detail='+encodeURIComponent(r.detail);
+  for(var attempt=1; attempt<=4; attempt++){
+    if($('sub-status') && attempt>1) $('sub-status').textContent='Retrying… (attempt '+attempt+' of 4)';
+    try{
+      var res=await fetch(url, { method:'GET' });
+      var d=await res.json();
+      if(d && d.ok){ clearSaved(); renderDone(); return; }
+      if(d && d.error==='already_done'){ clearSaved(); renderDone(); return; }   // a prior attempt already saved it = success
+      if(d && d.error==='invalid_link'){ renderError('This assessment link is invalid or has expired. Please contact HR.'); return; }
+      // server responded with another error — wait then retry
+    }catch(e){ /* network — retry */ }
+    await sleep(900*attempt);
+  }
+  renderError('We couldn’t save your results automatically. Your answers are safe on this page — please click the button below to try again.', true);
+}
+function retrySubmit(){ renderSubmitting(); doSubmit(); }
+function renderDone(){
   $('root').innerHTML =
     '<div class="card done center">'+
       '<div class="check"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>'+
@@ -251,9 +297,16 @@ function renderDone(score){
     '</div>';
 }
 
+/* ---------- local autosave ---------- */
+function saveProgress(){ try{ localStorage.setItem(LSKEY, JSON.stringify({ answers:state.answers, quizEnd:state.quizEnd })); }catch(e){} }
+function loadSaved(){ try{ return JSON.parse(localStorage.getItem(LSKEY)||'null'); }catch(e){ return null; } }
+function clearSaved(){ try{ localStorage.removeItem(LSKEY); }catch(e){} }
+
 /* ---------- utils ---------- */
+function firstName(n){ n=String(n||''); if(n.indexOf(',')>=0){ var p=n.split(','); return (p[1]||p[0]).trim(); } return n.split(/\s+/)[0]; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function mss(sec){ sec=Math.max(0,sec); return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'); }
+function sleep(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
 </script>
 </body>
 </html>
