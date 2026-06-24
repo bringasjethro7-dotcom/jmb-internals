@@ -45,6 +45,18 @@
   .err-box{ text-align:center; padding:36px 20px; }
   .pill{ display:inline-block; padding:3px 10px; border-radius:20px; font-size:12px; background:rgba(55,138,221,.15); color:#8bc0f0; margin-left:8px; }
   .note{ background:rgba(255,107,26,.08); border:1px solid var(--border-hi); border-radius:10px; padding:11px 13px; font-size:13px; color:var(--t2); margin-top:14px; }
+  /* proctoring: block selection of quiz text (inputs stay editable) */
+  body.lock, body.lock .q, body.lock .opt, body.lock .passage, body.lock .sec-h, body.lock h1, body.lock .sub, body.lock .pill{ -webkit-user-select:none; -moz-user-select:none; -ms-user-select:none; user-select:none; }
+  body.lock textarea, body.lock input{ -webkit-user-select:text; user-select:text; }
+  .cam{ position:fixed; right:16px; bottom:16px; width:168px; z-index:55; border-radius:12px; overflow:hidden; border:2px solid var(--border-hi); background:#000; box-shadow:0 8px 28px rgba(0,0,0,.55); }
+  .cam video{ width:100%; display:block; transform:scaleX(-1); }
+  .cam .lbl{ position:absolute; top:6px; left:6px; background:rgba(239,68,68,.92); color:#fff; font-size:10px; font-weight:800; letter-spacing:.04em; padding:2px 8px; border-radius:20px; display:flex; align-items:center; gap:5px; }
+  .cam .dot{ width:6px; height:6px; border-radius:50%; background:#fff; animation:blink 1.2s infinite; }
+  @keyframes blink{ 50%{ opacity:.15; } }
+  .warnbar{ position:fixed; top:0; left:0; right:0; z-index:70; background:#ef4444; color:#fff; text-align:center; padding:10px; font-size:13px; font-weight:700; display:none; }
+  .cover{ position:fixed; inset:0; z-index:65; background:rgba(8,8,10,.99); display:none; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px; }
+  .cover h2{ font-size:22px; margin:0 0 8px; }
+  .cover p{ color:var(--t2); font-size:14px; max-width:420px; }
 </style>
 </head>
 <body>
@@ -125,11 +137,17 @@ var TOTAL_Q = BANK.grammar.length + BANK.general.length + BANK.math.length;  // 
 
 var TYPING_PASSAGE = "A reliable virtual assistant keeps every project organized, communicates clearly, and consistently meets deadlines. Attention to detail separates good work from great work, so always proofread messages and double check numbers before sending anything to a client. When problems appear, a calm and solution focused attitude makes a real difference for the whole team. Staying dependable, honest, and easy to work with builds the kind of trust that turns a short engagement into a long term partnership. Take pride in small tasks, because doing the little things well is exactly what clients remember and reward over time.";
 
-var QUIZ_SECONDS = 30*60, TYPE_SECONDS = 5*60;
+var QUIZ_SECONDS = 25*60, TYPE_SECONDS = 5*60;
 var state = { answers:{}, quizEnd:0, quizTimer:null, typeTimer:null, typeStart:0, quizScores:null, result:null };
+
+var HR_CONTACT = 'virtualsjmb@gmail.com';   // office / HR contact shown in invites
+var OFFICE_INVITE = 'If you don’t have access to a laptop or computer'+
+  ', you’re warmly invited to take the exam at the <b>JMB Virtuals office</b>. '+
+  'Just reply to your assessment email or contact our HR team at <b>'+HR_CONTACT+'</b> to schedule a visit.';
 
 /* ---------- bootstrap ---------- */
 (function init(){
+  if(isMobileDevice()){ renderDeskOnly(); return; }
   if(!ID || !TOKEN){ renderError('This assessment link is missing information. Please use the exact link from your email.'); return; }
   fetch(HR_URL+'?action=assess_get&id='+encodeURIComponent(ID)+'&token='+encodeURIComponent(TOKEN))
     .then(function(r){ return r.json(); })
@@ -148,21 +166,105 @@ function renderIntro(){
     '<h1>Welcome'+(CAND.name?(', '+esc(firstName(CAND.name))):'')+'!</h1>'+
     '<p class="sub">You passed the resume screening'+(CAND.position?(' for <b>'+esc(CAND.position)+'</b>'):'')+'. This assessment has two parts:</p>'+
     '<div class="card">'+
-      '<p style="margin:0 0 10px;"><b>Part 1 — Knowledge quiz</b> <span class="pill">'+TOTAL_Q+' questions · 30 min</span></p>'+
+      '<p style="margin:0 0 10px;"><b>Part 1 — Knowledge quiz</b> <span class="pill">'+TOTAL_Q+' questions · 25 min</span></p>'+
       '<p class="muted" style="margin:0 0 16px;">Senior–high-school level: Grammar &amp; English, General Knowledge, and Mathematics. Multiple choice.</p>'+
       '<p style="margin:0 0 10px;"><b>Part 2 — Typing test</b> <span class="pill">5 minutes</span></p>'+
       '<p class="muted" style="margin:0 0 18px;">Type a passage as accurately and quickly as you can. We measure words per minute and accuracy.</p>'+
-      '<div class="note">Please complete the assessment in one sitting, on a quiet connection. You have <b>one attempt</b>. Your answers are saved on this device as you go, so a brief refresh won’t lose your progress.</div>'+
-      '<div style="margin-top:18px"><button class="btn" onclick="startQuiz()">Start assessment</button></div>'+
+      '<div class="note"><b>Proctored exam.</b> A working <b>webcam is required</b> and must stay on for the whole exam. Copying, printing, and screenshots are disabled. Please stay on this tab — switching away is recorded. You have <b>one attempt</b>; your answers autosave on this device.</div>'+
+      '<div style="margin-top:18px"><button class="btn" onclick="startAssessment()">Enable camera &amp; start</button></div>'+
     '</div>';
 }
+
+/* ---------- device + webcam gate ---------- */
+function isMobileDevice(){
+  var ua=navigator.userAgent||'';
+  if(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet|Silk|Kindle|PlayBook/i.test(ua)) return true;
+  var coarse = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
+  if(coarse && Math.min(screen.width||9999, screen.height||9999) < 820) return true;
+  return false;
+}
+function renderDeskOnly(){
+  $('root').innerHTML='<div class="card err-box"><h1 style="margin-top:0;">Please use a desktop or laptop</h1>'+
+    '<p class="sub">This assessment is proctored and includes a typing test, so it can only be taken on a <b>desktop or laptop computer with a webcam</b> — not on a phone or tablet.</p>'+
+    '<p class="sub">'+OFFICE_INVITE+'</p></div>';
+}
+async function startAssessment(){
+  var ok = await enableCamera();
+  if(!ok){ renderCamRequired(); return; }
+  armProctor();
+  startQuiz();
+}
+async function enableCamera(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
+  try{
+    state.camStream = await navigator.mediaDevices.getUserMedia({ video:{ width:{ideal:320}, height:{ideal:240} }, audio:false });
+    showCam();
+    return true;
+  }catch(e){ return false; }
+}
+function showCam(){
+  var box=$('cambox');
+  if(!box){ box=document.createElement('div'); box.id='cambox'; box.className='cam'; box.innerHTML='<span class="lbl"><span class="dot"></span>REC</span><video id="camvid" autoplay playsinline muted></video>'; document.body.appendChild(box); }
+  var v=$('camvid'); try{ v.srcObject=state.camStream; }catch(_){ }
+  var tr=state.camStream && state.camStream.getVideoTracks()[0];
+  if(tr) tr.onended=function(){ showWarn('Your webcam was turned off — please keep it on for the whole exam.'); };
+}
+function stopCam(){ try{ (state.camStream?state.camStream.getTracks():[]).forEach(function(t){ t.stop(); }); }catch(_){ } var b=$('cambox'); if(b) b.remove(); }
+function renderCamRequired(){
+  $('root').innerHTML='<div class="card err-box"><h1 style="margin-top:0;">Webcam access required</h1>'+
+    '<p class="sub">This exam is proctored, so you must allow camera access to begin. Please click below and choose <b>Allow</b> when your browser asks for the camera.</p>'+
+    '<p class="sub">'+OFFICE_INVITE.replace('laptop or computer','laptop, computer, or webcam')+'</p>'+
+    '<div style="margin-top:16px"><button class="btn" onclick="startAssessment()">Enable camera &amp; start</button></div></div>';
+}
+
+/* ---------- proctoring: block copy / print / screenshot, tab-switch cover ---------- */
+var _proctorArmed=false;
+function armProctor(){
+  if(_proctorArmed) return; _proctorArmed=true;
+  document.body.classList.add('lock');
+  document.addEventListener('contextmenu', blockEvt, true);
+  document.addEventListener('copy', blockEvt, true);
+  document.addEventListener('cut', blockEvt, true);
+  document.addEventListener('selectstart', function(e){ var t=e.target; if(t && (t.tagName==='TEXTAREA'||t.tagName==='INPUT')) return; blockEvt(e); }, true);
+  document.addEventListener('keydown', proctorKey, true);
+  document.addEventListener('keyup', proctorKeyUp, true);
+  window.addEventListener('blur', examBlur);
+  window.addEventListener('focus', examFocus);
+  document.addEventListener('visibilitychange', function(){ document.hidden?examBlur():examFocus(); });
+}
+function blockEvt(e){ e.preventDefault(); e.stopPropagation(); return false; }
+function proctorKey(e){
+  var k=(e.key||'').toLowerCase(), t=e.target, inField=(t&&(t.tagName==='TEXTAREA'||t.tagName==='INPUT'));
+  if((e.ctrlKey||e.metaKey) && ['c','x','s','p','u'].indexOf(k)>=0){
+    if(inField && (k==='c'||k==='x')) return;   // allow editing one's own typed answer
+    blockEvt(e); return;
+  }
+  if((e.ctrlKey||e.metaKey) && k==='a' && !inField){ blockEvt(e); return; }
+  if(k==='printscreen' || e.key==='PrintScreen' || e.key==='F12'){ blockEvt(e); }
+}
+function proctorKeyUp(e){
+  if(e.key==='PrintScreen' || (e.key||'').toLowerCase()==='printscreen'){
+    try{ if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(''); }catch(_){ }
+    showWarn('Screenshots are not allowed during the assessment.');
+  }
+}
+function showWarn(msg){
+  var b=$('warnbar'); if(!b){ b=document.createElement('div'); b.id='warnbar'; b.className='warnbar'; document.body.appendChild(b); }
+  b.textContent=msg; b.style.display='block';
+  clearTimeout(window._warnT); window._warnT=setTimeout(function(){ b.style.display='none'; }, 3500);
+}
+function ensureCover(){
+  var o=$('examcover'); if(!o){ o=document.createElement('div'); o.id='examcover'; o.className='cover'; o.innerHTML='<h2>Exam paused</h2><p>Please return to this tab and keep it in focus. Switching away during the exam is recorded.</p>'; document.body.appendChild(o); } return o;
+}
+function examBlur(){ if(!_proctorArmed) return; ensureCover().style.display='flex'; }
+function examFocus(){ var o=$('examcover'); if(o) o.style.display='none'; }
 
 /* ---------- quiz ---------- */
 function startQuiz(){
   var saved=loadSaved();
   state.answers = (saved && saved.answers) ? saved.answers : {};
   state.quizEnd = (saved && saved.quizEnd && saved.quizEnd>Date.now()) ? saved.quizEnd : (Date.now() + QUIZ_SECONDS*1000);
-  var html = '<div class="bar"><span class="timer" id="qtimer">⏱ 30:00</span><div class="prog"><i id="qprog"></i></div><span class="pcount" id="qcount">0 / '+TOTAL_Q+'</span></div><div class="card">';
+  var html = '<div class="bar"><span class="timer" id="qtimer">⏱ 25:00</span><div class="prog"><i id="qprog"></i></div><span class="pcount" id="qcount">0 / '+TOTAL_Q+'</span></div><div class="card">';
   SECTIONS.forEach(function(sec){ html += secBlock(sec[0], sec[1]); });
   html += '<div style="margin-top:24px;display:flex;justify-content:flex-end;gap:10px;align-items:center;"><span class="muted" id="unanswered"></span><button class="btn" id="quiz-next" onclick="finishQuiz(false)">Continue to typing test</button></div>';
   html += '</div>';
@@ -289,6 +391,7 @@ async function doSubmit(){
 }
 function retrySubmit(){ renderSubmitting(); doSubmit(); }
 function renderDone(){
+  _proctorArmed=false; document.body.classList.remove('lock'); var ec=$('examcover'); if(ec) ec.style.display='none'; stopCam();
   $('root').innerHTML =
     '<div class="card done center">'+
       '<div class="check"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>'+
