@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JMB Virtuals — HR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{ --bg:#0b0e14; --bg2:#0d1117; --card:#151b24; --card2:#1b222d; --line:rgba(255,255,255,.09);
+  --t1:#e8edf4; --t2:#aeb6c2; --t3:#6b7480; --o1:#ff6b1a; --o2:#ff8a3c; --o3:#ffa066;
+  --green:#4ade80; --red:#f87171; --amber:#ffb066; --blue:#60a5fa; --purple:#a78bfa; --r:16px; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t1);min-height:100vh;-webkit-font-smoothing:antialiased}
+a{color:var(--o2)}
+.wrap{max-width:1400px;margin:0 auto;padding:1.4rem}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:.2rem 0 1.2rem}
+.brand{display:flex;align-items:center;gap:11px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:22px;letter-spacing:.02em}
+.brand .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--o1),var(--o2));display:flex;align-items:center;justify-content:center;color:#0b0e14;font-weight:800;font-size:16px}
+.brand .jmb{font-size:11px;font-weight:700;color:var(--o3);border:1px solid rgba(255,107,26,.4);padding:1px 7px;border-radius:7px;letter-spacing:.1em}
+.who{font-size:13px;color:var(--t2)}
+.who b{color:var(--t1)}
+.btn{font-family:inherit;font-size:13px;border-radius:10px;padding:9px 15px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--t1);transition:all .15s}
+.btn:hover{border-color:rgba(255,255,255,.22)}
+.btn.primary{background:linear-gradient(135deg,var(--o1),var(--o2));border:none;color:#fff;font-weight:600}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.ghost{background:transparent}
+.btn.sm{padding:5px 11px;font-size:12px;border-radius:8px}
+.tabs{display:flex;gap:8px;margin-bottom:1.2rem}
+.tab{display:flex;align-items:center;gap:8px;padding:10px 18px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--t2);cursor:pointer;font-weight:600;font-size:14px}
+.tab.on{background:rgba(255,107,26,.14);border-color:rgba(255,107,26,.45);color:var(--o3)}
+.tab svg{width:17px;height:17px}
+.page{display:none}
+.page.on{display:block}
+/* kanban */
+.board{display:flex;gap:14px;overflow-x:auto;padding-bottom:1rem}
+.col{flex:1 0 230px;min-width:230px;background:rgba(255,255,255,.02);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;max-height:74vh}
+.col.drag{border-color:var(--o1);background:rgba(255,107,26,.06)}
+.colh{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line);position:sticky;top:0}
+.colh .nm{font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px}
+.colh .dot{width:9px;height:9px;border-radius:50%}
+.colh .ct{font-size:12px;color:var(--t3);font-family:'JetBrains Mono',monospace}
+.colbody{padding:10px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:9px}
+.cand{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:11px 12px;cursor:grab;transition:border-color .12s,transform .12s}
+.cand:hover{border-color:rgba(255,255,255,.22)}
+.cand:active{cursor:grabbing}
+.cand.dragging{opacity:.5}
+.cand .cn{font-weight:600;font-size:14px;color:var(--t1)}
+.cand .cp{font-size:12px;color:var(--t2);margin-top:2px}
+.cand .cmeta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--t3)}
+.cand .src{background:rgba(255,255,255,.06);border-radius:6px;padding:1px 7px}
+.muted{color:var(--t3);font-size:13px;padding:1rem;text-align:center}
+/* onboarding */
+.onb-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.3rem;margin-bottom:1rem}
+.onb-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:.9rem}
+.onb-name{font-weight:700;font-size:16px}
+.onb-sub{font-size:12px;color:var(--t3);margin-top:2px}
+.onb-bar{height:8px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden;margin:.5rem 0 1rem}
+.onb-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--o1),var(--o2));border-radius:5px;transition:width .3s}
+.onb-task{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.onb-task:last-child{border-bottom:none}
+.onb-check{width:22px;height:22px;border-radius:6px;border:1.8px solid var(--t3);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+.onb-task.done .onb-check{background:var(--green);border-color:var(--green);color:#0b0e14}
+.onb-task.done .onb-lbl{color:var(--t3);text-decoration:line-through}
+.onb-lbl{font-size:13.5px;color:var(--t1)}
+/* modal */
+.mb{position:fixed;inset:0;background:rgba(8,11,16,.66);backdrop-filter:blur(3px);z-index:1000;display:none;align-items:center;justify-content:center;padding:1rem}
+.mb.open{display:flex}
+.modal{background:var(--card);border:1px solid var(--line);border-radius:18px;width:100%;max-width:520px;max-height:92vh;overflow:auto;box-shadow:0 30px 70px rgba(0,0,0,.5)}
+.mh{display:flex;align-items:center;justify-content:space-between;padding:1.1rem 1.3rem;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:2}
+.mh h3{font-size:17px}
+.mx{border:none;background:rgba(255,255,255,.07);width:32px;height:32px;border-radius:50%;color:var(--t2);font-size:17px;cursor:pointer}
+.mbd{padding:1.2rem 1.3rem}
+.fg{margin-bottom:.9rem}
+.fg label{display:block;font-size:12px;color:var(--t2);margin-bottom:5px}
+.inp{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--t1);padding:10px 12px;font-size:14px;font-family:inherit;outline:none}
+.inp:focus{border-color:var(--o1)}
+textarea.inp{min-height:72px;resize:vertical}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mfoot{display:flex;gap:10px;justify-content:space-between;align-items:center;padding:1rem 1.3rem;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--card)}
+/* login / setup */
+.center{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1.5rem}
+.lcard{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:2rem;max-width:380px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.4)}
+.lcard h1{font-family:'Rajdhani',sans-serif;font-size:24px;margin-bottom:.3rem;display:flex;align-items:center;gap:10px}
+.lsub{font-size:13px;color:var(--t3);margin-bottom:1.4rem}
+.lerr{display:none;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);color:var(--red);font-size:13px;border-radius:10px;padding:9px 12px;margin-bottom:.9rem}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#1b222d;border:1px solid var(--line);color:var(--t1);padding:11px 18px;border-radius:11px;font-size:13px;opacity:0;transition:all .25s;z-index:2000;box-shadow:0 12px 30px rgba(0,0,0,.4)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.back{display:inline-flex;align-items:center;gap:6px;color:var(--t3);text-decoration:none;font-size:13px}
+.back:hover{color:var(--t1)}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="center" id="login">
+  <div class="lcard">
+    <h1><span class="brand"><span class="logo">HR</span></span> JMB HR</h1>
+    <div class="lsub">Hiring &amp; onboarding · admin/HR sign-in</div>
+    <div class="lerr" id="lerr"></div>
+    <div class="fg"><label>Employee ID</label><input class="inp" id="lid" placeholder="JMB0XX or ADMIN" autocomplete="username"></div>
+    <div class="fg"><label>PIN</label><input class="inp" id="lpin" type="password" placeholder="••••" autocomplete="current-password"></div>
+    <button class="btn primary" style="width:100%;margin-top:.4rem" id="lbtn" onclick="doLogin()">Sign in</button>
+    <div style="margin-top:1rem"><a class="back" href="https://internals.jmbvirtuals.com">← Back to hub</a></div>
+  </div>
+</div>
+
+<!-- SETUP -->
+<div class="center" id="setup" style="display:none">
+  <div class="lcard">
+    <h1>Setup needed</h1>
+    <div class="lsub">Paste the HR Apps Script web-app URL (the <code>/exec</code> link) in <code>hr.html</code> (HR_URL), then reload.</div>
+    <a class="back" href="https://internals.jmbvirtuals.com">← Back to hub</a>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="wrap" id="app" style="display:none">
+  <div class="topbar">
+    <div class="brand"><span class="logo">HR</span> JMB HR <span class="jmb">JMB</span></div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="who">Hi, <b id="who-name">HR</b></span>
+      <button class="btn ghost sm" onclick="doLogout()">Sign out</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab on" id="tab-hire" onclick="showTab('hire')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg> Hiring pipeline</div>
+    <div class="tab" id="tab-onb" onclick="showTab('onb')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Onboarding</div>
+    <button class="btn primary sm" style="margin-left:auto" onclick="openCandidate()">+ Add candidate</button>
+  </div>
+
+  <div class="page on" id="page-hire"><div class="board" id="board"><div class="muted">Loading…</div></div></div>
+  <div class="page" id="page-onb"><div id="onb-list"><div class="muted">Loading…</div></div></div>
+</div>
+
+<!-- CANDIDATE MODAL -->
+<div class="mb" id="cand-modal">
+  <div class="modal">
+    <div class="mh"><h3 id="cand-title">Add candidate</h3><button class="mx" onclick="closeCandidate()">✕</button></div>
+    <div class="mbd">
+      <div class="fg"><label>Full name *</label><input class="inp" id="c-name" placeholder="Juan Dela Cruz"></div>
+      <div class="grid2">
+        <div class="fg"><label>Position</label><input class="inp" id="c-pos" placeholder="SMM I"></div>
+        <div class="fg"><label>Stage</label><select class="inp" id="c-stage"></select></div>
+      </div>
+      <div class="grid2">
+        <div class="fg"><label>Email</label><input class="inp" id="c-email" placeholder="name@email.com"></div>
+        <div class="fg"><label>Phone</label><input class="inp" id="c-phone" placeholder="09xx…"></div>
+      </div>
+      <div class="fg"><label>Source</label><input class="inp" id="c-source" placeholder="Referral / Facebook / Indeed…"></div>
+      <div class="fg"><label>Notes</label><textarea class="inp" id="c-notes" placeholder="Interview notes, links, etc."></textarea></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn ghost sm" id="c-del" style="color:var(--red);display:none" onclick="delCandidate()">Delete</button>
+      <button class="btn primary" style="margin-left:auto" onclick="saveCandidate()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE PORTAL ACCOUNT MODAL -->
+<div class="mb" id="acct-modal">
+  <div class="modal">
+    <div class="mh"><h3>Create portal account</h3><button class="mx" onclick="closeAcct()">✕</button></div>
+    <div class="mbd">
+      <div class="lsub" style="margin-bottom:1rem">Adds this hire to the Employee Portal so they can log in and be onboarded.</div>
+      <div class="grid2">
+        <div class="fg"><label>Employee ID *</label><input class="inp" id="a-id" placeholder="JMB0XX"></div>
+        <div class="fg"><label>PIN *</label><input class="inp" id="a-pin" placeholder="4–6 digits"></div>
+      </div>
+      <div class="fg"><label>Full name</label><input class="inp" id="a-name"></div>
+      <div class="grid2">
+        <div class="fg"><label>Position</label><input class="inp" id="a-pos"></div>
+        <div class="fg"><label>Department</label><input class="inp" id="a-dept" placeholder="Social Media Management"></div>
+      </div>
+      <div class="grid2">
+        <div class="fg"><label>Start date</label><input class="inp" id="a-start" type="date"></div>
+        <div class="fg"><label>Work schedule</label><select class="inp" id="a-sched"><option value="weekdays">Weekdays (Mon–Fri)</option><option value="everyday">Every day</option></select></div>
+      </div>
+    </div>
+    <div class="mfoot"><button class="btn primary" style="margin-left:auto" onclick="submitAcct()">Create account</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ====== CONFIG ====== */
+var HR_URL     = "https://script.google.com/macros/s/AKfycbyf_V9JIV8x_MqT4eibw9okSWt9ZjyvEYM09nZBEMNLiiyximXIKX6ojc7aLpiRaffN/exec";
+var PORTAL_URL = "https://script.google.com/macros/s/AKfycbzoalT_9SYhSPciWdjDI6bv0qjKL7SWn0Rmkgt6CMJMzGs9pKCydCJChz6-ZuM_Srdj/exec";
+var ADMIN_PASS = "JMBeast_020298";
+
+var USER=null, ISADMIN=false, STATE={candidates:[]}, _editId=null, _acctCandId=null, _empCache=null;
+var STAGES=['applied','screening','interview','offer','hired','rejected'];
+var STAGE_LABEL={applied:'Applied',screening:'Screening',interview:'Interview',offer:'Offer',hired:'Hired',rejected:'Rejected'};
+var STAGE_COLOR={applied:'#60a5fa',screening:'#a78bfa',interview:'#ffb066',offer:'#ff8a3c',hired:'#4ade80',rejected:'#f87171'};
+var ONB_TASKS=['Signed contract','Submitted requirements / IDs','Company email created','Portal account created','Tools access (tracker · chat · voice)','Assigned to team / manager','Orientation & SOP walkthrough','First task assigned'];
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function configured(){ return HR_URL && HR_URL.indexOf('PASTE_')<0 && /^https?:/.test(HR_URL); }
+function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('show'); clearTimeout(window._tt); window._tt=setTimeout(function(){ t.classList.remove('show'); },2600); }
+function firstName(n){ n=String(n||'').trim(); if(n.indexOf(',')>=0) return (n.split(',')[1]||'').trim().split(/\s+/)[0]||n; return n.split(/\s+/)[0]||n; }
+
+/* ====== API ====== */
+function apiGet(params){ var qs=Object.keys(params).map(function(k){return encodeURIComponent(k)+'='+encodeURIComponent(params[k]);}).join('&'); return fetch(HR_URL+'?'+qs).then(function(r){return r.json();}); }
+function apiPost(obj){ return fetch(HR_URL,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(obj) }).then(function(r){return r.json();}); }
+
+/* ====== LOGIN ====== */
+async function doLogin(){
+  var id=$('lid').value.trim(), pin=$('lpin').value.trim(), err=$('lerr'), btn=$('lbtn');
+  err.style.display='none';
+  if(!id||!pin){ err.textContent='Enter your employee ID and PIN.'; err.style.display='block'; return; }
+  if(id.toUpperCase()==='ADMIN'){
+    if(pin===ADMIN_PASS){ enterApp({full_name:'Admin (JMB Virtuals)',employee_id:'ADMIN'}, true); }
+    else { err.textContent='Invalid admin password.'; err.style.display='block'; }
+    return;
+  }
+  btn.disabled=true; btn.textContent='Signing in…';
+  try{
+    var r=await fetch(PORTAL_URL+'?id='+encodeURIComponent(id)+'&pin='+encodeURIComponent(pin));
+    var d=await r.json();
+    if(d && d.error==='DEACTIVATED'){ err.textContent='This account has been deactivated.'; err.style.display='block'; btn.disabled=false; btn.textContent='Sign in'; return; }
+    if(!d || d.error || !d.employee_id) throw new Error('bad');
+    // HR is gated to admins/HR — allow only Admin password OR an employee whose position contains HR/manager/lead/admin
+    var pos=String(d.position||'').toLowerCase();
+    var isHR = /hr|human resource|manager|team lead|admin|owner|operations/.test(pos);
+    if(!isHR){ err.textContent='HR access only. Use the Admin login or an HR account.'; err.style.display='block'; btn.disabled=false; btn.textContent='Sign in'; return; }
+    enterApp(d, false);
+  }catch(e){ err.textContent='Invalid ID or PIN.'; err.style.display='block'; }
+  finally{ btn.disabled=false; btn.textContent='Sign in'; }
+}
+function doLogout(){ try{ sessionStorage.removeItem('hr_user'); }catch(e){} location.reload(); }
+function enterApp(user, admin){
+  USER=user; ISADMIN=!!admin;
+  try{ sessionStorage.setItem('hr_user', JSON.stringify({u:user,a:ISADMIN})); }catch(e){}
+  $('login').style.display='none';
+  if(!configured()){ $('setup').style.display='flex'; return; }
+  $('app').style.display='block';
+  $('who-name').textContent=firstName(user.full_name||user.employee_id);
+  // candidate stage select
+  $('c-stage').innerHTML=STAGES.map(function(s){ return '<option value="'+s+'">'+STAGE_LABEL[s]+'</option>'; }).join('');
+  loadState();
+}
+
+/* ====== STATE ====== */
+async function loadState(){
+  try{ STATE=await apiGet({action:'state'}); if(STATE.error) throw 0; STATE.candidates=STATE.candidates||[]; }
+  catch(e){ toast('Could not load. Check the HR backend URL.'); STATE={candidates:[]}; }
+  renderBoard(); renderOnb();
+}
+function refreshQuiet(){ apiGet({action:'state'}).then(function(s){ if(s&&!s.error){ STATE=s; STATE.candidates=STATE.candidates||[]; renderBoard(); renderOnb(); } }).catch(function(){}); }
+
+/* ====== TABS ====== */
+function showTab(t){
+  $('page-hire').classList.toggle('on', t==='hire');
+  $('page-onb').classList.toggle('on', t==='onb');
+  $('tab-hire').classList.toggle('on', t==='hire');
+  $('tab-onb').classList.toggle('on', t==='onb');
+  if(t==='onb') renderOnb();
+}
+
+/* ====== KANBAN ====== */
+function renderBoard(){
+  var byStage={}; STAGES.forEach(function(s){ byStage[s]=[]; });
+  (STATE.candidates||[]).forEach(function(c){ var s=STAGES.indexOf(String(c.stage))>=0?String(c.stage):'applied'; byStage[s].push(c); });
+  $('board').innerHTML=STAGES.map(function(s){
+    var cards=byStage[s].map(function(c){ return candCard(c); }).join('') || '<div style="color:var(--t3);font-size:12px;text-align:center;padding:1rem .5rem">—</div>';
+    return '<div class="col" data-stage="'+s+'" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event,\''+s+'\')">'
+      +'<div class="colh"><span class="nm"><span class="dot" style="background:'+STAGE_COLOR[s]+'"></span>'+STAGE_LABEL[s]+'</span><span class="ct">'+byStage[s].length+'</span></div>'
+      +'<div class="colbody">'+cards+'</div></div>';
+  }).join('');
+}
+function candCard(c){
+  var meta=[]; if(c.position) meta.push(esc(c.position)); if(c.applied) meta.push('applied '+esc(String(c.applied).slice(0,10)));
+  return '<div class="cand" draggable="true" ondragstart="onDragStart(event,\''+c.id+'\')" ondragend="onDragEnd(event)" onclick="openCandidate(\''+c.id+'\')">'
+    +'<div class="cn">'+esc(c.name||'(no name)')+'</div>'
+    +(c.position?'<div class="cp">'+esc(c.position)+'</div>':'')
+    +'<div class="cmeta">'+(c.source?'<span class="src">'+esc(c.source)+'</span>':'')+(c.applied?'<span>applied '+esc(String(c.applied).slice(0,10))+'</span>':'')+'</div></div>';
+}
+var _dragId=null;
+function onDragStart(e,id){ _dragId=id; e.dataTransfer.effectAllowed='move'; try{ e.dataTransfer.setData('text/plain',id); }catch(_){} var el=e.target.closest('.cand'); if(el) el.classList.add('dragging'); }
+function onDragEnd(e){ var el=e.target.closest('.cand'); if(el) el.classList.remove('dragging'); _dragId=null; document.querySelectorAll('.col.drag').forEach(function(c){c.classList.remove('drag');}); }
+function onDragOver(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; var col=e.target.closest('.col'); if(col) col.classList.add('drag'); }
+function onDragLeave(e){ var col=e.target.closest('.col'); if(col && !col.contains(e.relatedTarget)) col.classList.remove('drag'); }
+function onDrop(e, stage){
+  e.preventDefault();
+  var id=_dragId||(e.dataTransfer&&e.dataTransfer.getData('text/plain')); if(!id) return;
+  var c=(STATE.candidates||[]).filter(function(x){return String(x.id)===String(id);})[0]; if(!c || String(c.stage)===stage){ document.querySelectorAll('.col.drag').forEach(function(c){c.classList.remove('drag');}); return; }
+  var wasHired=String(c.stage)==='hired';
+  c.stage=stage; renderBoard();
+  apiPost({action:'candidate_stage', id:id, stage:stage}).catch(function(){ toast('Save failed'); });
+  if(stage==='hired' && !wasHired){ toast('Moved to Hired — set up onboarding in the Onboarding tab.'); renderOnb(); }
+}
+
+/* ====== CANDIDATE MODAL ====== */
+function openCandidate(id){
+  _editId=id||null;
+  var c=id?(STATE.candidates||[]).filter(function(x){return String(x.id)===String(id);})[0]:{};
+  if(id && !c) return;
+  $('cand-title').textContent=id?'Edit candidate':'Add candidate';
+  $('c-name').value=c.name||''; $('c-pos').value=c.position||''; $('c-stage').value=(c.stage||'applied');
+  $('c-email').value=c.email||''; $('c-phone').value=c.phone||''; $('c-source').value=c.source||''; $('c-notes').value=c.notes||'';
+  $('c-del').style.display=id?'':'none';
+  $('cand-modal').classList.add('open');
+}
+function closeCandidate(){ $('cand-modal').classList.remove('open'); }
+async function saveCandidate(){
+  var name=$('c-name').value.trim(); if(!name){ toast('Name is required.'); return; }
+  var payload={ action:'candidate_save', id:_editId||undefined, name:name, position:$('c-pos').value.trim(),
+    stage:$('c-stage').value, email:$('c-email').value.trim(), phone:$('c-phone').value.trim(),
+    source:$('c-source').value.trim(), notes:$('c-notes').value.trim(), by:firstName(USER.full_name||USER.employee_id) };
+  closeCandidate();
+  try{ var r=await apiPost(payload); if(r&&(r.ok||r.id)){ toast(_editId?'Candidate updated.':'Candidate added.'); await loadState(); } else toast('Save failed'); }
+  catch(e){ toast('Save failed'); }
+}
+async function delCandidate(){
+  if(!_editId) return;
+  if(!confirm('Delete this candidate? This cannot be undone.')) return;
+  closeCandidate();
+  try{ await apiPost({action:'candidate_del', id:_editId}); toast('Deleted.'); await loadState(); }catch(e){ toast('Delete failed'); }
+}
+
+/* ====== ONBOARDING ====== */
+function onbState(c){ try{ return JSON.parse(c.onboarding||'{}'); }catch(e){ return {}; } }
+function renderOnb(){
+  var hired=(STATE.candidates||[]).filter(function(c){ return String(c.stage)==='hired'; });
+  if(!hired.length){ $('onb-list').innerHTML='<div class="muted">No hired candidates yet. Move someone to <b>Hired</b> on the pipeline to start onboarding.</div>'; return; }
+  $('onb-list').innerHTML=hired.map(function(c){
+    var st=onbState(c), done=0; ONB_TASKS.forEach(function(t){ if(st[t]) done++; });
+    var pct=Math.round(done/ONB_TASKS.length*100);
+    var tasks=ONB_TASKS.map(function(t){
+      var d=!!st[t];
+      return '<div class="onb-task'+(d?' done':'')+'" onclick="toggleOnb(\''+c.id+'\',\''+esc(t).replace(/'/g,"\\'")+'\')"><span class="onb-check">'+(d?'✓':'')+'</span><span class="onb-lbl">'+esc(t)+'</span></div>';
+    }).join('');
+    var portalBtn = c.portal_id
+      ? '<span class="btn ghost sm" style="cursor:default;color:var(--green);border-color:rgba(74,222,128,.4)">Portal: '+esc(c.portal_id)+'</span>'
+      : '<button class="btn primary sm" onclick="openAcct(\''+c.id+'\')">Create portal account</button>';
+    return '<div class="onb-card">'
+      +'<div class="onb-head"><div><div class="onb-name">'+esc(c.name)+'</div><div class="onb-sub">'+esc(c.position||'—')+(c.email?(' · '+esc(c.email)):'')+'</div></div>'
+      +'<div style="display:flex;align-items:center;gap:10px"><span style="font-size:13px;color:var(--t2)">'+done+'/'+ONB_TASKS.length+' · <b style="color:'+(pct>=100?'var(--green)':'var(--o3)')+'">'+pct+'%</b></span>'+portalBtn+'</div></div>'
+      +'<div class="onb-bar"><i style="width:'+pct+'%"></i></div>'+tasks+'</div>';
+  }).join('');
+}
+function toggleOnb(id, task){
+  var c=(STATE.candidates||[]).filter(function(x){return String(x.id)===String(id);})[0]; if(!c) return;
+  var st=onbState(c); st[task]=!st[task]; c.onboarding=JSON.stringify(st);
+  renderOnb();
+  apiPost({action:'onboarding_set', id:id, onboarding:c.onboarding}).catch(function(){ toast('Save failed'); });
+}
+
+/* ====== CREATE PORTAL ACCOUNT ====== */
+async function openAcct(id){
+  var c=(STATE.candidates||[]).filter(function(x){return String(x.id)===String(id);})[0]; if(!c) return;
+  _acctCandId=id;
+  $('a-name').value=c.name||''; $('a-pos').value=c.position||''; $('a-dept').value=''; $('a-pin').value='';
+  $('a-start').value=new Date().toISOString().slice(0,10);
+  $('a-id').value='…'; $('acct-modal').classList.add('open');
+  // suggest the next JMB id
+  try{
+    if(!_empCache){ var r=await fetch(PORTAL_URL+'?action=get_all_employees&_='+Date.now()); var d=await r.json(); _empCache=(d&&d.employees)||[]; }
+    var mx=0; _empCache.forEach(function(e){ var m=String(e.employee_id||'').match(/(\d+)\s*$/); if(m){ var n=parseInt(m[1],10); if(n>mx) mx=n; } });
+    $('a-id').value='JMB'+String(mx+1).padStart(3,'0');
+  }catch(e){ $('a-id').value=''; }
+}
+function closeAcct(){ $('acct-modal').classList.remove('open'); }
+async function submitAcct(){
+  var empId=$('a-id').value.trim(), pin=$('a-pin').value.trim();
+  if(!empId||!pin){ toast('Employee ID and PIN are required.'); return; }
+  var q='?action=add_employee&employee_id='+encodeURIComponent(empId)+'&pin='+encodeURIComponent(pin)
+    +'&full_name='+encodeURIComponent($('a-name').value.trim())
+    +'&position='+encodeURIComponent($('a-pos').value.trim())
+    +'&department='+encodeURIComponent($('a-dept').value.trim())
+    +'&start_date='+encodeURIComponent($('a-start').value)
+    +'&work_schedule='+encodeURIComponent($('a-sched').value);
+  try{
+    var r=await fetch(PORTAL_URL+q); var d=await r.json();
+    if(d && d.success){
+      // mark on the candidate + tick the onboarding task
+      var c=(STATE.candidates||[]).filter(function(x){return String(x.id)===String(_acctCandId);})[0];
+      if(c){ c.portal_id=empId; var st=onbState(c); st['Portal account created']=true; c.onboarding=JSON.stringify(st);
+        apiPost({action:'candidate_portal', id:c.id, portal_id:empId}).catch(function(){});
+        apiPost({action:'onboarding_set', id:c.id, onboarding:c.onboarding}).catch(function(){}); }
+      _empCache=null;
+      closeAcct(); renderOnb(); toast('Portal account '+empId+' created.');
+    } else if(d && d.error==='ALREADY_EXISTS'){ toast('That Employee ID already exists.'); }
+    else { toast('Could not create account'+(d&&d.error?(': '+d.error):'.')); }
+  }catch(e){ toast('Network error — try again.'); }
+}
+
+/* ====== restore session ====== */
+(function(){
+  try{ var raw=sessionStorage.getItem('hr_user'); if(raw){ var o=JSON.parse(raw); enterApp(o.u, o.a); } }catch(e){}
+})();
+</script>
+</body>
+</html>
