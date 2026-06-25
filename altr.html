@@ -1579,9 +1579,9 @@ function renderInsights(){
   $('ins-stats').innerHTML=
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1.2rem">'+
       '<div class="inscard"><div class="inshd"><span>'+chartIcon+' Full promotion</span>'+
-      '<span class="goalsub" style="margin:0">'+fullA.length+' tracked · '+inprog(fullA)+' in progress</span>'+audYChip('full')+'</div>'+buildAudioChart('full')+'</div>'+
+      '<span class="goalsub" style="margin:0">'+fullA.length+' tracked · '+inprog(fullA)+' in progress</span>'+audYChip('full')+audXChip('full')+'</div>'+buildAudioChart('full')+'</div>'+
       '<div class="inscard"><div class="inshd"><span>'+chartIcon+' Partial promotion</span>'+
-      '<span class="goalsub" style="margin:0">'+partA.length+' tracked · '+inprog(partA)+' in progress</span>'+audYChip('partial')+'</div>'+buildAudioChart('partial')+'</div>'+
+      '<span class="goalsub" style="margin:0">'+partA.length+' tracked · '+inprog(partA)+' in progress</span>'+audYChip('partial')+audXChip('partial')+'</div>'+buildAudioChart('partial')+'</div>'+
     '</div>'+
     '<div class="inscard" style="margin-top:1.2rem"><div class="inshd"><span>'+chartIcon+' IG reels trend</span>'+
     '<span class="goalsub" style="margin:0">reach of reposted reels · '+reposts.length+' tracked</span></div>'+buildReelsChart()+'</div>';
@@ -1590,10 +1590,10 @@ function renderInsights(){
 }
 // Editable Y-axis range per audio chart (persisted locally) — lets you zoom the line graph
 var AUD_YRANGE = (function(){
-  var def={ full:{min:0,max:10000}, partial:{min:0,max:2000} };
+  var def={ full:{min:0,max:10000,days:7}, partial:{min:0,max:2000,days:7} };
   try{ var s=JSON.parse(localStorage.getItem('altr_aud_yrange')||'null'); if(s){
-    if(s.full)    def.full   ={ min:(+s.full.min||0),    max:(+s.full.max||def.full.max) };
-    if(s.partial) def.partial={ min:(+s.partial.min||0), max:(+s.partial.max||def.partial.max) };
+    if(s.full)    def.full   ={ min:(+s.full.min||0),    max:(+s.full.max||def.full.max),     days:(+s.full.days||7) };
+    if(s.partial) def.partial={ min:(+s.partial.min||0), max:(+s.partial.max||def.partial.max), days:(+s.partial.days||7) };
   } }catch(e){}
   return def;
 })();
@@ -1610,7 +1610,20 @@ async function editAudioYAxis(kind){
   var mx=await altPrompt('Y-axis MAXIMUM for the '+kind+' chart:', yr.max, { title:'Zoom Y-axis · maximum', type:'number' }); if(mx===null) return;
   var a=parseFloat(mn), b=parseFloat(mx);
   if(isNaN(a)||isNaN(b)||b<=a){ toast('Max must be greater than min.'); return; }
-  AUD_YRANGE[kind]={ min:a, max:b }; saveAudYRange();
+  AUD_YRANGE[kind]=Object.assign({}, (AUD_YRANGE[kind]||{}), { min:a, max:b }); saveAudYRange();
+  renderInsights();
+}
+function audXChip(kind){
+  var yr=AUD_YRANGE[kind]||{days:7}; var d=yr.days||7;
+  return '<button class="aa-xaxis" onclick="editAudioXAxis(\''+kind+'\')" title="Set the number of days shown on the X-axis" '+
+    'style="margin-left:8px;font:600 11px/1 inherit;color:var(--t2,#9aa);background:rgba(255,255,255,.05);border:1px solid var(--border,rgba(255,255,255,.12));border-radius:20px;padding:5px 11px;cursor:pointer;white-space:nowrap;">'+
+    'X '+d+'d ✎</button>';
+}
+async function editAudioXAxis(kind){
+  var yr=AUD_YRANGE[kind]||{days:7};
+  var v=await altPrompt('Number of days to show on the X-axis ('+kind+' chart):', (yr.days||7), { title:'X-axis · number of days', type:'number' }); if(v===null) return;
+  var n=parseInt(v,10); if(isNaN(n)||n<1||n>120){ toast('Enter days between 1 and 120.'); return; }
+  AUD_YRANGE[kind]=Object.assign({}, yr, { days:n }); saveAudYRange();
   renderInsights();
 }
 function buildAudioChart(kind){
@@ -1620,7 +1633,7 @@ function buildAudioChart(kind){
   var isP = (kind==='partial');
   var yr = AUD_YRANGE[kind] || { min:0, max:(isP?2000:10000) };
   return buildTrendChart(hist, titles,
-    { idKey:'audio_id', fixedMin:yr.min, fixedMax:yr.max, glines:(isP?4:10), glow:(isP?'audglowP':'audglowF'), def:'Audio ',
+    { idKey:'audio_id', fixedMin:yr.min, fixedMax:yr.max, days:yr.days, glines:(isP?4:10), glow:(isP?'audglowP':'audglowF'), def:'Audio ',
       empty:'No '+kind+' promotions tracked yet — add one as “'+kind+'” and update its reels count to build the line.' });
 }
 function buildReelsChart(){
@@ -1637,7 +1650,7 @@ function buildTrendChart(hist, titles, opt){
   function latest(id){ var a=byAud[id]; return a.length?a[a.length-1].v:0; }
   ids.sort(function(a,b){ return latest(b)-latest(a); }); ids=ids.slice(0,8);
   // ----- Y: fixed 10,000 (audio) or auto nice-max (reels) ; X = a 7-day week from the first reading -----
-  var DAY=86400000, WEEK=7;
+  var DAY=86400000, WEEK=Math.max(1, (opt.days|0) || 7);
   var GMAX=1; ids.forEach(function(id){ byAud[id].forEach(function(p){ if(p.v>GMAX) GMAX=p.v; }); });
   function niceMax(v){ var pow=Math.pow(10,Math.floor(Math.log10(v))); var n=v/pow; var m=n<=1?1:n<=1.5?1.5:n<=2?2:n<=2.5?2.5:n<=3?3:n<=4?4:n<=5?5:n<=8?8:10; return m*pow; }
   var MINY = opt.fixedMin || 0;
@@ -1667,7 +1680,8 @@ function buildTrendChart(hist, titles, opt){
   var svg='<svg viewBox="0 0 '+W+' '+H+'" class="trendsvg" preserveAspectRatio="xMidYMid meet">';
   svg+='<defs><filter id="'+GLOW+'" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="4.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
   for(var g=0;g<=GLINES;g++){ var yv=Math.round(MINY+g*GSTEP), yy=yAt(yv); svg+='<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="rgba(255,255,255,.06)"/><text x="'+(padL-8)+'" y="'+(yy+4)+'" text-anchor="end" class="axt">'+yv.toLocaleString()+'</text>'; }
-  for(var di=0; di<WEEK; di++){ var lbl=new Date(startMs+di*DAY); var mm=('0'+(lbl.getUTCMonth()+1)).slice(-2), dd=('0'+lbl.getUTCDate()).slice(-2); svg+='<text x="'+xAt(di+0.5)+'" y="'+(H-padB+20)+'" text-anchor="middle" class="axt">'+mm+'-'+dd+'</text>'; }
+  var lblStep=Math.max(1, Math.ceil(WEEK/14));   // thin out labels when many days are shown
+  for(var di=0; di<WEEK; di++){ if(di%lblStep!==0 && di!==WEEK-1) continue; var lbl=new Date(startMs+di*DAY); var mm=('0'+(lbl.getUTCMonth()+1)).slice(-2), dd=('0'+lbl.getUTCDate()).slice(-2); svg+='<text x="'+xAt(di+0.5)+'" y="'+(H-padB+20)+'" text-anchor="middle" class="axt">'+mm+'-'+dd+'</text>'; }
   function polyLen(pts){ var L=0; for(var i=1;i<pts.length;i++){ var dx=pts[i][0]-pts[i-1][0], dy=pts[i][1]-pts[i-1][1]; L+=Math.sqrt(dx*dx+dy*dy); } return L; }
   ids.forEach(function(id,ci){ var col=colors[ci%colors.length]; var pts=byAud[id].map(function(p){ return [xAt(p.frac),yAt(p.v)]; });
     if(!pts.length) return;
