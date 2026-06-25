@@ -94,6 +94,42 @@ textarea.inp{min-height:72px;resize:vertical}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .back{display:inline-flex;align-items:center;gap:6px;color:var(--t3);text-decoration:none;font-size:13px}
 .back:hover{color:var(--t1)}
+
+  /* ════════ PREMIUM PARITY WITH PORTAL ════════ */
+  /* soft-glow background */
+  body{ background:radial-gradient(1100px 460px at 50% -160px,rgba(255,107,26,.10),transparent 64%),radial-gradient(760px 460px at 108% 4%,rgba(99,102,241,.05),transparent 70%),var(--bg) !important; background-attachment:fixed; }
+  /* modals: glass backdrop + spring pop-in */
+  .mb{ background:rgba(6,8,12,.66); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+  .mb.open{ animation:hrFade .22s ease; }
+  .mb.open .modal{ animation:hrPop .36s cubic-bezier(.2,.85,.25,1.06); }
+  .modal{ box-shadow:0 30px 80px rgba(0,0,0,.55); }
+  @keyframes hrFade{from{opacity:0}to{opacity:1}}
+  @keyframes hrPop{0%{opacity:0;transform:translateY(16px) scale(.965)}100%{opacity:1;transform:none}}
+  /* login card entrance */
+  .lcard{ box-shadow:0 24px 60px rgba(0,0,0,.42) !important; animation:hrCardIn .55s cubic-bezier(.2,.85,.25,1.02) both; }
+  @keyframes hrCardIn{from{opacity:0;transform:translateY(22px) scale(.985)}to{opacity:1;transform:none}}
+  /* glass-water pill navigation + dynamic-island stretch + active breathe */
+  .tabs{ position:relative; overflow:hidden; gap:4px; padding:6px; width:fit-content; max-width:100%; border-radius:999px; border:1px solid rgba(255,255,255,.10); background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02)); box-shadow:0 12px 30px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.06); -webkit-backdrop-filter:blur(14px) saturate(130%); backdrop-filter:blur(14px) saturate(130%); transition:transform .5s cubic-bezier(.34,1.45,.5,1); }
+  .tabs:hover{ transform:scale(1.012); }
+  .tabs::before{ content:''; position:absolute; inset:0; border-radius:inherit; z-index:0; pointer-events:none; background:radial-gradient(42% 130% at 18% 30%,rgba(255,138,74,.10),transparent 70%),radial-gradient(38% 130% at 60% 64%,rgba(99,102,241,.08),transparent 70%),radial-gradient(46% 130% at 88% 38%,rgba(56,189,248,.07),transparent 72%); background-size:200% 200%,180% 180%,220% 220%; animation:hrWater 18s ease-in-out infinite; }
+  .tabs>*{ position:relative; z-index:1; }
+  @keyframes hrWater{0%{background-position:0% 0%,100% 0%,50% 100%}50%{background-position:55% 40%,42% 60%,58% 30%}100%{background-position:0% 0%,100% 0%,50% 100%}}
+  .tab{ border:1px solid transparent !important; border-radius:999px; transition:color .18s,background .18s,box-shadow .18s,padding .45s cubic-bezier(.34,1.45,.5,1); }
+  .tab:hover{ background:rgba(255,255,255,.07); color:var(--t1); padding-left:24px; padding-right:24px; }
+  .tab.on{ color:var(--o3); background:linear-gradient(180deg,rgba(255,107,26,.18),rgba(255,107,26,.10)); border-color:rgba(255,107,26,.28) !important; box-shadow:inset 0 0 0 1px rgba(255,107,26,.28),0 2px 8px rgba(255,107,26,.18); animation:hrBreathe 3.4s ease-in-out infinite; }
+  .tabs:hover .tab.on{ animation:none; }
+  @keyframes hrBreathe{0%,100%{box-shadow:inset 0 0 0 1px rgba(255,107,26,.26),0 2px 8px rgba(255,107,26,.15)}50%{box-shadow:inset 0 0 0 1px rgba(255,107,26,.42),0 5px 18px rgba(255,107,26,.32)}}
+  /* premium buttons */
+  .btn{ transition:all .15s, transform .12s, box-shadow .15s; }
+  .btn:hover{ transform:translateY(-1px); }
+  .btn:active{ transform:translateY(0) scale(.98); }
+  .btn.primary{ background:linear-gradient(135deg,var(--o1),var(--o2)); border-color:transparent; color:#fff; }
+  .btn.primary:hover{ box-shadow:0 8px 20px rgba(255,107,26,.35); }
+  .btn.ghost:hover{ border-color:rgba(255,107,26,.45); color:var(--o3); }
+  /* cards */
+  .onb-card{ box-shadow:0 12px 30px rgba(0,0,0,.24); transition:transform .15s, box-shadow .15s, border-color .15s; }
+  .onb-card:hover{ transform:translateY(-2px); box-shadow:0 18px 42px rgba(0,0,0,.3); border-color:rgba(255,107,26,.28); }
+  @media (prefers-reduced-motion: reduce){ .tabs,.tabs:hover,.tabs::before,.tab.on,.mb.open,.mb.open .modal,.lcard{ animation:none; transform:none; } }
 </style>
 </head>
 <body>
@@ -162,6 +198,16 @@ textarea.inp{min-height:72px;resize:vertical}
     <div class="mfoot">
       <button class="btn ghost sm" id="c-del" style="color:var(--red);display:none" onclick="delCandidate()">Delete</button>
       <button class="btn primary" style="margin-left:auto" onclick="saveCandidate()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESUME VIEWER MODAL -->
+<div class="mb" id="resume-modal">
+  <div class="modal" style="max-width:920px;width:95vw;">
+    <div class="mh"><h3 id="resume-title">Resume</h3><a id="resume-open" href="#" target="_blank" rel="noopener" class="btn ghost sm" style="margin-left:auto">Open in new tab ↗</a><button class="mx" onclick="closeResume()" style="margin-left:8px">✕</button></div>
+    <div class="mbd" style="padding:0;">
+      <iframe id="resume-frame" title="Resume preview" style="width:100%;height:74vh;border:0;background:#fff;border-radius:0 0 14px 14px;display:block;"></iframe>
     </div>
   </div>
 </div>
@@ -281,7 +327,7 @@ function renderBoard(){
 }
 function candCard(c){
   var extra='';
-  if(c.resume){ extra+='<a class="cbtn open" href="'+esc(c.resume)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">📄 Resume</a>'; }
+  if(c.resume){ extra+='<button class="cbtn open" onclick="openResume(event,\''+c.id+'\')">📄 View resume</button>'; }
   // assessment score badge once completed
   if(c.assess_at && c.assess_score!=='' && c.assess_score!=null){
     var sc=parseFloat(c.assess_score); var col=sc>=80?'#4ade80':(sc>=60?'#ffb066':'#f87171');
@@ -344,21 +390,47 @@ function openCandidate(id){
   $('c-name').value=c.name||''; $('c-pos').value=c.position||''; $('c-stage').value=(c.stage||'applied');
   $('c-email').value=c.email||''; $('c-phone').value=c.phone||''; $('c-source').value=c.source||''; $('c-notes').value=c.notes||'';
   $('c-del').style.display=id?'':'none';
-  // applicant info panel: resume link + assessment breakdown
+  // applicant info panel: resume viewer button + assessment breakdown
   var info=$('c-applicant'), bits=[];
-  if(c.resume) bits.push('<a href="'+esc(c.resume)+'" target="_blank" rel="noopener" style="color:#8bc0f0;font-weight:600">📄 Open resume</a>');
+  if(c.resume) bits.push('<button class="btn ghost sm" onclick="openResume(null,\''+c.id+'\')">📄 View resume</button>');
   if(c.assess_at && c.assess_score!=='' && c.assess_score!=null){
-    var d={}; try{ d=JSON.parse(c.assess_detail||'{}'); }catch(_){}
-    var parts=[];
-    if(d.grammar!=null) parts.push('Grammar '+d.grammar+'%');
-    if(d.general!=null) parts.push('General '+d.general+'%');
-    if(d.math!=null) parts.push('Math '+d.math+'%');
-    if(d.typing!=null) parts.push('Typing '+d.typing+'%'+(d.wpm!=null?(' ('+d.wpm+' wpm, '+d.accuracy+'% acc)'):''));
-    bits.push('<b>Assessment: '+Math.round(parseFloat(c.assess_score))+'%</b>'+(parts.length?'<br><span style="color:var(--t3)">'+parts.join(' · ')+'</span>':'')+'<br><span style="color:var(--t3);font-size:11px">taken '+esc(c.assess_at)+'</span>');
-  } else if(c.token){ bits.push('<span style="color:var(--t3)">Assessment link sent — awaiting completion.</span>'); }
-  if(bits.length){ info.innerHTML=bits.join('<div style="height:8px"></div>'); info.style.display=''; } else { info.style.display='none'; }
+    bits.push(assessBreakdownHTML(c));
+  } else if(c.token){ bits.push('<span style="color:var(--t3)">Assessment link sent — awaiting the applicant to complete it.</span>'); }
+  if(bits.length){ info.innerHTML=bits.join('<div style="height:12px"></div>'); info.style.display=''; } else { info.style.display='none'; }
   $('cand-modal').classList.add('open');
 }
+function assessBreakdownHTML(c){
+  var d={}; try{ d=JSON.parse(c.assess_detail||'{}'); }catch(_){}
+  var overall=Math.round(parseFloat(c.assess_score)); var oc=overall>=80?'#4ade80':(overall>=60?'#ffb066':'#f87171');
+  var rows=[['Grammar & English','grammar'],['General Knowledge','general'],['Mathematics','math'],['Typing','typing']];
+  var html='<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px"><span style="font-weight:700">Assessment results</span><span style="font-weight:800;font-size:18px;color:'+oc+'">'+overall+'%</span></div>';
+  rows.forEach(function(r){
+    var v=(d[r[1]]!=null)?Math.round(d[r[1]]):null; if(v===null) return;
+    var col=v>=80?'#4ade80':(v>=60?'#ffb066':'#f87171');
+    html+='<div style="display:flex;align-items:center;gap:9px;margin:6px 0;font-size:12px">'
+      +'<span style="width:128px;color:var(--t2)">'+r[0]+'</span>'
+      +'<div style="flex:1;height:8px;background:var(--card2);border-radius:5px;overflow:hidden"><i style="display:block;height:100%;width:'+v+'%;background:'+col+'"></i></div>'
+      +'<span style="width:36px;text-align:right;color:'+col+';font-weight:700">'+v+'%</span></div>';
+  });
+  if(d.wpm!=null) html+='<div style="font-size:11px;color:var(--t3);margin-top:8px">Typing speed: <b style="color:var(--t2)">'+d.wpm+' wpm</b> · accuracy <b style="color:var(--t2)">'+d.accuracy+'%</b></div>';
+  if(c.assess_at) html+='<div style="font-size:11px;color:var(--t3);margin-top:2px">Completed '+esc(c.assess_at)+'</div>';
+  return html;
+}
+/* ---- in-site resume viewer ---- */
+function drivePreview(url){
+  var m=/\/d\/([^\/?#]+)/.exec(url) || /[?&]id=([^&]+)/.exec(url);
+  return (m && m[1]) ? 'https://drive.google.com/file/d/'+m[1]+'/preview' : url;
+}
+function openResume(e, id){
+  if(e) e.stopPropagation();
+  var c=(STATE.candidates||[]).filter(function(x){return String(x.id)===String(id);})[0];
+  if(!c || !c.resume){ toast('No resume on file for this applicant.'); return; }
+  $('resume-title').textContent='Resume — '+(c.name||'');
+  $('resume-open').href=c.resume;
+  $('resume-frame').src=drivePreview(c.resume);
+  $('resume-modal').classList.add('open');
+}
+function closeResume(){ $('resume-frame').src='about:blank'; $('resume-modal').classList.remove('open'); }
 function applyLink(){ return location.href.replace(/[^\/]*$/,'')+'hr-apply.html'; }
 function copyApplyLink(){
   var url=applyLink();
