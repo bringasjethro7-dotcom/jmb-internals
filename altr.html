@@ -260,6 +260,16 @@ select.promosel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
 #setup p{color:var(--t2);font-size:14px;line-height:1.6;margin-bottom:.8rem}
 #setup code{font-family:'JetBrains Mono',monospace;font-size:12px;background:rgba(255,255,255,.06);padding:2px 6px;border-radius:5px;color:var(--o3)}
 @media(max-width:560px){ .hl .pill{display:none} }
+
+  /* crypto-style interactive chart */
+  .lwc-wrap{ position:relative; }
+  .lwc{ width:100%; height:400px; border-radius:14px; overflow:hidden;
+    background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(0,0,0,.14));
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.05), 0 18px 44px rgba(0,0,0,.4); }
+  .lwc-leg{ display:flex; flex-wrap:wrap; gap:14px; margin-top:12px; font-size:12px; color:#aeb6c2; }
+  .lwc-leg .lgi{ display:inline-flex; align-items:center; gap:6px; }
+  .lwc-leg .lgi i{ width:10px; height:10px; border-radius:50%; display:inline-block; box-shadow:0 0 8px currentColor; }
+  .lwc-leg .lgi b{ color:#e8edf4; font-variant-numeric:tabular-nums; }
 </style>
 </head>
 <body>
@@ -1586,6 +1596,7 @@ function renderInsights(){
     '<div class="inscard" style="margin-top:1.2rem"><div class="inshd"><span>'+chartIcon+' IG reels trend</span>'+
     '<span class="goalsub" style="margin:0">reach of reposted reels · '+reposts.length+' tracked</span></div>'+buildReelsChart()+'</div>';
   ANIMATE_AUDIO=false;   // consume the one-shot animate flag after both charts have rendered
+  mountAudioCharts();    // mount the interactive crypto-style charts into the placeholders
   renderAudios(); renderReposts();
 }
 // Editable Y-axis range per audio chart (persisted locally) — lets you zoom the line graph
@@ -1626,15 +1637,87 @@ async function editAudioXAxis(kind){
   AUD_YRANGE[kind]=Object.assign({}, yr, { days:n }); saveAudYRange();
   renderInsights();
 }
-function buildAudioChart(kind){
+// ── Crypto-style interactive trend chart (TradingView lightweight-charts) ──
+function hexA(hex,a){ var h=String(hex).replace('#',''); if(h.length===3)h=h.split('').map(function(c){return c+c;}).join(''); var r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16); return 'rgba('+r+','+g+','+b+','+a+')'; }
+function histTime(s){ s=String(s||''); var d=Date.parse(s.replace(' ','T')); if(isNaN(d)) d=Date.parse(s.slice(0,10)+'T00:00:00'); return Math.floor((isNaN(d)?Date.now():d)/1000); }
+function audioSeriesData(kind){
   var ofKind=(STATE.audios||[]).filter(function(a){ var p=String(a.kind||'full').toLowerCase()==='partial'; return kind==='partial'?p:!p; });
-  var ids={}, titles={}; ofKind.forEach(function(a){ ids[String(a.id)]=true; titles[String(a.id)]=a.title||('Audio '+a.id); });
-  var hist=(STATE.audio_history||[]).filter(function(h){ return ids[String(h.audio_id)]; });
-  var isP = (kind==='partial');
-  var yr = AUD_YRANGE[kind] || { min:0, max:(isP?2000:10000) };
-  return buildTrendChart(hist, titles,
-    { idKey:'audio_id', fixedMin:yr.min, fixedMax:yr.max, days:yr.days, glines:(isP?4:10), glow:(isP?'audglowP':'audglowF'), def:'Audio ',
-      empty:'No '+kind+' promotions tracked yet — add one as “'+kind+'” and update its reels count to build the line.' });
+  var titles={}; ofKind.forEach(function(a){ titles[String(a.id)]=a.title||('Audio '+a.id); });
+  var hist=(STATE.audio_history||[]).filter(function(h){ return titles[String(h.audio_id)]!==undefined; });
+  var byAud={};
+  hist.forEach(function(h){ var id=String(h.audio_id); (byAud[id]=byAud[id]||[]).push({ t:histTime(h.date), v:fnum(h.count) }); });
+  Object.keys(byAud).forEach(function(id){
+    byAud[id].sort(function(a,b){ return a.t-b.t; });
+    var last=-1; byAud[id].forEach(function(p){ if(p.t<=last) p.t=last+1; last=p.t; });
+  });
+  // keep the strongest 8, by latest value
+  var ids=Object.keys(byAud).sort(function(a,b){ var la=byAud[a].slice(-1)[0].v, lb=byAud[b].slice(-1)[0].v; return lb-la; }).slice(0,8);
+  var out={}; ids.forEach(function(id){ out[id]=byAud[id]; });
+  return { byAud:out, titles:titles };
+}
+function buildAudioChart(kind){
+  var d=audioSeriesData(kind);
+  if(!Object.keys(d.byAud).length){
+    return '<div class="muted">No '+kind+' promotions tracked yet — add one as “'+kind+'” and update its reels count to build the line.</div>';
+  }
+  return '<div class="lwc-wrap"><div class="lwc" id="lwc-'+kind+'"></div><div class="lwc-leg" id="lwc-leg-'+kind+'"></div></div>';
+}
+var _lwc={};
+function mountAudioCharts(){ ['full','partial'].forEach(mountAudioChart); }
+function mountAudioChart(kind){
+  var el=document.getElementById('lwc-'+kind); if(!el) return;
+  if(typeof LightweightCharts==='undefined'){ el.innerHTML='<div class="muted" style="padding:1rem">Loading chart…</div>'; setTimeout(function(){ mountAudioChart(kind); }, 400); return; }
+  if(_lwc[kind]){ try{ if(_lwc[kind].ro) _lwc[kind].ro.disconnect(); _lwc[kind].chart.remove(); }catch(e){} _lwc[kind]=null; }
+  var data=audioSeriesData(kind); var ids=Object.keys(data.byAud); if(!ids.length) return;
+  var yr=AUD_YRANGE[kind]||{min:0,max:(kind==='partial'?2000:10000),days:7};
+  el.innerHTML='';
+  var LC=LightweightCharts;
+  var chart=LC.createChart(el,{
+    width:el.clientWidth, height:el.clientHeight||400,
+    layout:{ background:{ type:'solid', color:'transparent' }, textColor:'#9aa4b2', fontSize:11, fontFamily:'Inter,system-ui,sans-serif' },
+    grid:{ vertLines:{ color:'rgba(255,255,255,.045)' }, horzLines:{ color:'rgba(255,255,255,.05)' } },
+    rightPriceScale:{ borderColor:'rgba(255,255,255,.08)', scaleMargins:{ top:.14, bottom:.08 } },
+    timeScale:{ borderColor:'rgba(255,255,255,.08)', timeVisible:true, secondsVisible:false, rightOffset:4 },
+    crosshair:{ mode:LC.CrosshairMode.Normal,
+      vertLine:{ color:'rgba(255,255,255,.30)', width:1, style:2, labelBackgroundColor:'#ff6b1a' },
+      horzLine:{ color:'rgba(255,255,255,.30)', width:1, style:2, labelBackgroundColor:'#ff6b1a' } },
+    handleScroll:true, handleScale:true
+  });
+  var colors=['#ff6b1a','#22c55e','#3b82f6','#f59e0b','#a855f7','#ef4444','#14b8a6','#eab308'];
+  var single=ids.length===1;
+  var seriesArr=[];
+  ids.forEach(function(id,ci){
+    var col=colors[ci%colors.length];
+    var common={ priceLineVisible:false, lastValueVisible:true, crosshairMarkerRadius:4, crosshairMarkerBorderColor:col, crosshairMarkerBackgroundColor:'#0b0e14',
+      autoscaleInfoProvider:function(){ return { priceRange:{ minValue:yr.min, maxValue:yr.max } }; } };
+    var s = single
+      ? chart.addAreaSeries(Object.assign({ lineColor:col, lineWidth:3, topColor:hexA(col,.34), bottomColor:hexA(col,0) }, common))
+      : chart.addLineSeries(Object.assign({ color:col, lineWidth:2.4, lineType:0 }, common));
+    s.setData(data.byAud[id].map(function(p){ return { time:p.t, value:p.v }; }));
+    seriesArr.push({ id:id, s:s, col:col, title:data.titles[id]||('Audio '+id) });
+  });
+  // X window: show the last N days, then let the user wheel-zoom / drag-pan freely
+  try{
+    var allT=[]; ids.forEach(function(id){ data.byAud[id].forEach(function(p){ allT.push(p.t); }); });
+    var maxT=Math.max.apply(null,allT), minT=Math.min.apply(null,allT);
+    var from=Math.max(minT, maxT-(yr.days||7)*86400);
+    if(from>=maxT) chart.timeScale().fitContent(); else chart.timeScale().setVisibleRange({ from:from, to:maxT+3600 });
+  }catch(e){ try{ chart.timeScale().fitContent(); }catch(_){} }
+  // live crosshair legend (crypto-style read-out)
+  var legEl=document.getElementById('lwc-leg-'+kind);
+  function renderLeg(param){
+    if(!legEl) return;
+    legEl.innerHTML=seriesArr.map(function(o){
+      var v='';
+      if(param && param.seriesData && param.seriesData.get){ var dd=param.seriesData.get(o.s); if(dd && dd.value!=null) v=Number(dd.value).toLocaleString(); }
+      if(v===''){ var arr=data.byAud[o.id]; v=arr.length?Number(arr[arr.length-1].v).toLocaleString():'—'; }
+      return '<span class="lgi"><i style="background:'+o.col+'"></i>'+esc(o.title)+' <b>'+v+'</b></span>';
+    }).join('');
+  }
+  renderLeg(null);
+  chart.subscribeCrosshairMove(renderLeg);
+  var ro=null; try{ ro=new ResizeObserver(function(){ chart.applyOptions({ width:el.clientWidth }); }); ro.observe(el); }catch(e){}
+  _lwc[kind]={ chart:chart, ro:ro };
 }
 function buildReelsChart(){
   return buildTrendChart(STATE.repost_history||[], (function(){ var t={}; (STATE.reposts||[]).forEach(function(r){ t[String(r.id)]=('Reel '+r.id); }); return t; })(),
