@@ -215,6 +215,28 @@ textarea.inp{min-height:72px;resize:vertical}
   </div>
 </div>
 
+<!-- INTERVIEW SCHEDULE MODAL -->
+<div class="mb" id="interview-modal">
+  <div class="modal">
+    <div class="mh"><h3>Schedule interview</h3><button class="mx" onclick="closeInterview()">✕</button></div>
+    <div class="mbd">
+      <div id="iv-who" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:14px;font-size:13px;line-height:1.7"></div>
+      <div class="grid2">
+        <div class="fg"><label>Date &amp; time *</label><input class="inp" id="iv-when" type="datetime-local"></div>
+        <div class="fg"><label>Format</label><select class="inp" id="iv-mode" onchange="ivModeChange()"><option value="online">Online</option><option value="inperson">In Person</option></select></div>
+      </div>
+      <div class="fg"><label>Interviewer — HR employee *</label><input class="inp" id="iv-with" placeholder="e.g. Maria Santos"></div>
+      <div class="fg"><label id="iv-loc-label">Meeting link</label><input class="inp" id="iv-loc" placeholder="https://meet.google.com/…"></div>
+      <div class="fg"><label>Note to applicant (optional)</label><textarea class="inp" id="iv-note" placeholder="Anything they should prepare or bring…"></textarea></div>
+      <div style="font-size:12px;color:var(--t3);margin-top:2px">An invitation email with these details will be sent to the applicant.</div>
+    </div>
+    <div class="mfoot">
+      <button class="btn ghost sm" onclick="closeInterview()">Cancel</button>
+      <button class="btn primary" id="iv-send" style="margin-left:auto" onclick="submitInterview()">Send invite &amp; move to Interview</button>
+    </div>
+  </div>
+</div>
+
 <!-- RESUME VIEWER MODAL -->
 <div class="mb" id="resume-modal">
   <div class="modal" style="max-width:920px;width:95vw;">
@@ -388,10 +410,46 @@ function onDrop(e, stage){
   e.preventDefault();
   var id=_dragId||(e.dataTransfer&&e.dataTransfer.getData('text/plain')); if(!id) return;
   var c=(STATE.candidates||[]).filter(function(x){return String(x.id)===String(id);})[0]; if(!c || String(c.stage)===stage){ document.querySelectorAll('.col.drag').forEach(function(c){c.classList.remove('drag');}); return; }
+  document.querySelectorAll('.col.drag').forEach(function(x){x.classList.remove('drag');});
+  // Moving to Interview: collect a schedule and email the applicant an invitation
+  if(stage==='interview' && String(c.stage)!=='interview'){ openInterviewModal(c); return; }
   var wasHired=String(c.stage)==='hired';
   c.stage=stage; renderBoard();
   apiPost({action:'candidate_stage', id:id, stage:stage}).catch(function(){ toast('Save failed'); });
   if(stage==='hired' && !wasHired){ toast('Moved to Hired — set up onboarding in the Onboarding tab.'); renderOnb(); }
+}
+
+/* ====== INTERVIEW SCHEDULE ====== */
+var _ivCand=null;
+function openInterviewModal(c){
+  _ivCand=c;
+  $('iv-who').innerHTML='<b>'+esc(c.name||'Applicant')+'</b>'+(c.position?' · '+esc(c.position):'')+'<br><span style="color:var(--t3)">'+esc(c.email||'⚠ no email on file')+'</span>';
+  $('iv-when').value=''; $('iv-mode').value='online'; $('iv-with').value=''; $('iv-loc').value=''; $('iv-note').value='';
+  ivModeChange();
+  $('interview-modal').classList.add('open');
+}
+function closeInterview(){ $('interview-modal').classList.remove('open'); _ivCand=null; }
+function ivModeChange(){
+  var online=$('iv-mode').value==='online';
+  $('iv-loc-label').textContent = online ? 'Meeting link' : 'Location / Address';
+  $('iv-loc').placeholder = online ? 'https://meet.google.com/…' : 'Office address or where to meet';
+}
+function ivFmtWhen(v){ if(!v) return ''; var d=new Date(v); if(isNaN(d.getTime())) return v; return d.toLocaleDateString('en-US',{weekday:'short',month:'long',day:'numeric',year:'numeric'})+' · '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true}); }
+async function submitInterview(){
+  var c=_ivCand; if(!c) return;
+  var when=$('iv-when').value, mode=$('iv-mode').value, withName=$('iv-with').value.trim(), loc=$('iv-loc').value.trim(), note=$('iv-note').value.trim();
+  if(!when){ toast('Pick a date & time.'); return; }
+  if(!withName){ toast('Enter the interviewer (HR) name.'); return; }
+  if(!c.email && !confirm('No email is on file for this applicant — they will be moved to Interview but no invite can be emailed. Continue?')) return;
+  var btn=$('iv-send'); btn.disabled=true; btn.textContent='Sending…';
+  c.stage='interview'; renderBoard();   // optimistic
+  try{
+    var r=await apiPost({ action:'candidate_interview', id:c.id, email:c.email, name:c.name,
+      when:ivFmtWhen(when), mode:(mode==='online'?'online':'inperson'), interviewer:withName, location:loc, note:note });
+    if(r && r.ok) toast(r.emailed ? 'Interview scheduled — invite emailed ✓' : 'Scheduled, but the email could not be sent.');
+    else toast('Save failed.');
+  }catch(e){ toast('Save failed.'); }
+  finally{ btn.disabled=false; btn.textContent='Send invite & move to Interview'; closeInterview(); }
 }
 
 /* ====== CANDIDATE MODAL ====== */
