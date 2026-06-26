@@ -178,6 +178,14 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .empin:focus{border-color:var(--o1)}
 select.promosel{max-width:200px;cursor:pointer}
 select.promosel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
+button.promosel{max-width:220px;cursor:pointer;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.promosel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
+.promo-pop{position:fixed;z-index:400;min-width:235px;max-width:310px;max-height:340px;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px;box-shadow:0 22px 60px rgba(0,0,0,.6)}
+.promo-pop .promo-opt{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--t1)}
+.promo-pop .promo-opt:hover{background:rgba(255,255,255,.06)}
+.promo-pop .promo-opt input{accent-color:var(--o1);width:16px;height:16px;flex-shrink:0;cursor:pointer;margin:0}
+.promo-pop .promo-done{border-top:1px solid var(--line);margin-top:4px;padding-top:6px;text-align:right}
+.promo-pop .promo-done button{background:linear-gradient(135deg,var(--o1),var(--o2));border:none;color:#fff;font-weight:600;font-size:12.5px;border-radius:8px;padding:6px 14px;cursor:pointer;font-family:inherit}
 .empwrap{display:flex;align-items:center;gap:9px}
 .empchk{width:17px;height:17px;accent-color:var(--o1);cursor:pointer;flex-shrink:0}
 .pct{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px}
@@ -618,8 +626,9 @@ function ringAlarm(){
   }catch(e){}
 }
 function renderReelsAlarmList(){
-  var audios=(STATE&&STATE.audios)||[];
-  if(!audios.length){ $('reels-alarm-list').innerHTML='<div class="muted">No audio promotions to update.</div>'; return; }
+  // Completed ("Done") promotions are finished — don't ask for updated reels counts on them.
+  var audios=((STATE&&STATE.audios)||[]).filter(function(a){ return String(a.status||'').toLowerCase()!=='done'; });
+  if(!audios.length){ $('reels-alarm-list').innerHTML='<div class="muted">No active audio promotions to update.</div>'; return; }
   var lk='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
   $('reels-alarm-list').innerHTML='<table class="srctable"><thead><tr><th>Audio</th><th>Current</th><th>New count</th></tr></thead><tbody>'+
     audios.map(function(a){
@@ -841,19 +850,49 @@ function renderPostTeam(){
   var sum=$('postteam-sum'); if(sum) sum.textContent=totP+' / '+totT+' posted · '+(totT?Math.round(totP/totT*100):0)+'%';
   var body=$('postteam-body'); if(body) body.innerHTML = html || '<tr><td colspan="6" class="muted">No posting team.</td></tr>';
 }
-/* Assigned-promotion cell for a poster — options from current audio promotions */
+/* Assigned-promotion cell for a poster — MULTIPLE audio promotions (comma-separated ids) */
+function audioIdList(v){ return String(v||'').split(',').map(function(s){ return s.trim(); }).filter(Boolean); }
+function promoLabel(v){
+  var ids=audioIdList(v); if(!ids.length) return '— assign promos —';
+  var byId={}; (STATE.audios||[]).forEach(function(a){ byId[String(a.id)]=a; });
+  var names=ids.map(function(id){ var a=byId[id]; return esc(a?(a.title||('Audio '+id)):id); });
+  return names.length<=2 ? names.join(', ') : (names.slice(0,2).join(', ')+' +'+(names.length-2));
+}
 function posterPromoCell(px){
-  var cur=String(px.audio||'');
+  var ids=audioIdList(px.audio);
   if(ISADMIN){
-    var audios=(STATE.audios||[]);
-    var opts='<option value="">— assign promo —</option>'+audios.map(function(au){
-      var k=(String(au.kind||'full').toLowerCase()==='partial')?'Partial':'Full';
-      return '<option value="'+esc(au.id)+'"'+(String(au.id)===cur?' selected':'')+'>'+esc(au.title||('Audio '+au.id))+' · '+k+'</option>';
-    }).join('');
-    return '<select class="empin promosel'+(cur?' has':'')+'" onchange="setPoster(\''+esc(px.id)+'\',\'audio\',this.value)">'+opts+'</select>';
+    return '<button type="button" id="promo-btn-'+esc(px.id)+'" class="empin promosel'+(ids.length?' has':'')+'" onclick="openPromoMenu(event,\''+esc(px.id)+'\')">'+promoLabel(px.audio)+'</button>';
   }
-  var au=(STATE.audios||[]).filter(function(x){ return String(x.id)===cur; })[0];
-  return au ? esc(au.title||('Audio '+au.id)) : '<span style="color:var(--t3)">—</span>';
+  if(!ids.length) return '<span style="color:var(--t3)">—</span>';
+  return promoLabel(px.audio);
+}
+function openPromoMenu(ev, posterId){
+  ev.stopPropagation(); closePromoPop();
+  var s=(STATE.posters||[]).filter(function(x){ return String(x.id)===String(posterId); })[0];
+  var cur=audioIdList(s&&s.audio); var audios=(STATE.audios||[]);
+  var pop=document.createElement('div'); pop.className='promo-pop'; pop.id='promo-pop';
+  pop.innerHTML=(audios.length?audios.map(function(au){
+      var on=cur.indexOf(String(au.id))>=0; var k=(String(au.kind||'full').toLowerCase()==='partial')?'Partial':'Full';
+      return '<label class="promo-opt"><input type="checkbox" '+(on?'checked':'')+' onchange="togglePosterAudio(\''+esc(posterId)+'\',\''+esc(au.id)+'\',this.checked)"><span>'+esc(au.title||('Audio '+au.id))+' · '+k+'</span></label>';
+    }).join(''):'<div class="muted" style="padding:8px 10px">No promotions yet</div>')+
+    '<div class="promo-done"><button onclick="closePromoPop()">Done</button></div>';
+  document.body.appendChild(pop);
+  var r=ev.currentTarget.getBoundingClientRect();
+  pop.style.left=Math.max(8, Math.min(window.innerWidth-pop.offsetWidth-8, r.left))+'px';
+  var top=r.bottom+6; if(top+pop.offsetHeight>window.innerHeight-8) top=Math.max(8, r.top-pop.offsetHeight-6);
+  pop.style.top=top+'px';
+  setTimeout(function(){ document.addEventListener('mousedown', _promoOutside); },0);
+}
+function _promoOutside(e){ var p=document.getElementById('promo-pop'); if(p && !p.contains(e.target)) closePromoPop(); }
+function closePromoPop(){ var p=document.getElementById('promo-pop'); if(p) p.remove(); document.removeEventListener('mousedown', _promoOutside); }
+function togglePosterAudio(posterId, audioId, on){
+  var s=(STATE.posters||[]).filter(function(x){ return String(x.id)===String(posterId); })[0];
+  var cur=audioIdList(s&&s.audio); var i=cur.indexOf(String(audioId));
+  if(on && i<0) cur.push(String(audioId)); else if(!on && i>=0) cur.splice(i,1);
+  var val=cur.join(',');
+  if(s) s.audio=val;
+  var btn=document.getElementById('promo-btn-'+posterId); if(btn){ btn.innerHTML=promoLabel(val); btn.classList.toggle('has', !!val); }
+  apiPost({ action:'poster_set', id:posterId, audio:val }).catch(function(){ toast('Save failed'); });
 }
 function setPoster(id, field, val){
   var s=(STATE.posters||[]).filter(function(x){ return String(x.id)===String(id); })[0]; if(s){ s[field]=val; }
