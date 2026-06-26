@@ -118,6 +118,7 @@ button{font-family:inherit}
 .tile .ph .big{width:78px;height:78px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:700;color:#fff}
 .tile .lbl{position:absolute;left:10px;bottom:10px;background:rgba(0,0,0,.55);border-radius:8px;padding:4px 10px;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:7px;max-width:80%}
 .tile .lbl .mic{width:14px;height:14px;flex-shrink:0}
+.tile .lbl span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tile .lbl .mic.off{color:var(--red)}
 .tile .you{position:absolute;right:10px;top:10px;background:rgba(255,107,26,.9);color:#fff;font-size:10px;font-weight:700;border-radius:6px;padding:2px 7px}
 .call-bar{padding:14px;display:flex;align-items:center;justify-content:center;gap:12px;border-top:1px solid var(--line);flex-wrap:wrap}
@@ -407,13 +408,24 @@ var PORTAL_URL = "https://script.google.com/macros/s/AKfycbzoalT_9SYhSPciWdjDI6b
 var ADMIN_PASS = "JMBeast_020298";
 var SUPA_URL   = 'https://rvyrnkjqxnijxydloujk.supabase.co';
 var SUPA_KEY   = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2eXJua2pxeG5panh5ZGxvdWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NzAwODQsImV4cCI6MjA5NzE0NjA4NH0.SwkSkmbeWrhm5PZZDSZ1Z4hbjpQ0L2CRtuKQmpHshBE';
+// Low-latency ICE: prefer DIRECT peer-to-peer (STUN) — relays add delay. TURN is a
+// fallback for strict NATs. For best reliability/quality, replace the openrelay TURN
+// below with YOUR OWN TURN server (e.g. self-hosted coturn or a paid TURN) — the free
+// public relay is the single biggest cause of lag/quality drops when relaying.
 var ICE = { iceServers: [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
   { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
   { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
   { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
-]};
+], iceCandidatePoolSize: 4, bundlePolicy: 'max-bundle', rtcpMuxPolicy: 'require' };
+// High-quality capture constraints
+var AUDIO_C = { echoCancellation:true, noiseSuppression:true, autoGainControl:true, channelCount:1, sampleRate:48000 };
+var VIDEO_C = { width:{ ideal:1280 }, height:{ ideal:720 }, frameRate:{ ideal:30, max:30 }, facingMode:'user' };
+// Per-stream bitrate ceilings, scaled down as a mesh call grows (protects latency)
+function videoMaxBitrate(){ var n=Object.keys(peers||{}).length+1; return n<=2?2500000 : n<=4?1400000 : n<=6?900000 : 600000; }
 var DEFAULT_CHANNELS = ['general','random','dev','watercooler'];
 var CHAN_DESC = { general:'Team-wide channel', random:'Off-topic & banter', dev:'Engineering', watercooler:'Hang out' };
 
@@ -634,9 +646,9 @@ function renderPeople(){
     var badge=unread['dm:'+id]?('<span class="badge">'+unread['dm:'+id]+'</span>'):'';
     var live=(activeRooms['dm:'+[ME.id,id].sort().join(':')]||[]).length;
     var right = live ? '<span class="live"><i></i>call</span>' : (badge||'<span class="dot" style="background:'+(on?'var(--green)':'var(--t3)')+'"></span>');
-    return '<div class="chan'+active+'" onclick="openDM(\''+id+'\')">'+
+    return '<div class="chan'+active+'" onclick="openDM(\''+id+'\')" title="'+esc(p.name)+'">'+
       '<div class="av" style="background:'+colorFor(id)+'">'+av+'</div>'+
-      '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(firstName(p.name))+'</span>'+
+      '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.name)+'</span>'+
       right+
     '</div>';
   }).join('');
@@ -665,7 +677,7 @@ function openDM(id){ openView({ type:'dm', id:id, name:(people[id]&&people[id].n
 function openView(v){
   view=v;
   if(v.type==='channel'){ unread['ch:'+v.key]=0; $('view-title').innerHTML='<span class="hash">#</span> '+esc(v.key); $('view-desc').textContent=CHAN_DESC[v.key]||'Channel'; }
-  else { unread['dm:'+v.id]=0; $('view-title').innerHTML='<span class="hash">@</span> '+esc(firstName(v.name)); $('view-desc').textContent='Direct message'; }
+  else { unread['dm:'+v.id]=0; $('view-title').innerHTML='<span class="hash">@</span> '+esc(v.name); $('view-desc').textContent='Direct message'; }
   _typers={}; renderTyping(); updateJoinBtn();
   renderChannels(); renderPeople();
   loadMessages();
@@ -858,7 +870,7 @@ function roomLabel(){ return view.type==='channel' ? ('#'+view.key) : firstName(
 async function startCall(video){
   if(inCall){ toast('You are already in a call.'); return; }
   callVideo=!!video;
-  try{ localStream = await navigator.mediaDevices.getUserMedia({ audio:true, video: callVideo }); }
+  try{ localStream = await navigator.mediaDevices.getUserMedia({ audio:AUDIO_C, video: callVideo?VIDEO_C:false }); }
   catch(e){ toast('Allow microphone'+(callVideo?'/camera':'')+' access to start a call.'); return; }
   micOn=true; camOn=callVideo; sharing=false;
   inCall=true; callRoom=roomId();
@@ -887,25 +899,38 @@ function onCallPresence(){
   var ids=Object.keys(callChan.presenceState());
   ids.forEach(function(id){ if(id!==ME.id && localStream && !peers[id]) createPeer(id, ME.id < id); });
   $('call-count').textContent = ids.length;
+  tuneAll();   // rescale per-stream bitrate as the call grows/shrinks
 }
 function createPeer(id, initiator){
   if(peers[id]) return;
   var pc=new RTCPeerConnection(ICE);
   peers[id]={ pc:pc, stream:null };
-  localStream.getTracks().forEach(function(t){ pc.addTrack(t, localStream); });
+  localStream.getTracks().forEach(function(t){ if(t.kind==='video'){ try{ t.contentHint='motion'; }catch(e){} } pc.addTrack(t, localStream); });
   pc.onicecandidate=function(ev){ if(ev.candidate) sig(id,{kind:'candidate',candidate:ev.candidate}); };
-  pc.ontrack=function(ev){ peers[id].stream=ev.streams[0]; var nm=(people[id]&&people[id].name)|| 'Teammate'; addTile(id, nm, ev.streams[0], false); attachMeter(id, ev.streams[0]); };
+  pc.ontrack=function(ev){ try{ if('playoutDelayHint' in ev.receiver) ev.receiver.playoutDelayHint=0; }catch(e){} peers[id].stream=ev.streams[0]; var nm=(people[id]&&people[id].name)|| 'Teammate'; addTile(id, nm, ev.streams[0], false); attachMeter(id, ev.streams[0]); };
   pc.oniceconnectionstatechange=function(){ setTileConn(id, pc.iceConnectionState); };
-  pc.onconnectionstatechange=function(){ if(pc.connectionState==='failed'||pc.connectionState==='closed') removePeer(id); };
+  pc.onconnectionstatechange=function(){ if(pc.connectionState==='connected') tuneSenders(pc); if(pc.connectionState==='failed'||pc.connectionState==='closed') removePeer(id); };
   if(initiator){ pc.onnegotiationneeded=async function(){ try{ var o=await pc.createOffer(); await pc.setLocalDescription(o); sig(id,{kind:'offer',sdp:pc.localDescription}); }catch(e){} }; }
+  tuneSenders(pc);
 }
+// Push higher bitrate/framerate + low-latency preferences onto each sender.
+function tuneSenders(pc){
+  try{ pc.getSenders().forEach(function(s){
+    if(!s.track) return;
+    var pr=s.getParameters(); if(!pr.encodings||!pr.encodings.length) pr.encodings=[{}];
+    if(s.track.kind==='video'){ pr.encodings[0].maxBitrate=(sharing?3000000:videoMaxBitrate()); pr.encodings[0].maxFramerate=30; pr.degradationPreference='maintain-framerate'; }
+    else if(s.track.kind==='audio'){ pr.encodings[0].maxBitrate=128000; }
+    s.setParameters(pr).catch(function(){});
+  }); }catch(e){}
+}
+function tuneAll(){ Object.keys(peers).forEach(function(id){ if(peers[id]&&peers[id].pc) tuneSenders(peers[id].pc); }); }
 async function onSig(p){
   var d=p.payload; if(!d||d.to!==ME.id||!inCall||!localStream) return;
   var from=d.from; if(!peers[from]) createPeer(from, false);
   var pc=peers[from].pc;
   try{
-    if(d.kind==='offer'){ await pc.setRemoteDescription(new RTCSessionDescription(d.sdp)); var a=await pc.createAnswer(); await pc.setLocalDescription(a); sig(from,{kind:'answer',sdp:pc.localDescription}); }
-    else if(d.kind==='answer'){ await pc.setRemoteDescription(new RTCSessionDescription(d.sdp)); }
+    if(d.kind==='offer'){ await pc.setRemoteDescription(new RTCSessionDescription(d.sdp)); var a=await pc.createAnswer(); await pc.setLocalDescription(a); sig(from,{kind:'answer',sdp:pc.localDescription}); tuneSenders(pc); }
+    else if(d.kind==='answer'){ await pc.setRemoteDescription(new RTCSessionDescription(d.sdp)); tuneSenders(pc); }
     else if(d.kind==='candidate'){ try{ await pc.addIceCandidate(new RTCIceCandidate(d.candidate)); }catch(e){} }
   }catch(e){}
 }
@@ -935,21 +960,21 @@ function toggleCam(){
   var vt=localStream.getVideoTracks()[0];
   if(vt && !sharing){ camOn=!camOn; vt.enabled=camOn; setTileVideo(ME.id,camOn); updateCallButtons(); broadcastState(); return; }
   if(!vt){ // joined voice-only → acquire camera and add to peers
-    navigator.mediaDevices.getUserMedia({ video:true }).then(function(s){
-      var track=s.getVideoTracks()[0]; localStream.addTrack(track);
+    navigator.mediaDevices.getUserMedia({ video:VIDEO_C }).then(function(s){
+      var track=s.getVideoTracks()[0]; try{ track.contentHint='motion'; }catch(e){} localStream.addTrack(track);
       Object.keys(peers).forEach(function(id){ try{ peers[id].pc.addTrack(track, localStream); }catch(e){} });
-      camOn=true; setTileLocalStream(); setTileVideo(ME.id,true); updateCallButtons(); broadcastState();
+      camOn=true; setTileLocalStream(); setTileVideo(ME.id,true); updateCallButtons(); broadcastState(); tuneAll();
     }).catch(function(){ toast('Could not start camera.'); });
   }
 }
 async function toggleScreen(){
   if(!localStream) return;
   if(sharing){ stopScreen(); return; }
-  try{ screenStream=await navigator.mediaDevices.getDisplayMedia({ video:true, audio:false }); }
+  try{ screenStream=await navigator.mediaDevices.getDisplayMedia({ video:{ frameRate:{ ideal:30 } }, audio:false }); }
   catch(e){ return; }
-  var screenTrack=screenStream.getVideoTracks()[0];
+  var screenTrack=screenStream.getVideoTracks()[0]; try{ screenTrack.contentHint='detail'; }catch(e){}
   replaceVideoTrack(screenTrack);
-  sharing=true; camOn=true; setTileVideo(ME.id,true); updateCallButtons(); broadcastState();
+  sharing=true; camOn=true; setTileVideo(ME.id,true); updateCallButtons(); broadcastState(); tuneAll();
   screenTrack.onended=function(){ stopScreen(); };
 }
 function stopScreen(){
@@ -958,7 +983,7 @@ function stopScreen(){
   var cam=localStream.getVideoTracks()[0];
   if(cam){ replaceVideoTrack(cam); camOn=cam.enabled; }
   else { replaceVideoTrack(null); camOn=false; }
-  setTileVideo(ME.id,camOn); updateCallButtons(); broadcastState();
+  setTileVideo(ME.id,camOn); updateCallButtons(); broadcastState(); tuneAll();
 }
 function replaceVideoTrack(track){
   Object.keys(peers).forEach(function(id){
@@ -985,7 +1010,7 @@ function addTile(id,name,stream,isMe){
     var el=document.createElement('div'); el.className='tile novideo'; el.id=gid;
     el.innerHTML='<video autoplay playsinline'+(isMe?' muted':'')+'></video>'+
       '<div class="ph"><div class="big" style="background:'+colorFor(id)+'">'+initials(name)+'</div></div>'+
-      '<div class="lbl"><svg class="mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg><span>'+esc(firstName(name))+(isMe?' (you)':'')+'</span></div>'+
+      '<div class="lbl"><svg class="mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg><span>'+esc(name)+(isMe?' (you)':'')+'</span></div>'+
       (isMe?'<div class="you">YOU</div>':'<span class="conn" title="Connecting…"></span>');
     $('grid').appendChild(el);
     updateGridClass();
@@ -1028,7 +1053,7 @@ async function openDevices(){
 function closeDevices(e){ var m=$('devmenu'); if(m && (!e || !m.contains(e.target))) m.style.display='none'; }
 async function applyMic(deviceId){
   try{
-    var s=await navigator.mediaDevices.getUserMedia({ audio:{ deviceId:{ exact:deviceId } } });
+    var s=await navigator.mediaDevices.getUserMedia({ audio:Object.assign({ deviceId:{ exact:deviceId } }, AUDIO_C) });
     var track=s.getAudioTracks()[0]; track.enabled=micOn;
     Object.keys(peers).forEach(function(pid){ var sd=peers[pid].pc.getSenders().filter(function(x){return x.track&&x.track.kind==='audio';})[0]; if(sd){ try{ sd.replaceTrack(track); }catch(e){} } });
     var old=localStream.getAudioTracks()[0]; if(old){ localStream.removeTrack(old); old.stop(); } localStream.addTrack(track);
@@ -1038,10 +1063,10 @@ async function applyMic(deviceId){
 async function applyCam(deviceId){
   try{
     if(sharing) stopScreen();
-    var s=await navigator.mediaDevices.getUserMedia({ video:{ deviceId:{ exact:deviceId } } });
-    var track=s.getVideoTracks()[0];
+    var s=await navigator.mediaDevices.getUserMedia({ video:Object.assign({ deviceId:{ exact:deviceId } }, VIDEO_C) });
+    var track=s.getVideoTracks()[0]; try{ track.contentHint='motion'; }catch(e){}
     var old=localStream.getVideoTracks()[0]; if(old){ localStream.removeTrack(old); old.stop(); } localStream.addTrack(track);
-    replaceVideoTrack(track); camOn=true; setTileVideo(ME.id,true); updateCallButtons(); broadcastState(); $('devmenu').style.display='none'; toast('Camera switched.');
+    replaceVideoTrack(track); camOn=true; setTileVideo(ME.id,true); updateCallButtons(); broadcastState(); tuneAll(); $('devmenu').style.display='none'; toast('Camera switched.');
   }catch(e){ toast('Could not switch camera.'); }
 }
 
