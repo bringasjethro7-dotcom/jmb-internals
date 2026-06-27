@@ -1648,7 +1648,7 @@ function renderInsights(){
       '<span class="goalsub" style="margin:0">'+partA.length+' tracked · '+inprog(partA)+' in progress</span>'+audYChip('partial')+audXChip('partial')+'</div>'+buildAudioChart('partial')+'</div>'+
     '</div>'+
     '<div class="inscard" style="margin-top:1.2rem"><div class="inshd"><span>'+chartIcon+' IG reels trend</span>'+
-    '<span class="goalsub" style="margin:0">reach of reposted reels · '+reposts.length+' tracked</span></div>'+buildReelsChart()+'</div>';
+    '<span class="goalsub" style="margin:0">reach of reposted reels · '+reposts.length+' tracked</span>'+reelYChip()+reelXChip()+'</div>'+buildReelsChart()+'</div>';
   ANIMATE_AUDIO=false;   // consume the one-shot animate flag after both charts have rendered
   mountAudioCharts();    // mount the interactive crypto-style charts into the placeholders
   renderAudios(); renderReposts();
@@ -1690,6 +1690,35 @@ async function editAudioXAxis(kind){
   var n=parseInt(v,10); if(isNaN(n)||n<1||n>120){ toast('Enter days between 1 and 120.'); return; }
   AUD_YRANGE[kind]=Object.assign({}, yr, { days:n }); saveAudYRange();
   renderInsights();
+}
+// ── Editable X/Y axis for the IG reels trend (reposts) ──
+var REEL_RANGE = (function(){
+  var def={ min:0, max:2000, days:7 };
+  try{ var s=JSON.parse(localStorage.getItem('altr_reel_range')||'null'); if(s){ def={ min:(+s.min||0), max:(+s.max||2000), days:(+s.days||7) }; } }catch(e){}
+  return def;
+})();
+function saveReelRange(){ try{ localStorage.setItem('altr_reel_range', JSON.stringify(REEL_RANGE)); }catch(e){} }
+function reelYChip(){
+  return '<button class="aa-yaxis" onclick="editReelYAxis()" title="Set Y-axis min &amp; max — zoom the line graph" '+
+    'style="margin-left:auto;font:600 11px/1 inherit;color:var(--t2,#9aa);background:rgba(255,255,255,.05);border:1px solid var(--border,rgba(255,255,255,.12));border-radius:20px;padding:5px 11px;cursor:pointer;white-space:nowrap;">'+
+    'Y '+Number(REEL_RANGE.min).toLocaleString()+'–'+Number(REEL_RANGE.max).toLocaleString()+' ✎</button>';
+}
+function reelXChip(){
+  return '<button class="aa-xaxis" onclick="editReelXAxis()" title="Set the number of days shown on the X-axis" '+
+    'style="margin-left:8px;font:600 11px/1 inherit;color:var(--t2,#9aa);background:rgba(255,255,255,.05);border:1px solid var(--border,rgba(255,255,255,.12));border-radius:20px;padding:5px 11px;cursor:pointer;white-space:nowrap;">'+
+    'X '+(REEL_RANGE.days||7)+'d ✎</button>';
+}
+async function editReelYAxis(){
+  var mn=await altPrompt('Y-axis MINIMUM for the IG reels trend:', REEL_RANGE.min, { title:'Zoom Y-axis · minimum', type:'number' }); if(mn===null) return;
+  var mx=await altPrompt('Y-axis MAXIMUM for the IG reels trend:', REEL_RANGE.max, { title:'Zoom Y-axis · maximum', type:'number' }); if(mx===null) return;
+  var a=parseFloat(mn), b=parseFloat(mx);
+  if(isNaN(a)||isNaN(b)||b<=a){ toast('Max must be greater than min.'); return; }
+  REEL_RANGE.min=a; REEL_RANGE.max=b; saveReelRange(); renderInsights();
+}
+async function editReelXAxis(){
+  var v=await altPrompt('Number of days to show on the X-axis (IG reels trend):', (REEL_RANGE.days||7), { title:'X-axis · number of days', type:'number' }); if(v===null) return;
+  var n=parseInt(v,10); if(isNaN(n)||n<1||n>120){ toast('Enter days between 1 and 120.'); return; }
+  REEL_RANGE.days=n; saveReelRange(); renderInsights();
 }
 // ── Crypto-style interactive trend chart (TradingView lightweight-charts) ──
 function hexA(hex,a){ var h=String(hex).replace('#',''); if(h.length===3)h=h.split('').map(function(c){return c+c;}).join(''); var r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16); return 'rgba('+r+','+g+','+b+','+a+')'; }
@@ -1775,7 +1804,7 @@ function mountAudioChart(kind){
 }
 function buildReelsChart(){
   return buildTrendChart(STATE.repost_history||[], (function(){ var t={}; (STATE.reposts||[]).forEach(function(r){ t[String(r.id)]=('Reel '+r.id); }); return t; })(),
-    { idKey:'repost_id', fixedMax:2000, glow:'reelglow', def:'Reel ', empty:'No trend yet — log a reel repost and update its reach over time to build the line.' });
+    { idKey:'repost_id', fixedMin:REEL_RANGE.min, fixedMax:REEL_RANGE.max, days:REEL_RANGE.days, glow:'reelglow', def:'Reel ', empty:'No trend yet — log a reel repost and update its reach over time to build the line.' });
 }
 function buildTrendChart(hist, titles, opt){
   if(!hist.length) return '<div class="muted">'+opt.empty+'</div>';
@@ -1808,7 +1837,7 @@ function buildTrendChart(hist, titles, opt){
     byAud[id].forEach(function(p){ var di=Math.round((dayMs(p.d)-startMs)/DAY); if(di<0)di=0; if(di>WEEK-1)di=WEEK-1; p.frac=di+timeFrac(p.d); });
     byAud[id].sort(function(a,b){ return a.frac-b.frac; });   // keep the line drawing left-to-right
   });
-  var W=860,H=560,padL=54,padR=14,padT=14,padB=46, plotW=W-padL-padR, plotH=H-padT-padB;   // H 1.75× taller
+  var W=860,H=280,padL=54,padR=14,padT=14,padB=46, plotW=W-padL-padR, plotH=H-padT-padB;   // height halved (0.5×)
   function xAt(frac){ return padL + (frac/WEEK)*plotW; }
   function yAt(v){ var c=Math.max(MINY,Math.min(v,MAXY)); return padT + plotH - ((c-MINY)/(MAXY-MINY))*plotH; }
   var colors=['#ff6b1a','#22c55e','#3b82f6','#f59e0b','#a855f7','#ef4444','#14b8a6','#eab308'];
