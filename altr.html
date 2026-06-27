@@ -464,8 +464,8 @@ button.promosel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
 <!-- Scheduled reels-count reminder alarm -->
 <div id="reels-alarm">
   <div class="eodbox">
-    <div class="eodhd warn ring">🔔 Time to update reels counts</div>
-    <div class="eodsub">Scheduled check-in (PHT). For each promoted audio, open its Instagram page (↗), read the “X reels” number, and enter the latest figure below. You can type <b>2300</b> or <b>2.3K</b>.</div>
+    <div class="eodhd warn ring">🔔 Time to update reels &amp; repost counts</div>
+    <div class="eodsub">Scheduled check-in (PHT). For each promoted audio and each reposted reel, open its Instagram page (↗), read the latest number, and enter it below — every update adds a point to that item's trend. You can type <b>2300</b> or <b>2.3K</b>.</div>
     <div id="reels-alarm-list" style="margin:.6rem 0 .2rem"></div>
     <div class="eodbtns"><button class="ghost" onclick="dismissReelsAlarm()">Later</button><button class="adminbtn" onclick="saveReelsAlarm()">Save counts</button></div>
   </div>
@@ -628,13 +628,25 @@ function ringAlarm(){
 function renderReelsAlarmList(){
   // Completed ("Done") promotions are finished — don't ask for updated reels counts on them.
   var audios=((STATE&&STATE.audios)||[]).filter(function(a){ return String(a.status||'').toLowerCase()!=='done'; });
-  if(!audios.length){ $('reels-alarm-list').innerHTML='<div class="muted">No active audio promotions to update.</div>'; return; }
+  var reposts=((STATE&&STATE.reposts)||[]);
+  if(!audios.length && !reposts.length){ $('reels-alarm-list').innerHTML='<div class="muted">Nothing to update right now.</div>'; return; }
   var lk='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
-  $('reels-alarm-list').innerHTML='<table class="srctable"><thead><tr><th>Audio</th><th>Current</th><th>New count</th></tr></thead><tbody>'+
-    audios.map(function(a){
+  function sectionRow(t){ return '<tr><td colspan="3" style="font:700 10px/1 \'JetBrains Mono\',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);padding-top:14px">'+t+'</td></tr>'; }
+  var rows='';
+  if(audios.length){
+    rows+=sectionRow('Audio promotions')+audios.map(function(a){
       var open=a.link?'<a href="'+esc(a.link)+'" target="_blank" rel="noopener" title="Open IG audio page" style="color:var(--o2);margin-left:6px">'+lk+'</a>':'';
-      return '<tr><td class="nm">'+esc(a.title||'—')+open+'</td><td>'+(a.reach?esc(a.reach):'—')+'</td><td><input class="alarm-in" data-id="'+esc(a.id)+'" placeholder="e.g. 2300 or 2.3K"></td></tr>';
-    }).join('')+'</tbody></table>';
+      return '<tr><td class="nm">'+esc(a.title||'—')+open+'</td><td>'+(a.reach?esc(a.reach):'—')+'</td><td><input class="alarm-in" data-kind="audio" data-id="'+esc(a.id)+'" placeholder="e.g. 2300 or 2.3K"></td></tr>';
+    }).join('');
+  }
+  if(reposts.length){
+    rows+=sectionRow('Reel reposts')+reposts.map(function(r){
+      var label=r.link?('<a href="'+esc(r.link)+'" target="_blank" rel="noopener" title="Open reel" style="color:var(--o2)">Reel '+esc(r.id)+'</a>'):('Reel '+esc(r.id));
+      var sub=r.date?('<span style="color:var(--t3);font-size:11px;margin-left:6px">'+esc(r.date)+'</span>'):'';
+      return '<tr><td class="nm">'+label+sub+'</td><td>'+(r.reach?esc(r.reach):'—')+'</td><td><input class="alarm-in" data-kind="repost" data-id="'+esc(r.id)+'" placeholder="e.g. 2300 or 2.3K"></td></tr>';
+    }).join('');
+  }
+  $('reels-alarm-list').innerHTML='<table class="srctable"><thead><tr><th>Promotion</th><th>Current</th><th>New count</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 function fireReelsAlarm(){ ringAlarm(); renderReelsAlarmList(); $('reels-alarm').classList.add('open'); }
 function dismissReelsAlarm(){ $('reels-alarm').classList.remove('open'); }
@@ -643,7 +655,9 @@ async function saveReelsAlarm(){
   for(var i=0;i<inputs.length;i++){
     var v=String(inputs[i].value||'').trim(); if(!v) continue;
     var n=parseNumLoose(v); if(n===null){ bad++; continue; }
-    try{ await apiPost({ action:'audio_save', id:inputs[i].getAttribute('data-id'), reach:String(n), by:firstName(USER.full_name||USER.employee_id) }); saved++; }catch(e){ bad++; }
+    var kind=inputs[i].getAttribute('data-kind')||'audio';
+    var action=(kind==='repost')?'repost_save':'audio_save';   // repost_save snapshots reach → builds repost history
+    try{ await apiPost({ action:action, id:inputs[i].getAttribute('data-id'), reach:String(n), by:firstName(USER.full_name||USER.employee_id) }); saved++; }catch(e){ bad++; }
   }
   if(saved) await refreshQuiet();
   toast(saved?(saved+' count'+(saved>1?'s':'')+' updated'):(bad?'Check the numbers entered':'Nothing entered'));
