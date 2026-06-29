@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JMB Virtuals — Outreach</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0e14;--bg2:#0d1117;--card:#151b24;--card2:#1b222d;--line:rgba(255,255,255,.09);
+ --o1:#ff6b1a;--o2:#e83d00;--t1:#e8eaf0;--t2:#9aa3b2;--t3:#5a6072;--green:#34d399;--blue:#38bdf8;--amber:#fbbf24;--purple:#a78bfa;--red:#f87171;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t1);min-height:100vh;font-size:14px}
+a{color:inherit}
+button{font-family:inherit;cursor:pointer}
+.mono{font-family:'JetBrains Mono',monospace}
+/* sign in */
+#signin{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,rgba(255,107,26,.12),transparent 60%),var(--bg);z-index:50}
+.sicard{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:34px 30px;width:340px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.sicard h1{font-family:'Rajdhani',sans-serif;font-size:26px;letter-spacing:.04em;margin-bottom:4px}
+.sicard h1 b{color:var(--o1)}
+.sicard p{color:var(--t2);font-size:13px;margin-bottom:18px}
+.inp{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:11px;color:var(--t1);padding:12px 13px;font-size:14px;font-family:inherit;outline:none}
+.inp:focus{border-color:var(--o1)}
+.btn{background:linear-gradient(135deg,var(--o1),var(--o2));color:#fff;border:none;border-radius:11px;padding:12px 16px;font-weight:700;font-size:14px}
+.btn:hover{filter:brightness(1.08)}
+.btn.sm{padding:8px 13px;font-size:13px;border-radius:9px}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--t2);font-weight:600}
+.btn.ghost:hover{color:var(--t1);border-color:var(--o1)}
+/* header */
+header{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);background:rgba(13,17,23,.85);position:sticky;top:0;z-index:20;backdrop-filter:blur(10px)}
+.logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;letter-spacing:.06em}
+.logo b{color:var(--o1)}
+.spacer{flex:1}
+.who{font-size:13px;color:var(--t2)}
+.who b{color:var(--t1)}
+nav{display:flex;gap:4px;padding:10px 16px;border-bottom:1px solid var(--line);overflow-x:auto;background:var(--bg2)}
+.tab{background:transparent;border:none;color:var(--t2);padding:9px 15px;border-radius:9px;font-weight:600;font-size:13.5px;white-space:nowrap}
+.tab:hover{color:var(--t1);background:var(--card)}
+.tab.on{color:#fff;background:linear-gradient(135deg,rgba(255,107,26,.9),rgba(232,61,0,.8))}
+main{padding:20px;max-width:1280px;margin:0 auto}
+.page{display:none}.page.on{display:block}
+/* stat cards */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;position:relative;overflow:hidden}
+.stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--o1)}
+.stat .v{font-size:26px;font-weight:800;font-family:'Rajdhani',sans-serif}
+.stat .l{font-size:11.5px;color:var(--t2);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+.sechead{font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;margin:18px 0 10px;display:flex;align-items:center;gap:8px}
+.muted{color:var(--t3);font-size:13px}
+/* funnel + bars */
+.bar{height:26px;border-radius:7px;background:var(--card2);overflow:hidden;position:relative;margin:5px 0}
+.bar>span{display:block;height:100%;background:linear-gradient(90deg,var(--o1),var(--o2));border-radius:7px}
+.barrow{display:grid;grid-template-columns:120px 1fr 48px;align-items:center;gap:10px;margin:6px 0;font-size:13px}
+/* filters */
+.filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;align-items:center}
+.sel,.filters .inp{background:var(--card);border:1px solid var(--line);border-radius:9px;color:var(--t1);padding:8px 11px;font-size:13px;font-family:inherit;outline:none}
+.sel:focus,.filters .inp:focus{border-color:var(--o1)}
+/* board */
+.board{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px}
+.col{flex:0 0 248px;background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:10px;min-height:120px}
+.col h4{font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--t2);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.col h4 .cnt{background:var(--card2);border-radius:20px;padding:1px 8px;font-size:11px;color:var(--t1)}
+.pcard{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:10px 11px;margin-bottom:8px}
+.pcard .nm{font-weight:700;font-size:13.5px}
+.pcard .co{font-size:12px;color:var(--o1);margin-top:1px}
+.pcard .mt{font-size:11.5px;color:var(--t2);margin-top:3px;display:flex;flex-wrap:wrap;gap:5px}
+.chip{font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:20px;background:var(--card2);color:var(--t2)}
+.pcard .act{display:flex;gap:5px;margin-top:8px}
+.mini{background:var(--card2);border:1px solid var(--line);color:var(--t2);border-radius:7px;padding:4px 8px;font-size:11px;font-weight:600}
+.mini:hover{color:#fff;border-color:var(--o1)}
+.fu{font-size:11px;color:var(--amber);margin-top:4px}
+.fu.over{color:var(--red)}
+/* daily tracker */
+.counters{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.counter{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center}
+.counter .cl{font-size:13px;color:var(--t2);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.counter .cv{font-size:40px;font-weight:800;font-family:'Rajdhani',sans-serif;margin:4px 0;line-height:1}
+.counter .ct{font-size:11.5px;color:var(--t3)}
+.cbtns{display:flex;gap:8px;justify-content:center;margin-top:10px}
+.cbtns button{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--card2);color:var(--t1);font-size:18px;font-weight:700}
+.cbtns button:hover{border-color:var(--o1)}
+.cbtns .plus{background:linear-gradient(135deg,var(--o1),var(--o2));border:none;color:#fff}
+.cprog{height:6px;border-radius:6px;background:var(--card2);overflow:hidden;margin-top:10px}
+.cprog>span{display:block;height:100%;background:var(--green)}
+/* templates */
+.tmpl{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin-bottom:12px}
+.tmpl h4{font-size:14px;margin-bottom:4px}
+.tmpl .cat{font-size:11px;color:var(--o1);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+.tmpl pre{white-space:pre-wrap;font-family:'Inter',sans-serif;font-size:13px;color:var(--t1);background:var(--bg2);border:1px solid var(--line);border-left:3px solid var(--o1);border-radius:9px;padding:11px 13px;margin:8px 0;line-height:1.5}
+.mergebar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+.mergebar label{font-size:11px;color:var(--t2);display:flex;flex-direction:column;gap:3px}
+.mergebar input{background:var(--bg2);border:1px solid var(--line);border-radius:8px;color:var(--t1);padding:7px 10px;font-size:13px;width:150px;outline:none}
+/* calendar */
+.calgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.calc{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 13px;display:flex;gap:10px;align-items:flex-start}
+.calc.done{opacity:.55}
+.calc .day{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:var(--o1);flex-shrink:0;width:30px}
+.calc .pill{font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:20px;background:var(--card2);color:var(--t2);margin-bottom:3px;display:inline-block}
+.calc .hk{font-size:12.5px;line-height:1.4}
+.calc input{margin-top:3px;width:17px;height:17px;accent-color:var(--o1)}
+/* modal */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:40;padding:16px}
+.ov.on{display:flex}
+.modal{background:var(--card);border:1px solid var(--line);border-radius:16px;width:520px;max-width:100%;max-height:90vh;overflow:auto;padding:22px}
+.modal h3{font-family:'Rajdhani',sans-serif;font-size:20px;margin-bottom:14px}
+.frm{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.frm label{font-size:11.5px;color:var(--t2);display:flex;flex-direction:column;gap:4px}
+.frm label.full{grid-column:1/3}
+.frm input,.frm select,.frm textarea{background:var(--bg2);border:1px solid var(--line);border-radius:9px;color:var(--t1);padding:9px 11px;font-size:13px;font-family:inherit;outline:none}
+.frm textarea{min-height:64px;resize:vertical}
+.frm input:focus,.frm select:focus,.frm textarea:focus{border-color:var(--o1)}
+.mactions{display:flex;justify-content:space-between;gap:10px;margin-top:18px}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--card2);border:1px solid var(--o1);color:#fff;padding:11px 18px;border-radius:11px;font-size:13px;font-weight:600;opacity:0;transition:opacity .25s,transform .25s;z-index:60;pointer-events:none}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+.empty{text-align:center;color:var(--t3);padding:30px;font-size:13px}
+.banner{background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.4);color:#fde68a;border-radius:12px;padding:11px 14px;font-size:12.5px;margin-bottom:16px}
+@media(max-width:560px){.frm{grid-template-columns:1fr}.frm label.full{grid-column:1}}
+</style>
+</head>
+<body>
+
+<!-- SIGN IN -->
+<div id="signin">
+  <div class="sicard">
+    <h1><b>JMB</b> OUTREACH</h1>
+    <p>Sign in with your name to start working the pipeline.</p>
+    <input class="inp" id="si-name" placeholder="Your name" autocomplete="off" style="margin-bottom:10px">
+    <button class="btn" style="width:100%" onclick="signIn()">Enter</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+  <header>
+    <span class="logo"><b>JMB</b> OUTREACH</span>
+    <span class="spacer"></span>
+    <span class="who">Hi, <b id="who-name">—</b></span>
+    <button class="btn ghost sm" onclick="loadState()">↻ Refresh</button>
+    <button class="btn ghost sm" onclick="signOut()">Sign out</button>
+  </header>
+  <nav>
+    <button class="tab on" data-pg="dash" onclick="go('dash')">Dashboard</button>
+    <button class="tab" data-pg="pipe" onclick="go('pipe')">Pipeline</button>
+    <button class="tab" data-pg="daily" onclick="go('daily')">Daily Tracker</button>
+    <button class="tab" data-pg="tmpl" onclick="go('tmpl')">Templates</button>
+    <button class="tab" data-pg="cal" onclick="go('cal')">Content Calendar</button>
+  </nav>
+  <main>
+    <div id="be-banner" class="banner" style="display:none"></div>
+
+    <!-- DASHBOARD -->
+    <div class="page on" id="pg-dash">
+      <div class="stats" id="dash-stats"></div>
+      <div class="sechead">Pipeline funnel</div>
+      <div id="dash-funnel"></div>
+      <div class="sechead">Leads by channel</div>
+      <div id="dash-channel"></div>
+      <div class="sechead">This week's activity (team)</div>
+      <div class="stats" id="dash-week"></div>
+    </div>
+
+    <!-- PIPELINE -->
+    <div class="page" id="pg-pipe">
+      <div class="filters">
+        <button class="btn sm" onclick="openProspect()">+ Add prospect</button>
+        <input class="inp" id="f-search" placeholder="Search name / company…" oninput="renderBoard()" style="width:200px">
+        <select class="sel" id="f-channel" onchange="renderBoard()"><option value="">All channels</option><option>Email</option><option>LinkedIn</option><option>Referral</option><option>Other</option></select>
+        <select class="sel" id="f-owner" onchange="renderBoard()"><option value="">All owners</option></select>
+        <label class="muted" style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="f-mine" onchange="renderBoard()" style="accent-color:var(--o1)"> Only mine</label>
+      </div>
+      <div class="board" id="board"></div>
+    </div>
+
+    <!-- DAILY -->
+    <div class="page" id="pg-daily">
+      <div class="sechead">Today — <span id="daily-date" class="muted" style="font-weight:400"></span></div>
+      <div class="counters" id="counters"></div>
+      <div class="sechead" style="margin-top:22px">Your last 7 days</div>
+      <div class="stats" id="daily-week"></div>
+    </div>
+
+    <!-- TEMPLATES -->
+    <div class="page" id="pg-tmpl">
+      <div class="sechead">Merge fields</div>
+      <div class="mergebar">
+        <label>First name<input id="m-first" placeholder="Sarah" oninput="renderTemplates()"></label>
+        <label>Company<input id="m-company" placeholder="Acme Co" oninput="renderTemplates()"></label>
+        <label>Niche / detail<input id="m-niche" placeholder="ecommerce" oninput="renderTemplates()"></label>
+        <label>Your name<input id="m-you" placeholder="Jeth" oninput="renderTemplates()"></label>
+      </div>
+      <div id="tmpl-list"></div>
+    </div>
+
+    <!-- CALENDAR -->
+    <div class="page" id="pg-cal">
+      <div class="sechead">30-Day LinkedIn Content Calendar
+        <span class="muted" style="font-weight:400;font-size:12px">· tick a day when posted</span></div>
+      <div class="muted" style="margin-bottom:12px">Pillars: E Educational · P Proof · B Behind-scenes · S Story · C CTA</div>
+      <div class="calgrid" id="calgrid"></div>
+    </div>
+  </main>
+</div>
+
+<!-- PROSPECT MODAL -->
+<div class="ov" id="ov-prospect">
+  <div class="modal">
+    <h3 id="pm-title">Add prospect</h3>
+    <input type="hidden" id="pm-id">
+    <div class="frm">
+      <label class="full">Name<input id="pm-name" placeholder="Full name"></label>
+      <label>Company<input id="pm-company"></label>
+      <label>Role / title<input id="pm-role" placeholder="Founder / CEO"></label>
+      <label>Country<select id="pm-country"><option>US</option><option>UK</option><option>Canada</option><option>Australia</option><option>Other</option></select></label>
+      <label>Channel<select id="pm-channel"><option>Email</option><option>LinkedIn</option><option>Referral</option><option>Other</option></select></label>
+      <label>Stage<select id="pm-status"><option value="new">New</option><option value="contacted">Contacted</option><option value="replied">Replied</option><option value="call">Call booked</option><option value="client">Client</option><option value="lost">Lost</option></select></label>
+      <label>Owner<input id="pm-owner"></label>
+      <label>Email<input id="pm-email"></label>
+      <label>LinkedIn URL<input id="pm-linkedin"></label>
+      <label>Source<input id="pm-source" placeholder="cold email / referral / FB group"></label>
+      <label>Next follow-up<input id="pm-followup" type="date"></label>
+      <label class="full">Notes<textarea id="pm-notes"></textarea></label>
+    </div>
+    <div class="mactions">
+      <button class="btn ghost sm" id="pm-del" onclick="deleteProspect()" style="color:var(--red);border-color:rgba(248,113,113,.4)">Delete</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn ghost sm" onclick="closeModal('ov-prospect')">Cancel</button>
+        <button class="btn sm" onclick="saveProspect()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ====== CONFIG: paste your deployed outreach-apps-script /exec URL here ====== */
+var OUT_URL = "https://script.google.com/macros/s/AKfycbyeXDrdobvs9jk9wnbK9XUH5J5dz1V3uHRq93LvbwqzW46wtj491tVJZd0-FHeUsI5fwg/exec";
+/* =========================================================================== */
+
+var STATE = { prospects:[], activity:[] };
+var USER = "";
+var STAGES = [
+  {k:'new',label:'New',c:'#5a6072'},
+  {k:'contacted',label:'Contacted',c:'#38bdf8'},
+  {k:'replied',label:'Replied',c:'#fbbf24'},
+  {k:'call',label:'Call booked',c:'#a78bfa'},
+  {k:'client',label:'Client',c:'#34d399'},
+  {k:'lost',label:'Lost',c:'#f87171'},
+];
+var TARGETS = { emails:30, connects:30, dms:15, posts:1, calls:0 };
+var COUNTER_LABELS = { emails:'Cold emails', connects:'LinkedIn connects', dms:'Value DMs', posts:'Posts/engage', calls:'Calls booked' };
+
+/* ---------- helpers ---------- */
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function toast(m){var t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show');},2200);}
+function todayPHT(){return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});} // YYYY-MM-DD
+function apiGet(params){var qs=Object.keys(params).map(function(k){return encodeURIComponent(k)+'='+encodeURIComponent(params[k]);}).join('&');return fetch(OUT_URL+'?'+qs).then(function(r){return r.json();});}
+function apiPost(obj){return fetch(OUT_URL,{method:'POST',body:JSON.stringify(obj)}).then(function(r){return r.json();});}
+
+/* ---------- sign in ---------- */
+function signIn(){var n=($('si-name').value||'').trim();if(!n){$('si-name').focus();return;}USER=n;try{localStorage.setItem('out_user',n);}catch(e){}startApp();}
+function signOut(){try{localStorage.removeItem('out_user');}catch(e){}location.reload();}
+function startApp(){
+  $('signin').style.display='none';$('app').style.display='block';
+  $('who-name').textContent=USER;$('pm-owner') && ($('pm-owner').value=USER);
+  if(OUT_URL.indexOf('PASTE_')===0){$('be-banner').style.display='block';
+    $('be-banner').innerHTML='⚠ Backend not connected yet. Deploy <b>outreach-apps-script.gs</b> and paste its /exec URL into <b>OUT_URL</b> at the top of this file. The tool works offline meanwhile, but data won\'t be shared or saved to the sheet.';}
+  renderTemplates();renderCalendar();loadState();
+  setInterval(poll,12000);document.addEventListener('visibilitychange',function(){if(!document.hidden)poll();});
+}
+
+/* ---------- load ---------- */
+var PENDING=0,LASTACT=0;
+function loadState(){
+  if(OUT_URL.indexOf('PASTE_')===0){renderAll();return;}
+  apiGet({action:'get_state'}).then(function(d){
+    if(d&&d.ok){STATE.prospects=d.prospects||[];STATE.activity=d.activity||[];renderAll();}
+    else toast('Could not load data.');
+  }).catch(function(){toast('Network error loading data.');});
+}
+function poll(){if(document.hidden||PENDING>0)return;if(Date.now()-LASTACT<5000)return;
+  var ae=document.activeElement;if(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'))return;
+  if(OUT_URL.indexOf('PASTE_')===0)return;loadState();}
+
+function renderAll(){fillOwners();renderDash();renderBoard();renderDaily();}
+
+/* ---------- nav ---------- */
+function go(pg){document.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('on',t.dataset.pg===pg);});
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('on');});$('pg-'+pg).classList.add('on');}
+
+/* ---------- dashboard ---------- */
+function renderDash(){
+  var p=STATE.prospects;
+  var counts={};STAGES.forEach(function(s){counts[s.k]=0;});
+  p.forEach(function(x){var s=x.status||'new';if(counts[s]===undefined)counts[s]=0;counts[s]++;});
+  var total=p.length,clients=counts.client||0;
+  var contacted=p.filter(function(x){return x.status!=='new';}).length;
+  var rep=p.filter(function(x){return ['replied','call','client'].indexOf(x.status)>=0;}).length;
+  var calls=p.filter(function(x){return ['call','client'].indexOf(x.status)>=0;}).length;
+  $('dash-stats').innerHTML=[
+    ['Total prospects',total],['Replied',rep],['Calls booked',calls],
+    ['Clients won',clients],['Win rate', total?Math.round(clients/total*100)+'%':'0%']
+  ].map(function(s){return '<div class="stat"><div class="v">'+s[1]+'</div><div class="l">'+s[0]+'</div></div>';}).join('');
+  // funnel
+  var fmax=Math.max(total,1);
+  $('dash-funnel').innerHTML=STAGES.map(function(s){
+    var v=counts[s.k]||0,pct=Math.round(v/fmax*100);
+    return '<div class="barrow"><span style="color:'+s.c+';font-weight:600">'+s.label+'</span><div class="bar"><span style="width:'+pct+'%;background:linear-gradient(90deg,'+s.c+','+s.c+'aa)"></span></div><b>'+v+'</b></div>';
+  }).join('');
+  // channel
+  var ch={};p.forEach(function(x){var c=x.channel||'Other';ch[c]=(ch[c]||0)+1;});
+  var cmax=Math.max.apply(null,[1].concat(Object.values(ch)));
+  var keys=Object.keys(ch);
+  $('dash-channel').innerHTML=keys.length?keys.map(function(c){
+    var pct=Math.round(ch[c]/cmax*100);
+    return '<div class="barrow"><span>'+esc(c)+'</span><div class="bar"><span style="width:'+pct+'%"></span></div><b>'+ch[c]+'</b></div>';
+  }).join(''):'<div class="muted">No prospects yet.</div>';
+  // week activity (team)
+  var wk=weekTotals(null);
+  $('dash-week').innerHTML=['emails','connects','dms','posts','calls'].map(function(k){
+    return '<div class="stat"><div class="v">'+wk[k]+'</div><div class="l">'+COUNTER_LABELS[k]+'</div></div>';
+  }).join('');
+}
+function weekTotals(user){
+  var cutoff=new Date();cutoff.setDate(cutoff.getDate()-6);var cut=cutoff.toLocaleDateString('en-CA',{timeZone:'Asia/Manila'});
+  var t={emails:0,connects:0,dms:0,posts:0,calls:0};
+  STATE.activity.forEach(function(a){
+    if(a.date.slice(0,10)<cut)return;
+    if(user&&String(a.user).toLowerCase()!==user.toLowerCase())return;
+    ['emails','connects','dms','posts','calls'].forEach(function(k){t[k]+=Number(a[k])||0;});
+  });
+  return t;
+}
+
+/* ---------- pipeline board ---------- */
+function fillOwners(){
+  var owners={};STATE.prospects.forEach(function(x){if(x.owner)owners[x.owner]=1;});
+  var sel=$('f-owner'),cur=sel.value;
+  sel.innerHTML='<option value="">All owners</option>'+Object.keys(owners).map(function(o){return '<option'+(o===cur?' selected':'')+'>'+esc(o)+'</option>';}).join('');
+}
+function renderBoard(){
+  var q=($('f-search').value||'').toLowerCase(),ch=$('f-channel').value,ow=$('f-owner').value,mine=$('f-mine').checked;
+  var list=STATE.prospects.filter(function(x){
+    if(q&&!((x.name||'').toLowerCase().indexOf(q)>=0||(x.company||'').toLowerCase().indexOf(q)>=0))return false;
+    if(ch&&x.channel!==ch)return false;
+    if(ow&&x.owner!==ow)return false;
+    if(mine&&String(x.owner||'').toLowerCase()!==USER.toLowerCase())return false;
+    return true;
+  });
+  $('board').innerHTML=STAGES.map(function(s){
+    var items=list.filter(function(x){return (x.status||'new')===s.k;});
+    return '<div class="col"><h4><span style="color:'+s.c+'">'+s.label+'</span><span class="cnt">'+items.length+'</span></h4>'+
+      (items.map(card).join('')||'<div class="muted" style="font-size:12px;padding:6px">—</div>')+'</div>';
+  }).join('');
+}
+function card(x){
+  var idx=STAGES.findIndex(function(s){return s.k===(x.status||'new');});
+  var fu='';
+  if(x.next_followup){var over=x.next_followup<todayPHT();fu='<div class="fu'+(over?' over':'')+'">⏰ '+(over?'overdue ':'')+esc(x.next_followup)+'</div>';}
+  return '<div class="pcard">'+
+    '<div class="nm">'+esc(x.name||'(no name)')+'</div>'+
+    (x.company?'<div class="co">'+esc(x.company)+(x.role?' · '+esc(x.role):'')+'</div>':'')+
+    '<div class="mt">'+(x.channel?'<span class="chip">'+esc(x.channel)+'</span>':'')+(x.country?'<span class="chip">'+esc(x.country)+'</span>':'')+(x.owner?'<span class="chip">'+esc(x.owner)+'</span>':'')+'</div>'+
+    fu+
+    '<div class="act">'+
+      (idx>0?'<button class="mini" onclick="moveStage(\''+x.id+'\',-1)">◀</button>':'')+
+      '<button class="mini" onclick="openProspect(\''+x.id+'\')">Edit</button>'+
+      (idx<STAGES.length-1?'<button class="mini" onclick="moveStage(\''+x.id+'\',1)" style="margin-left:auto">▶</button>':'')+
+    '</div></div>';
+}
+function moveStage(id,dir){
+  var x=STATE.prospects.filter(function(p){return p.id===id;})[0];if(!x)return;
+  var idx=STAGES.findIndex(function(s){return s.k===(x.status||'new');});var ni=idx+dir;
+  if(ni<0||ni>=STAGES.length)return;x.status=STAGES[ni].k;
+  renderBoard();renderDash();persistProspect(x);
+}
+
+/* ---------- prospect modal ---------- */
+function openProspect(id){
+  $('pm-del').style.display=id?'inline-block':'none';
+  if(id){var x=STATE.prospects.filter(function(p){return p.id===id;})[0]||{};
+    $('pm-title').textContent='Edit prospect';$('pm-id').value=x.id;
+    $('pm-name').value=x.name||'';$('pm-company').value=x.company||'';$('pm-role').value=x.role||'';
+    $('pm-country').value=x.country||'US';$('pm-channel').value=x.channel||'Email';$('pm-status').value=x.status||'new';
+    $('pm-owner').value=x.owner||USER;$('pm-email').value=x.email||'';$('pm-linkedin').value=x.linkedin||'';
+    $('pm-source').value=x.source||'';$('pm-followup').value=(x.next_followup||'').slice(0,10);$('pm-notes').value=x.notes||'';
+  }else{
+    $('pm-title').textContent='Add prospect';['pm-id','pm-name','pm-company','pm-role','pm-email','pm-linkedin','pm-source','pm-followup','pm-notes'].forEach(function(i){$(i).value='';});
+    $('pm-country').value='US';$('pm-channel').value='Email';$('pm-status').value='new';$('pm-owner').value=USER;
+  }
+  $('ov-prospect').classList.add('on');
+}
+function closeModal(id){$(id).classList.remove('on');}
+function collectProspect(){
+  return {id:$('pm-id').value||'',name:$('pm-name').value.trim(),company:$('pm-company').value.trim(),
+    role:$('pm-role').value.trim(),country:$('pm-country').value,channel:$('pm-channel').value,status:$('pm-status').value,
+    owner:$('pm-owner').value.trim()||USER,email:$('pm-email').value.trim(),linkedin:$('pm-linkedin').value.trim(),
+    source:$('pm-source').value.trim(),next_followup:$('pm-followup').value,notes:$('pm-notes').value.trim()};
+}
+function saveProspect(){
+  var p=collectProspect();if(!p.name){toast('Enter a name.');return;}
+  if(p.id){var ex=STATE.prospects.filter(function(z){return z.id===p.id;})[0];if(ex)Object.assign(ex,p);}
+  else{p.id='tmp-'+Date.now();STATE.prospects.push(p);}
+  closeModal('ov-prospect');renderAll();persistProspect(p);
+}
+function persistProspect(p){
+  if(OUT_URL.indexOf('PASTE_')===0){return;}
+  PENDING++;LASTACT=Date.now();
+  var payload=Object.assign({action:'save_prospect'},p);if(String(p.id).indexOf('tmp-')===0)delete payload.id;
+  apiPost(payload).then(function(d){PENDING=Math.max(0,PENDING-1);
+    if(d&&d.ok){if(d.id&&String(p.id).indexOf('tmp-')===0){p.id=d.id;}toast('Saved.');}
+    else toast('Save failed.');
+  }).catch(function(){PENDING=Math.max(0,PENDING-1);toast('Network error.');});
+}
+function deleteProspect(){
+  var id=$('pm-id').value;if(!id)return;if(!confirm('Delete this prospect?'))return;
+  STATE.prospects=STATE.prospects.filter(function(z){return z.id!==id;});closeModal('ov-prospect');renderAll();
+  if(OUT_URL.indexOf('PASTE_')===0)return;
+  apiPost({action:'delete_prospect',id:id}).then(function(){toast('Deleted.');});
+}
+
+/* ---------- daily tracker ---------- */
+var _todayRow=null,_saveTimer=null;
+function renderDaily(){
+  $('daily-date').textContent=todayPHT();
+  var d=todayPHT();
+  _todayRow=STATE.activity.filter(function(a){return a.date.slice(0,10)===d&&String(a.user).toLowerCase()===USER.toLowerCase();})[0]
+    ||{date:d,user:USER,emails:0,connects:0,dms:0,posts:0,calls:0};
+  $('counters').innerHTML=['emails','connects','dms','posts','calls'].map(function(k){
+    var v=Number(_todayRow[k])||0,tg=TARGETS[k],pct=tg?Math.min(100,Math.round(v/tg*100)):0;
+    return '<div class="counter"><div class="cl">'+COUNTER_LABELS[k]+'</div>'+
+      '<div class="cv">'+v+'</div>'+
+      '<div class="ct">'+(tg?('target '+tg):'no target')+'</div>'+
+      '<div class="cbtns"><button onclick="bump(\''+k+'\',-1)">−</button><button class="plus" onclick="bump(\''+k+'\',1)">+</button></div>'+
+      (tg?'<div class="cprog"><span style="width:'+pct+'%;background:'+(pct>=100?'var(--green)':'var(--o1)')+'"></span></div>':'')+
+    '</div>';
+  }).join('');
+  var wk=weekTotals(USER);
+  $('daily-week').innerHTML=['emails','connects','dms','posts','calls'].map(function(k){
+    return '<div class="stat"><div class="v">'+wk[k]+'</div><div class="l">'+COUNTER_LABELS[k]+'</div></div>';
+  }).join('');
+}
+function bump(k,dir){
+  _todayRow[k]=Math.max(0,(Number(_todayRow[k])||0)+dir);
+  // keep STATE.activity in sync
+  var d=todayPHT();var ex=STATE.activity.filter(function(a){return a.date.slice(0,10)===d&&String(a.user).toLowerCase()===USER.toLowerCase();})[0];
+  if(ex)Object.assign(ex,_todayRow);else STATE.activity.push(Object.assign({},_todayRow));
+  renderDaily();
+  clearTimeout(_saveTimer);_saveTimer=setTimeout(saveDaily,700);
+}
+function saveDaily(){
+  if(OUT_URL.indexOf('PASTE_')===0)return;
+  PENDING++;LASTACT=Date.now();
+  apiPost({action:'log_activity',date:todayPHT(),user:USER,
+    emails:_todayRow.emails,connects:_todayRow.connects,dms:_todayRow.dms,posts:_todayRow.posts,calls:_todayRow.calls})
+    .then(function(){PENDING=Math.max(0,PENDING-1);}).catch(function(){PENDING=Math.max(0,PENDING-1);});
+}
+
+/* ---------- templates ---------- */
+var TEMPLATES=[
+  {cat:'Cold Email',title:'Template 1 — Pain-led',body:"Subject: quick question, {FirstName}\n\nHi {FirstName},\nNoticed you're running {Company} — impressive work in {Niche}.\nMost founders at your stage quietly lose 15–20 hours a week to inbox, scheduling and CRM admin.\nWe place dedicated virtual assistants with US/UK businesses to take that off your plate — and you watch their tracked hours and output live in a portal, so there's no guessing.\nWorth a quick 15-min call to map what you'd offload first?\n— {YourName}, JMB Virtuals"},
+  {cat:'Cold Email',title:'Template 2 — ROI / time-back',body:"Subject: 20 hours back?\n\nHi {FirstName},\nIf you got 20 hours a week back, what would you spend them on — sales, product, or actually logging off?\nThat's roughly what our clients reclaim after we match them with a dedicated VA (admin, inbox, CRM, support, research). Fully managed, cancel anytime, free replacement if it's not a fit.\nOpen to a short call this week?\n— {YourName}, JMB Virtuals"},
+  {cat:'Cold Email',title:'Template 3 — Transparency angle',body:"Subject: the offshore VA trust problem\n\nHi {FirstName},\nMost people who try offshore VAs worry about one thing: are they actually working?\nWe solved that — clients see their VA's live tracked hours and daily output in their own portal. Dedicated talent, full transparency, managed by us.\nHappy to show you how it works on a 15-min call. Worth a look?\n— {YourName}, JMB Virtuals"},
+  {cat:'Follow-up',title:'Follow-up 1 (Day 3)',body:"Hi {FirstName} — floating this back up. Even a “not now” helps me know whether to stop. Worth a quick chat about offloading your admin?"},
+  {cat:'Follow-up',title:'Follow-up 2 (Day 7)',body:"Hi {FirstName} — last note from me. I put together a free “50-Task Delegation Playbook” (the exact tasks founders hand off first). Want me to send it over, no call needed?"},
+  {cat:'Follow-up',title:'Follow-up 3 (Day 12 — breakup)',body:"Hi {FirstName} — I'll close your file for now so I'm not a pest. If admin ever starts eating your week, just reply “VA” and I'll jump in. All the best with {Company}."},
+  {cat:'LinkedIn',title:'Connection request',body:"Hi {FirstName} — I work with {Niche} founders on taking admin off their plate with dedicated VAs. Loved your work at {Company}. Would be great to connect."},
+  {cat:'LinkedIn',title:'DM 1 — after accept',body:"Thanks for connecting, {FirstName}! Quick one — what's the single most time-consuming admin task on your plate right now? I share a lot of delegation tips and might have a quick win for you."},
+  {cat:'LinkedIn',title:'DM 2 — soft offer',body:"That's such a common one. We handle exactly that for {Niche} businesses with a dedicated VA — and you'd see their tracked hours and output live, so it's fully transparent.\nWant me to send my free 50-Task Delegation Playbook, or would a quick 15-min call be easier?"},
+  {cat:'Referral',title:'Partner outreach',body:"Subject: a referral idea for your clients, {FirstName}\n\nHi {FirstName},\nYou work with exactly the kind of founders we help: busy {Niche} owners drowning in admin.\nWe place dedicated, fully-managed virtual assistants (with live hour/output tracking, so it's transparent). When your clients mention they're overwhelmed, we'd be a clean fit — and I'd share 10–15% of revenue on anyone you send, for as long as they stay.\nOpen to a quick call to see if our clients overlap? Happy to send referrals your way too.\n— {YourName}, JMB Virtuals"},
+];
+function mergeText(t){
+  var f=($('m-first').value||'{FirstName}'),c=($('m-company').value||'{Company}'),n=($('m-niche').value||'{Niche}'),y=($('m-you').value||'{YourName}');
+  return t.replace(/\{FirstName\}/g,f).replace(/\{Company\}/g,c).replace(/\{Niche\}/g,n).replace(/\{YourName\}/g,y);
+}
+function renderTemplates(){
+  var cats={};TEMPLATES.forEach(function(t){(cats[t.cat]=cats[t.cat]||[]).push(t);});
+  $('tmpl-list').innerHTML=Object.keys(cats).map(function(cat){
+    return '<div class="sechead">'+esc(cat)+'</div>'+cats[cat].map(function(t){
+      var i=TEMPLATES.indexOf(t);var merged=mergeText(t.body);
+      return '<div class="tmpl"><div class="cat">'+esc(t.cat)+'</div><h4>'+esc(t.title)+'</h4>'+
+        '<pre id="tpl-'+i+'">'+esc(merged)+'</pre>'+
+        '<button class="btn sm" onclick="copyTpl('+i+')">Copy</button></div>';
+    }).join('');
+  }).join('');
+}
+function copyTpl(i){var txt=mergeText(TEMPLATES[i].body);
+  navigator.clipboard.writeText(txt).then(function(){toast('Copied to clipboard.');},function(){
+    var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('Copied.');}catch(e){toast('Copy failed.');}document.body.removeChild(ta);});
+}
+
+/* ---------- content calendar ---------- */
+var CONTENT=[
+ ["1","S","“I almost burned out doing my own admin.” Founder-overwhelm story → delegation fixed it."],
+ ["2","E","5 signs it's time to hire a VA (checklist)."],["3","P","Mini case: client got back 18 hrs/week. Before/after."],
+ ["4","E","The 10 tasks every founder should offload first."],["5","C","“Free: 50-Task Delegation Playbook — comment TASKS.”"],
+ ["6","B","Portal screenshot: “This is how clients see every hour worked.”"],["7","S","Myth: “offshore VAs don't care.” Usually a management problem."],
+ ["8","E","How to write a 1-page SOP so a VA nails a task."],["9","P","Testimonial / happy-client screenshot."],
+ ["10","E","Part-time vs full-time vs team VA — how to choose."],["11","B","A day in the life of one of our VAs."],
+ ["12","C","“Book a free Delegation Call” — what happens, step by step."],["13","S","The 9pm-inbox trap: a relatable founder moment."],
+ ["14","E","7 tasks you should NEVER delegate (honesty builds trust)."],["15","P","Results roundup: hours saved this month."],
+ ["16","E","How we vet and train VAs (quality story)."],["17","B","Behind the scenes: our QA scorecard."],
+ ["18","S","“The hire that changed my business.” Story."],["19","E","Local hire vs dedicated VA (cost comparison)."],
+ ["20","C","Offer: free week / free replacement guarantee."],["21","E","Inbox-zero system you can hand to a VA today."],
+ ["22","P","Case: e-commerce client — order/listing win."],["23","B","Clients watch hours + output live (portal clip)."],
+ ["24","S","A mistake we made early on + what we learned."],["25","E","CRM hygiene: weekly tasks a VA should own."],
+ ["26","C","“Comment VA and I'll tell you the 3 tasks to offload first.”"],["27","E","Time-zone myth: how offshore VAs cover your hours."],
+ ["28","P","Before/after of a founder's calendar."],["29","E","GDPR & data security: how we keep data safe."],
+ ["30","C","Recap + CTA: “Want 20 hours back? Book a free call.”"],
+];
+var PILL={E:'Educational',P:'Proof',B:'Behind-scenes',S:'Story',C:'CTA'};
+function calKey(){return 'out_cal_'+USER;}
+function calDone(){try{return JSON.parse(localStorage.getItem(calKey())||'{}');}catch(e){return {};}}
+function renderCalendar(){
+  var done=calDone();
+  $('calgrid').innerHTML=CONTENT.map(function(r){
+    var d=r[0],pil=r[1],hk=r[2],on=!!done[d];
+    return '<div class="calc'+(on?' done':'')+'"><div class="day">'+d+'</div><div style="flex:1">'+
+      '<span class="pill">'+esc(pil)+' · '+PILL[pil]+'</span><div class="hk">'+esc(hk)+'</div>'+
+      '<button class="mini" style="margin-top:7px" onclick="copyHook('+(parseInt(d,10)-1)+')">Copy idea</button></div>'+
+      '<input type="checkbox" '+(on?'checked':'')+' onchange="toggleCal(\''+d+'\',this.checked)"></div>';
+  }).join('');
+}
+function toggleCal(d,on){var done=calDone();if(on)done[d]=1;else delete done[d];try{localStorage.setItem(calKey(),JSON.stringify(done));}catch(e){}renderCalendar();}
+function copyHook(i){var txt=CONTENT[i][2];navigator.clipboard.writeText(txt).then(function(){toast('Idea copied.');});}
+
+/* ---------- boot ---------- */
+(function(){var u='';try{u=localStorage.getItem('out_user')||'';}catch(e){}
+  if(u){USER=u;startApp();}else{$('si-name').focus();
+    $('si-name').addEventListener('keydown',function(e){if(e.key==='Enter')signIn();});}
+})();
+</script>
+</body>
+</html>
