@@ -979,7 +979,7 @@ function acctRow(kind, a, r){
   var assigned = countNonBlank(cells,n);
   var meta='<div class="ah"><b>@'+esc(a.handle)+'</b><span>P'+esc(a.phone)+' · U'+esc(a.user)+' · A'+esc(a.acct)+(a.followers?' · '+esc(a.followers)+' followers':'')+'</span></div>';
   var vaTag = va?'<span class="vacode" title="'+esc(va)+'">'+esc(firstName(va))+'</span>':'';
-  var kebab='<button class="kebab" title="Mark suspended / logged out" onclick="cycleAcctStatus(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>';
+  var kebab = ISADMIN ? '<button class="kebab" title="Mark suspended / logged out" onclick="cycleAcctStatus(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></button>' : '';   // account status is admin-only
   var boxes=''; for(var i=0;i<n;i++){
     var lbl;
     if(kind==='src'){ lbl=gdGet(nums,i)||(i+1); }
@@ -1405,6 +1405,7 @@ async function togglePostBox(phone,user,acct,handle){
 }
 var ACCT_STATUS_CYCLE=['active','suspended','logged_out'];
 async function cycleAcctStatus(phone,user,acct,handle){
+  if(!ISADMIN){ toast('Only admins can change account status.'); return; }
   var a=(STATE.accounts||[]).filter(function(x){ return String(x.phone)===String(phone)&&String(x.user)===String(user)&&String(x.acct)===String(acct)&&String(x.handle)===String(handle); })[0]; if(!a) return;
   var i=ACCT_STATUS_CYCLE.indexOf(a.status||'active'); var next=ACCT_STATUS_CYCLE[(i+1)%ACCT_STATUS_CYCLE.length];
   a.status=next; renderPosting(); renderSourcing(); if(typeof renderAccountsTab==='function') renderAccountsTab();
