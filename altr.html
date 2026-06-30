@@ -628,7 +628,7 @@ function ringAlarm(){
 function renderReelsAlarmList(){
   // Completed ("Done") promotions are finished — don't ask for updated reels counts on them.
   var audios=((STATE&&STATE.audios)||[]).filter(function(a){ return String(a.status||'').toLowerCase()!=='done'; });
-  var reposts=((STATE&&STATE.reposts)||[]);
+  var reposts=((STATE&&STATE.reposts)||[]).filter(function(r){ return String(r.status||'').toLowerCase()!=='done'; });
   if(!audios.length && !reposts.length){ $('reels-alarm-list').innerHTML='<div class="muted">Nothing to update right now.</div>'; return; }
   var lk='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
   function sectionRow(t){ return '<tr><td colspan="3" style="font:700 10px/1 \'JetBrains Mono\',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);padding-top:14px">'+t+'</td></tr>'; }
@@ -1931,12 +1931,14 @@ function renderReposts(){
   var reposts=(STATE.reposts||[]).slice().reverse();
   var html='';
   if(!reposts.length){ html='<div class="muted">No reposts logged yet.</div>'; }
-  else { html='<table class="srctable"><thead><tr><th>Date</th><th>Reel</th><th>Reposts</th><th>Reach</th><th></th></tr></thead><tbody>'+
+  else { html='<table class="srctable"><thead><tr><th>Date</th><th>Reel</th><th>Status</th><th>Reach</th><th></th></tr></thead><tbody>'+
     reposts.map(function(r){
       var link=r.link?'<a href="'+esc(r.link)+'" target="_blank" rel="noopener">link</a>':'—';
+      var st=String(r.status||'progress').toLowerCase();
+      var sbadge='<button class="sbadge '+(st==='done'?'done':'prog')+'" title="Click to toggle Done" onclick="toggleRepostStatus(\''+esc(r.id)+'\',\''+st+'\')">'+(st==='done'?'Done':'In progress')+'</button>';
       var reach='<span class="igc" onclick="editRepostReach(\''+esc(r.id)+'\',\''+escAttr(r.reach||'')+'\')" title="Click to edit">'+(r.reach?esc(r.reach):'—')+'</span>';
       var refresh=r.link?'<button class="igref" title="Re-fetch reach" onclick="refreshRepost(\''+esc(r.id)+'\',\''+escAttr(r.link)+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>':'';
-      return '<tr><td class="nm">'+esc(r.date||'')+'</td><td>'+link+'</td><td><b>'+esc(r.count||'')+'</b></td><td>'+reach+' '+refresh+'</td><td><button class="delx" title="Delete" onclick="delRepost(\''+esc(r.id)+'\')">✕</button></td></tr>';
+      return '<tr><td class="nm">'+esc(r.date||'')+'</td><td>'+link+'</td><td>'+sbadge+'</td><td>'+reach+' '+refresh+'</td><td><button class="delx" title="Delete" onclick="delRepost(\''+esc(r.id)+'\')">✕</button></td></tr>';
     }).join('')+'</tbody></table>'; }
   $('ins-reposts').innerHTML=html;
 }
@@ -2016,9 +2018,13 @@ async function delAudio(id){
 }
 async function addRepost(){
   var link=await altPrompt('IG reel link (optional):', '', { title:'Log a reel repost', placeholder:'https://www.instagram.com/reel/…' }); if(link===null) return;
-  var count=await altPrompt('Number of reposts:', '1', { title:'Log a reel repost', type:'number' }); if(count===null) return;
   var reach=await altPrompt('Reach (optional number):', '', { title:'Log a reel repost', type:'number' }); if(reach===null) reach='';
-  try{ await apiPost({ action:'repost_save', date:STATE.src_today||STATE.today, link:String(link).trim(), count:parseInt(count,10)||1, reach:String(reach).trim(), by:firstName(USER.full_name||USER.employee_id) }); await refreshQuiet(); }
+  try{ await apiPost({ action:'repost_save', date:STATE.src_today||STATE.today, link:String(link).trim(), count:1, reach:String(reach).trim(), status:'progress', by:firstName(USER.full_name||USER.employee_id) }); await refreshQuiet(); }
+  catch(e){ toast('Save failed'); }
+}
+async function toggleRepostStatus(id, cur){
+  var next=(String(cur).toLowerCase()==='done')?'progress':'done';
+  try{ await apiPost({ action:'repost_save', id:id, status:next, by:firstName(USER.full_name||USER.employee_id) }); await refreshQuiet(); toast(next==='done'?'Marked done — excluded from EOD report.':'Reopened.'); }
   catch(e){ toast('Save failed'); }
 }
 async function delRepost(id){
