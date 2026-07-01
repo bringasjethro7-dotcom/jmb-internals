@@ -324,6 +324,7 @@ button.promosel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
       <div class="tab" data-page="sourcing" onclick="showTab('sourcing')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Sourcing</div>
       <div class="tab" data-page="posting" onclick="showTab('posting')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Posting</div>
       <div class="tab" data-page="accounts" onclick="showTab('accounts')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-3-3.87"/><path d="M4 21v-2a4 4 0 0 1 3-3.87"/><circle cx="12" cy="7" r="4"/><path d="M9 11H7a2 2 0 0 0-2 2"/></svg>Accounts</div>
+      <div class="tab" data-page="history" onclick="showTab('history')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13a9 9 0 1 0 .49-4.5"/><path d="M12 7v5l3 2"/></svg>Daily history</div>
       <div class="tab" id="qa-tab" data-page="qa" style="display:none" onclick="showTab('qa')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/><circle cx="18" cy="6" r="3"/></svg>QA Checker</div>
     </div>
 
@@ -418,6 +419,19 @@ button.promosel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
       </div>
       <div class="stats" id="acct-stats"></div>
       <div id="accounts-list"><div class="muted">Loading accounts…</div></div>
+    </div>
+
+    <!-- DAILY HISTORY — per-employee sourced/posted vs target for a chosen recorded day -->
+    <div class="page" id="page-history">
+      <div class="toolbar">
+        <label style="font-size:13px;color:var(--t2)">Date&nbsp;<select class="sel" id="hist-date" onchange="loadHistory()"><option>Loading…</option></select></label>
+        <button class="ghost" onclick="loadHistory()">↻ Refresh</button>
+      </div>
+      <div class="stats" id="hist-stats"></div>
+      <h3 style="margin:16px 0 6px;font-size:14px;color:var(--t1)">Sourcing — per employee</h3>
+      <div id="hist-src"><div class="muted">Pick a date.</div></div>
+      <h3 style="margin:22px 0 6px;font-size:14px;color:var(--t1)">Posting — per employee</h3>
+      <div id="hist-post"><div class="muted">Pick a date.</div></div>
     </div>
 
     <!-- QA CHECKER — reels posted per day, grouped by poster -->
@@ -1571,10 +1585,10 @@ async function addSourcer(){
 }
 
 async function recordDay(){
-  if(!confirm('Record today’s sourcing totals to history? The board stays as-is (nothing is cleared).')) return;
+  if(!confirm('Record today’s sourcing — totals AND each employee’s daily target/sourced — to history (kept for volume review)? The board stays as-is (nothing is cleared).')) return;
   try{
     var r=await apiPost({ action:'src_record', by:firstName(USER.full_name||USER.employee_id) });
-    if(r&&r.ok) toast('Recorded '+r.date+' — sourced today: '+r.sourced_today+', assigned: '+r.assigned);
+    if(r&&r.ok) toast('Recorded '+r.date+' — sourced today: '+r.sourced_today+', assigned: '+r.assigned+(r.sourcers?(' · '+r.sourcers+' employees snapshotted'):''));
     else toast('Could not record');
   }catch(e){ toast('Record failed'); }
 }
@@ -2066,11 +2080,48 @@ async function refreshRepost(id, link){
 
 /* ---- tabs ---- */
 function showTab(p){
-  ['device','posting','sourcing','insights','accounts','qa'].forEach(function(x){
+  ['device','posting','sourcing','insights','accounts','qa','history'].forEach(function(x){
     var el=$('page-'+x); if(el) el.classList.toggle('on', x===p);
   });
   document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('on', t.getAttribute('data-page')===p); });
-  if(STATE){ if(p==='device') renderDevice(); else if(p==='posting') renderPosting(); else if(p==='insights'){ ANIMATE_AUDIO=true; renderInsights(); } else if(p==='accounts') renderAccountsTab(); else if(p==='qa') renderQA(); else renderSourcing(); }
+  if(STATE){ if(p==='device') renderDevice(); else if(p==='posting') renderPosting(); else if(p==='insights'){ ANIMATE_AUDIO=true; renderInsights(); } else if(p==='accounts') renderAccountsTab(); else if(p==='qa') renderQA(); else if(p==='history') loadHistory(); else renderSourcing(); }
+}
+/* ===================== DAILY HISTORY (per-employee sourced/posted vs target) ===================== */
+var HIST_DATES=null;
+async function loadHistory(){
+  var sel=$('hist-date'); var wanted=(sel&&sel.value&&sel.value!=='Loading…')?sel.value:'';
+  $('hist-src').innerHTML='<div class="muted">Loading…</div>'; $('hist-post').innerHTML='';
+  try{
+    var d=await apiPost({ action:'daily_history', date:wanted });
+    if(!d||!d.ok){ $('hist-src').innerHTML='<div class="muted">Could not load history.</div>'; return; }
+    // date dropdown
+    if(sel){ var opts=(d.dates||[]); if(!opts.length) opts=[d.date];
+      sel.innerHTML=opts.map(function(dt){ return '<option'+(dt===d.date?' selected':'')+'>'+esc(dt)+'</option>'; }).join(''); }
+    renderHistory(d);
+  }catch(e){ $('hist-src').innerHTML='<div class="muted">Network error.</div>'; }
+}
+function _histTable(rows, cols){
+  if(!rows.length) return '<div class="muted">No records for this date.</div>';
+  var head='<table class="srctable"><thead><tr><th>Employee</th><th>Phones</th>'+cols.map(function(c){return '<th>'+c[1]+'</th>';}).join('')+'<th>Completion</th></tr></thead><tbody>';
+  var body=rows.map(function(r){
+    var tgt=Number(r[cols[cols.length-1][0]])||0;   // last metric col = target
+    var got=Number(r[cols[0][0]])||0;               // first metric col = done (sourced/posted)
+    var pct=tgt?Math.round(got/tgt*100):0; var pc=pct>=100?'ok':(pct>=70?'mid':'low');
+    return '<tr><td class="nm">'+esc(r.name||'—')+'</td><td>'+esc(String(r.phones||'').split(' ').filter(Boolean).map(function(x){return 'P'+x;}).join(', ')||'—')+'</td>'+
+      cols.map(function(c){ return '<td><b>'+esc(r[c[0]]!=null&&r[c[0]]!==''?r[c[0]]:'0')+'</b></td>'; }).join('')+
+      '<td><div style="display:flex;align-items:center;gap:8px"><span class="pct '+pc+'">'+pct+'%</span><div class="pbar" style="min-width:70px"><i style="width:'+Math.min(100,pct)+'%"></i></div></div></td></tr>';
+  }).join('');
+  return head+body+'</tbody></table>';
+}
+function renderHistory(d){
+  var src=d.sourcing||[], post=d.posting||[];
+  var sSourced=src.reduce(function(s,r){return s+(Number(r.sourced)||0);},0), sTarget=src.reduce(function(s,r){return s+(Number(r.target)||0);},0);
+  var pPosted=post.reduce(function(s,r){return s+(Number(r.posted)||0);},0), pTarget=post.reduce(function(s,r){return s+(Number(r.target)||0);},0);
+  $('hist-stats').innerHTML =
+    statCard('Sourced', sSourced, '')+statCard('Sourcing target', sTarget, 'r')+
+    statCard('Posted', pPosted, 'g')+statCard('Posting target', pTarget, 'a');
+  $('hist-src').innerHTML=_histTable(src, [['sourced','Sourced'],['accounts','Accounts'],['target','Target']]);
+  $('hist-post').innerHTML=_histTable(post, [['posted','Posted'],['accounts','Accounts'],['target','Target']]);
 }
 
 /* ===================== QA — REELS COUNT (per day, by poster) ===================== */
