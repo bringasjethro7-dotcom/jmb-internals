@@ -533,7 +533,7 @@ button.promosel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
 
 <script>
 /* ====== CONFIG ====== */
-var PORTAL_URL = "https://script.google.com/macros/s/AKfycbyWjoG5n9qsyFXx3QfWWFn06umtELVR6B5sVnWThNjz95X5WT2RP-FXFljhHXaRh05Hfg/exec"; // for employee ID+PIN login
+var PORTAL_URL = "https://script.google.com/macros/s/AKfycbzoalT_9SYhSPciWdjDI6bv0qjKL7SWn0Rmkgt6CMJMzGs9pKCydCJChz6-ZuM_Srdj/exec"; // for employee ID+PIN login
 var ALTR_URL   = "https://script.google.com/macros/s/AKfycbw_qxqgOi2ceuSgJBpSSNt1QXjGhHhSnCO4w9y4f21-SHlfY3m7YDxWiYbFjHZJxIFJHQ/exec"; // deployed altr-apps-script.gs /exec URL
 var ADMIN_PASS = "JMBeast_020298";
 var DEFAULT_SOURCERS = [
@@ -688,12 +688,15 @@ async function doLogin(){
   }
   btn.disabled=true; btn.textContent='Signing in…';
   try{
-    var res=await fetch(PORTAL_URL+'?id='+encodeURIComponent(id)+'&pin='+encodeURIComponent(pin));
+    var res=await fetch(PORTAL_URL+'?id='+encodeURIComponent(id)+'&pin='+encodeURIComponent(pin)+'&_='+Date.now());
     var data=await res.json();
-    if(data && data.error==='DEACTIVATED'){ err.textContent='This account has been deactivated. Contact your admin.'; err.style.display='block'; btn.disabled=false; btn.textContent='Sign in'; return; }
-    if(!data || data.error || !data.employee_id) throw new Error('bad');
+    if(data && data.error==='DEACTIVATED'){ err.textContent='This account has been deactivated. Contact your admin.'; err.style.display='block'; return; }
+    if(data && data.error==='WRONG_PIN'){ err.textContent='Wrong PIN for that ID.'; err.style.display='block'; return; }
+    if(data && data.error==='NOT_FOUND'){ err.textContent='Employee ID not found.'; err.style.display='block'; return; }
+    if(data && (data.error==='SHEET_NOT_FOUND'||data.error==='BAD_SHEET_HEADERS')){ err.textContent='Login service is misconfigured (backend). Tell your admin.'; err.style.display='block'; return; }
+    if(!data || data.error || !data.employee_id) throw new Error(data&&data.error?data.error:'bad');
     enterApp(data, false);
-  }catch(e){ err.textContent='Invalid ID or PIN.'; err.style.display='block'; }
+  }catch(e){ err.textContent='Couldn’t reach the login service. Check connection / try again.'; err.style.display='block'; }
   finally{ btn.disabled=false; btn.textContent='Sign in'; }
 }
 function doLogout(){ sessionStorage.removeItem('altr_user'); location.reload(); }
