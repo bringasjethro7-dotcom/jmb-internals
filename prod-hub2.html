@@ -246,11 +246,15 @@ function renderReview(){
   var body=REV.map(function(x,i){
     var col={pending:'#fbbf24',approved:'#34d399',rejected:'#f87171'}[x.vol_status]||'#fbbf24';
     var noId=!x.id;
-    return '<tr style="border-top:1px solid rgba(255,255,255,.07);">'+
+    var vol=(x.volume===''||x.volume==null)?0:Number(x.volume);
+    var qph=(vol>0 && x.hours>0)?(vol/x.hours):0;
+    var susp=(x.hours>0 && x.hours<0.1) || qph>500;   // near-zero hours or absurd rate = likely bad entry
+    var warn=susp?' <span title="Suspicious: very low hours / extreme rate" style="color:#fbbf24;font-weight:700;">⚠</span>':'';
+    return '<tr style="border-top:1px solid rgba(255,255,255,.07);'+(susp?'background:rgba(251,191,36,.07);':'')+'">'+
       '<td style="padding:8px 6px;">'+esc(x.full_name)+'</td>'+
       '<td style="padding:8px 6px;white-space:nowrap;">'+esc(x.date)+'</td>'+
       '<td style="padding:8px 6px;">'+esc(x.task||'—')+'</td>'+
-      '<td style="padding:8px 6px;white-space:nowrap;">'+(Math.round(x.hours*100)/100)+'h</td>'+
+      '<td style="padding:8px 6px;white-space:nowrap;'+(susp?'color:#fbbf24;':'')+'">'+(Math.round(x.hours*100)/100)+'h'+warn+'</td>'+
       '<td style="padding:8px 6px;"><input id="rv-'+i+'" type="number" step="any" value="'+(x.volume===''?'':x.volume)+'" placeholder="—" style="width:82px;background:#1a2330;border:1px solid rgba(255,255,255,.14);border-radius:7px;color:#e6edf3;padding:5px 7px;font-family:inherit;"'+(noId?' disabled':'')+'></td>'+
       '<td style="padding:8px 6px;color:'+col+';font-weight:700;text-transform:capitalize;">'+x.vol_status+(x.vol_by?('<div style="font-size:10px;color:#6b7d90;font-weight:400;">'+esc(x.vol_by)+'</div>'):'')+'</td>'+
       '<td style="padding:8px 6px;white-space:nowrap;">'+(noId?'<span style="color:#6b7d90;font-size:11px;">no id</span>':(
