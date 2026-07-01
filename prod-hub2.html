@@ -231,7 +231,12 @@ async function loadReview(){
   try{
     var r=await fetch(PORTAL_URL+'?action=vol_review&from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to)+'&status='+encodeURIComponent(status)+'&_='+Date.now());
     var d=await r.json();
-    if(!d||!d.ok){ box.innerHTML='<div class="empty">Could not load entries.</div>'; return; }
+    if(!d||!d.ok){
+      // If vol_review isn't a known action, the old backend falls through to login and returns an employee/NOT_FOUND shape.
+      var stale=(!d)||(d.error==='NOT_FOUND')||(d.employee_id!==undefined)||(d.error===undefined);
+      box.innerHTML='<div class="empty" style="color:#f87171">Could not load entries'+((d&&d.error)?(' ('+esc(d.error)+')'):'')+'.'+
+        (stale?'<br><span style="color:#9fb0c3">The portal Apps Script needs a NEW deployment — this build doesn\'t have the review endpoint yet. After deploying, ?action=ping should read <b>2026-07-01-vol-approval</b>.</span>':'')+'</div>';
+      return; }
     REV=d.rows||[]; var c=d.counts||{};
     $('rev-counts').textContent=(c.pending||0)+' pending · '+(c.approved||0)+' approved · '+(c.rejected||0)+' rejected';
     renderReview();
