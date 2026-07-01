@@ -126,6 +126,7 @@ main{padding:20px;max-width:1180px;margin:0 auto}
 
 <script>
 var PORTAL_URL = "https://script.google.com/macros/s/AKfycbzoalT_9SYhSPciWdjDI6bv0qjKL7SWn0Rmkgt6CMJMzGs9pKCydCJChz6-ZuM_Srdj/exec";
+var ADMIN_PASS = "JMBeast_020298";   // lets an admin sign in with ID "ADMIN" + this password
 var USER=null;
 function $(id){return document.getElementById(id);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
@@ -145,6 +146,12 @@ async function signIn(){
   var id=($('si-id').value||'').trim(), pin=($('si-pin').value||'').trim();
   var err=$('si-err'); err.style.display='none';
   if(!id||!pin){ err.style.display='block'; err.textContent='Enter your Employee ID and PIN.'; return; }
+  // Admin sign-in: ID "ADMIN" + admin password (no employee record needed).
+  if(id.toUpperCase()==='ADMIN'){
+    if(pin===ADMIN_PASS){ USER={ id:'ADMIN', name:'Admin' }; try{ sessionStorage.setItem('prod_user', JSON.stringify(USER)); }catch(e){} startApp(); }
+    else { err.style.display='block'; err.textContent='Incorrect admin password.'; }
+    return;
+  }
   var b=$('si-btn'); b.disabled=true; b.textContent='Checking…';
   try{
     var r=await fetch(PORTAL_URL+'?id='+encodeURIComponent(id)+'&pin='+encodeURIComponent(pin)+'&_='+Date.now());
