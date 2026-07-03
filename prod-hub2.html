@@ -245,30 +245,81 @@ async function loadReview(){
 function renderReview(){
   var box=$('rev-body');
   if(!REV.length){ box.innerHTML='<div class="empty">No entries for this filter.</div>'; return; }
-  var head='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;">'+
+  // group rows by project (preserve first-seen order); falls back to one group if backend hasn't sent project yet
+  var order=[], byP={};
+  REV.forEach(function(x,i){ var p=(x.project&&String(x.project).trim())||'(Ungrouped)'; if(!byP[p]){ byP[p]=[]; order.push(p); } byP[p].push(i); });
+
+  var toolbar='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;">'+
+    '<button class="btn ghost sm" id="rev-appsel" onclick="revApproveSelected()" style="border-color:rgba(52,211,153,.5);color:#34d399;font-weight:700;padding:7px 14px;">✔ Approve selected (0)</button>'+
+    '<span style="font-size:11px;color:#6b7d90;">Tick individual rows or a whole project, then approve in one click.</span></div>';
+
+  var html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;">'+
     '<thead><tr style="text-align:left;color:#9fb0c3;font-size:11px;text-transform:uppercase;letter-spacing:.04em;">'+
+    '<th style="padding:8px 6px;width:26px;"><input type="checkbox" id="rev-all" onchange="revToggleAll(this.checked)" title="Select all"></th>'+
     '<th style="padding:8px 6px;">Employee</th><th style="padding:8px 6px;">Date</th><th style="padding:8px 6px;">Task</th><th style="padding:8px 6px;">Hours</th><th style="padding:8px 6px;">Volume</th><th style="padding:8px 6px;">Status</th><th style="padding:8px 6px;">Action</th></tr></thead><tbody>';
-  var body=REV.map(function(x,i){
-    var col={pending:'#fbbf24',approved:'#34d399',rejected:'#f87171'}[x.vol_status]||'#fbbf24';
-    var noId=!x.ids;
-    var vol=(x.volume===''||x.volume==null)?0:Number(x.volume);
-    var qph=(vol>0 && x.hours>0)?(vol/x.hours):0;
-    var susp=(x.hours>0 && x.hours<0.1) || qph>500;   // near-zero hours or absurd rate = likely bad entry
-    var warn=susp?' <span title="Suspicious: very low hours / extreme rate" style="color:#fbbf24;font-weight:700;">⚠</span>':'';
-    var cnt=(x.entries>1)?(' <span title="'+x.entries+' entries combined" style="color:#6b7d90;font-size:11px;">×'+x.entries+'</span>'):'';
-    return '<tr style="border-top:1px solid rgba(255,255,255,.07);'+(susp?'background:rgba(251,191,36,.07);':'')+'">'+
-      '<td style="padding:8px 6px;">'+esc(x.full_name)+'</td>'+
-      '<td style="padding:8px 6px;white-space:nowrap;">'+esc(x.date)+'</td>'+
-      '<td style="padding:8px 6px;">'+esc(x.task||'—')+cnt+'</td>'+
-      '<td style="padding:8px 6px;white-space:nowrap;'+(susp?'color:#fbbf24;':'')+'">'+(Math.round(x.hours*100)/100)+'h'+warn+'</td>'+
-      '<td style="padding:8px 6px;"><input id="rv-'+i+'" type="number" step="any" value="'+(x.volume===''?'':x.volume)+'" placeholder="—" style="width:82px;background:#1a2330;border:1px solid rgba(255,255,255,.14);border-radius:7px;color:#e6edf3;padding:5px 7px;font-family:inherit;"'+(noId?' disabled':'')+'></td>'+
-      '<td style="padding:8px 6px;color:'+col+';font-weight:700;text-transform:capitalize;">'+x.vol_status+(x.vol_by?('<div style="font-size:10px;color:#6b7d90;font-weight:400;">'+esc(x.vol_by)+'</div>'):'')+'</td>'+
-      '<td style="padding:8px 6px;white-space:nowrap;">'+(noId?'<span style="color:#6b7d90;font-size:11px;">no id</span>':(
-        '<button class="btn ghost sm" style="border-color:rgba(52,211,153,.4);color:#34d399;padding:5px 10px;" onclick="revAct('+i+',\'approved\')">Approve</button> '+
-        '<button class="btn ghost sm" style="border-color:rgba(248,113,113,.4);color:#f87171;padding:5px 10px;" onclick="revAct('+i+',\'rejected\')">Reject</button>'))+'</td>'+
-    '</tr>';
-  }).join('');
-  box.innerHTML=head+body+'</tbody></table></div>';
+
+  order.forEach(function(p){
+    var idxs=byP[p];
+    var pend=idxs.filter(function(i){ return REV[i].ids && REV[i].vol_status!=='approved'; }).length;
+    var pid='p'+p.replace(/[^a-z0-9]/gi,'_');
+    html+='<tr style="background:rgba(124,160,255,.08);"><td colspan="8" style="padding:9px 8px;">'+
+      '<label style="display:inline-flex;align-items:center;gap:9px;cursor:pointer;font-weight:800;color:#e6edf3;font-size:12.5px;letter-spacing:.02em;">'+
+      '<input type="checkbox" class="rev-pcb" data-proj="'+pid+'" onchange="revToggleProj(\''+pid+'\',this.checked)"'+(pend?'':' disabled')+'>'+
+      '📁 '+esc(p)+' <span style="font-weight:500;color:#8aa0b6;font-size:11px;">'+idxs.length+' task-day'+(idxs.length>1?'s':'')+' · '+pend+' pending</span></label></td></tr>';
+    idxs.forEach(function(i){
+      var x=REV[i];
+      var col={pending:'#fbbf24',approved:'#34d399',rejected:'#f87171'}[x.vol_status]||'#fbbf24';
+      var noId=!x.ids; var selectable=!!(x.ids && x.vol_status!=='approved');
+      var vol=(x.volume===''||x.volume==null)?0:Number(x.volume);
+      var qph=(vol>0 && x.hours>0)?(vol/x.hours):0;
+      var susp=(x.hours>0 && x.hours<0.1) || qph>500;
+      var warn=susp?' <span title="Suspicious: very low hours / extreme rate" style="color:#fbbf24;font-weight:700;">⚠</span>':'';
+      var cnt=(x.entries>1)?(' <span title="'+x.entries+' entries combined" style="color:#6b7d90;font-size:11px;">×'+x.entries+'</span>'):'';
+      html+='<tr style="border-top:1px solid rgba(255,255,255,.07);'+(susp?'background:rgba(251,191,36,.07);':'')+'">'+
+        '<td style="padding:8px 6px;"><input type="checkbox" class="rev-cb" data-i="'+i+'" data-proj="'+pid+'" onchange="revCbChange()"'+(selectable?'':' disabled')+'></td>'+
+        '<td style="padding:8px 6px;">'+esc(x.full_name)+'</td>'+
+        '<td style="padding:8px 6px;white-space:nowrap;">'+esc(x.date)+'</td>'+
+        '<td style="padding:8px 6px;">'+esc(x.task||'—')+cnt+'</td>'+
+        '<td style="padding:8px 6px;white-space:nowrap;'+(susp?'color:#fbbf24;':'')+'">'+(Math.round(x.hours*100)/100)+'h'+warn+'</td>'+
+        '<td style="padding:8px 6px;"><input id="rv-'+i+'" type="number" step="any" value="'+(x.volume===''?'':x.volume)+'" placeholder="—" style="width:82px;background:#1a2330;border:1px solid rgba(255,255,255,.14);border-radius:7px;color:#e6edf3;padding:5px 7px;font-family:inherit;"'+(noId?' disabled':'')+'></td>'+
+        '<td style="padding:8px 6px;color:'+col+';font-weight:700;text-transform:capitalize;">'+x.vol_status+(x.vol_by?('<div style="font-size:10px;color:#6b7d90;font-weight:400;">'+esc(x.vol_by)+'</div>'):'')+'</td>'+
+        '<td style="padding:8px 6px;white-space:nowrap;">'+(noId?'<span style="color:#6b7d90;font-size:11px;">no id</span>':(
+          '<button class="btn ghost sm" style="border-color:rgba(52,211,153,.4);color:#34d399;padding:5px 10px;" onclick="revAct('+i+',\'approved\')">Approve</button> '+
+          '<button class="btn ghost sm" style="border-color:rgba(248,113,113,.4);color:#f87171;padding:5px 10px;" onclick="revAct('+i+',\'rejected\')">Reject</button>'))+'</td>'+
+      '</tr>';
+    });
+  });
+  box.innerHTML=toolbar+html+'</tbody></table></div>';
+  revCbChange();
+}
+function revCbChange(){
+  var n=document.querySelectorAll('.rev-cb:checked').length;
+  var b=$('rev-appsel'); if(b){ b.textContent='✔ Approve selected ('+n+')'; b.disabled=(n===0); b.style.opacity=n?'1':'.5'; }
+  document.querySelectorAll('.rev-pcb').forEach(function(pc){
+    var pid=pc.getAttribute('data-proj');
+    var boxes=document.querySelectorAll('.rev-cb[data-proj="'+pid+'"]:not([disabled])');
+    var chk=document.querySelectorAll('.rev-cb[data-proj="'+pid+'"]:checked');
+    pc.checked = boxes.length>0 && chk.length===boxes.length;
+  });
+  var all=$('rev-all'); if(all){ var tot=document.querySelectorAll('.rev-cb:not([disabled])').length; all.checked=tot>0 && n===tot; }
+}
+function revToggleProj(pid, on){
+  document.querySelectorAll('.rev-cb[data-proj="'+pid+'"]:not([disabled])').forEach(function(cb){ cb.checked=on; });
+  revCbChange();
+}
+function revToggleAll(on){
+  document.querySelectorAll('.rev-cb:not([disabled])').forEach(function(cb){ cb.checked=on; });
+  revCbChange();
+}
+async function revApproveSelected(){
+  var ids=[]; document.querySelectorAll('.rev-cb:checked').forEach(function(cb){ var x=REV[+cb.getAttribute('data-i')]; if(x&&x.ids&&x.vol_status!=='approved') ids.push(x.ids); });
+  if(!ids.length){ alert('Tick at least one row (or a project) to approve.'); return; }
+  if(!confirm('Approve '+ids.length+' selected task-day(s) as logged?')) return;
+  var url=PORTAL_URL+'?action=set_vol_status&ids='+encodeURIComponent(ids.join(','))+'&status=approved&by_id='+encodeURIComponent(USER.id)+'&by_name='+encodeURIComponent(USER.name)+'&_='+Date.now();
+  try{ var r=await fetch(url); var d=await r.json();
+    if(d&&d.ok) loadReview();
+    else alert('Failed: '+((d&&d.error==='NOT_LEAD')?'not authorized (leads only)':((d&&d.error)||'error')));
+  }catch(e){ alert('Network error.'); }
 }
 async function revAct(i, status){
   var x=REV[i]; if(!x||!x.ids) return;
