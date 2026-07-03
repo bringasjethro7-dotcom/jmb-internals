@@ -1714,13 +1714,13 @@ async function editAudioYAxis(kind){
 }
 function audXChip(kind){
   var yr=AUD_YRANGE[kind]||{days:7}; var d=yr.days||7;
-  return '<button class="aa-xaxis" onclick="editAudioXAxis(\''+kind+'\')" title="Set the number of days shown on the X-axis" '+
+  return '<button class="aa-xaxis" onclick="editAudioXAxis(\''+kind+'\')" title="X-axis window: '+d+' days kept centered on today — it moves forward each day. Click to change." '+
     'style="margin-left:8px;font:600 11px/1 inherit;color:var(--t2,#9aa);background:rgba(255,255,255,.05);border:1px solid var(--border,rgba(255,255,255,.12));border-radius:20px;padding:5px 11px;cursor:pointer;white-space:nowrap;">'+
-    'X '+d+'d ✎</button>';
+    'X '+d+'d · today-centered ✎</button>';
 }
 async function editAudioXAxis(kind){
   var yr=AUD_YRANGE[kind]||{days:7};
-  var v=await altPrompt('Number of days to show on the X-axis ('+kind+' chart):', (yr.days||7), { title:'X-axis · number of days', type:'number' }); if(v===null) return;
+  var v=await altPrompt('Days shown on the X-axis for the '+kind+' chart.\nToday stays centered — half the days before, half after (e.g. 7 = 3 days back · today · 3 days ahead).', (yr.days||7), { title:'X-axis · days (centered on today)', type:'number' }); if(v===null) return;
   var n=parseInt(v,10); if(isNaN(n)||n<1||n>120){ toast('Enter days between 1 and 120.'); return; }
   AUD_YRANGE[kind]=Object.assign({}, yr, { days:n }); saveAudYRange();
   renderInsights();
@@ -1738,9 +1738,9 @@ function reelYChip(){
     'Y '+Number(REEL_RANGE.min).toLocaleString()+'–'+Number(REEL_RANGE.max).toLocaleString()+' ✎</button>';
 }
 function reelXChip(){
-  return '<button class="aa-xaxis" onclick="editReelXAxis()" title="Set the number of days shown on the X-axis" '+
+  return '<button class="aa-xaxis" onclick="editReelXAxis()" title="X-axis window: '+(REEL_RANGE.days||7)+' days kept centered on today — it moves forward each day. Click to change." '+
     'style="margin-left:8px;font:600 11px/1 inherit;color:var(--t2,#9aa);background:rgba(255,255,255,.05);border:1px solid var(--border,rgba(255,255,255,.12));border-radius:20px;padding:5px 11px;cursor:pointer;white-space:nowrap;">'+
-    'X '+(REEL_RANGE.days||7)+'d ✎</button>';
+    'X '+(REEL_RANGE.days||7)+'d · today-centered ✎</button>';
 }
 async function editReelYAxis(){
   var mn=await altPrompt('Y-axis MINIMUM for the IG reels trend:', REEL_RANGE.min, { title:'Zoom Y-axis · minimum', type:'number' }); if(mn===null) return;
@@ -1750,7 +1750,7 @@ async function editReelYAxis(){
   REEL_RANGE.min=a; REEL_RANGE.max=b; saveReelRange(); renderInsights();
 }
 async function editReelXAxis(){
-  var v=await altPrompt('Number of days to show on the X-axis (IG reels trend):', (REEL_RANGE.days||7), { title:'X-axis · number of days', type:'number' }); if(v===null) return;
+  var v=await altPrompt('Days shown on the X-axis for the IG reels trend.\nToday stays centered — half the days before, half after (e.g. 7 = 3 days back · today · 3 days ahead).', (REEL_RANGE.days||7), { title:'X-axis · days (centered on today)', type:'number' }); if(v===null) return;
   var n=parseInt(v,10); if(isNaN(n)||n<1||n>120){ toast('Enter days between 1 and 120.'); return; }
   REEL_RANGE.days=n; saveReelRange(); renderInsights();
 }
@@ -1813,12 +1813,16 @@ function mountAudioChart(kind){
     s.setData(data.byAud[id].map(function(p){ return { time:p.t, value:p.v }; }));
     seriesArr.push({ id:id, s:s, col:col, title:data.titles[id]||('Audio '+id) });
   });
-  // X window: show the last N days, then let the user wheel-zoom / drag-pan freely
+  // X window: center on TODAY (PHT) — half the days before, the rest after — so the
+  // view follows the current date. Data stays loaded, so users can still drag-pan to history.
   try{
-    var allT=[]; ids.forEach(function(id){ data.byAud[id].forEach(function(p){ allT.push(p.t); }); });
-    var maxT=Math.max.apply(null,allT), minT=Math.min.apply(null,allT);
-    var from=Math.max(minT, maxT-(yr.days||7)*86400);
-    if(from>=maxT) chart.timeScale().fitContent(); else chart.timeScale().setVisibleRange({ from:from, to:maxT+3600 });
+    var days=(yr.days||7);
+    var todayStr=new Date().toLocaleDateString('en-CA',{ timeZone:'Asia/Manila' });
+    var todaySec=Math.floor(Date.parse(todayStr+'T00:00:00')/1000);
+    var half=Math.floor(days/2);
+    var from=todaySec-half*86400;
+    var to=todaySec+(days-half)*86400;   // today sits in the middle; room to scroll right
+    chart.timeScale().setVisibleRange({ from:from, to:to });
   }catch(e){ try{ chart.timeScale().fitContent(); }catch(_){} }
   // live crosshair legend (crypto-style read-out)
   var legEl=document.getElementById('lwc-leg-'+kind);
@@ -1857,8 +1861,9 @@ function buildTrendChart(hist, titles, opt){
   var MAXY = opt.fixedMax || niceMax(GMAX); if(MAXY<=MINY) MAXY=MINY+1;
   var GLINES = opt.glines || (opt.fixedMax?10:5), GSTEP = (MAXY-MINY)/GLINES;
   function dayMs(s){ return Date.parse(String(s).slice(0,10)+'T00:00:00Z'); }   // UTC midnight — matches the UTC day labels
-  var startMs=Infinity; ids.forEach(function(id){ byAud[id].forEach(function(p){ var d=dayMs(p.d); if(!isNaN(d)&&d<startMs) startMs=d; }); });
-  if(!isFinite(startMs)) startMs=dayMs(new Date().toISOString());
+  // Center the X window on TODAY (PHT): half the days before, the remainder after.
+  var _todayStr=new Date().toLocaleDateString('en-CA',{ timeZone:'Asia/Manila' });
+  var startMs=dayMs(_todayStr)-Math.floor(WEEK/2)*DAY;
   // place each point by its real date + time-of-day, so spacing reflects when it was actually logged
   // map the day to the 08:00–20:00 PHT posting window (12 hours); anything outside clamps to the edges
   function timeFrac(s){
@@ -1868,7 +1873,9 @@ function buildTrendChart(hist, titles, opt){
     return f<0?0:(f>1?1:f);
   }
   ids.forEach(function(id){
-    byAud[id].forEach(function(p){ var di=Math.round((dayMs(p.d)-startMs)/DAY); if(di<0)di=0; if(di>WEEK-1)di=WEEK-1; p.frac=di+timeFrac(p.d); });
+    // keep only points inside the centered window; older/newer points scroll off
+    byAud[id]=byAud[id].filter(function(p){ var di=Math.round((dayMs(p.d)-startMs)/DAY); p._di=di; return di>=0 && di<=WEEK-1; });
+    byAud[id].forEach(function(p){ p.frac=p._di+timeFrac(p.d); });
     byAud[id].sort(function(a,b){ return a.frac-b.frac; });   // keep the line drawing left-to-right
   });
   var W=860,H=280,padL=54,padR=14,padT=14,padB=46, plotW=W-padL-padR, plotH=H-padT-padB;   // height halved (0.5×)
@@ -1882,6 +1889,11 @@ function buildTrendChart(hist, titles, opt){
   for(var g=0;g<=GLINES;g++){ var yv=Math.round(MINY+g*GSTEP), yy=yAt(yv); svg+='<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="rgba(255,255,255,.06)"/><text x="'+(padL-8)+'" y="'+(yy+4)+'" text-anchor="end" class="axt">'+yv.toLocaleString()+'</text>'; }
   var lblStep=Math.max(1, Math.ceil(WEEK/14));   // thin out labels when many days are shown
   for(var di=0; di<WEEK; di++){ if(di%lblStep!==0 && di!==WEEK-1) continue; var lbl=new Date(startMs+di*DAY); var mm=('0'+(lbl.getUTCMonth()+1)).slice(-2), dd=('0'+lbl.getUTCDate()).slice(-2); svg+='<text x="'+xAt(di+0.5)+'" y="'+(H-padB+20)+'" text-anchor="middle" class="axt">'+mm+'-'+dd+'</text>'; }
+  // "Today" guide line — marks the centered current day
+  var _tIdx=Math.round((dayMs(_todayStr)-startMs)/DAY);
+  if(_tIdx>=0 && _tIdx<=WEEK-1){ var _tx=xAt(_tIdx+0.5);
+    svg+='<line x1="'+_tx+'" y1="'+padT+'" x2="'+_tx+'" y2="'+(H-padB)+'" stroke="rgba(255,107,26,.5)" stroke-width="1.4" stroke-dasharray="4 4"/>'+
+      '<text x="'+_tx+'" y="'+(padT+11)+'" text-anchor="middle" class="axt" style="fill:#ff8a4a;font-weight:700">Today</text>'; }
   function polyLen(pts){ var L=0; for(var i=1;i<pts.length;i++){ var dx=pts[i][0]-pts[i-1][0], dy=pts[i][1]-pts[i-1][1]; L+=Math.sqrt(dx*dx+dy*dy); } return L; }
   ids.forEach(function(id,ci){ var col=colors[ci%colors.length]; var pts=byAud[id].map(function(p){ return [xAt(p.frac),yAt(p.v)]; });
     if(!pts.length) return;
