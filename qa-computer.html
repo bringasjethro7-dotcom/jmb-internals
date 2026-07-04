@@ -55,13 +55,16 @@ main{padding:20px;max-width:1180px;margin:0 auto}
 .taskhd{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
 .taskhd .tn{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700}
 .taskhd .tc{font-size:11px;color:var(--t3);font-weight:600}
-.gridwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
-.qgrid{width:100%;border-collapse:collapse;font-size:12px;min-width:640px}
+.gridwrap{overflow:auto;max-height:72vh;border:1px solid var(--line);border-radius:12px}
+.qgrid{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;min-width:640px}
 .qgrid th,.qgrid td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:5px 7px;text-align:center;vertical-align:middle}
 .qgrid tr td:last-child,.qgrid tr th:last-child{border-right:none}
 .qgrid tbody tr:last-child td{border-bottom:none}
-.qgrid thead th{background:var(--bg2);color:var(--t2);font-weight:700;font-size:10.5px;position:sticky;top:0}
-.qgrid td.crit,.qgrid th.crit{text-align:left;color:var(--t1);min-width:280px;max-width:340px;line-height:1.3;font-weight:500}
+.qgrid thead th{background:var(--bg2);color:var(--t2);font-weight:700;font-size:10.5px;position:sticky;top:0;z-index:2}
+/* Freeze the first row (account headers) AND the first column (criteria). */
+.qgrid td.crit,.qgrid th.crit{text-align:left;color:var(--t1);min-width:250px;max-width:330px;line-height:1.3;font-weight:500;position:sticky;left:0;z-index:1;background:var(--card)}
+.qgrid thead th.crit{z-index:3;background:var(--bg2)}
+.qgrid .subtot td.crit{background:var(--bg2)}
 .acctcol{min-width:104px}
 .acctname{width:88px;background:var(--card2);border:1px solid var(--line);border-radius:6px;color:var(--t1);font-size:11px;padding:3px 5px;outline:none;text-align:center}
 .acctname:focus{border-color:var(--o1)}
@@ -152,6 +155,10 @@ textarea.note:focus{border-color:var(--o1)}
       <label class="clientqa"><input type="checkbox" id="c-clientqa" onchange="onClientQAChange()"> With Client's QA <span class="ded">— auto deduct 10%</span></label>
       <div id="crit-list"></div>
       <textarea class="note" id="c-note" placeholder="Optional note for this week's audit (context, recurring issues, etc.)"></textarea>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px">
+        <label class="clientqa" style="margin:0"><input type="checkbox" id="c-email" checked> 📧 Email summary to employee</label>
+        <button class="btn ghost" onclick="clearBoard()" style="margin-left:auto">🧹 Clear board</button>
+      </div>
       <button class="btn" id="save-btn" style="width:100%;margin-top:12px" onclick="saveScore()">Compute &amp; save weekly QA</button>
     </div>
 
@@ -334,6 +341,14 @@ function flipRow(task,ci){
   renderCriteria(); recompute();
 }
 function setAcctName(task,ai,val){ if(AUDIT[task][ai]) AUDIT[task][ai].name=String(val||'').slice(0,40); }
+function clearBoard(){
+  if(!confirm('Clear the board? This resets every check to Pass and account names to default for this project.')) return;
+  AUDIT=defaultAudit(); clientQA=false;
+  if($('c-clientqa')) $('c-clientqa').checked=false;
+  $('c-note').value='';
+  renderCriteria(); recompute();
+  toast('Board cleared to default.');
+}
 function addAcct(task){ var t=taskByName(task); AUDIT[task].push({ name:task+' #'+(AUDIT[task].length+1), states:t.criteria.map(function(){return true;}) }); renderCriteria(); recompute(); }
 function removeAcct(task,ai){ if(AUDIT[task].length<=1) return; AUDIT[task].splice(ai,1); renderCriteria(); recompute(); }
 
@@ -421,6 +436,14 @@ async function saveScore(){
   if(!month){ toast('Pick a month.'); return; }
   var res=recompute();
   var criteria=JSON.stringify({ clientQA:clientQA, matrix:AUDIT });
+  // Build the "where to focus" list = every FAILED check, with its account + criterion label.
+  var focus=[]; var p=curProject();
+  p.tasks.forEach(function(t){
+    (AUDIT[t.name]||[]).forEach(function(a){
+      t.criteria.forEach(function(lbl,ci){ if(a.states[ci]===false) focus.push({ task:t.name, account:a.name, criterion:lbl }); });
+    });
+  });
+  var wantEmail=$('c-email') && $('c-email').checked;
   var empObj=EMPLOYEES.filter(function(e){ return String(e.employee_id)===String(emp); })[0];
   var full=(empObj&&empObj.full_name)||'';
   var b=$('save-btn'); b.disabled=true; b.textContent='Saving…';
@@ -437,10 +460,17 @@ async function saveScore(){
       +'&criteria='+encodeURIComponent(criteria)
       +'&note='+encodeURIComponent($('c-note').value||'')
       +'&by='+encodeURIComponent(USER.name||USER.id)
+      +'&email='+(wantEmail?'1':'0')
+      +'&client_qa='+(clientQA?'1':'0')
+      +'&focus='+encodeURIComponent(JSON.stringify(focus))
       +'&_='+Date.now();
     var r=await fetch(url); var d=await r.json();
     b.disabled=false; b.textContent='Compute & save weekly QA';
-    if(d&&d.ok){ toast('Saved · '+full+' W'+week+' = '+res.score+'% ('+res.passed+'/'+res.total+')'); onContextChange(); }
+    if(d&&d.ok){
+      var msg='Saved · '+full+' W'+week+' = '+res.score+'% ('+res.passed+'/'+res.total+')';
+      if(wantEmail){ msg += d.emailed ? ' · summary emailed' : (d.email_to ? ' · email failed' : ' · no email on file'); }
+      toast(msg); onContextChange();
+    }
     else { toast('Save failed: '+((d&&d.error)||'unknown')); }
   }catch(e){ b.disabled=false; b.textContent='Compute & save weekly QA'; toast('Network error — try again.'); }
 }
