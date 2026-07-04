@@ -119,6 +119,7 @@ main{padding:20px;max-width:1180px;margin:0 auto}
       <button class="btn ghost sm" onclick="loadReview()">↻ Refresh</button>
       <span class="spacer" style="flex:1"></span>
       <button class="btn ghost sm" onclick="revApproveAll()" style="border-color:rgba(52,211,153,.4);color:#34d399;">✔ Approve all shown (as logged)</button>
+      <button class="btn ghost sm" onclick="revResetAllShown()" style="border-color:rgba(148,163,184,.45);color:#94a3b8;">↩ Reset all shown → Pending</button>
     </div>
     <div id="rev-body"><div class="empty">Loading…</div></div>
   </div>
@@ -285,7 +286,8 @@ function renderReview(){
         '<td style="padding:8px 6px;color:'+col+';font-weight:700;text-transform:capitalize;">'+x.vol_status+(x.vol_by?('<div style="font-size:10px;color:#6b7d90;font-weight:400;">'+esc(x.vol_by)+'</div>'):'')+'</td>'+
         '<td style="padding:8px 6px;white-space:nowrap;">'+(noId?'<span style="color:#6b7d90;font-size:11px;">no id</span>':(
           '<button class="btn ghost sm" style="border-color:rgba(52,211,153,.4);color:#34d399;padding:5px 10px;" onclick="revAct('+i+',\'approved\')">Approve</button> '+
-          '<button class="btn ghost sm" style="border-color:rgba(248,113,113,.4);color:#f87171;padding:5px 10px;" onclick="revAct('+i+',\'rejected\')">Reject</button>'))+'</td>'+
+          '<button class="btn ghost sm" style="border-color:rgba(248,113,113,.4);color:#f87171;padding:5px 10px;" onclick="revAct('+i+',\'rejected\')">Reject</button>'+
+          (x.vol_status!=='pending'?' <button class="btn ghost sm" style="border-color:rgba(148,163,184,.5);color:#94a3b8;padding:5px 10px;" onclick="revAct('+i+',\'pending\')" title="Undo — set back to pending">↩ Undo</button>':'')))+'</td>'+
       '</tr>';
     });
   });
@@ -339,6 +341,19 @@ async function revApproveAll(){
   try{ var r=await fetch(url); var d=await r.json();
     if(d&&d.ok) loadReview();
     else alert('Failed: '+((d&&d.error)||'error'));
+  }catch(e){ alert('Network error.'); }
+}
+// Undo: set every shown entry that isn't already pending back to PENDING (reverses an
+// accidental "approve/reject all"). Only affects the current date range + status filter.
+async function revResetAllShown(){
+  var ids=REV.filter(function(x){ return x.ids && x.vol_status!=='pending'; }).map(function(x){ return x.ids; }).join(',');
+  var groups=REV.filter(function(x){ return x.ids && x.vol_status!=='pending'; }).length;
+  if(!ids){ alert('Nothing to reset — everything shown is already pending.'); return; }
+  if(!confirm('Reset all '+groups+' shown task-day(s) back to PENDING?\n\nThis undoes the approval/rejection for everything in the current date range so it can be reviewed again.')) return;
+  var url=PORTAL_URL+'?action=set_vol_status&ids='+encodeURIComponent(ids)+'&status=pending&by_id='+encodeURIComponent(USER.id)+'&by_name='+encodeURIComponent(USER.name)+'&_='+Date.now();
+  try{ var r=await fetch(url); var d=await r.json();
+    if(d&&d.ok){ loadReview(); }
+    else alert('Failed: '+((d&&d.error==='NOT_LEAD')?'not authorized (leads only)':((d&&d.error)||'error')));
   }catch(e){ alert('Network error.'); }
 }
 /* ---- boot ---- */
