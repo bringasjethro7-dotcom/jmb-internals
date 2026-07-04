@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>JMB Virtuals — QA Computer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0e14;--bg2:#0d1117;--card:#151b24;--card2:#1b222d;--line:rgba(255,255,255,.09);
+ --o1:#ff6b1a;--o2:#e83d00;--t1:#e8eaf0;--t2:#9aa3b2;--t3:#5a6072;--green:#34d399;--red:#f87171;--blue:#38bdf8;--amber:#fbbf24;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t1);min-height:100vh;font-size:14px}
+button{font-family:inherit;cursor:pointer}
+.mono{font-family:'JetBrains Mono',monospace}
+#signin{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,rgba(255,107,26,.12),transparent 60%),var(--bg);z-index:50;padding:16px}
+.sicard{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:32px 28px;width:340px;max-width:100%;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.sicard h1{font-family:'Rajdhani',sans-serif;font-size:24px;letter-spacing:.04em;margin-bottom:2px}
+.sicard h1 b{color:var(--o1)}
+.sicard p{color:var(--t2);font-size:12.5px;margin-bottom:16px}
+.inp{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:11px;color:var(--t1);padding:11px 13px;font-size:14px;font-family:inherit;outline:none;margin-bottom:10px}
+.inp:focus{border-color:var(--o1)}
+.btn{background:linear-gradient(135deg,var(--o1),var(--o2));color:#fff;border:none;border-radius:11px;padding:11px 16px;font-weight:700;font-size:14px}
+.btn:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:8px 13px;font-size:13px;border-radius:9px}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--t2);font-weight:600}
+.btn.ghost:hover{color:var(--t1);border-color:var(--o1)}
+.btn.tiny{padding:3px 9px;font-size:11px;border-radius:7px}
+.err{color:var(--red);font-size:12.5px;margin-top:4px;display:none}
+header{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);background:rgba(13,17,23,.85);position:sticky;top:0;z-index:20;backdrop-filter:blur(10px)}
+.logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;letter-spacing:.06em}
+.logo b{color:var(--o1)}
+.spacer{flex:1}
+.who{font-size:13px;color:var(--t2)}.who b{color:var(--t1)}
+main{padding:20px;max-width:1180px;margin:0 auto}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:16px}
+.controls label{font-size:11px;color:var(--t2);text-transform:uppercase;letter-spacing:.04em;display:flex;flex-direction:column;gap:4px}
+.controls select,.controls input{background:var(--card);border:1px solid var(--line);border-radius:9px;color:var(--t1);padding:8px 10px;font-size:13px;font-family:inherit;outline:none}
+.controls select:focus,.controls input:focus{border-color:var(--o1)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+.card h2{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;letter-spacing:.03em;margin-bottom:2px}
+.card .sub{font-size:12px;color:var(--t3);margin-bottom:14px}
+/* score bar */
+.scorebar{display:flex;align-items:center;gap:18px;background:linear-gradient(135deg,rgba(255,107,26,.12),transparent);border:1px solid var(--line);border-radius:16px;padding:16px 20px;margin-bottom:16px;position:sticky;top:64px;z-index:15;backdrop-filter:blur(8px)}
+.scorebar .big{font-family:'Rajdhani',sans-serif;font-size:46px;font-weight:800;line-height:1;min-width:96px}
+.scorebar .meta{flex:1}
+.scorebar .meta .l{font-size:11px;color:var(--t2);text-transform:uppercase;letter-spacing:.06em}
+.scorebar .meta .pf{font-size:13px;color:var(--t3);margin-top:3px}
+.progress{height:8px;border-radius:6px;background:var(--card2);overflow:hidden;margin-top:8px}
+.progress>span{display:block;height:100%;background:linear-gradient(90deg,var(--o1),var(--o2))}
+/* task grid */
+.taskblk{margin-bottom:20px}
+.taskhd{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.taskhd .tn{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700}
+.taskhd .tc{font-size:11px;color:var(--t3);font-weight:600}
+.gridwrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+.qgrid{width:100%;border-collapse:collapse;font-size:12px;min-width:640px}
+.qgrid th,.qgrid td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:5px 7px;text-align:center;vertical-align:middle}
+.qgrid tr td:last-child,.qgrid tr th:last-child{border-right:none}
+.qgrid tbody tr:last-child td{border-bottom:none}
+.qgrid thead th{background:var(--bg2);color:var(--t2);font-weight:700;font-size:10.5px;position:sticky;top:0}
+.qgrid td.crit,.qgrid th.crit{text-align:left;color:var(--t1);min-width:280px;max-width:340px;line-height:1.3;font-weight:500}
+.acctcol{min-width:104px}
+.acctname{width:88px;background:var(--card2);border:1px solid var(--line);border-radius:6px;color:var(--t1);font-size:11px;padding:3px 5px;outline:none;text-align:center}
+.acctname:focus{border-color:var(--o1)}
+.rmacct{background:none;border:none;color:var(--t3);font-size:13px;margin-left:2px}
+.rmacct:hover{color:var(--red)}
+.cell{width:36px;height:27px;border-radius:6px;border:1px solid var(--line);background:var(--card2);font-weight:800;font-size:13px;color:var(--t3)}
+.cell.pass{background:rgba(52,211,153,.16);color:var(--green);border-color:rgba(52,211,153,.45)}
+.cell.fail{background:rgba(248,113,113,.16);color:var(--red);border-color:rgba(248,113,113,.45)}
+.critlbl{cursor:pointer}
+.critlbl:hover{color:var(--o1)}
+.subtot td{background:var(--bg2);font-weight:700;color:var(--t2);font-size:11px}
+.clientqa{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--t1);cursor:pointer;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:9px 13px;margin:0 0 14px}
+.clientqa input{width:16px;height:16px;accent-color:var(--o1);cursor:pointer}
+.clientqa .ded{color:var(--amber);font-weight:700;font-size:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}}
+.weekchips{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
+.wc{text-align:center;background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:8px 4px}
+.wc.sel{border-color:var(--o1);box-shadow:0 0 0 1px var(--o1)}
+.wc .wn{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em}
+.wc .wv{font-size:16px;font-weight:800;font-family:'Rajdhani',sans-serif}
+.avgrow{font-size:12px;color:var(--t2);text-align:center;margin-bottom:6px}
+.avgrow b{color:var(--o1);font-size:15px}
+textarea.note{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--t1);padding:10px;font-size:13px;font-family:inherit;outline:none;resize:vertical;min-height:56px;margin-top:12px}
+textarea.note:focus{border-color:var(--o1)}
+.slrow{display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:7px 0;border-top:1px solid var(--line);color:var(--t2)}
+.slrow b{color:var(--t1)}
+.pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(56,189,248,.15);color:var(--blue)}
+.empty{color:var(--t3);font-size:12.5px;padding:8px 0}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card2);border:1px solid var(--line);color:var(--t1);padding:11px 18px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:.25s;z-index:60;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- SIGN IN -->
+<div id="signin">
+  <div class="sicard">
+    <h1>QA <b>Computer</b></h1>
+    <p>Weekly QA scoring · leads &amp; admin only</p>
+    <input class="inp" id="si-id" placeholder="Employee ID" autocomplete="off">
+    <input class="inp" id="si-pin" type="password" placeholder="PIN" autocomplete="off" onkeydown="if(event.key==='Enter')signIn()">
+    <button class="btn" id="si-btn" style="width:100%" onclick="signIn()">Sign in</button>
+    <div class="err" id="si-err"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+  <header>
+    <div class="logo">JMB<b>·</b>QA</div>
+    <div class="spacer"></div>
+    <div class="who">Signed in as <b id="who-name">—</b></div>
+    <button class="btn ghost sm" onclick="signOut()">Sign out</button>
+  </header>
+
+  <main>
+    <div class="controls">
+      <label>Employee
+        <select id="c-emp" onchange="onContextChange()"><option value="">Loading…</option></select>
+      </label>
+      <label>Project
+        <select id="c-proj" onchange="onProjectChange()"></select>
+      </label>
+      <label>Month
+        <input type="month" id="c-month" onchange="onContextChange()">
+      </label>
+      <label>Week
+        <select id="c-week" onchange="onContextChange()">
+          <option value="1">Week 1</option><option value="2">Week 2</option>
+          <option value="3">Week 3</option><option value="4">Week 4</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="scorebar">
+      <div class="big" id="score-big">—</div>
+      <div class="meta">
+        <div class="l">Weekly QA score</div>
+        <div class="pf" id="score-pf">—</div>
+        <div class="progress"><span id="score-bar" style="width:0%"></span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 id="proj-title">—</h2>
+      <div class="sub">Mark every criterion Pass (✓) or Fail (✕) for each account. Click a criterion label to flip that whole row. Score = passed ÷ total checks across all tasks &amp; accounts.</div>
+      <label class="clientqa"><input type="checkbox" id="c-clientqa" onchange="onClientQAChange()"> With Client's QA <span class="ded">— auto deduct 10%</span></label>
+      <div id="crit-list"></div>
+      <textarea class="note" id="c-note" placeholder="Optional note for this week's audit (context, recurring issues, etc.)"></textarea>
+      <button class="btn" id="save-btn" style="width:100%;margin-top:12px" onclick="saveScore()">Compute &amp; save weekly QA</button>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>This employee · <span id="ctx-month">—</span></h2>
+        <div class="sub">Saved weekly scores (scorecard uses the month average)</div>
+        <div class="avgrow">Month avg: <b id="wk-avg">—</b></div>
+        <div class="weekchips" id="wk-chips"></div>
+      </div>
+      <div class="card">
+        <h2>Recent audits</h2>
+        <div class="sub">Saved this month</div>
+        <div id="audit-list"><div class="empty">—</div></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script>
+var PORTAL_URL = "https://script.google.com/macros/s/AKfycbzoalT_9SYhSPciWdjDI6bv0qjKL7SWn0Rmkgt6CMJMzGs9pKCydCJChz6-ZuM_Srdj/exec";
+var ADMIN_PASS = "JMBeast_020298";
+var USER=null, EMPLOYEES=[];
+var AUDIT={};   // { taskName: [ { name, states:[bool...] } ] }
+var clientQA=false;   // "With Client's QA" → auto-deduct 10 points from the final score
+var CLIENT_QA_DEDUCT=10;
+
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function clRank(d){var s=String((d&&(d.career_level||d.cl||d.level))||'');var n=parseInt(s.replace(/[^0-9]/g,''),10);return isNaN(n)?0:n;}
+function toast(m){var t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('show');},2400);}
+function curMonth(){var n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0');}
+
+/* ============ PROJECT DEFINITIONS ============
+   Each project has one or more TASKS. Each task has its own criteria list and a
+   default number of accounts. Every criterion is checked for every account, all
+   equal-weight. Add a project/task here and it shows up automatically. */
+var REDDIT_CORE = [
+  'Correct Post/Content and Caption',
+  '4-Hour Interval Between Posts (each post ≥ 4h apart from the previous session post)',
+  'No Duplicate Image on the Same Day',
+  'No Duplicate Caption on the Same Day',
+  'Account Joined the Target Subreddit Before Posting',
+  'Account Joined the Target Subreddit Before Commenting',
+  'Posted in the Correct Subreddit',
+  'Commented in the Correct Subreddit',
+  'No Multiple Comments in the Same Subreddit on the Same Day'
+];
+var PROJECTS = {
+  'Reddit - Altz': {
+    label: 'Reddit - Altz',
+    tasks: [
+      { name: 'Posting', accounts: 5, criteria: REDDIT_CORE.concat([
+        'DM Each Account According to the SOP (each account receives the required DM(s) per SOP)'
+      ]) },
+      { name: 'Farming', accounts: 10, criteria: [
+        'Account Joined the Target Subreddit Before Commenting',
+        'Commented in the Correct Subreddit',
+        'No Multiple Comments in the Same Subreddit on the Same Day'
+      ] }
+    ]
+  },
+  'ALTR Media': {
+    label: 'ALTR Media',
+    tasks: [
+      { name: 'Content Sourcing', accounts: 10, criteria: [
+        'Accurate to the Topic',
+        'Fixed Watermarks',
+        'English Audio / Language',
+        'Folder Complete (4 Contents)',
+        'Snapchat + Correct Caption'
+      ] }
+    ]
+  }
+};
+
+/* ---- sign in (CL7–CL9 or ADMIN) ---- */
+async function signIn(){
+  var id=($('si-id').value||'').trim(), pin=($('si-pin').value||'').trim();
+  var err=$('si-err'); err.style.display='none';
+  if(!id||!pin){ err.style.display='block'; err.textContent='Enter your Employee ID and PIN.'; return; }
+  if(id.toUpperCase()==='ADMIN'){
+    if(pin===ADMIN_PASS){ USER={ id:'ADMIN', name:'Admin' }; try{ sessionStorage.setItem('qa_user', JSON.stringify(USER)); }catch(e){} startApp(); }
+    else { err.style.display='block'; err.textContent='Incorrect admin password.'; }
+    return;
+  }
+  var b=$('si-btn'); b.disabled=true; b.textContent='Checking…';
+  try{
+    var r=await fetch(PORTAL_URL+'?id='+encodeURIComponent(id)+'&pin='+encodeURIComponent(pin)+'&_='+Date.now());
+    var d=await r.json();
+    b.disabled=false; b.textContent='Sign in';
+    if(!d || d.error){ err.style.display='block'; err.textContent=(d&&d.error==='WRONG_PIN')?'Incorrect PIN.':'Employee not found.'; return; }
+    var rank=clRank(d), isAdmin=String(d.employee_id||'').toUpperCase()==='ADMIN';
+    if(!(isAdmin || rank>=7)){ err.style.display='block'; err.textContent='Access is limited to team leads (CL7–CL9) and admin.'; return; }
+    USER={ id:d.employee_id, name:d.full_name||d.employee_id };
+    try{ sessionStorage.setItem('qa_user', JSON.stringify(USER)); }catch(e){}
+    startApp();
+  }catch(e){ b.disabled=false; b.textContent='Sign in'; err.style.display='block'; err.textContent='Network error — try again.'; }
+}
+function signOut(){ try{ sessionStorage.removeItem('qa_user'); }catch(e){} location.reload(); }
+
+function startApp(){
+  $('signin').style.display='none'; $('app').style.display='block';
+  $('who-name').textContent=USER.name;
+  $('c-month').value = curMonth();
+  buildProjectDropdown();
+  onProjectChange();
+  loadEmployees();
+}
+
+/* ---- employees ---- */
+async function loadEmployees(){
+  try{
+    var r=await fetch(PORTAL_URL+'?action=get_all_employees&_='+Date.now());
+    var d=await r.json();
+    EMPLOYEES=((d&&d.employees)||[]).filter(function(e){ return e.employee_id && String(e.employee_id).toUpperCase()!=='ADMIN'; });
+    EMPLOYEES.sort(function(a,b){ return String(a.full_name||a.employee_id).localeCompare(String(b.full_name||b.employee_id)); });
+    $('c-emp').innerHTML='<option value="">Select employee…</option>'+EMPLOYEES.map(function(e){
+      return '<option value="'+esc(e.employee_id)+'">'+esc(e.full_name||e.employee_id)+' ('+esc(e.employee_id)+')</option>';
+    }).join('');
+  }catch(e){ $('c-emp').innerHTML='<option value="">Could not load employees</option>'; }
+}
+
+/* ---- project + audit model ---- */
+function buildProjectDropdown(){
+  $('c-proj').innerHTML=Object.keys(PROJECTS).map(function(k){ return '<option value="'+esc(k)+'">'+esc(PROJECTS[k].label)+'</option>'; }).join('');
+}
+function curProject(){ return PROJECTS[$('c-proj').value]; }
+
+function defaultAudit(){
+  var p=curProject(); var a={};
+  p.tasks.forEach(function(t){
+    a[t.name]=[];
+    for(var i=0;i<t.accounts;i++){ a[t.name].push({ name:t.name+' #'+(i+1), states:t.criteria.map(function(){return true;}) }); }
+  });
+  return a;
+}
+function onProjectChange(){
+  var p=curProject(); if(!p) return;
+  $('proj-title').textContent=p.label;
+  AUDIT=defaultAudit();
+  clientQA=false; if($('c-clientqa')) $('c-clientqa').checked=false;
+  renderCriteria(); recompute();
+  onContextChange();
+}
+function taskByName(name){ return curProject().tasks.filter(function(t){return t.name===name;})[0]; }
+
+function renderCriteria(){
+  var p=curProject(); if(!p) return;
+  var html=p.tasks.map(function(t){
+    var accts=AUDIT[t.name]||[];
+    var head='<tr><th class="crit">'+esc(t.name)+' criteria</th>'+accts.map(function(a,ai){
+      return '<th class="acctcol"><input class="acctname" value="'+esc(a.name)+'" onchange="setAcctName(\''+esc(t.name)+'\','+ai+',this.value)" title="Account name / handle">'+
+        (accts.length>1?'<button class="rmacct" title="Remove account" onclick="removeAcct(\''+esc(t.name)+'\','+ai+')">×</button>':'')+'</th>';
+    }).join('')+'</tr>';
+    var rows=t.criteria.map(function(lbl,ci){
+      return '<tr><td class="crit critlbl" title="Click to flip this row" onclick="flipRow(\''+esc(t.name)+'\','+ci+')">'+esc(lbl)+'</td>'+
+        accts.map(function(a,ai){
+          var st=a.states[ci]; var cls=st===true?'pass':(st===false?'fail':'');
+          return '<td><button class="cell '+cls+'" onclick="toggleCell(\''+esc(t.name)+'\','+ai+','+ci+')">'+(st===true?'✓':(st===false?'✕':'–'))+'</button></td>';
+        }).join('')+'</tr>';
+    }).join('');
+    var sub='<tr class="subtot"><td class="crit">Passed</td>'+accts.map(function(a){
+      var pass=a.states.filter(function(s){return s===true;}).length;
+      return '<td>'+pass+'/'+t.criteria.length+'</td>';
+    }).join('')+'</tr>';
+    return '<div class="taskblk"><div class="taskhd"><span class="tn">'+esc(t.name)+'</span>'+
+      '<span class="tc">'+accts.length+' account'+(accts.length!==1?'s':'')+' · '+t.criteria.length+' criteria</span>'+
+      '<button class="btn ghost tiny" onclick="addAcct(\''+esc(t.name)+'\')">+ account</button></div>'+
+      '<div class="gridwrap"><table class="qgrid"><thead>'+head+'</thead><tbody>'+rows+sub+'</tbody></table></div></div>';
+  }).join('');
+  $('crit-list').innerHTML=html;
+}
+function toggleCell(task,ai,ci){ var a=AUDIT[task][ai]; a.states[ci]=(a.states[ci]===true)?false:true; renderCriteria(); recompute(); }
+function flipRow(task,ci){
+  var accts=AUDIT[task]; var allPass=accts.every(function(a){return a.states[ci]===true;});
+  accts.forEach(function(a){ a.states[ci]=allPass?false:true; });
+  renderCriteria(); recompute();
+}
+function setAcctName(task,ai,val){ if(AUDIT[task][ai]) AUDIT[task][ai].name=String(val||'').slice(0,40); }
+function addAcct(task){ var t=taskByName(task); AUDIT[task].push({ name:task+' #'+(AUDIT[task].length+1), states:t.criteria.map(function(){return true;}) }); renderCriteria(); recompute(); }
+function removeAcct(task,ai){ if(AUDIT[task].length<=1) return; AUDIT[task].splice(ai,1); renderCriteria(); recompute(); }
+
+function computeAudit(){
+  var p=curProject(); var passed=0, total=0;
+  p.tasks.forEach(function(t){
+    (AUDIT[t.name]||[]).forEach(function(a){
+      total += t.criteria.length;
+      passed += a.states.filter(function(s){return s===true;}).length;
+    });
+  });
+  return { passed:passed, total:total, score: total>0?Math.round(passed/total*100):0 };
+}
+function onClientQAChange(){ clientQA=$('c-clientqa').checked; recompute(); }
+function recompute(){
+  var res=computeAudit();
+  var base=res.score;
+  var score=clientQA?Math.max(0, base-CLIENT_QA_DEDUCT):base;
+  $('score-big').textContent=score;
+  $('score-pf').textContent=res.passed+' of '+res.total+' checks passed'
+    +(clientQA?' · client QA −'+CLIENT_QA_DEDUCT+' (base '+base+')':'');
+  $('score-bar').style.width=(res.total>0?score:0)+'%';
+  var col=score>=90?'var(--green)':(score>=75?'var(--amber)':'var(--red)');
+  $('score-big').style.color=col;
+  return { passed:res.passed, total:res.total, base:base, score:score };
+}
+
+/* ---- context: weekly scores + prior audits + prefill ---- */
+async function onContextChange(){
+  var emp=$('c-emp').value, month=$('c-month').value;
+  $('ctx-month').textContent=month||'—';
+  if(!emp||!month){ $('wk-chips').innerHTML=''; $('wk-avg').textContent='—'; $('audit-list').innerHTML='<div class="empty">Pick an employee.</div>'; return; }
+  try{
+    var r=await fetch(PORTAL_URL+'?action=get_qa_weekly&employee_id='+encodeURIComponent(emp)+'&month='+encodeURIComponent(month)+'&_='+Date.now());
+    var d=await r.json(); var w=(d&&d.weeks)||{}; var selW=parseInt($('c-week').value,10);
+    $('wk-avg').textContent=(d&&d.avg!=null)?d.avg:'—';
+    var html=''; for(var k=1;k<=4;k++){ var v=(w[k]!==''&&w[k]!=null&&!isNaN(w[k]))?Number(w[k]):null;
+      var col=v==null?'var(--t3)':(v>=90?'var(--green)':(v>=75?'var(--amber)':'var(--red)'));
+      html+='<div class="wc'+(k===selW?' sel':'')+'"><div class="wn">W'+k+'</div><div class="wv" style="color:'+col+'">'+(v==null?'—':v)+'</div></div>';
+    }
+    $('wk-chips').innerHTML=html;
+  }catch(e){}
+  try{
+    var r2=await fetch(PORTAL_URL+'?action=qa_audit_get&employee_id='+encodeURIComponent(emp)+'&month='+encodeURIComponent(month)+'&_='+Date.now());
+    var d2=await r2.json(); var aud=(d2&&d2.audits)||[];
+    aud.sort(function(a,b){ return String(b.updated_at).localeCompare(String(a.updated_at)); });
+    $('audit-list').innerHTML= aud.length ? aud.map(function(a){
+      return '<div class="slrow"><span><b>'+esc(a.project)+'</b> · W'+esc(a.week)+'</span><span><span class="pill">'+esc(a.score)+'</span></span></div>';
+    }).join('') : '<div class="empty">No audits saved this month yet.</div>';
+    // prefill the matrix if an audit exists for this project + week
+    var proj=$('c-proj').value, selW2=parseInt($('c-week').value,10);
+    var match=aud.filter(function(a){ return String(a.project).toLowerCase()===proj.toLowerCase() && parseInt(a.week,10)===selW2; })[0];
+    if(match && match.criteria){
+      var loaded=null; try{ loaded=JSON.parse(match.criteria); }catch(e){}
+      var matrix=null;
+      if(loaded && loaded.matrix){ matrix=loaded.matrix; clientQA=!!loaded.clientQA; }
+      else if(loaded && typeof loaded==='object' && !Array.isArray(loaded)){ matrix=loaded; clientQA=false; }
+      AUDIT = matrix ? normalizeAudit(matrix) : defaultAudit();
+      $('c-note').value=match.note||'';
+    } else { AUDIT=defaultAudit(); clientQA=false; $('c-note').value=''; }
+    if($('c-clientqa')) $('c-clientqa').checked=clientQA;
+    renderCriteria(); recompute();
+  }catch(e){}
+}
+// Make a loaded audit conform to the current project's tasks/criteria lengths.
+function normalizeAudit(loaded){
+  var p=curProject(); var out={};
+  p.tasks.forEach(function(t){
+    var src=Array.isArray(loaded[t.name])?loaded[t.name]:[];
+    if(!src.length){ out[t.name]=[]; for(var i=0;i<t.accounts;i++) out[t.name].push({name:t.name+' #'+(i+1),states:t.criteria.map(function(){return true;})}); return; }
+    out[t.name]=src.map(function(a,i){
+      var states=(a&&Array.isArray(a.states))?a.states.slice(0,t.criteria.length):[];
+      while(states.length<t.criteria.length) states.push(true);
+      states=states.map(function(s){ return s===true; });
+      return { name:(a&&a.name)||(t.name+' #'+(i+1)), states:states };
+    });
+  });
+  return out;
+}
+
+/* ---- save ---- */
+async function saveScore(){
+  var emp=$('c-emp').value, month=$('c-month').value, week=$('c-week').value, proj=$('c-proj').value;
+  if(!emp){ toast('Pick an employee first.'); return; }
+  if(!month){ toast('Pick a month.'); return; }
+  var res=recompute();
+  var criteria=JSON.stringify({ clientQA:clientQA, matrix:AUDIT });
+  var empObj=EMPLOYEES.filter(function(e){ return String(e.employee_id)===String(emp); })[0];
+  var full=(empObj&&empObj.full_name)||'';
+  var b=$('save-btn'); b.disabled=true; b.textContent='Saving…';
+  try{
+    var url=PORTAL_URL+'?action=qa_compute_save'
+      +'&employee_id='+encodeURIComponent(emp)
+      +'&full_name='+encodeURIComponent(full)
+      +'&project='+encodeURIComponent(proj)
+      +'&month='+encodeURIComponent(month)
+      +'&week='+encodeURIComponent(week)
+      +'&score='+encodeURIComponent(res.score)
+      +'&passed='+encodeURIComponent(res.passed)
+      +'&total='+encodeURIComponent(res.total)
+      +'&criteria='+encodeURIComponent(criteria)
+      +'&note='+encodeURIComponent($('c-note').value||'')
+      +'&by='+encodeURIComponent(USER.name||USER.id)
+      +'&_='+Date.now();
+    var r=await fetch(url); var d=await r.json();
+    b.disabled=false; b.textContent='Compute & save weekly QA';
+    if(d&&d.ok){ toast('Saved · '+full+' W'+week+' = '+res.score+'% ('+res.passed+'/'+res.total+')'); onContextChange(); }
+    else { toast('Save failed: '+((d&&d.error)||'unknown')); }
+  }catch(e){ b.disabled=false; b.textContent='Compute & save weekly QA'; toast('Network error — try again.'); }
+}
+
+/* ---- resume session ---- */
+(function(){
+  try{ var s=sessionStorage.getItem('qa_user'); if(s){ USER=JSON.parse(s); if(USER&&USER.id){ startApp(); } } }catch(e){}
+})();
+</script>
+</body>
+</html>
