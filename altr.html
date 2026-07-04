@@ -547,7 +547,7 @@ button.promosel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
 
 <script>
 /* ====== CONFIG ====== */
-var PORTAL_URL = "https://script.google.com/macros/s/AKfycbzoalT_9SYhSPciWdjDI6bv0qjKL7SWn0Rmkgt6CMJMzGs9pKCydCJChz6-ZuM_Srdj/exec"; // for employee ID+PIN login
+var PORTAL_URL = "https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByOLL4TuRPKvtPh2rjY-b3rOJ5aBoIc8sOmO9kP/exec"; // for employee ID+PIN login
 var ALTR_URL   = "https://script.google.com/macros/s/AKfycbw_qxqgOi2ceuSgJBpSSNt1QXjGhHhSnCO4w9y4f21-SHlfY3m7YDxWiYbFjHZJxIFJHQ/exec"; // deployed altr-apps-script.gs /exec URL
 var ADMIN_PASS = "JMBeast_020298";
 var DEFAULT_SOURCERS = [
@@ -1364,8 +1364,11 @@ async function confirmEOD(){
   toast('Ending the day… please wait');
   try{
     var r=await apiPost({ action:'eod', date:STATE.date, by:firstName(USER.full_name||USER.employee_id) });
-    if(r && r.ok){ showEod(r.message); refreshQuiet(); }
-    else { alert('Couldn’t end the day'+(r&&r.error?(':\n\n'+r.error):'.')+'\n\nPlease try again in a moment.'); }
+    // Server busy (lock contention) — retry once after a short pause.
+    if(r && r.error && /busy/i.test(String(r.error))){ await new Promise(function(res){ setTimeout(res,1500); }); r=await apiPost({ action:'eod', date:STATE.date, by:firstName(USER.full_name||USER.employee_id) }); }
+    if(r && (r.ok || r.message)){ showEod(r.message||''); refreshQuiet(); }
+    else if(r && r.error){ alert('Couldn’t end the day:\n\n'+r.error+'\n\nPlease try again in a moment.'); }
+    else { alert('Couldn’t end the day.\n\nThe report didn’t come back as expected — the ALTR backend may need to be redeployed (New version). Please try again in a moment.'); }
   }catch(e){ alert('Couldn’t end the day — network error. Please try again.'); }
 }
 function showEod(msg){ $('eod-text').value=msg||''; $('eod-modal').classList.add('open'); }
