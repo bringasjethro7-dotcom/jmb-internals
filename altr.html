@@ -406,7 +406,10 @@ button.promosel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
     <div class="page" id="page-accounts">
       <div class="toolbar">
         <select class="sel" id="acct-statusf" onchange="renderAccountsTab()"><option value="all">All statuses</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="logged_out">Logged out</option></select>
+        <select class="sel" id="acct-tagf" onchange="renderAccountsTab()"><option value="">All tags</option><option value="__any">⚑ Any flag</option><option value="__none">No flag</option></select>
+        <select class="sel" id="acct-folf" onchange="renderAccountsTab()"><option value="">All followers</option><option value="0-999">&lt; 1K</option><option value="1000-9999">1K – 10K</option><option value="10000-99999">10K – 100K</option><option value="100000-">100K+</option></select>
         <input class="search" id="acct-search" placeholder="Search handle / phone…" oninput="renderAccountsTab()" />
+        <button class="ghost" onclick="openAcctReport()" title="Generate a suspended / logged-out report grouped by phone">📋 Report</button>
         <button class="ghost" onclick="refreshFollowersBulk()" title="Pull latest followers &amp; bio for the accounts shown">↻ Followers &amp; bio</button>
         <button class="ghost" onclick="refreshFollowersBulk(true)" title="Only pull accounts that have no bio yet — saves RapidAPI calls">↻ Missing bios</button>
         <button class="adminbtn" id="acct-add-btn" style="display:none" onclick="addAccountPrompt()">+ Add account</button>
@@ -456,6 +459,24 @@ button.promosel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- ACCOUNT STATUS REPORT (suspended / logged out, grouped by phone) -->
+<div id="acct-report-modal" style="display:none;position:fixed;inset:0;z-index:9600;align-items:center;justify-content:center;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);padding:16px;">
+  <div style="width:540px;max-width:100%;background:var(--bg2,#0d1117);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 30px 90px rgba(0,0,0,.6);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-size:16px;font-weight:800;color:var(--t1);">📋 Account status report</div>
+      <button class="ghost" onclick="closeAcctReport()">✕ Close</button>
+    </div>
+    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+      <label style="display:inline-flex;align-items:center;gap:6px;color:var(--t2);font-size:13px;cursor:pointer;"><input type="checkbox" id="rep-susp" checked onchange="genAcctReport()"> Suspended</label>
+      <label style="display:inline-flex;align-items:center;gap:6px;color:var(--t2);font-size:13px;cursor:pointer;"><input type="checkbox" id="rep-lo" checked onchange="genAcctReport()"> Logged out</label>
+      <span style="flex:1"></span>
+      <button class="adminbtn" onclick="copyAcctReport()">⧉ Copy report</button>
+    </div>
+    <textarea id="acct-report-text" readonly rows="16" style="width:100%;background:#0b0e14;border:1px solid var(--line);border-radius:10px;color:var(--t1);padding:12px;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.55;resize:vertical;outline:none;white-space:pre;"></textarea>
+    <div style="font-size:11px;color:var(--t3);margin-top:6px;">Copy this and paste it into the group chat.</div>
+  </div>
+</div>
 
 <!-- First-open phone-check reminder -->
 <div id="phone-reminder">
@@ -645,36 +666,46 @@ function renderReelsAlarmList(){
   var reposts=((STATE&&STATE.reposts)||[]).filter(function(r){ return String(r.status||'').toLowerCase()!=='done'; });
   if(!audios.length && !reposts.length){ $('reels-alarm-list').innerHTML='<div class="muted">Nothing to update right now.</div>'; return; }
   var lk='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
-  function sectionRow(t){ return '<tr><td colspan="3" style="font:700 10px/1 \'JetBrains Mono\',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);padding-top:14px">'+t+'</td></tr>'; }
+  function sectionRow(t){ return '<tr><td colspan="4" style="font:700 10px/1 \'JetBrains Mono\',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);padding-top:14px">'+t+'</td></tr>'; }
   var rows='';
   if(audios.length){
     rows+=sectionRow('Audio promotions')+audios.map(function(a){
       var open=a.link?'<a href="'+esc(a.link)+'" target="_blank" rel="noopener" title="Open IG audio page" style="color:var(--o2);margin-left:6px">'+lk+'</a>':'';
-      return '<tr><td class="nm">'+esc(a.title||'—')+open+'</td><td>'+(a.reach?esc(a.reach):'—')+'</td><td><input class="alarm-in" data-kind="audio" data-id="'+esc(a.id)+'" placeholder="e.g. 2300 or 2.3K"></td></tr>';
+      return '<tr><td class="nm">'+esc(a.title||'—')+open+'</td><td>'+(a.reach?esc(a.reach):'—')+'</td><td><input class="alarm-in" data-kind="audio" data-id="'+esc(a.id)+'" placeholder="e.g. 2300 or 2.3K"></td>'+
+        '<td><input class="alarm-rank" data-id="'+esc(a.id)+'" placeholder="'+(a.rank?('now #'+esc(a.rank)):'US rank')+'" style="width:74px"></td></tr>';
     }).join('');
   }
   if(reposts.length){
     rows+=sectionRow('Reel reposts')+reposts.map(function(r){
       var label=r.link?('<a href="'+esc(r.link)+'" target="_blank" rel="noopener" title="Open reel" style="color:var(--o2)">Reel '+esc(r.id)+'</a>'):('Reel '+esc(r.id));
       var sub=r.date?('<span style="color:var(--t3);font-size:11px;margin-left:6px">'+esc(r.date)+'</span>'):'';
-      return '<tr><td class="nm">'+label+sub+'</td><td>'+(r.reach?esc(r.reach):'—')+'</td><td><input class="alarm-in" data-kind="repost" data-id="'+esc(r.id)+'" placeholder="e.g. 2300 or 2.3K"></td></tr>';
+      return '<tr><td class="nm">'+label+sub+'</td><td>'+(r.reach?esc(r.reach):'—')+'</td><td><input class="alarm-in" data-kind="repost" data-id="'+esc(r.id)+'" placeholder="e.g. 2300 or 2.3K"></td><td></td></tr>';
     }).join('');
   }
-  $('reels-alarm-list').innerHTML='<table class="srctable"><thead><tr><th>Promotion</th><th>Current</th><th>New count</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  $('reels-alarm-list').innerHTML='<table class="srctable"><thead><tr><th>Promotion</th><th>Current</th><th>New count</th><th>US rank</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 function fireReelsAlarm(){ ringAlarm(); renderReelsAlarmList(); $('reels-alarm').classList.add('open'); }
 function dismissReelsAlarm(){ $('reels-alarm').classList.remove('open'); }
 async function saveReelsAlarm(){
-  var inputs=document.querySelectorAll('#reels-alarm-list .alarm-in'), saved=0, bad=0;
+  var inputs=document.querySelectorAll('#reels-alarm-list .alarm-in'), saved=0, bad=0, doneRank={};
   for(var i=0;i<inputs.length;i++){
     var v=String(inputs[i].value||'').trim(); if(!v) continue;
     var n=parseNumLoose(v); if(n===null){ bad++; continue; }
     var kind=inputs[i].getAttribute('data-kind')||'audio';
+    var id=inputs[i].getAttribute('data-id');
     var action=(kind==='repost')?'repost_save':'audio_save';   // repost_save snapshots reach → builds repost history
-    try{ await apiPost({ action:action, id:inputs[i].getAttribute('data-id'), reach:String(n), by:firstName(USER.full_name||USER.employee_id) }); saved++; }catch(e){ bad++; }
+    var payload={ action:action, id:id, reach:String(n), by:firstName(USER.full_name||USER.employee_id) };
+    if(kind==='audio'){ doneRank[id]=1; var rin=document.querySelector('#reels-alarm-list .alarm-rank[data-id="'+id+'"]'); if(rin){ var rv=String(rin.value||'').replace(/[^0-9]/g,'').trim(); if(rv!=='') payload.rank=rv; } }
+    try{ await apiPost(payload); saved++; }catch(e){ bad++; }
+  }
+  // ranks entered without a new count → save rank on its own
+  var ranks=document.querySelectorAll('#reels-alarm-list .alarm-rank');
+  for(var j=0;j<ranks.length;j++){ var rid=ranks[j].getAttribute('data-id'); if(doneRank[rid]) continue;
+    var rv2=String(ranks[j].value||'').replace(/[^0-9]/g,'').trim(); if(rv2==='') continue;
+    try{ await apiPost({ action:'audio_save', id:rid, rank:rv2, by:firstName(USER.full_name||USER.employee_id) }); saved++; }catch(e){ bad++; }
   }
   if(saved) await refreshQuiet();
-  toast(saved?(saved+' count'+(saved>1?'s':'')+' updated'):(bad?'Check the numbers entered':'Nothing entered'));
+  toast(saved?(saved+' update'+(saved>1?'s':'')+' saved'):(bad?'Check the numbers entered':'Nothing entered'));
   if(!bad) dismissReelsAlarm();
 }
 function reelsAlarmTick(){
@@ -1162,14 +1193,20 @@ function acctStatusBadge(a){
   var col=(s==='active')?'var(--green)':((s==='suspended')?'var(--amber)':'var(--red)');
   var bg=(s==='active')?'rgba(34,197,94,.12)':((s==='suspended')?'rgba(245,158,11,.12)':'rgba(239,68,68,.14)');
   var sty='display:inline-block;font-size:11px;font-weight:600;padding:3px 10px;border-radius:8px;color:'+col+';background:'+bg+';';
-  if(ISADMIN){ return '<button title="Click to change" style="'+sty+'border:none;cursor:pointer;font:inherit" onclick="cycleAcctStatus(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\')">'+label+'</button>'; }
+  if(ISADMIN){
+    var opts=[['active','Active'],['suspended','Suspended'],['logged_out','Logged out']].map(function(o){ return '<option value="'+o[0]+'"'+(s===o[0]?' selected':'')+'>'+o[1]+'</option>'; }).join('');
+    return '<select title="Change status" onchange="setAcctStatusVal(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\',this.value)" style="'+sty+'border:1px solid rgba(255,255,255,.18);cursor:pointer;font:inherit;padding:3px 8px;outline:none;">'+opts+'</select>';
+  }
   return '<span style="'+sty+'">'+label+'</span>';
 }
 function renderAccountsTab(){
   if(!STATE || !$('accounts-list')) return;
   var accts=(STATE.accounts||[]).slice();
   var sf=$('acct-statusf')?$('acct-statusf').value:'all';
+  var tf=$('acct-tagf')?$('acct-tagf').value:'';
+  var ff=$('acct-folf')?$('acct-folf').value:'';
   var q=$('acct-search')?$('acct-search').value.trim().toLowerCase():'';
+  var tsel=$('acct-tagf'); if(tsel && tsel.options.length<=3){ ACCT_TAGS.forEach(function(t){ var o=document.createElement('option'); o.value=t; o.textContent='⚑ '+t; tsel.appendChild(o); }); }
   var total=accts.length, act=0, susp=0, lo=0, eligible=0, withBio=0;
   accts.forEach(function(a){ var s=String(a.status||'active'); if(s==='active')act++; else if(s==='suspended')susp++; else lo++;
     if(String(a.handle||'').trim()!==''){ eligible++; if(String(a.bio||'').trim()!=='') withBio++; } });
@@ -1177,6 +1214,11 @@ function renderAccountsTab(){
   $('acct-stats').innerHTML = statCard('Accounts',total,'')+statCard('Active',act,'g')+statCard('Suspended',susp,'a')+statCard('Logged out',lo,'r')+statCard('Bios missing',missingBio,missingBio>0?'a':'g');
   var rows=accts.filter(function(a){
     if(sf!=='all' && String(a.status||'active')!==sf) return false;
+    var tag=String(a.tag||'').trim();
+    if(tf==='__any' && !tag) return false;
+    if(tf==='__none' && tag) return false;
+    if(tf && tf!=='__any' && tf!=='__none' && tag!==tf) return false;
+    if(ff){ var fol=fnum(a.followers)||0; var pp=ff.split('-'); var lo=Number(pp[0]||0); var hi=(pp[1]===''||pp[1]===undefined)?Infinity:Number(pp[1]); if(fol<lo||fol>hi) return false; }
     if(q){ var hay=('p'+a.phone+' u'+a.user+' a'+a.acct+' @'+(a.handle||'')).toLowerCase(); if(hay.indexOf(q)<0) return false; }
     return true;
   });
@@ -1424,6 +1466,58 @@ async function togglePostBox(phone,user,acct,handle){
   }catch(e){ toast('Save failed'); await refreshQuiet(); }
 }
 var ACCT_STATUS_CYCLE=['active','suspended','logged_out'];
+async function setAcctStatusVal(phone,user,acct,handle,val){
+  if(!ISADMIN){ toast('Only admins can change account status.'); return; }
+  var a=(STATE.accounts||[]).filter(function(x){ return String(x.phone)===String(phone)&&String(x.user)===String(user)&&String(x.acct)===String(acct)&&String(x.handle)===String(handle); })[0]; if(!a) return;
+  a.status=val; renderPosting(); renderSourcing(); if(typeof renderAccountsTab==='function') renderAccountsTab();
+  try{ await apiPost({ action:'account_status', phone:phone, user:user, acct:acct, handle:handle, status:val }); toast('@'+handle+' → '+String(val).replace('_',' ')); }
+  catch(e){ toast('Save failed'); }
+}
+/* ---- Account status report (suspended / logged out, grouped by phone) ---- */
+function openAcctReport(){
+  var m=$('acct-report-modal'); if(!m) return;
+  if(!$('rep-susp').checked && !$('rep-lo').checked){ $('rep-susp').checked=true; $('rep-lo').checked=true; }
+  genAcctReport();
+  m.style.display='flex';
+}
+function closeAcctReport(){ var m=$('acct-report-modal'); if(m) m.style.display='none'; }
+function genAcctReport(){
+  var wantS=$('rep-susp')&&$('rep-susp').checked, wantL=$('rep-lo')&&$('rep-lo').checked;
+  var accts=(STATE&&STATE.accounts)||[];
+  var sel=accts.filter(function(a){ var s=String(a.status||'active'); return (wantS&&s==='suspended')||(wantL&&s==='logged_out'); });
+  var byPhone={}; sel.forEach(function(a){ var p=String(a.phone||'?'); (byPhone[p]=byPhone[p]||[]).push(a); });
+  var phones=Object.keys(byPhone).sort(function(a,b){ return (parseInt(a,10)||0)-(parseInt(b,10)||0); });
+  var titleParts=[]; if(wantS)titleParts.push('Suspended'); if(wantL)titleParts.push('Logged out');
+  var date=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  var L=[];
+  L.push('🚨 ALTR Account Status Report — '+date);
+  L.push(titleParts.join(' & ')||'(select at least one)');
+  L.push('');
+  if(!sel.length){ L.push('✅ No '+(titleParts.join(' / ').toLowerCase()||'flagged')+' accounts right now. All good!'); }
+  else {
+    phones.forEach(function(p){
+      L.push('📱 Phone '+p);
+      byPhone[p].sort(function(x,y){ return (fnum(x.user)-fnum(y.user))||(fnum(x.acct)-fnum(y.acct)); });
+      byPhone[p].forEach(function(a){
+        var hh=String(a.handle||'').replace(/^@/,'');
+        var who=hh?('@'+hh):('A'+a.acct);
+        var st=(String(a.status)==='logged_out')?'Logged out':'Suspended';
+        L.push('   • U'+a.user+' · '+who+' — '+st);
+      });
+      L.push('');
+    });
+    var ns=sel.filter(function(a){return String(a.status)==='suspended';}).length;
+    var nl=sel.filter(function(a){return String(a.status)==='logged_out';}).length;
+    var parts=[]; if(wantS)parts.push(ns+' suspended'); if(wantL)parts.push(nl+' logged out');
+    L.push('Total: '+sel.length+' account'+(sel.length!==1?'s':'')+' ('+parts.join(', ')+') across '+phones.length+' phone'+(phones.length!==1?'s':'')+'.');
+  }
+  $('acct-report-text').value=L.join('\n');
+}
+function copyAcctReport(){
+  var t=$('acct-report-text'); if(!t) return;
+  try{ navigator.clipboard.writeText(t.value); toast('Report copied — paste it in the group chat.'); }
+  catch(e){ t.select(); try{ document.execCommand('copy'); toast('Report copied.'); }catch(_e){ toast('Select the text and copy manually.'); } }
+}
 async function cycleAcctStatus(phone,user,acct,handle){
   if(!ISADMIN){ toast('Only admins can change account status.'); return; }
   var a=(STATE.accounts||[]).filter(function(x){ return String(x.phone)===String(phone)&&String(x.user)===String(user)&&String(x.acct)===String(acct)&&String(x.handle)===String(handle); })[0]; if(!a) return;
@@ -1932,7 +2026,7 @@ function renderAudios(){
   var audios=(STATE.audios||[]).slice().reverse();
   var html='';
   if(!audios.length){ html='<div class="muted">No audio promotions yet.</div>'; }
-  else { html='<table class="srctable"><thead><tr><th>Audio</th><th>Type</th><th>Status</th><th>Reels using</th><th></th></tr></thead><tbody>'+
+  else { html='<table class="srctable"><thead><tr><th>Audio</th><th>Type</th><th>Status</th><th>Reels using</th><th>US rank</th><th></th></tr></thead><tbody>'+
     audios.map(function(a){
       var st=String(a.status).toLowerCase();
       var kind=String(a.kind||'full').toLowerCase();
@@ -1940,8 +2034,9 @@ function renderAudios(){
       var kbadge='<button class="sbadge" style="border-color:'+(kind==='partial'?'rgba(168,85,247,.45)':'rgba(255,107,26,.45)')+';color:'+(kind==='partial'?'#a855f7':'#ff8a4a')+'" title="Click to switch Full / Partial" onclick="toggleAudioKind(\''+esc(a.id)+'\',\''+kind+'\')">'+(kind==='partial'?'Partial':'Full')+'</button>';
       var title=a.link?'<a href="'+esc(a.link)+'" target="_blank" rel="noopener">'+esc(a.title||a.link)+'</a>':esc(a.title||'—');
       var num='<span class="igc" onclick="editAudioNum(\''+esc(a.id)+'\',\''+escAttr(a.reach||'')+'\')" title="Click to edit">'+(a.reach?esc(a.reach):'—')+'</span>';
-      var refresh=a.link?'<button class="igref" title="Open the IG audio page, then enter the latest reels count" onclick="checkAudio(\''+esc(a.id)+'\',\''+escAttr(a.link)+'\',\''+escAttr(a.reach||'')+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg></button>':'';
-      return '<tr><td class="nm">'+title+'</td><td>'+kbadge+'</td><td>'+badge+'</td><td>'+num+' '+refresh+'</td><td><button class="delx" title="Delete" onclick="delAudio(\''+esc(a.id)+'\')">✕</button></td></tr>';
+      var refresh=a.link?'<button class="igref" title="Open the IG audio page, then enter the latest reels count" onclick="checkAudio(\''+esc(a.id)+'\',\''+escAttr(a.link)+'\',\''+escAttr(a.reach||'')+'\',\''+escAttr(a.rank||'')+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg></button>':'';
+      var rankCell='<span class="igc" onclick="editAudioRank(\''+esc(a.id)+'\',\''+escAttr(a.rank||'')+'\')" title="US trending rank (from IG in-app Trending list) — click to edit">'+(a.rank?('#'+esc(a.rank)):'—')+'</span>';
+      return '<tr><td class="nm">'+title+'</td><td>'+kbadge+'</td><td>'+badge+'</td><td>'+num+' '+refresh+'</td><td>'+rankCell+'</td><td><button class="delx" title="Delete" onclick="delAudio(\''+esc(a.id)+'\')">✕</button></td></tr>';
     }).join('')+'</tbody></table>'; }
   $('ins-audios').innerHTML=html;
 }
@@ -1956,13 +2051,22 @@ async function editAudioNum(id, cur){
   var n=parseNumLoose(v); if(n===null){ toast('Enter a valid number (e.g. 2300 or 2.3K)'); return; }
   apiPost({ action:'audio_save', id:id, reach:String(n), by:firstName(USER.full_name||USER.employee_id) }).then(refreshQuiet).catch(function(){ toast('Save failed'); });
 }
-/* open the audio's IG page, then pop the entry box — two quick clicks, always accurate */
-async function checkAudio(id, link, cur){
+async function editAudioRank(id, cur){
+  var v=await altPrompt('US trending rank for this audio — from the IG in-app Trending audio list. Leave blank if it’s not in the top 50:', cur||'', { title:'Update US trending rank', placeholder:'e.g. 8  (or blank)' });
+  if(v===null) return;
+  var r=String(v).replace(/[^0-9]/g,'').trim();
+  apiPost({ action:'audio_save', id:id, rank:r, by:firstName(USER.full_name||USER.employee_id) }).then(refreshQuiet).catch(function(){ toast('Save failed'); });
+}
+/* open the audio's IG page, then pop the entry box — enter reels count AND US trending rank */
+async function checkAudio(id, link, cur, curRank){
   if(link){ try{ window.open(link, '_blank', 'noopener'); }catch(e){} }
   var v=await altPrompt('On the Instagram tab that just opened, read the "X reels" number under the title, then enter it here:', cur||'', { title:'Enter reels count', placeholder:'e.g. 2300 or 2.3K' });
   if(v===null) return;
   var n=parseNumLoose(v); if(n===null){ toast('Enter a valid number (e.g. 2300 or 2.3K)'); return; }
-  apiPost({ action:'audio_save', id:id, reach:String(n), by:firstName(USER.full_name||USER.employee_id) }).then(refreshQuiet).catch(function(){ toast('Save failed'); });
+  var rv=await altPrompt('And its US trending rank right now (from the app’s Trending audio list). Leave blank if not in the top 50:', curRank||'', { title:'US trending rank', placeholder:'e.g. 8  (or blank)' });
+  var payload={ action:'audio_save', id:id, reach:String(n), by:firstName(USER.full_name||USER.employee_id) };
+  if(rv!==null) payload.rank=String(rv).replace(/[^0-9]/g,'').trim();
+  apiPost(payload).then(refreshQuiet).catch(function(){ toast('Save failed'); });
 }
 async function refreshAudio(id, link){
   if(!link){ toast('No link'); return; }
