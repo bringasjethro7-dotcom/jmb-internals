@@ -96,6 +96,35 @@ textarea.note:focus{border-color:var(--o1)}
 .empty{color:var(--t3);font-size:12.5px;padding:8px 0}
 #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card2);border:1px solid var(--line);color:var(--t1);padding:11px 18px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:.25s;z-index:60;box-shadow:0 12px 40px rgba(0,0,0,.5)}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* view nav */
+.nav{display:flex;gap:6px}
+.navb{background:transparent;border:1px solid var(--line);color:var(--t2);border-radius:9px;padding:7px 14px;font-weight:600;font-size:13px}
+.navb:hover{color:var(--t1)}
+.navb.active{background:linear-gradient(135deg,var(--o1),var(--o2));color:#fff;border-color:transparent}
+/* dashboard */
+.dwrap{overflow:auto;border:1px solid var(--line);border-radius:12px;max-height:70vh}
+.dtable{width:100%;border-collapse:separate;border-spacing:0;font-size:13px;min-width:660px}
+.dtable th,.dtable td{border-bottom:1px solid var(--line);padding:9px 10px;text-align:center;white-space:nowrap}
+.dtable tbody tr:last-child td{border-bottom:none}
+.dtable thead th{background:var(--bg2);color:var(--t2);font-size:11px;text-transform:uppercase;letter-spacing:.04em;position:sticky;top:0;z-index:2}
+.dtable td.nm,.dtable th.nm{text-align:left;position:sticky;left:0;background:var(--card);z-index:1;min-width:190px}
+.dtable thead th.nm{z-index:3;background:var(--bg2)}
+.dtable td.nm .eid{display:block;font-size:10.5px;color:var(--t3);font-weight:500}
+.wkcell{display:inline-flex;align-items:center;justify-content:center;width:46px;height:31px;border-radius:8px;font-weight:800;font-size:12px;border:1px solid var(--line);background:var(--card2);color:var(--t3)}
+.wkcell.done{background:rgba(52,211,153,.16);color:var(--green);border-color:rgba(52,211,153,.5)}
+.wkcell.overdue{background:rgba(248,113,113,.16);color:var(--red);border-color:rgba(248,113,113,.5)}
+.schedrow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:6px 0 2px}
+@media(max-width:640px){.schedrow{grid-template-columns:repeat(2,1fr)}}
+.schedrow .sc{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+.schedrow .sc .l{font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+.schedrow .sc input{width:100%;background:var(--card);border:1px solid var(--line);border-radius:8px;color:var(--t1);padding:6px 8px;font-size:12px;font-family:inherit;outline:none}
+.schedrow .sc input:focus{border-color:var(--o1)}
+.schedrow .sc input:disabled{opacity:.6;cursor:not-allowed}
+.legend2{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--t2);margin:4px 0 14px}
+.legend2 i{width:12px;height:12px;border-radius:4px;display:inline-block;vertical-align:-2px;margin-right:5px}
+.subbtn{padding:6px 13px;font-size:12px;border-radius:8px}
+.subok{font-size:11.5px;color:var(--green);font-weight:700}
+.subok span{display:block;color:var(--t3);font-weight:500;font-size:10px}
 </style>
 </head>
 <body>
@@ -116,12 +145,17 @@ textarea.note:focus{border-color:var(--o1)}
 <div id="app" style="display:none">
   <header>
     <div class="logo">JMB<b>·</b>QA</div>
+    <nav class="nav">
+      <button class="navb active" id="nav-compute" onclick="showView('compute')">Compute</button>
+      <button class="navb" id="nav-dash" onclick="showView('dash')">Dashboard</button>
+    </nav>
     <div class="spacer"></div>
     <div class="who">Signed in as <b id="who-name">—</b></div>
     <button class="btn ghost sm" onclick="signOut()">Sign out</button>
   </header>
 
   <main>
+   <div id="view-compute">
     <div class="controls">
       <label>Employee
         <select id="c-emp" onchange="onContextChange()"><option value="">Loading…</option></select>
@@ -175,6 +209,34 @@ textarea.note:focus{border-color:var(--o1)}
         <div id="audit-list"><div class="empty">—</div></div>
       </div>
     </div>
+   </div><!-- /view-compute -->
+
+   <div id="view-dash" style="display:none">
+    <div class="controls">
+      <label>Month
+        <input type="month" id="d-month" onchange="loadDashboard()">
+      </label>
+      <button class="btn ghost sm" onclick="loadDashboard()" style="align-self:flex-end">↻ Refresh</button>
+    </div>
+    <div class="card">
+      <h2>Weekly QA schedule</h2>
+      <div class="sub" id="sched-sub">Due date per week — a cell turns red when its due date passes with no QA saved. Admin can assign.</div>
+      <div class="schedrow" id="sched-row"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h2>Monthly QA completion</h2>
+      <div class="sub">Green = QA saved · Red = overdue (past due date) · Blank = pending. <b>Submit</b> enables once all 4 weeks are green — it locks the month average into the employee's scorecard and the admin portal record.</div>
+      <div class="legend2">
+        <span><i style="background:rgba(52,211,153,.7)"></i>Submitted</span>
+        <span><i style="background:rgba(248,113,113,.7)"></i>Overdue</span>
+        <span><i style="background:var(--card2);border:1px solid var(--line)"></i>Pending</span>
+      </div>
+      <div class="dwrap"><table class="dtable">
+        <thead><tr><th class="nm">Employee</th><th>Week 1</th><th>Week 2</th><th>Week 3</th><th>Week 4</th><th>Month</th></tr></thead>
+        <tbody id="dash-body"><tr><td colspan="6" class="empty">Pick a month and refresh.</td></tr></tbody>
+      </table></div>
+    </div>
+   </div><!-- /view-dash -->
   </main>
 </div>
 
@@ -183,7 +245,7 @@ textarea.note:focus{border-color:var(--o1)}
 <script>
 var PORTAL_URL = "https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByOLL4TuRPKvtPh2rjY-b3rOJ5aBoIc8sOmO9kP/exec";
 var ADMIN_PASS = "JMBeast_020298";
-var USER=null, EMPLOYEES=[];
+var USER=null, EMPLOYEES=[], IS_ADMIN=false, VIEW='compute';
 var AUDIT={};   // { taskName: [ { name, states:[bool...] } ] }
 var clientQA=false;   // "With Client's QA" → auto-deduct 10 points from the final score
 var CLIENT_QA_DEDUCT=10;
@@ -265,10 +327,22 @@ function signOut(){ try{ sessionStorage.removeItem('qa_user'); }catch(e){} locat
 function startApp(){
   $('signin').style.display='none'; $('app').style.display='block';
   $('who-name').textContent=USER.name;
+  IS_ADMIN = !!(USER && String(USER.id).toUpperCase()==='ADMIN');
   $('c-month').value = curMonth();
+  $('d-month').value = curMonth();
   buildProjectDropdown();
   onProjectChange();
   loadEmployees();
+}
+
+/* ---- view switch: Compute ↔ Dashboard ---- */
+function showView(v){
+  VIEW=v;
+  $('view-compute').style.display = (v==='compute')?'block':'none';
+  $('view-dash').style.display    = (v==='dash')?'block':'none';
+  $('nav-compute').classList.toggle('active', v==='compute');
+  $('nav-dash').classList.toggle('active', v==='dash');
+  if(v==='dash') loadDashboard();
 }
 
 /* ---- employees ---- */
@@ -473,6 +547,78 @@ async function saveScore(){
     }
     else { toast('Save failed: '+((d&&d.error)||'unknown')); }
   }catch(e){ b.disabled=false; b.textContent='Compute & save weekly QA'; toast('Network error — try again.'); }
+}
+
+/* ============ DASHBOARD — monthly Week1-4 completion + schedule + submit ============ */
+var DASH_ROWS=[], DASH_SCHED={};
+async function loadDashboard(){
+  var month=$('d-month').value; if(!month){ $('dash-body').innerHTML='<tr><td colspan="6" class="empty">Pick a month.</td></tr>'; return; }
+  $('dash-body').innerHTML='<tr><td colspan="6" class="empty">Loading…</td></tr>';
+  try{
+    var r=await fetch(PORTAL_URL+'?action=qa_dashboard&month='+encodeURIComponent(month)+'&_='+Date.now());
+    var d=await r.json();
+    if(!d || d.error){ $('dash-body').innerHTML='<tr><td colspan="6" class="empty">Could not load ('+esc((d&&d.error)||'error')+').</td></tr>'; return; }
+    DASH_ROWS=d.rows||[]; DASH_SCHED=d.schedule||{};
+    renderSchedule(DASH_SCHED); renderDash(DASH_ROWS);
+  }catch(e){ $('dash-body').innerHTML='<tr><td colspan="6" class="empty">Network error — try again.</td></tr>'; }
+}
+function renderSchedule(sched){
+  var dis=IS_ADMIN?'':'disabled';
+  var html=''; for(var w=1;w<=4;w++){
+    var v=esc(sched[w]||'');
+    html+='<div class="sc"><div class="l">Week '+w+' due</div>'
+      +'<input type="date" value="'+v+'" '+dis+' onchange="saveSchedule('+w+',this.value)"></div>';
+  }
+  $('sched-row').innerHTML=html;
+  $('sched-sub').textContent = IS_ADMIN
+    ? 'Due date per week — a cell turns red when its due date passes with no QA saved.'
+    : 'Due date per week (set by admin) — a cell turns red when its due date passes with no QA saved.';
+}
+async function saveSchedule(week, val){
+  if(!IS_ADMIN){ toast('Only admin can set the schedule.'); return; }
+  var month=$('d-month').value;
+  try{
+    var r=await fetch(PORTAL_URL+'?action=qa_schedule_save&month='+encodeURIComponent(month)
+      +'&week='+week+'&due_date='+encodeURIComponent(val||'')+'&by='+encodeURIComponent(USER.name||USER.id)+'&_='+Date.now());
+    var d=await r.json();
+    if(d&&d.ok){ toast('Week '+week+' schedule saved.'); loadDashboard(); }
+    else toast('Save failed: '+((d&&d.error)||'unknown'));
+  }catch(e){ toast('Network error — try again.'); }
+}
+function wkCell(c){
+  if(c.state==='done') return '<span class="wkcell done" title="Saved '+esc(c.score)+'%">'+esc(c.score)+'</span>';
+  if(c.state==='overdue') return '<span class="wkcell overdue" title="Overdue — due '+esc(c.due)+'">!</span>';
+  return '<span class="wkcell" title="'+(c.due?('Due '+esc(c.due)):'No schedule')+'">–</span>';
+}
+function renderDash(rows){
+  if(!rows.length){ $('dash-body').innerHTML='<tr><td colspan="6" class="empty">No employees.</td></tr>'; return; }
+  $('dash-body').innerHTML=rows.map(function(r,i){
+    var cells=r.cells.map(function(c){ return '<td>'+wkCell(c)+'</td>'; }).join('');
+    var last;
+    if(r.submitted){
+      last='<span class="subok">✓ Submitted'+(r.avg!=null?' · '+r.avg+'%':'')+'<span>'+esc((r.submitted_by||'')+(r.submitted_at?(' · '+String(r.submitted_at).slice(0,10)):''))+'</span></span>';
+    } else if(r.complete){
+      last='<button class="btn subbtn" id="sub-'+i+'" onclick="submitMonth('+i+')">Submit</button>';
+    } else {
+      last='<span style="font-size:11px;color:var(--t3)">'+r.greens+'/4 done</span>';
+    }
+    return '<tr><td class="nm"><b>'+esc(r.full_name)+'</b><span class="eid">'+esc(r.employee_id)+'</span></td>'+cells+'<td>'+last+'</td></tr>';
+  }).join('');
+}
+async function submitMonth(i){
+  var r=DASH_ROWS[i]; if(!r) return;
+  if(!r.complete){ toast('All 4 weeks must be green first.'); return; }
+  if(!confirm('Submit '+r.full_name+"'s QA for "+$('d-month').value+'? This locks the month average ('+r.avg+'%) into their scorecard and the admin record.')) return;
+  var btn=$('sub-'+i); if(btn){ btn.disabled=true; btn.textContent='Submitting…'; }
+  var month=$('d-month').value;
+  try{
+    var res=await fetch(PORTAL_URL+'?action=qa_submit_month&employee_id='+encodeURIComponent(r.employee_id)
+      +'&full_name='+encodeURIComponent(r.full_name)+'&month='+encodeURIComponent(month)
+      +'&by='+encodeURIComponent(USER.name||USER.id)+'&_='+Date.now());
+    var d=await res.json();
+    if(d&&d.ok){ toast(r.full_name+' submitted · '+d.avg+'% → scorecard.'); loadDashboard(); }
+    else { toast('Submit failed: '+((d&&d.error)||'unknown')); if(btn){ btn.disabled=false; btn.textContent='Submit'; } }
+  }catch(e){ toast('Network error — try again.'); if(btn){ btn.disabled=false; btn.textContent='Submit'; } }
 }
 
 /* ---- resume session ---- */
