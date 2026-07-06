@@ -346,17 +346,35 @@ function tickType(){
   if($('t-prog')) $('t-prog').style.width=Math.min(100, elapsed/TYPE_SECONDS*100)+'%';
   if(left<=0){ finishAttempt(true); }
 }
+// Edit-distance so a single early miss doesn't wreck alignment (positional compare does).
+function _lev(a,b){
+  a=a||''; b=b||''; var n=a.length, m=b.length;
+  if(!n) return m; if(!m) return n;
+  var prev=new Array(m+1), cur=new Array(m+1), i, j;
+  for(j=0;j<=m;j++) prev[j]=j;
+  for(i=1;i<=n;i++){
+    cur[0]=i;
+    for(j=1;j<=m;j++){
+      var cost=(a.charCodeAt(i-1)===b.charCodeAt(j-1))?0:1;
+      cur[j]=Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+cost);
+    }
+    var t=prev; prev=cur; cur=t;
+  }
+  return prev[m];
+}
 function typingStats(){
   var typed=$('type-in')?$('type-in').value:'';
   var elapsedMin = state.typeStart ? Math.max((Date.now()-state.typeStart)/60000, 1/60) : 1;
-  var words = typed.trim()? typed.trim().split(/\s+/).length : 0;
-  var wpm = Math.round(words/elapsedMin);
-  var correct=0; for(var i=0;i<typed.length;i++){ if(typed[i]===TYPING_PASSAGE[i]) correct++; }
-  var acc = typed.length? Math.round(correct/typed.length*100) : 100;
-  return { wpm:wpm, acc:acc, words:words };
+  var L=typed.length;
+  var ref=TYPING_PASSAGE.substring(0, L);                 // the passage they were meant to type so far
+  var dist=L? _lev(typed, ref) : 0;
+  var acc=L? Math.max(0, Math.min(100, Math.round((1 - dist/Math.max(L,1))*100))) : 100;
+  var gross=Math.round((L/5)/elapsedMin);                 // standard: 1 "word" = 5 characters
+  var net=Math.max(0, Math.round(gross*acc/100));         // errors reduce effective speed
+  return { wpm:net, gross:gross, acc:acc, chars:L };
 }
 function updateTypeStats(){ var s=typingStats(); if($('t-wpm')) $('t-wpm').textContent=s.wpm; if($('t-acc')) $('t-acc').textContent=s.acc; }
-function typingScore(s){ var speed=Math.max(0, Math.min(100, Math.round(s.wpm/40*100))); return Math.round(speed*(s.acc/100)); }
+function typingScore(s){ return Math.max(0, Math.min(100, Math.round(s.wpm/40*100))); }  // s.wpm is net (accuracy already applied)
 function finishAttempt(auto){
   if(state.typeTimer){ clearInterval(state.typeTimer); state.typeTimer=null; }
   var ts=typingStats(), score=typingScore(ts);
