@@ -187,6 +187,8 @@ label.f select:focus,label.f input:focus{border-color:var(--o1)}
     <h3>Settings</h3>
     <label class="f" style="text-transform:none;margin-bottom:12px">Your website (used in posts)
       <input class="inp" id="set-site" style="margin-top:4px" placeholder="jmbvirtuals.com"></label>
+    <label class="f" style="text-transform:none;margin-bottom:12px">Starting rate (shown in offers, e.g. $2.50–3/hr)
+      <input class="inp" id="set-rate" style="margin-top:4px;width:160px" placeholder="$2.50–3/hr"></label>
     <label class="f" style="text-transform:none;margin-bottom:12px">Cool-down per group (days before you can re-post there)
       <input class="inp" id="set-cooldown" type="number" min="1" max="60" style="margin-top:4px;width:120px"></label>
     <div class="row" style="justify-content:flex-end;margin-top:6px">
@@ -202,7 +204,7 @@ label.f select:focus,label.f input:focus{border-color:var(--o1)}
 /* ================= DATA ================= */
 var USER = null, VIEW = 'today';
 var GROUPS = [], TEMPLATES = [], LOG = [];
-var SET = { site:'jmbvirtuals.com', cooldown:7 };
+var SET = { site:'jmbvirtuals.com', cooldown:7, rate:'$2.50–3/hr' };
 
 var NICHES = {
   'General':              { task:'admin, social media, and customer support', tip:'list the tasks you dread most — those are the first ones to delegate.' },
@@ -211,7 +213,12 @@ var NICHES = {
   'Coaches / consultants':{ task:'inbox, scheduling, and content repurposing', tip:'turn every client call into one short post — a single call can fuel a week of content.' },
   'Agencies':             { task:'client reporting, scheduling, and admin', tip:'templatize your client reports once, then a VA can run them weekly so you never touch a spreadsheet.' },
   'Small business':       { task:'admin, email, and social media', tip:'write down 5 tasks you did today that someone else could do — that\'s your first VA job description.' },
-  'SaaS / startups':      { task:'support triage, data entry, and research', tip:'a VA handling first-line support triage can cut a founder\'s inbox time in half.' }
+  'SaaS / startups':      { task:'support triage, data entry, and research', tip:'a VA handling first-line support triage can cut a founder\'s inbox time in half.' },
+  'Home services / trades':{ task:'appointment setting, dispatch, and lead follow-up', tip:'a VA calling every missed lead back within 5 minutes can nearly double your booked jobs.' },
+  'Short-term rentals':   { task:'guest messaging, booking coordination, and reviews', tip:'a VA running your guest inbox keeps your Superhost status without you glued to the phone.' },
+  'Creators / media':     { task:'video editing, scheduling, and community management', tip:'hand off editing and posting — spend your time on ideas and filming, not timelines.' },
+  'Professional services':{ task:'client intake, scheduling, and follow-up', tip:'a VA handling new-client intake means no lead ever waits more than an hour for a reply.' },
+  'Wholesaling / lead gen':{ task:'cold calling, skip tracing, and CRM follow-up', tip:'the money is in the follow-up — a VA working your list daily is where deals actually come from.' }
 };
 
 var DEFAULT_GROUPS = [
@@ -254,6 +261,32 @@ var DEFAULT_GROUPS = [
   { platform:'Reddit', name:'r/PersonalTrainer', niche:'Coaches / consultants', policy:'value', url:'https://reddit.com/r/personaltraining' },
   { platform:'Reddit', name:'r/podcasting', niche:'Coaches / consultants', policy:'value', url:'https://reddit.com/r/podcasting' },
   { platform:'Reddit', name:'r/NewTubers', niche:'Coaches / consultants', policy:'value', url:'https://reddit.com/r/NewTubers' },
+  /* ---- Reddit: more business-owner communities (strong client potential) ---- */
+  { platform:'Reddit', name:'r/growmybusiness', niche:'Small business', policy:'value', url:'https://reddit.com/r/growmybusiness' },
+  { platform:'Reddit', name:'r/OnlineBusiness', niche:'Small business', policy:'value', url:'https://reddit.com/r/OnlineBusiness' },
+  { platform:'Reddit', name:'r/AskMarketing', niche:'Agencies', policy:'value', url:'https://reddit.com/r/AskMarketing' },
+  { platform:'Reddit', name:'r/Flipping', niche:'E-commerce', policy:'value', url:'https://reddit.com/r/Flipping' },
+  { platform:'Reddit', name:'r/juststart', niche:'Small business', policy:'value', url:'https://reddit.com/r/juststart' },
+  /* ---- Reddit: real-estate wholesaling / lead gen (heavy VA users) ---- */
+  { platform:'Reddit', name:'r/Wholesaling', niche:'Wholesaling / lead gen', policy:'value', url:'https://reddit.com/r/Wholesaling' },
+  { platform:'Reddit', name:'r/WholesalingHouses', niche:'Wholesaling / lead gen', policy:'value', url:'https://reddit.com/r/WholesalingHouses' },
+  { platform:'Reddit', name:'r/RealEstate', niche:'Real estate', policy:'value', url:'https://reddit.com/r/RealEstate' },
+  /* ---- Reddit: short-term rentals ---- */
+  { platform:'Reddit', name:'r/AirBnBHosts', niche:'Short-term rentals', policy:'value', url:'https://reddit.com/r/AirBnBHosts' },
+  { platform:'Reddit', name:'r/airbnb_hosts', niche:'Short-term rentals', policy:'value', url:'https://reddit.com/r/airbnb_hosts' },
+  /* ---- Reddit: home services / trades ---- */
+  { platform:'Reddit', name:'r/Contractor', niche:'Home services / trades', policy:'value', url:'https://reddit.com/r/Contractor' },
+  { platform:'Reddit', name:'r/HVAC', niche:'Home services / trades', policy:'value', url:'https://reddit.com/r/HVAC' },
+  { platform:'Reddit', name:'r/Plumbing', niche:'Home services / trades', policy:'value', url:'https://reddit.com/r/Plumbing' },
+  { platform:'Reddit', name:'r/electricians', niche:'Home services / trades', policy:'value', url:'https://reddit.com/r/electricians' },
+  /* ---- Reddit: professional services ---- */
+  { platform:'Reddit', name:'r/InsuranceAgent', niche:'Professional services', policy:'value', url:'https://reddit.com/r/InsuranceAgent' },
+  { platform:'Reddit', name:'r/msp', niche:'Professional services', policy:'value', url:'https://reddit.com/r/msp' },
+  { platform:'Reddit', name:'r/Bookkeeping', niche:'Professional services', policy:'value', url:'https://reddit.com/r/Bookkeeping' },
+  { platform:'Reddit', name:'r/lawfirm', niche:'Professional services', policy:'value', url:'https://reddit.com/r/lawfirm' },
+  /* ---- Reddit: creators / media ---- */
+  { platform:'Reddit', name:'r/YouTubers', niche:'Creators / media', policy:'value', url:'https://reddit.com/r/youtubers' },
+  { platform:'Reddit', name:'r/Twitch', niche:'Creators / media', policy:'value', url:'https://reddit.com/r/Twitch' },
   /* ---- Facebook (add the URL of each group you join) ---- */
   { platform:'Facebook', name:'Hire a Virtual Assistant (add URL)', niche:'General', policy:'promo', url:'' },
   { platform:'Facebook', name:'Virtual Assistant Jobs / Hiring (add URL)', niche:'General', policy:'promo', url:'' },
@@ -294,7 +327,18 @@ var DEFAULT_TEMPLATES = [
   { policy:'hire', name:'For-hire (SMM)', body:'[For Hire] Social Media Managers + VAs for {niche} brands.\n\nContent scheduling, engagement, {task}. Reliable and easy to work with.\n{site} · DM for details.' },
   /* ===== NO PROMO (pure engagement) ===== */
   { policy:'no', name:'Engagement only', body:'{niche} owners — {tip}\n\nWhat\'s worked for you? Genuinely curious how others handle this.' },
-  { policy:'no', name:'Poll-style', body:'{niche} owners: what eats the most of your week?\n\n1) {task}\n2) Admin / email\n3) Content / social\n4) Something else (comment)\n\nCurious where everyone\'s time actually goes.' }
+  { policy:'no', name:'Poll-style', body:'{niche} owners: what eats the most of your week?\n\n1) {task}\n2) Admin / email\n3) Content / social\n4) Something else (comment)\n\nCurious where everyone\'s time actually goes.' },
+  /* ===== CATCHY / HOOKY VALUE (strong opening line, no link) ===== */
+  { policy:'value', name:'Hook · $5 tasks', body:'Your $200/hr time is being spent on $5/hr tasks. 👀\n\nMost {niche} owners are secretly full-time admins. {tip}\n\nWhat\'s the task you KNOW you shouldn\'t be doing yourself?' },
+  { policy:'value', name:'Hook · clone yourself', body:'What would you do with 15 hours back every week?\n\nThat\'s roughly what {niche} owners lose to {task}. The fix isn\'t working faster — it\'s handing it off with a simple system.\n\nHappy to share how, just ask. 👇' },
+  { policy:'value', name:'Hook · 11pm', body:'You didn\'t start your business to be doing {task} at 11pm.\n\nYet here we are. 😅 {tip}\n\nDrop a 🙋 if this is you — you\'re not alone.' },
+  { policy:'value', name:'Hook · expensive employee', body:'The most expensive employee in your business is you… doing admin.\n\nEvery hour a {niche} owner spends on {task} is an hour not spent closing, creating, or growing. {tip}' },
+  /* ===== CATCHY + CHEAP (link OK) — competitive pricing ===== */
+  { policy:'promo', name:'Cheap hook · clone', body:'What if you could clone yourself for {rate}? 🧬\n\nWe\'re a trained VA team that takes {task} off {niche} owners\' plates — reliable, US hours, no long contracts. Rates from {rate}.\n\nDM me or peek at {site} 👋' },
+  { policy:'promo', name:'Cheap hook · coffee budget', body:'A trained virtual assistant for less than your monthly coffee runs. ☕→📈\n\nWe handle {task} for {niche} businesses starting at {rate}. Same-timezone availability, easy to work with.\n\n{site} · DM to grab a spot.' },
+  { policy:'promo', name:'Cheap hook · stop $5 tasks', body:'Stop doing $5 tasks yourself. 🛑\n\nHand off {task} to a trained VA from {rate} — we help {niche} owners get their week back. Reliable, managed, US hours.\n\nDM me or check {site}.' },
+  /* ===== CATCHY + CHEAP for-hire ===== */
+  { policy:'hire', name:'Cheap for-hire', body:'[For Hire] Trained VAs & Social Media Managers from {rate} 💼\n\nPerfect for {niche} businesses — we handle {task}. Reliable, US-hours available, no long contracts.\nPortfolio & rates: {site}\n\nDM to chat 👇' }
 ];
 
 /* ================= HELPERS ================= */
@@ -376,7 +420,7 @@ function buildPost(g, tplIdx){
   if(!pool.length) return '';
   var t = pool[tplIdx % pool.length];
   var ni = NICHES[g.niche] || NICHES['General'];
-  return t.body.replace(/{niche}/g, g.niche.toLowerCase()).replace(/{task}/g, ni.task).replace(/{tip}/g, ni.tip).replace(/{site}/g, SET.site);
+  return t.body.replace(/{niche}/g, g.niche.toLowerCase()).replace(/{task}/g, ni.task).replace(/{tip}/g, ni.tip).replace(/{site}/g, SET.site).replace(/{rate}/g, SET.rate);
 }
 function regenPost(){ _todayTplIdx++; renderToday(); }
 function skipTarget(){ var el=GROUPS.filter(isEligible); if(el.length<2){ toast('No other eligible group.'); return; } var idx=el.findIndex(function(g){return g.id===_todayGid;}); _todayGid=el[(idx+1)%el.length].id; _todayTplIdx=0; renderToday(); }
@@ -459,9 +503,9 @@ function renderLog(){
 function clearLog(){ if(!confirm('Clear your entire posting log?')) return; LOG=[]; save(); renderLog(); renderStreak(); }
 
 /* ================= SETTINGS ================= */
-function openSettings(){ $('set-site').value=SET.site; $('set-cooldown').value=SET.cooldown; $('settings-modal').classList.add('on'); }
+function openSettings(){ $('set-site').value=SET.site; $('set-rate').value=SET.rate; $('set-cooldown').value=SET.cooldown; $('settings-modal').classList.add('on'); }
 function closeSettings(){ $('settings-modal').classList.remove('on'); }
-function saveSettings(){ SET.site=($('set-site').value||'jmbvirtuals.com').trim(); SET.cooldown=Math.max(1,Math.min(60,parseInt($('set-cooldown').value,10)||7)); save(); closeSettings(); toast('Settings saved.'); if(VIEW==='today') renderToday(); }
+function saveSettings(){ SET.site=($('set-site').value||'jmbvirtuals.com').trim(); SET.rate=($('set-rate').value||'$2.50–3/hr').trim(); SET.cooldown=Math.max(1,Math.min(60,parseInt($('set-cooldown').value,10)||7)); save(); closeSettings(); toast('Settings saved.'); if(VIEW==='today') renderToday(); }
 
 /* ================= RESUME ================= */
 (function(){ try{ var u=localStorage.getItem('pa_user'); if(u){ USER=u; startApp(); } }catch(e){} })();
