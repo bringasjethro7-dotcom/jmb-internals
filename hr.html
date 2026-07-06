@@ -215,12 +215,31 @@ textarea.inp{min-height:72px;resize:vertical}
   <div class="tabs">
     <div class="tab on" id="tab-hire" onclick="showTab('hire')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg> Hiring pipeline</div>
     <div class="tab" id="tab-onb" onclick="showTab('onb')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Onboarding</div>
+    <div class="tab" id="tab-off" onclick="showTab('off')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Offboarding</div>
     <button class="btn ghost sm" style="margin-left:auto" onclick="copyApplyLink()" title="Copy the public application form link to share with applicants">🔗 Application link</button>
     <button class="btn primary sm" onclick="openCandidate()">+ Add candidate</button>
   </div>
 
   <div class="page on" id="page-hire"><div class="board" id="board"><div class="muted">Loading…</div></div></div>
   <div class="page" id="page-onb"><div id="onb-list"><div class="muted">Loading…</div></div></div>
+  <div class="page" id="page-off">
+    <div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px;">＋ Start offboarding</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
+        <div class="fg" style="margin:0;min-width:220px;"><label>Employee</label><select class="inp" id="off-emp"><option value="">Loading…</option></select></div>
+        <div class="fg" style="margin:0;min-width:150px;"><label>Type</label><select class="inp" id="off-type" onchange="offTypeFields()"><option value="resignation">Resignation</option><option value="termination">Termination</option></select></div>
+        <button class="btn primary" onclick="offStart()">Start offboarding</button>
+      </div>
+      <div id="off-fields" style="margin-top:10px;"></div>
+      <div style="font-size:11.5px;color:var(--t3);margin-top:8px;">Completing a case <b style="color:#f87171">deactivates the account</b> (no portal login) and <b style="color:#38bdf8">emails the employee</b> automatically.</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <b style="font-size:14px;">Offboarding cases</b>
+      <select class="inp" id="off-filter" onchange="renderOff()" style="width:auto;padding:6px 10px;"><option value="open">In progress</option><option value="completed">Completed</option><option value="all">All</option></select>
+      <button class="btn ghost sm" onclick="loadOff()" style="margin-left:auto">↻ Refresh</button>
+    </div>
+    <div id="off-body"><div class="muted">—</div></div>
+  </div>
 </div>
 
 <!-- CANDIDATE MODAL -->
@@ -270,6 +289,29 @@ textarea.inp{min-height:72px;resize:vertical}
   </div>
 </div>
 
+<!-- ASSESSMENT SCHEDULE MODAL (in-office) -->
+<div class="mb" id="assess-modal">
+  <div class="modal">
+    <div class="mh"><h3>Schedule assessment (in-office)</h3><button class="mx" onclick="closeAssess()">✕</button></div>
+    <div class="mbd">
+      <div id="as-who" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:14px;font-size:13px;line-height:1.7"></div>
+      <div class="grid2">
+        <div class="fg"><label>Date *</label><input class="inp" id="as-date" type="date"></div>
+        <div class="fg"><label>Time</label><input class="inp" id="as-time" type="time"></div>
+      </div>
+      <div class="fg"><label>Duration</label><input class="inp" id="as-dur" placeholder="e.g. 2 hours"></div>
+      <div class="fg"><label>Office address (venue) *</label><input class="inp" id="as-office" placeholder="Full office address where the exam is held"></div>
+      <div class="fg"><label>Exam coverage / parts</label><textarea class="inp" id="as-cover" placeholder="e.g.&#10;• Aptitude & logical reasoning&#10;• English proficiency (grammar + comprehension)&#10;• Typing speed test&#10;• Role-specific skills exam"></textarea></div>
+      <div class="fg"><label>Extra note (optional)</label><textarea class="inp" id="as-note" placeholder="Anything else for the applicant"></textarea></div>
+      <div style="font-size:12px;color:var(--t3);margin-top:2px">The exam is <b>in-office only</b>. An email with the schedule &amp; coverage will be sent to the applicant, and they move to the Assessment stage.</div>
+    </div>
+    <div class="mfoot">
+      <button class="btn ghost sm" onclick="closeAssess()">Cancel</button>
+      <button class="btn primary" id="as-send" style="margin-left:auto" onclick="submitAssess()">Send schedule &amp; move to Assessment</button>
+    </div>
+  </div>
+</div>
+
 <!-- RESUME VIEWER MODAL -->
 <div class="mb" id="resume-modal">
   <div class="modal" style="max-width:920px;width:95vw;">
@@ -310,7 +352,9 @@ textarea.inp{min-height:72px;resize:vertical}
 /* ====== CONFIG ====== */
 var HR_URL     = "https://script.google.com/macros/s/AKfycbyf_V9JIV8x_MqT4eibw9okSWt9ZjyvEYM09nZBEMNLiiyximXIKX6ojc7aLpiRaffN/exec";
 var PORTAL_URL = "https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByOLL4TuRPKvtPh2rjY-b3rOJ5aBoIc8sOmO9kP/exec";
+var ASSESS_URL = "https://internals.jmbvirtuals.com/hr-assess.html";   // digital exam page (in-office laptop)
 var ADMIN_PASS = "JMBeast_020298";
+function openExam(e,id,token){ if(e) e.stopPropagation(); var url=ASSESS_URL+'?id='+encodeURIComponent(id)+'&token='+encodeURIComponent(token); window.open(url,'_blank','noopener'); }
 
 var USER=null, ISADMIN=false, STATE={candidates:[]}, _editId=null, _acctCandId=null, _empCache=null;
 var STAGES=['applied','screening','assessment','interview','offer','hired','rejected'];
@@ -377,9 +421,12 @@ function refreshQuiet(){ apiGet({action:'state'}).then(function(s){ if(s&&!s.err
 function showTab(t){
   $('page-hire').classList.toggle('on', t==='hire');
   $('page-onb').classList.toggle('on', t==='onb');
+  $('page-off').classList.toggle('on', t==='off');
   $('tab-hire').classList.toggle('on', t==='hire');
   $('tab-onb').classList.toggle('on', t==='onb');
+  $('tab-off').classList.toggle('on', t==='off');
   if(t==='onb') renderOnb();
+  if(t==='off') loadOff();
 }
 
 /* ====== KANBAN ====== */
@@ -400,6 +447,9 @@ function candCard(c){
   if(c.assess_at && c.assess_score!=='' && c.assess_score!=null){
     var sc=parseFloat(c.assess_score); var col=sc>=80?'#4ade80':(sc>=60?'#ffb066':'#f87171');
     extra+='<span class="cbtn" style="cursor:default;border-color:'+col+'55;color:'+col+'" onclick="event.stopPropagation()">Assessment: '+Math.round(sc)+'%</span>';
+  } else if(String(c.stage)==='assessment' && c.token){
+    // in-office: open the digital exam on the office laptop for this applicant
+    extra+='<button class="cbtn open" onclick="openExam(event,\''+c.id+'\',\''+esc(c.token)+'\')">💻 Open exam (in-office)</button>';
   }
   // pass/fail for resume-review stage
   var actions='';
@@ -418,14 +468,11 @@ function candCard(c){
 async function screenCand(e, id, decision){
   e.stopPropagation();
   var c=(STATE.candidates||[]).filter(function(x){return String(x.id)===String(id);})[0]||{};
-  var pass=decision==='pass';
-  var msg=pass
-    ? 'Pass '+(c.name||'this applicant')+'? They will be emailed a link to the assessment and moved to the Assessment stage.'
-    : 'Fail '+(c.name||'this applicant')+'? They will be emailed a polite rejection and moved to Rejected.';
-  if(!confirm(msg)) return;
-  toast(pass?'Passing — emailing assessment link…':'Sending rejection email…');
+  if(decision==='pass'){ openAssess(c); return; }   // pass → schedule the in-office assessment
+  if(!confirm('Fail '+(c.name||'this applicant')+'? They will be emailed a polite rejection and moved to Rejected.')) return;
+  toast('Sending rejection email…');
   try{
-    var r=await apiPost({ action:'candidate_screen', id:id, decision:decision, by:firstName(USER.full_name||USER.employee_id) });
+    var r=await apiPost({ action:'candidate_screen', id:id, decision:'fail', by:firstName(USER.full_name||USER.employee_id) });
     if(r && r.ok){
       if(r.emailed){ toast('Email sent to '+(c.email||'applicant')); }
       else { toast('Saved, but email failed — run authorizeHr in the HR Apps Script once.'); if(r.email_error) console.warn('HR email error:', r.email_error); }
@@ -433,6 +480,140 @@ async function screenCand(e, id, decision){
     }
     else toast((r&&r.error)?r.error:'Action failed');
   }catch(err){ toast('Action failed'); }
+}
+
+/* ====== ASSESSMENT SCHEDULE (in-office) ====== */
+var _asCand=null;
+function openAssess(c){
+  _asCand=c;
+  $('as-who').innerHTML='<b>'+esc(c.name||'Applicant')+'</b>'+(c.position?' · '+esc(c.position):'')+'<br><span style="color:var(--t3)">'+esc(c.email||'⚠ no email on file')+'</span>';
+  $('as-date').value=''; $('as-time').value=''; $('as-dur').value=''; $('as-office').value=''; $('as-cover').value=''; $('as-note').value='';
+  $('assess-modal').classList.add('open');
+}
+function closeAssess(){ $('assess-modal').classList.remove('open'); _asCand=null; }
+async function submitAssess(){
+  var c=_asCand; if(!c) return;
+  var date=$('as-date').value, office=$('as-office').value.trim();
+  if(!date){ toast('Pick the assessment date.'); return; }
+  if(!office){ toast('Enter the office address (venue).'); return; }
+  if(!c.email && !confirm('No email is on file for this applicant — they will be moved to Assessment but no schedule can be emailed. Continue?')) return;
+  var btn=$('as-send'); btn.disabled=true; btn.textContent='Sending…';
+  c.stage='assessment'; renderBoard();   // optimistic
+  try{
+    var r=await apiPost({ action:'candidate_assess_schedule', id:c.id,
+      date:date, time:$('as-time').value, duration:$('as-dur').value.trim(),
+      office:office, coverage:$('as-cover').value, note:$('as-note').value.trim() });
+    if(r && r.ok) toast(r.emailed ? 'Assessment scheduled — schedule emailed ✓' : 'Scheduled, but the email could not be sent.');
+    else toast((r&&r.error)?r.error:'Save failed.');
+    await loadState();
+  }catch(e){ toast('Save failed.'); }
+  finally{ btn.disabled=false; btn.textContent='Send schedule & move to Assessment'; closeAssess(); }
+}
+
+/* ====== OFFBOARDING (uses the PORTAL backend so it can deactivate accounts) ====== */
+var OFF_DATA={cases:[],employees:[]};
+var OFF_CAUSES={
+  termination:[
+    {cat:'Performance & Quality', items:['Inaccurate / low-quality work','Low productivity / output','Failure to meet KPIs / scorecard','Repeated errors after coaching','Missed deadlines']},
+    {cat:'Behaviour & Conduct', items:['Misconduct / policy violation','Insubordination','Dishonesty / falsification','Harassment / disrespect','Breach of confidentiality','Conflict of interest']},
+    {cat:'Attendance & Reliability', items:['Excessive absences / no-show','Chronic tardiness','Abandonment of post (AWOL)','Time theft / idle tracking']},
+    {cat:'Business', items:['End of contract / project','Redundancy / restructuring','Client account closed','Failed probation']}
+  ],
+  resignation:[
+    {cat:'Reason for leaving', items:['Better opportunity','Career shift','Personal / family reasons','Health reasons','Relocation','Return to school','Compensation','Work setup / schedule','Burnout / workload']}
+  ]
+};
+function offBadge(type){ return String(type||'').toLowerCase()==='termination'
+  ? '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(248,113,113,.15);color:#f87171;">Termination</span>'
+  : '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(56,189,248,.15);color:#38bdf8;">Resignation</span>'; }
+function offTypeFields(){
+  var t=$('off-type').value; var groups=OFF_CAUSES[t]||OFF_CAUSES.termination;
+  var html='<style>.offchip{display:inline-flex;font-size:12px;padding:5px 11px;border-radius:20px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--t2);cursor:pointer;margin:0 6px 6px 0;}.offchip.on{background:rgba(255,107,26,.16);border-color:#ff6b1a;color:#ff8a3c;font-weight:600;}.offcat{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin:10px 0 5px;}</style>';
+  html+='<div class="grid2" style="max-width:420px;">';
+  if(t==='termination'){
+    html+='<div class="fg" style="margin:0;"><label>Effective date</label><input class="inp" id="off-eff" type="date"></div>';
+    html+='<div class="fg" style="margin:0;"><label>With cause?</label><select class="inp" id="off-cause"><option value="Yes">Yes</option><option value="No">No</option></select></div>';
+  } else {
+    html+='<div class="fg" style="margin:0;"><label>Notice date</label><input class="inp" id="off-notice" type="date"></div>';
+    html+='<div class="fg" style="margin:0;"><label>Last day</label><input class="inp" id="off-last" type="date"></div>';
+  }
+  html+='</div>';
+  html+='<div id="off-causes" style="margin-top:10px;"><div style="font-size:12px;color:var(--t2);font-weight:600;margin-bottom:2px;">'+(t==='termination'?'Cause(s) — select all that apply':'Reason(s) — select all that apply')+'</div>';
+  groups.forEach(function(g){ html+='<div class="offcat">'+esc(g.cat)+'</div>'+g.items.map(function(it){ return '<span class="offchip" onclick="this.classList.toggle(\'on\')">'+esc(it)+'</span>'; }).join(''); });
+  html+='<div class="fg" style="margin-top:8px;"><label>Additional details (optional)</label><input class="inp" id="off-details" placeholder="anything specific to add"></div></div>';
+  $('off-fields').innerHTML=html;
+}
+function offGatherReason(){
+  var chips=Array.prototype.slice.call(document.querySelectorAll('#off-causes .offchip.on')).map(function(c){return c.textContent.trim();});
+  var det=(($('off-details')||{}).value||'').trim();
+  var parts=chips.join(', '); if(det) parts=parts?(parts+' — '+det):det; return parts;
+}
+function loadOff(){
+  offTypeFields();
+  var body=$('off-body'); if(body) body.innerHTML='<div class="muted">Loading…</div>';
+  fetch(PORTAL_URL+'?action=offboarding_list&_='+Date.now()).then(function(r){return r.json();}).then(function(d){
+    if(!d||d.error){ if(body) body.innerHTML='<div class="muted">Could not load ('+esc((d&&d.error)||'error')+').</div>'; return; }
+    OFF_DATA=d;
+    var sel=$('off-emp'); if(sel){ var avail=(d.employees||[]).filter(function(e){return !e.has_open;});
+      sel.innerHTML='<option value="">Select employee…</option>'+avail.map(function(e){ return '<option value="'+esc(e.employee_id)+'">'+esc(e.full_name)+' ('+esc(e.employee_id)+')</option>'; }).join(''); }
+    renderOff();
+  }).catch(function(){ if(body) body.innerHTML='<div class="muted">Network error.</div>'; });
+}
+function offStart(){
+  var emp=$('off-emp').value, type=$('off-type').value;
+  if(!emp){ toast('Pick an employee first.'); return; }
+  var reason=offGatherReason();
+  if(!reason){ toast('Select at least one '+(type==='termination'?'cause':'reason')+'.'); return; }
+  var q=PORTAL_URL+'?action=offboarding_start&employee_id='+encodeURIComponent(emp)+'&type='+encodeURIComponent(type)+'&by='+encodeURIComponent(firstName(USER.full_name||USER.employee_id))+'&reason='+encodeURIComponent(reason);
+  if(type==='termination'){ q+='&effective_date='+encodeURIComponent((($('off-eff')||{}).value)||'')+'&with_cause='+encodeURIComponent((($('off-cause')||{}).value)||''); }
+  else { q+='&notice_date='+encodeURIComponent((($('off-notice')||{}).value)||'')+'&last_day='+encodeURIComponent((($('off-last')||{}).value)||''); }
+  fetch(q+'&_='+Date.now()).then(function(r){return r.json();}).then(function(d){
+    if(d&&d.ok){ toast('Offboarding started.'); loadOff(); }
+    else toast('Could not start: '+((d&&d.error==='ALREADY_OPEN')?'this employee already has an open case.':((d&&d.error)||'unknown')));
+  }).catch(function(){ toast('Network error.'); });
+}
+function renderOff(){
+  var body=$('off-body'); if(!body) return;
+  var f=(($('off-filter')||{}).value)||'open';
+  var list=(OFF_DATA.cases||[]).filter(function(c){ if(f==='all') return true; if(f==='completed') return c.status==='completed'; return c.status!=='completed'; });
+  if(!list.length){ body.innerHTML='<div class="muted">No '+(f==='completed'?'completed':(f==='open'?'in-progress':''))+' offboarding cases.</div>'; return; }
+  body.innerHTML=list.map(offCard).join('');
+}
+function offCard(c){
+  var done=(c.checklist||[]).filter(function(x){return x.done;}).length, total=(c.checklist||[]).length, completed=c.status==='completed';
+  var dates=completed ? 'Completed '+esc(String(c.completed_at).slice(0,10))+' by '+esc(c.completed_by)
+    : (c.type==='termination' ? 'Effective: <b>'+esc(c.effective_date||'—')+'</b>'+(c.with_cause?(' · With cause: <b>'+esc(c.with_cause)+'</b>'):'')
+                              : 'Notice: <b>'+esc(c.notice_date||'—')+'</b> · Last day: <b>'+esc(c.last_day||'—')+'</b>');
+  var checks=(c.checklist||[]).map(function(x,i){ return '<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0;'+(completed?'opacity:.7;':'')+'">'+
+    '<input type="checkbox" '+(x.done?'checked':'')+' '+(completed?'disabled':'')+' onchange="offToggle(\''+c.id+'\','+i+',this.checked)" style="width:16px;height:16px;accent-color:#ff6b1a;">'+
+    '<span>'+esc(x.label)+(x.done&&x.at?(' <span style="color:var(--t3);font-size:11px">· '+esc(String(x.at).slice(0,10))+'</span>'):'')+'</span></label>'; }).join('');
+  var actions=completed?'':'<div style="display:flex;gap:8px;margin-top:10px;"><button class="btn" style="background:#f87171;color:#fff;border-color:#f87171;font-weight:600;" onclick="offComplete(\''+c.id+'\')">✓ Complete &amp; deactivate</button><button class="btn ghost sm" onclick="offCancel(\''+c.id+'\')">Cancel case</button></div>';
+  return '<div style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;">'+
+    '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><b style="font-size:14px;">'+esc(c.full_name)+'</b>'+offBadge(c.type)+
+    (completed?'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(148,163,184,.18);color:var(--t2);">Completed</span>':'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(255,107,26,.15);color:#ff8a3c;">In progress · '+done+'/'+total+'</span>')+
+    '<span style="margin-left:auto;font-size:11px;color:var(--t3);">'+esc(c.employee_id)+'</span></div>'+
+    '<div style="font-size:12px;color:var(--t2);margin:6px 0 4px;">'+dates+(c.reason?(' · '+esc(c.reason)):'')+'</div>'+
+    '<div style="border-top:1px solid var(--line);margin-top:8px;padding-top:6px;">'+checks+'</div>'+actions+'</div>';
+}
+function offToggle(id,i,checked){
+  var c=(OFF_DATA.cases||[]).filter(function(x){return x.id===id;})[0]; if(!c||!c.checklist[i]) return;
+  c.checklist[i].done=!!checked; c.checklist[i].at=checked?new Date().toISOString().slice(0,10):''; c.checklist[i].by=checked?firstName(USER.full_name||USER.employee_id):'';
+  fetch(PORTAL_URL+'?action=offboarding_update&id='+encodeURIComponent(id)+'&checklist='+encodeURIComponent(JSON.stringify(c.checklist))+'&_='+Date.now())
+    .then(function(r){return r.json();}).then(function(){ renderOff(); }).catch(function(){});
+}
+function offComplete(id){
+  var c=(OFF_DATA.cases||[]).filter(function(x){return x.id===id;})[0]; if(!c) return;
+  if(!confirm('Complete offboarding for '+c.full_name+'?\n\nThis DEACTIVATES their account (no portal login) and EMAILS them.')) return;
+  fetch(PORTAL_URL+'?action=offboarding_complete&id='+encodeURIComponent(id)+'&by='+encodeURIComponent(firstName(USER.full_name||USER.employee_id))+'&_='+Date.now())
+    .then(function(r){return r.json();}).then(function(d){
+      if(d&&d.ok){ toast(c.full_name+' offboarded ('+d.deactivated_as+')'+(d.emailed?' · emailed':(d.email_to?' · email failed':' · no email'))); loadOff(); }
+      else toast('Failed: '+((d&&d.error)||'unknown'));
+    }).catch(function(){ toast('Network error.'); });
+}
+function offCancel(id){
+  if(!confirm('Cancel and delete this offboarding case? The employee stays active.')) return;
+  fetch(PORTAL_URL+'?action=offboarding_cancel&id='+encodeURIComponent(id)+'&_='+Date.now())
+    .then(function(r){return r.json();}).then(function(){ loadOff(); }).catch(function(){});
 }
 var _dragId=null;
 function onDragStart(e,id){ _dragId=id; e.dataTransfer.effectAllowed='move'; try{ e.dataTransfer.setData('text/plain',id); }catch(_){} var el=e.target.closest('.cand'); if(el) el.classList.add('dragging'); }
