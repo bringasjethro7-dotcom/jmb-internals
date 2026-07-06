@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>JMB Virtuals — Posting Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0b0e14;--bg2:#0d1117;--card:#151b24;--card2:#1b222d;--line:rgba(255,255,255,.09);
+ --o1:#ff6b1a;--o2:#e83d00;--o3:#ff9a5c;--t1:#e8eaf0;--t2:#9aa3b2;--t3:#5a6072;--green:#34d399;--red:#f87171;--blue:#38bdf8;--amber:#fbbf24;--purple:#a78bfa}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t1);min-height:100vh;font-size:14px}
+button{font-family:inherit;cursor:pointer}
+a{color:var(--o3)}
+#signin{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,rgba(255,107,26,.12),transparent 60%),var(--bg);z-index:50;padding:16px}
+.sicard{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:32px 28px;width:360px;max-width:100%;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.sicard h1{font-family:'Rajdhani',sans-serif;font-size:24px;letter-spacing:.04em;margin-bottom:2px}
+.sicard h1 b{color:var(--o1)}
+.sicard p{color:var(--t2);font-size:12.5px;margin-bottom:16px;line-height:1.5}
+.inp{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:11px;color:var(--t1);padding:11px 13px;font-size:14px;font-family:inherit;outline:none;margin-bottom:10px}
+.inp:focus{border-color:var(--o1)}
+.btn{background:linear-gradient(135deg,var(--o1),var(--o2));color:#fff;border:none;border-radius:11px;padding:11px 16px;font-weight:700;font-size:14px}
+.btn:hover{filter:brightness(1.08)}
+.btn.sm{padding:8px 13px;font-size:13px;border-radius:9px}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--t2);font-weight:600}
+.btn.ghost:hover{color:var(--t1);border-color:var(--o1)}
+.btn.tiny{padding:4px 10px;font-size:11.5px;border-radius:8px}
+header{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);background:rgba(13,17,23,.85);position:sticky;top:0;z-index:20;backdrop-filter:blur(10px);flex-wrap:wrap}
+.logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;letter-spacing:.06em}
+.logo b{color:var(--o1)}
+nav.nav{display:flex;gap:6px;flex-wrap:wrap}
+.navb{background:transparent;border:1px solid var(--line);color:var(--t2);border-radius:9px;padding:7px 14px;font-weight:600;font-size:13px}
+.navb:hover{color:var(--t1)}
+.navb.active{background:linear-gradient(135deg,var(--o1),var(--o2));color:#fff;border-color:transparent}
+.spacer{flex:1}
+.streak{font-size:12px;color:var(--t2);background:var(--card2);border:1px solid var(--line);border-radius:20px;padding:5px 12px}
+.streak b{color:var(--amber)}
+main{padding:20px;max-width:1080px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+.card h2{font-family:'Rajdhani',sans-serif;font-size:17px;font-weight:700;letter-spacing:.02em;margin-bottom:2px}
+.card .sub{font-size:12px;color:var(--t3);margin-bottom:12px}
+.warnbar{background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.3);color:var(--amber);border-radius:12px;padding:11px 15px;font-size:12.5px;line-height:1.55;margin-bottom:16px}
+.warnbar b{color:#fde68a}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+label.f{font-size:11px;color:var(--t2);text-transform:uppercase;letter-spacing:.04em;display:flex;flex-direction:column;gap:4px}
+label.f select,label.f input{background:var(--card2);border:1px solid var(--line);border-radius:9px;color:var(--t1);padding:8px 10px;font-size:13px;font-family:inherit;outline:none}
+label.f select:focus,label.f input:focus{border-color:var(--o1)}
+.pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;display:inline-block}
+.pill.promo{background:rgba(52,211,153,.15);color:var(--green)}
+.pill.value{background:rgba(56,189,248,.15);color:var(--blue)}
+.pill.hire{background:rgba(167,139,250,.15);color:var(--purple)}
+.pill.no{background:rgba(248,113,113,.15);color:var(--red)}
+.pill.rd{background:rgba(255,107,26,.15);color:var(--o3)}
+.pill.fb{background:rgba(56,120,255,.16);color:#7aa2ff}
+/* today */
+.today-target{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.today-target .nm{font-weight:700;font-size:15px}
+.post-box{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:14px;white-space:pre-wrap;font-size:14px;line-height:1.6;min-height:120px}
+.today-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.alts{margin-top:14px}
+.alt-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;background:var(--card2);border:1px solid var(--line);border-radius:20px;padding:6px 12px;margin:0 6px 6px 0;cursor:pointer}
+.alt-chip:hover{border-color:var(--o1)}
+/* table */
+.tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}
+.tbl th,.tbl td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:middle}
+.tbl th{color:var(--t2);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;position:sticky;top:0;background:var(--bg2)}
+.tbl tr:last-child td{border-bottom:none}
+.tblwrap{overflow:auto;border:1px solid var(--line);border-radius:12px;max-height:66vh}
+.mini{background:none;border:none;color:var(--t3);cursor:pointer;font-size:13px;padding:2px 5px}
+.mini:hover{color:var(--o3)}
+.empty{color:var(--t3);font-size:12.5px;padding:14px;text-align:center}
+.tplitem{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+.tplitem .th{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.tplitem textarea{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--t1);font-family:inherit;font-size:13px;padding:9px;resize:vertical;min-height:74px;line-height:1.5}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card2);border:1px solid var(--line);color:var(--t1);padding:11px 18px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:.25s;z-index:60}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.mb{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:70;display:none;align-items:center;justify-content:center;padding:16px}
+.mb.on{display:flex}
+.modal{background:var(--card);border:1px solid var(--line);border-radius:16px;width:440px;max-width:100%;padding:20px;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.modal h3{font-size:16px;margin-bottom:12px}
+.hide{display:none}
+</style>
+</head>
+<body>
+
+<!-- SIGN IN -->
+<div id="signin">
+  <div class="sicard">
+    <h1>Posting <b>Assistant</b></h1>
+    <p>Your daily helper for getting JMB seen in US communities — the safe, ban-proof way. It suggests a rule-compliant post, tracks where you've posted, and keeps you from over-posting. <b>You</b> do the actual posting.</p>
+    <input class="inp" id="si-name" placeholder="Your name" autocomplete="off" onkeydown="if(event.key==='Enter')signIn()">
+    <button class="btn" style="width:100%" onclick="signIn()">Start</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+  <header>
+    <div class="logo">JMB<b>·</b>Posting</div>
+    <nav class="nav">
+      <button class="navb active" id="nav-today" onclick="showView('today')">Today</button>
+      <button class="navb" id="nav-groups" onclick="showView('groups')">Groups</button>
+      <button class="navb" id="nav-templates" onclick="showView('templates')">Templates</button>
+      <button class="navb" id="nav-log" onclick="showView('log')">Log</button>
+    </nav>
+    <div class="spacer"></div>
+    <div class="streak">🔥 Streak: <b id="streak">0</b> days</div>
+    <button class="btn ghost sm" onclick="openSettings()">⚙️ Settings</button>
+    <button class="btn ghost sm" onclick="signOut()">Sign out</button>
+  </header>
+
+  <main>
+    <div class="warnbar">
+      <b>Play it safe.</b> This tool never logs into your accounts or posts for you — that gets accounts banned. It just tells you <b>what</b> to post and <b>where</b>, then you post it yourself. Post value, not spam: in "value-only" groups, share a helpful tip and let people ask — don't drop raw links.
+    </div>
+
+    <!-- TODAY -->
+    <div id="view-today">
+      <div class="card">
+        <h2>Today's post</h2>
+        <div class="sub" id="today-date"></div>
+        <div id="today-body"></div>
+      </div>
+    </div>
+
+    <!-- GROUPS -->
+    <div id="view-groups" class="hide">
+      <div class="card" style="margin-bottom:16px">
+        <h2>Add a target group</h2>
+        <div class="sub">Add the US groups/subreddits you've joined. Tag each one's self-promo policy honestly — it decides what kind of post the tool suggests.</div>
+        <div class="row">
+          <label class="f">Platform<select class="inp" id="g-plat" style="margin:0;width:130px"><option>Reddit</option><option>Facebook</option><option>LinkedIn</option><option>Other</option></select></label>
+          <label class="f">Name<input class="inp" id="g-name" style="margin:0;width:200px" placeholder="r/smallbusiness"></label>
+          <label class="f">Niche<select class="inp" id="g-niche" style="margin:0;width:170px"></select></label>
+          <label class="f">Promo policy<select class="inp" id="g-policy" style="margin:0;width:170px"><option value="value">Value-only (no link)</option><option value="promo">Promo OK (link allowed)</option><option value="hire">For-hire / hiring group</option><option value="no">No promo (engage only)</option></select></label>
+          <label class="f">Link<input class="inp" id="g-url" style="margin:0;width:220px" placeholder="https://…"></label>
+          <button class="btn sm" onclick="addGroup()">＋ Add</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="row" style="justify-content:space-between;margin-bottom:10px">
+          <h2 style="margin:0">Target groups</h2>
+          <div class="row" style="align-items:center">
+            <label class="f" style="flex-direction:row;align-items:center;gap:6px;text-transform:none">Platform
+              <select class="inp" id="g-filter" style="margin:0;padding:6px 9px" onchange="renderGroups()"><option value="">All</option><option>Reddit</option><option>Facebook</option><option>LinkedIn</option></select></label>
+            <button class="btn ghost tiny" onclick="resetGroups()">Reset to defaults</button>
+          </div>
+        </div>
+        <div class="tblwrap"><table class="tbl">
+          <thead><tr><th>Platform</th><th>Group</th><th>Niche</th><th>Policy</th><th>Last posted</th><th></th></tr></thead>
+          <tbody id="groups-body"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- TEMPLATES -->
+    <div id="view-templates" class="hide">
+      <div class="card">
+        <h2>Post templates</h2>
+        <div class="sub">Placeholders auto-fill: <code>{niche}</code>, <code>{task}</code>, <code>{tip}</code>, <code>{site}</code>. Each template is tagged for a policy — the tool only uses matching templates for a group.</div>
+        <div id="templates-body"></div>
+        <button class="btn ghost sm" onclick="addTemplate()" style="margin-top:6px">＋ Add template</button>
+      </div>
+    </div>
+
+    <!-- LOG -->
+    <div id="view-log" class="hide">
+      <div class="card">
+        <div class="row" style="justify-content:space-between;margin-bottom:10px">
+          <div><h2 style="margin:0">Posting log</h2><div class="sub" id="log-sub"></div></div>
+          <button class="btn ghost tiny" onclick="clearLog()">Clear log</button>
+        </div>
+        <div class="tblwrap"><table class="tbl">
+          <thead><tr><th>Date</th><th>Platform</th><th>Group</th><th>Post</th></tr></thead>
+          <tbody id="log-body"></tbody>
+        </table></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="mb" id="settings-modal">
+  <div class="modal">
+    <h3>Settings</h3>
+    <label class="f" style="text-transform:none;margin-bottom:12px">Your website (used in posts)
+      <input class="inp" id="set-site" style="margin-top:4px" placeholder="jmbvirtuals.com"></label>
+    <label class="f" style="text-transform:none;margin-bottom:12px">Cool-down per group (days before you can re-post there)
+      <input class="inp" id="set-cooldown" type="number" min="1" max="60" style="margin-top:4px;width:120px"></label>
+    <div class="row" style="justify-content:flex-end;margin-top:6px">
+      <button class="btn ghost sm" onclick="closeSettings()">Cancel</button>
+      <button class="btn sm" onclick="saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ================= DATA ================= */
+var USER = null, VIEW = 'today';
+var GROUPS = [], TEMPLATES = [], LOG = [];
+var SET = { site:'jmbvirtuals.com', cooldown:7 };
+
+var NICHES = {
+  'General':              { task:'admin, social media, and customer support', tip:'list the tasks you dread most — those are the first ones to delegate.' },
+  'Real estate':          { task:'lead follow-up, CRM updates, and listing coordination', tip:'set a 5-minute end-of-day rule to log every new lead in your CRM — nothing slips through.' },
+  'E-commerce':           { task:'order support, product listings, and customer messages', tip:'batch customer replies into two windows a day instead of all-day — quality goes up, stress goes down.' },
+  'Coaches / consultants':{ task:'inbox, scheduling, and content repurposing', tip:'turn every client call into one short post — a single call can fuel a week of content.' },
+  'Agencies':             { task:'client reporting, scheduling, and admin', tip:'templatize your client reports once, then a VA can run them weekly so you never touch a spreadsheet.' },
+  'Small business':       { task:'admin, email, and social media', tip:'write down 5 tasks you did today that someone else could do — that\'s your first VA job description.' },
+  'SaaS / startups':      { task:'support triage, data entry, and research', tip:'a VA handling first-line support triage can cut a founder\'s inbox time in half.' }
+};
+
+var DEFAULT_GROUPS = [
+  /* ---- Reddit: service-offer friendly (link OK) ---- */
+  { platform:'Reddit', name:'r/forhire', niche:'General', policy:'hire', url:'https://reddit.com/r/forhire' },
+  { platform:'Reddit', name:'r/hiring', niche:'General', policy:'hire', url:'https://reddit.com/r/hiring' },
+  { platform:'Reddit', name:'r/DoneDirtCheap', niche:'General', policy:'promo', url:'https://reddit.com/r/DoneDirtCheap' },
+  { platform:'Reddit', name:'r/VirtualAssistantPH', niche:'General', policy:'promo', url:'https://reddit.com/r/VirtualAssistantPH' },
+  /* ---- Reddit: value-only business/entrepreneur ---- */
+  { platform:'Reddit', name:'r/Entrepreneur', niche:'Small business', policy:'value', url:'https://reddit.com/r/Entrepreneur' },
+  { platform:'Reddit', name:'r/smallbusiness', niche:'Small business', policy:'value', url:'https://reddit.com/r/smallbusiness' },
+  { platform:'Reddit', name:'r/EntrepreneurRideAlong', niche:'Small business', policy:'value', url:'https://reddit.com/r/EntrepreneurRideAlong' },
+  { platform:'Reddit', name:'r/sweatystartup', niche:'Small business', policy:'value', url:'https://reddit.com/r/sweatystartup' },
+  { platform:'Reddit', name:'r/Business', niche:'Small business', policy:'value', url:'https://reddit.com/r/business' },
+  { platform:'Reddit', name:'r/startups', niche:'SaaS / startups', policy:'value', url:'https://reddit.com/r/startups' },
+  { platform:'Reddit', name:'r/SaaS', niche:'SaaS / startups', policy:'value', url:'https://reddit.com/r/SaaS' },
+  { platform:'Reddit', name:'r/SideProject', niche:'SaaS / startups', policy:'value', url:'https://reddit.com/r/SideProject' },
+  /* ---- Reddit: agencies / marketing ---- */
+  { platform:'Reddit', name:'r/agency', niche:'Agencies', policy:'value', url:'https://reddit.com/r/agency' },
+  { platform:'Reddit', name:'r/digital_marketing', niche:'Agencies', policy:'value', url:'https://reddit.com/r/digital_marketing' },
+  { platform:'Reddit', name:'r/marketing', niche:'Agencies', policy:'value', url:'https://reddit.com/r/marketing' },
+  { platform:'Reddit', name:'r/socialmedia', niche:'Agencies', policy:'value', url:'https://reddit.com/r/socialmedia' },
+  { platform:'Reddit', name:'r/SocialMediaMarketing', niche:'Agencies', policy:'value', url:'https://reddit.com/r/SocialMediaMarketing' },
+  { platform:'Reddit', name:'r/Emailmarketing', niche:'Agencies', policy:'value', url:'https://reddit.com/r/Emailmarketing' },
+  /* ---- Reddit: e-commerce ---- */
+  { platform:'Reddit', name:'r/ecommerce', niche:'E-commerce', policy:'value', url:'https://reddit.com/r/ecommerce' },
+  { platform:'Reddit', name:'r/shopify', niche:'E-commerce', policy:'value', url:'https://reddit.com/r/shopify' },
+  { platform:'Reddit', name:'r/FulfillmentByAmazon', niche:'E-commerce', policy:'value', url:'https://reddit.com/r/FulfillmentByAmazon' },
+  { platform:'Reddit', name:'r/AmazonSeller', niche:'E-commerce', policy:'value', url:'https://reddit.com/r/AmazonSeller' },
+  { platform:'Reddit', name:'r/EtsySellers', niche:'E-commerce', policy:'value', url:'https://reddit.com/r/EtsySellers' },
+  { platform:'Reddit', name:'r/dropship', niche:'E-commerce', policy:'value', url:'https://reddit.com/r/dropship' },
+  /* ---- Reddit: real estate ---- */
+  { platform:'Reddit', name:'r/realestateinvesting', niche:'Real estate', policy:'value', url:'https://reddit.com/r/realestateinvesting' },
+  { platform:'Reddit', name:'r/realtors', niche:'Real estate', policy:'value', url:'https://reddit.com/r/realtors' },
+  { platform:'Reddit', name:'r/Landlord', niche:'Real estate', policy:'value', url:'https://reddit.com/r/Landlord' },
+  { platform:'Reddit', name:'r/PropertyManagement', niche:'Real estate', policy:'value', url:'https://reddit.com/r/PropertyManagement' },
+  /* ---- Reddit: coaches / consultants ---- */
+  { platform:'Reddit', name:'r/consulting', niche:'Coaches / consultants', policy:'value', url:'https://reddit.com/r/consulting' },
+  { platform:'Reddit', name:'r/lifecoach', niche:'Coaches / consultants', policy:'value', url:'https://reddit.com/r/lifecoach' },
+  { platform:'Reddit', name:'r/PersonalTrainer', niche:'Coaches / consultants', policy:'value', url:'https://reddit.com/r/personaltraining' },
+  { platform:'Reddit', name:'r/podcasting', niche:'Coaches / consultants', policy:'value', url:'https://reddit.com/r/podcasting' },
+  { platform:'Reddit', name:'r/NewTubers', niche:'Coaches / consultants', policy:'value', url:'https://reddit.com/r/NewTubers' },
+  /* ---- Facebook (add the URL of each group you join) ---- */
+  { platform:'Facebook', name:'Hire a Virtual Assistant (add URL)', niche:'General', policy:'promo', url:'' },
+  { platform:'Facebook', name:'Virtual Assistant Jobs / Hiring (add URL)', niche:'General', policy:'promo', url:'' },
+  { platform:'Facebook', name:'Outsourcing & Delegation for Business Owners (add URL)', niche:'General', policy:'promo', url:'' },
+  { platform:'Facebook', name:'Shopify / E-commerce Sellers (add URL)', niche:'E-commerce', policy:'value', url:'' },
+  { platform:'Facebook', name:'Amazon FBA Sellers (add URL)', niche:'E-commerce', policy:'value', url:'' },
+  { platform:'Facebook', name:'Etsy Sellers (add URL)', niche:'E-commerce', policy:'value', url:'' },
+  { platform:'Facebook', name:'Real Estate Investors USA (add URL)', niche:'Real estate', policy:'value', url:'' },
+  { platform:'Facebook', name:'Realtors / Real Estate Agents (add URL)', niche:'Real estate', policy:'value', url:'' },
+  { platform:'Facebook', name:'Agency Owners / Digital Marketing (add URL)', niche:'Agencies', policy:'value', url:'' },
+  { platform:'Facebook', name:'Social Media Managers (add URL)', niche:'Agencies', policy:'value', url:'' },
+  { platform:'Facebook', name:'Coaches & Consultants (add URL)', niche:'Coaches / consultants', policy:'value', url:'' },
+  { platform:'Facebook', name:'Course Creators / Online Educators (add URL)', niche:'Coaches / consultants', policy:'value', url:'' },
+  { platform:'Facebook', name:'SaaS Founders / Startups (add URL)', niche:'SaaS / startups', policy:'value', url:'' },
+  { platform:'Facebook', name:'Small Business Owners USA (add URL)', niche:'Small business', policy:'value', url:'' },
+  { platform:'Facebook', name:'Female Entrepreneurs / Boss Moms (add URL)', niche:'Small business', policy:'value', url:'' }
+];
+
+var DEFAULT_TEMPLATES = [
+  /* ===== VALUE-ONLY (no link — share help, let people ask) ===== */
+  { policy:'value', name:'Value tip', body:'Quick tip for {niche} owners: {tip}\n\nHappy to walk anyone through the exact setup — just comment or shoot me a DM.' },
+  { policy:'value', name:'Delegation question', body:'{niche} owners — what\'s the one task you keep meaning to hand off but never do?\n\n(I run a small VA team, genuinely curious what the biggest time-sink is right now.)' },
+  { policy:'value', name:'Mini case study', body:'A {niche} client was spending ~10 hrs/week on {task}. We set up a simple system and had a VA run it — they got those hours back.\n\nIf {task} is eating your week, happy to share how we structured it.' },
+  { policy:'value', name:'Time audit', body:'Did a quick time audit with a {niche} owner last week. ~40% of their week was {task} — stuff that didn\'t need the owner at all.\n\nIf you\'ve never tracked where your hours actually go, try it for 3 days. It\'s eye-opening.' },
+  { policy:'value', name:'First VA job description', body:'Best way to figure out your first hire: for one week, jot down every task you did that someone else could do.\n\nFor most {niche} owners it\'s {task}. That list IS the job description. Happy to share a template if useful.' },
+  { policy:'value', name:'Systems > hustle', body:'Hot take for {niche} owners: you don\'t need to work more hours, you need one repeatable system for {task}.\n\nDocument it once, hand it to someone, stop touching it. {tip}' },
+  { policy:'value', name:'Common mistake', body:'The most common mistake I see {niche} owners make: trying to do {task} themselves at 11pm because "it\'s faster than explaining it."\n\nIt\'s not faster over a month. {tip}' },
+  { policy:'value', name:'Before / after', body:'Before: a {niche} owner buried in {task}, working nights.\nAfter: a simple SOP + a VA running it daily, owner back to actual growth work.\n\nThe change wasn\'t working harder — it was writing down the process once.' },
+  { policy:'value', name:'Ask the room', body:'{niche} owners — {tip}\n\nWhat\'s the one thing you WISH you could stop doing yourself? Drop it below, curious what\'s most common.' },
+  { policy:'value', name:'Quick win', body:'One quick win for {niche} owners this week: {tip}\n\nTakes 20 minutes to set up, saves hours every week after. Try it and let me know how it goes.' },
+  { policy:'value', name:'What I learned', body:'Been running a small VA team for {niche} businesses for a while. Biggest lesson: the bottleneck is almost never the work — it\'s that nobody documented how it\'s done.\n\nFix the SOP and {task} basically runs itself.' },
+  /* ===== PROMO OK (link allowed) ===== */
+  { policy:'promo', name:'Soft offer', body:'We\'re a virtual assistant team that helps {niche} businesses with {task}. If that\'s eating your time, we can take it off your plate — trained team, US hours available.\n\nDM me or take a look: {site}' },
+  { policy:'promo', name:'Free process audit', body:'Offering a few {niche} owners a free 20-minute "what can you delegate" audit this week — I\'ll map which of your tasks (like {task}) a VA could take over and how.\n\nComment or DM if you want a slot. More on us: {site}' },
+  { policy:'promo', name:'Take it off your plate', body:'If you\'re a {niche} owner drowning in {task}, that\'s exactly what we do — reliable VAs, trained and managed, US hours available. No long contracts.\n\n{site} · DM me to chat.' },
+  /* ===== FOR-HIRE (r/forhire style) ===== */
+  { policy:'hire', name:'For-hire (VA)', body:'[For Hire] Virtual Assistants for {niche} businesses — {task} and more.\n\nTrained, managed team · US-hours available · flexible hours.\nPortfolio & rates: {site}\n\nDM to chat.' },
+  { policy:'hire', name:'For-hire (SMM)', body:'[For Hire] Social Media Managers + VAs for {niche} brands.\n\nContent scheduling, engagement, {task}. Reliable and easy to work with.\n{site} · DM for details.' },
+  /* ===== NO PROMO (pure engagement) ===== */
+  { policy:'no', name:'Engagement only', body:'{niche} owners — {tip}\n\nWhat\'s worked for you? Genuinely curious how others handle this.' },
+  { policy:'no', name:'Poll-style', body:'{niche} owners: what eats the most of your week?\n\n1) {task}\n2) Admin / email\n3) Content / social\n4) Something else (comment)\n\nCurious where everyone\'s time actually goes.' }
+];
+
+/* ================= HELPERS ================= */
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function toast(m){var t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show');},2400);}
+function todayStr(){var n=new Date();return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');}
+function dNice(d){try{return new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});}catch(e){return d;}}
+function daysBetween(a,b){return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000);}
+function policyPill(p){var m={promo:['promo','Promo OK'],value:['value','Value-only'],hire:['hire','For-hire'],no:['no','No promo']};var x=m[p]||m.value;return '<span class="pill '+x[0]+'">'+x[1]+'</span>';}
+function platPill(p){var c=p==='Reddit'?'rd':(p==='Facebook'?'fb':'value');return '<span class="pill '+c+'">'+esc(p)+'</span>';}
+
+function lgKey(){return 'pa_log_'+USER;}
+function save(){ try{ localStorage.setItem('pa_groups',JSON.stringify(GROUPS)); localStorage.setItem('pa_templates',JSON.stringify(TEMPLATES)); localStorage.setItem('pa_settings',JSON.stringify(SET)); localStorage.setItem(lgKey(),JSON.stringify(LOG)); }catch(e){} }
+
+/* ================= AUTH ================= */
+function signIn(){var n=($('si-name').value||'').trim();if(!n)return;USER=n;try{localStorage.setItem('pa_user',n);}catch(e){}startApp();}
+function signOut(){try{localStorage.removeItem('pa_user');}catch(e){}location.reload();}
+function startApp(){
+  $('signin').style.display='none';$('app').style.display='block';
+  try{ GROUPS=JSON.parse(localStorage.getItem('pa_groups')||'null')||DEFAULT_GROUPS.slice(); }catch(e){ GROUPS=DEFAULT_GROUPS.slice(); }
+  try{ TEMPLATES=JSON.parse(localStorage.getItem('pa_templates')||'null')||DEFAULT_TEMPLATES.slice(); }catch(e){ TEMPLATES=DEFAULT_TEMPLATES.slice(); }
+  try{ SET=Object.assign(SET,JSON.parse(localStorage.getItem('pa_settings')||'{}')); }catch(e){}
+  try{ LOG=JSON.parse(localStorage.getItem(lgKey())||'[]'); }catch(e){ LOG=[]; }
+  GROUPS.forEach(function(g,i){ if(!g.id) g.id='g'+i+'_'+Math.random().toString(36).slice(2,6); });
+  fillNicheSelect();
+  showView('today');
+  renderStreak();
+}
+
+/* ================= VIEWS ================= */
+function showView(v){
+  VIEW=v;
+  ['today','groups','templates','log'].forEach(function(n){ $('view-'+n).classList.toggle('hide',n!==v); $('nav-'+n).classList.toggle('active',n===v); });
+  if(v==='today') renderToday();
+  if(v==='groups') renderGroups();
+  if(v==='templates') renderTemplates();
+  if(v==='log') renderLog();
+}
+
+/* ---- eligibility + last posted ---- */
+function lastPosted(gid){ var d=null; LOG.forEach(function(e){ if(e.gid===gid && (!d || e.date>d)) d=e.date; }); return d; }
+function isEligible(g){ var lp=lastPosted(g.id); if(!lp) return true; return daysBetween(lp, todayStr()) >= (SET.cooldown||7); }
+
+/* ================= TODAY ================= */
+var _todayGid=null, _todayTplIdx=0;
+function renderToday(){
+  $('today-date').textContent = dNice(todayStr());
+  var body=$('today-body');
+  var eligible = GROUPS.filter(isEligible);
+  if(!GROUPS.length){ body.innerHTML='<div class="empty">Add some target groups first (Groups tab).</div>'; return; }
+  if(!eligible.length){ body.innerHTML='<div class="empty">You\'ve posted recently in every group — nice! Add more groups or wait for the cool-down.</div>'; return; }
+  // choose target = eligible group least-recently posted (never-posted first)
+  if(!_todayGid || !eligible.some(function(g){return g.id===_todayGid;})){
+    eligible.sort(function(a,b){ var la=lastPosted(a.id)||'', lb=lastPosted(b.id)||''; return la.localeCompare(lb); });
+    _todayGid = eligible[0].id; _todayTplIdx=0;
+  }
+  var g = GROUPS.filter(function(x){return x.id===_todayGid;})[0];
+  var post = buildPost(g, _todayTplIdx);
+  var linkBtn = g.url ? '<a class="btn ghost sm" href="'+esc(g.url)+'" target="_blank" rel="noopener">Open group ↗</a>' : '';
+  body.innerHTML =
+    '<div class="today-target">'+platPill(g.platform)+'<span class="nm">'+esc(g.name)+'</span>'+policyPill(g.policy)+
+      '<span style="color:var(--t3);font-size:12px">· '+esc(g.niche)+'</span><div class="spacer"></div>'+linkBtn+
+      '<button class="btn ghost sm" onclick="skipTarget()">Skip →</button></div>'+
+    '<div class="post-box" id="post-text">'+esc(post)+'</div>'+
+    '<div class="today-actions">'+
+      '<button class="btn" onclick="copyPost()">📋 Copy post</button>'+
+      '<button class="btn ghost sm" onclick="regenPost()">↻ Rewrite</button>'+
+      '<button class="btn sm" style="background:linear-gradient(135deg,#16a34a,#0d9488)" onclick="markPosted()">✓ I posted this</button>'+
+    '</div>'+
+    '<div class="alts"><div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Other groups ready today</div>'+
+      eligible.filter(function(x){return x.id!==g.id;}).slice(0,8).map(function(x){ return '<span class="alt-chip" onclick="pickTarget(\''+x.id+'\')">'+platPill(x.platform)+esc(x.name)+'</span>'; }).join('')+'</div>';
+  window._todayPost=post;
+}
+function buildPost(g, tplIdx){
+  var pool = TEMPLATES.filter(function(t){ return t.policy===g.policy; });
+  if(!pool.length) pool = TEMPLATES.filter(function(t){ return t.policy==='value'; });
+  if(!pool.length) pool = TEMPLATES.slice();
+  if(!pool.length) return '';
+  var t = pool[tplIdx % pool.length];
+  var ni = NICHES[g.niche] || NICHES['General'];
+  return t.body.replace(/{niche}/g, g.niche.toLowerCase()).replace(/{task}/g, ni.task).replace(/{tip}/g, ni.tip).replace(/{site}/g, SET.site);
+}
+function regenPost(){ _todayTplIdx++; renderToday(); }
+function skipTarget(){ var el=GROUPS.filter(isEligible); if(el.length<2){ toast('No other eligible group.'); return; } var idx=el.findIndex(function(g){return g.id===_todayGid;}); _todayGid=el[(idx+1)%el.length].id; _todayTplIdx=0; renderToday(); }
+function pickTarget(id){ _todayGid=id; _todayTplIdx=0; renderToday(); window.scrollTo({top:0,behavior:'smooth'}); }
+function copyPost(){ var txt=window._todayPost||''; navigator.clipboard.writeText(txt).then(function(){ toast('Post copied — paste it into the group.'); },function(){ toast('Copy failed — select the text manually.'); }); }
+function markPosted(){
+  var g=GROUPS.filter(function(x){return x.id===_todayGid;})[0]; if(!g) return;
+  LOG.push({ date:todayStr(), gid:g.id, group:g.name, platform:g.platform, text:(window._todayPost||'').slice(0,300) });
+  save(); toast('Logged! Nice work.'); _todayGid=null; renderToday(); renderStreak();
+}
+function renderStreak(){
+  var days={}; LOG.forEach(function(e){ days[e.date]=1; });
+  // consecutive days ending today or yesterday
+  var streak=0, d=new Date();
+  for(var i=0;i<400;i++){ var s=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); if(days[s]){ streak++; } else if(i>0){ break; } d.setDate(d.getDate()-1); }
+  // if nothing today yet but yesterday counted, keep streak; if neither, 0
+  $('streak').textContent = streak;
+}
+
+/* ================= GROUPS ================= */
+function fillNicheSelect(){ var s=$('g-niche'); if(s) s.innerHTML=Object.keys(NICHES).map(function(n){return '<option>'+esc(n)+'</option>';}).join(''); }
+function renderGroups(){
+  var f=($('g-filter')||{}).value||'';
+  var list=GROUPS.filter(function(g){ return !f || g.platform===f; });
+  var body=$('groups-body');
+  if(!list.length){ body.innerHTML='<tr><td colspan="6" class="empty">No groups. Add one above or reset to defaults.</td></tr>'; return; }
+  body.innerHTML=list.map(function(g){
+    var lp=lastPosted(g.id); var elig=isEligible(g);
+    var lpTxt = lp ? (esc(lp)+(elig?'':' <span class="pill no" title="On cool-down">cooldown</span>')) : '<span style="color:var(--t3)">never</span>';
+    var link = g.url ? '<a href="'+esc(g.url)+'" target="_blank" rel="noopener">'+esc(g.name)+'</a>' : esc(g.name);
+    return '<tr><td>'+platPill(g.platform)+'</td><td>'+link+'</td><td style="color:var(--t2)">'+esc(g.niche)+'</td><td>'+policyPill(g.policy)+'</td><td>'+lpTxt+'</td>'+
+      '<td style="text-align:right;white-space:nowrap"><button class="mini" title="Edit link/policy" onclick="editGroup(\''+g.id+'\')">✎</button><button class="mini" title="Remove" onclick="delGroup(\''+g.id+'\')">✕</button></td></tr>';
+  }).join('');
+}
+function addGroup(){
+  var name=($('g-name').value||'').trim(); if(!name){ toast('Enter a group name.'); return; }
+  GROUPS.push({ id:'g_'+Math.random().toString(36).slice(2,8), platform:$('g-plat').value, name:name, niche:$('g-niche').value, policy:$('g-policy').value, url:($('g-url').value||'').trim() });
+  $('g-name').value=''; $('g-url').value='';
+  save(); renderGroups(); toast('Group added.');
+}
+function delGroup(id){ if(!confirm('Remove this group?')) return; GROUPS=GROUPS.filter(function(g){return g.id!==id;}); save(); renderGroups(); }
+function editGroup(id){
+  var g=GROUPS.filter(function(x){return x.id===id;})[0]; if(!g) return;
+  var u=prompt('Group link (URL):', g.url||''); if(u===null) return; g.url=u.trim();
+  var p=prompt('Policy — type one of: value, promo, hire, no', g.policy); if(p!==null && ['value','promo','hire','no'].indexOf(p.trim())>=0) g.policy=p.trim();
+  save(); renderGroups(); toast('Updated.');
+}
+function resetGroups(){ if(!confirm('Reset the group list back to the defaults? Your added groups will be lost.')) return; GROUPS=DEFAULT_GROUPS.slice(); GROUPS.forEach(function(g,i){ g.id='g'+i+'_'+Math.random().toString(36).slice(2,6); }); save(); renderGroups(); }
+
+/* ================= TEMPLATES ================= */
+function renderTemplates(){
+  var body=$('templates-body');
+  body.innerHTML=TEMPLATES.map(function(t,i){
+    return '<div class="tplitem"><div class="th">'+policyPill(t.policy)+'<b style="font-size:13px">'+esc(t.name)+'</b><div class="spacer"></div>'+
+      '<button class="mini" title="Delete" onclick="delTemplate('+i+')">✕</button></div>'+
+      '<textarea onchange="updTemplate('+i+',this.value)">'+esc(t.body)+'</textarea></div>';
+  }).join('') || '<div class="empty">No templates.</div>';
+}
+function updTemplate(i,val){ if(TEMPLATES[i]){ TEMPLATES[i].body=val; save(); } }
+function delTemplate(i){ if(!confirm('Delete this template?')) return; TEMPLATES.splice(i,1); save(); renderTemplates(); }
+function addTemplate(){
+  var name=prompt('Template name:'); if(!name) return;
+  var pol=prompt('Policy (value / promo / hire / no):','value'); if(!pol) return; pol=pol.trim(); if(['value','promo','hire','no'].indexOf(pol)<0) pol='value';
+  TEMPLATES.push({ policy:pol, name:name.trim(), body:'Write your post here. Use {niche}, {task}, {tip}, {site}.' });
+  save(); renderTemplates();
+}
+
+/* ================= LOG ================= */
+function renderLog(){
+  var recent=LOG.slice().sort(function(a,b){return String(b.date).localeCompare(String(a.date));});
+  var week=0, weekAgo=new Date(); weekAgo.setDate(weekAgo.getDate()-7); var wstr=weekAgo.getFullYear()+'-'+String(weekAgo.getMonth()+1).padStart(2,'0')+'-'+String(weekAgo.getDate()).padStart(2,'0');
+  LOG.forEach(function(e){ if(e.date>=wstr) week++; });
+  $('log-sub').textContent = LOG.length+' total posts · '+week+' in the last 7 days';
+  var body=$('log-body');
+  if(!recent.length){ body.innerHTML='<tr><td colspan="4" class="empty">Nothing logged yet. Post something from the Today tab and hit "I posted this".</td></tr>'; return; }
+  body.innerHTML=recent.slice(0,200).map(function(e){
+    return '<tr><td style="white-space:nowrap">'+esc(e.date)+'</td><td>'+platPill(e.platform)+'</td><td>'+esc(e.group)+'</td><td style="color:var(--t2);max-width:420px">'+esc((e.text||'').replace(/\n/g,' ').slice(0,120))+'…</td></tr>';
+  }).join('');
+}
+function clearLog(){ if(!confirm('Clear your entire posting log?')) return; LOG=[]; save(); renderLog(); renderStreak(); }
+
+/* ================= SETTINGS ================= */
+function openSettings(){ $('set-site').value=SET.site; $('set-cooldown').value=SET.cooldown; $('settings-modal').classList.add('on'); }
+function closeSettings(){ $('settings-modal').classList.remove('on'); }
+function saveSettings(){ SET.site=($('set-site').value||'jmbvirtuals.com').trim(); SET.cooldown=Math.max(1,Math.min(60,parseInt($('set-cooldown').value,10)||7)); save(); closeSettings(); toast('Settings saved.'); if(VIEW==='today') renderToday(); }
+
+/* ================= RESUME ================= */
+(function(){ try{ var u=localStorage.getItem('pa_user'); if(u){ USER=u; startApp(); } }catch(e){} })();
+</script>
+</body>
+</html>
