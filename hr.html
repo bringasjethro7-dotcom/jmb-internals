@@ -354,7 +354,15 @@ var HR_URL     = "https://script.google.com/macros/s/AKfycbyf_V9JIV8x_MqT4eibw9o
 var PORTAL_URL = "https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByOLL4TuRPKvtPh2rjY-b3rOJ5aBoIc8sOmO9kP/exec";
 var ASSESS_URL = "https://internals.jmbvirtuals.com/hr-assess.html";   // digital exam page (in-office laptop)
 var ADMIN_PASS = "JMBeast_020298";
-function openExam(e,id,token){ if(e) e.stopPropagation(); var url=ASSESS_URL+'?id='+encodeURIComponent(id)+'&token='+encodeURIComponent(token); window.open(url,'_blank','noopener'); }
+function examLink(id,token){ return ASSESS_URL+'?id='+encodeURIComponent(id)+'&token='+encodeURIComponent(token); }
+function copyExamLink(e,id,token){
+  if(e) e.stopPropagation();
+  var url=examLink(id,token);
+  try{
+    navigator.clipboard.writeText(url).then(function(){ toast('Exam link copied — paste it for the examinee.'); },
+      function(){ window.prompt('Copy the exam link for the examinee:', url); });
+  }catch(_){ window.prompt('Copy the exam link for the examinee:', url); }
+}
 
 var USER=null, ISADMIN=false, STATE={candidates:[]}, _editId=null, _acctCandId=null, _empCache=null;
 var STAGES=['applied','screening','assessment','interview','offer','hired','rejected'];
@@ -448,8 +456,8 @@ function candCard(c){
     var sc=parseFloat(c.assess_score); var col=sc>=80?'#4ade80':(sc>=60?'#ffb066':'#f87171');
     extra+='<span class="cbtn" style="cursor:default;border-color:'+col+'55;color:'+col+'" onclick="event.stopPropagation()">Assessment: '+Math.round(sc)+'%</span>';
   } else if(String(c.stage)==='assessment' && c.token){
-    // in-office: open the digital exam on the office laptop for this applicant
-    extra+='<button class="cbtn open" onclick="openExam(event,\''+c.id+'\',\''+esc(c.token)+'\')">💻 Open exam (in-office)</button>';
+    // in-office: copy the exam link for the examinee to paste on the office laptop
+    extra+='<button class="cbtn open" onclick="copyExamLink(event,\''+c.id+'\',\''+esc(c.token)+'\')">🔗 Copy exam link</button>';
   }
   // pass/fail for resume-review stage
   var actions='';
@@ -484,10 +492,20 @@ async function screenCand(e, id, decision){
 
 /* ====== ASSESSMENT SCHEDULE (in-office) ====== */
 var _asCand=null;
+var ASSESS_DEFAULT_DUR = '30 minutes';
+var ASSESS_DEFAULT_OFFICE = 'Km6, Brgy. Laguio, Siniloan, Laguna (Google Maps: search "JMB Camp")';
+var ASSESS_DEFAULT_COVERAGE =
+  'The exam is taken on a laptop and has two parts:\n'+
+  '• Written exam — 50 items, 25 minutes (70% of the score): 20 Grammar (Senior High School level), 15 Mathematics & Logic, and 15 Technology / VA & SMM platforms.\n'+
+  '• Typing test — 5 minutes, up to 3 attempts (best counts), target 40 WPM (30% of the score).';
 function openAssess(c){
   _asCand=c;
   $('as-who').innerHTML='<b>'+esc(c.name||'Applicant')+'</b>'+(c.position?' · '+esc(c.position):'')+'<br><span style="color:var(--t3)">'+esc(c.email||'⚠ no email on file')+'</span>';
-  $('as-date').value=''; $('as-time').value=''; $('as-dur').value=''; $('as-office').value=''; $('as-cover').value=''; $('as-note').value='';
+  $('as-date').value=''; $('as-time').value='';
+  $('as-dur').value=ASSESS_DEFAULT_DUR;
+  $('as-office').value=ASSESS_DEFAULT_OFFICE;
+  $('as-cover').value=ASSESS_DEFAULT_COVERAGE;
+  $('as-note').value='';
   $('assess-modal').classList.add('open');
 }
 function closeAssess(){ $('assess-modal').classList.remove('open'); _asCand=null; }
