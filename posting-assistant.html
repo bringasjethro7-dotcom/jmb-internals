@@ -103,6 +103,7 @@ label.f select:focus,label.f input:focus{border-color:var(--o1)}
       <button class="navb active" id="nav-today" onclick="showView('today')">Today</button>
       <button class="navb" id="nav-groups" onclick="showView('groups')">Groups</button>
       <button class="navb" id="nav-templates" onclick="showView('templates')">Templates</button>
+      <button class="navb" id="nav-warmup" onclick="showView('warmup')">Warm-up</button>
       <button class="navb" id="nav-log" onclick="showView('log')">Log</button>
     </nav>
     <div class="spacer"></div>
@@ -163,6 +164,21 @@ label.f select:focus,label.f input:focus{border-color:var(--o1)}
         <div id="templates-body"></div>
         <button class="btn ghost sm" onclick="addTemplate()" style="margin-top:6px">＋ Add template</button>
       </div>
+    </div>
+
+    <!-- WARM-UP -->
+    <div id="view-warmup" class="hide">
+      <div class="warnbar">
+        <b>Why warm up?</b> A brand-new account that starts dropping promo gets banned fast. Spend ~2 weeks looking like a real, helpful human first — build karma and history, then start the daily cadence. Rule of thumb: <b>~9 helpful contributions for every 1 that mentions JMB</b>.
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <div><h2 style="margin:0">14-day warm-up</h2><div class="sub" id="wu-sub"></div></div>
+          <button class="btn ghost tiny" onclick="resetWarmup()">Reset progress</button>
+        </div>
+        <div style="height:8px;border-radius:6px;background:var(--card2);overflow:hidden;margin-top:10px"><span id="wu-bar" style="display:block;height:100%;width:0;background:linear-gradient(90deg,var(--o1),var(--o2))"></span></div>
+      </div>
+      <div id="warmup-body"></div>
     </div>
 
     <!-- LOG -->
@@ -372,12 +388,52 @@ function startApp(){
 /* ================= VIEWS ================= */
 function showView(v){
   VIEW=v;
-  ['today','groups','templates','log'].forEach(function(n){ $('view-'+n).classList.toggle('hide',n!==v); $('nav-'+n).classList.toggle('active',n===v); });
+  ['today','groups','templates','warmup','log'].forEach(function(n){ $('view-'+n).classList.toggle('hide',n!==v); $('nav-'+n).classList.toggle('active',n===v); });
   if(v==='today') renderToday();
   if(v==='groups') renderGroups();
   if(v==='templates') renderTemplates();
+  if(v==='warmup') renderWarmup();
   if(v==='log') renderLog();
 }
+
+/* ================= WARM-UP PLAN ================= */
+var WARMUP = [
+  { d:1,  h:'Set up the account', tasks:['Add banner, avatar (JMB logo), bio, and the website in Social Links','Verify your email (unverified new accounts get filtered)','Pin your intro post to the profile','Join 8–10 target subreddits from the Groups tab','Skim each sub\'s rules — note which ban self-promo'] },
+  { d:2,  h:'Just listen + upvote', tasks:['Upvote ~20 posts you genuinely like across your subs','Leave 3 short, real comments (no promo, no links)','Save a few good posts for later reference'] },
+  { d:3,  h:'Be helpful', tasks:['Answer 1 "how do I…" question thoroughly with a real tip','Leave 4 more genuine comments','No links, no mention of JMB yet'] },
+  { d:4,  h:'First value post', tasks:['Make 1 value-only POST (a tip or question) in a friendly sub like r/smallbusiness','Reply to anyone who comments','Comment on 3 other posts'] },
+  { d:5,  h:'Keep engaging', tasks:['Comment on 5 posts — add real value','Join 3–4 more niche subs','Upvote generously'] },
+  { d:6,  h:'Answer questions', tasks:['Find 2 "who can help with X" / "how do I handle Y" threads and give real answers','Comment on 3 more posts'] },
+  { d:7,  h:'Value post #2', tasks:['Post 1 more value-only tip or mini-story','Reply to EVERY comment you\'ve received so far','Check your karma — it should be climbing'] },
+  { d:8,  h:'Soft context mention', tasks:['Comment on 5 posts','Where it fits naturally, mention "I run a small VA team" — NO link','Keep the 9:1 helpful-to-promo ratio'] },
+  { d:9,  h:'Value post #3', tasks:['Post 1 value-only post (use a Hook template with no link)','Soft-mention JMB only in replies where genuinely relevant'] },
+  { d:10, h:'Conversations', tasks:['Reply fast to any comments/DMs','Comment on 5 posts','If someone asks what you do, share the pinned post / DM — don\'t hard-sell'] },
+  { d:11, h:'Value post #4', tasks:['Post 1 more value post','Engage in 1 longer discussion thread'] },
+  { d:12, h:'First soft promo', tasks:['Find a "Promote Your Business" / self-promo thread (e.g. r/smallbusiness weekly) and post a soft offer','Comment on 4 other posts to balance it out'] },
+  { d:13, h:'Momentum', tasks:['Post 1 value post + soft mention where relevant','Reply to everything','Add any new groups you\'ve found to the Groups tab'] },
+  { d:14, h:'Go live 🚀', tasks:['Review: is karma up and history healthy? If yes, start the daily cadence on the Today tab','Keep 9:1 value-to-promo — links only where allowed','Never post the same thing across many subs the same day (the cooldown handles this)'] }
+];
+function wuKey(){ return 'pa_warmup_'+USER; }
+function wuState(){ try{ return JSON.parse(localStorage.getItem(wuKey())||'{}'); }catch(e){ return {}; } }
+function renderWarmup(){
+  var st=wuState(), total=0, done=0;
+  WARMUP.forEach(function(day,di){ day.tasks.forEach(function(t,ti){ total++; if(st[di+'_'+ti]) done++; }); });
+  $('wu-sub').textContent = done+' of '+total+' steps done';
+  $('wu-bar').style.width = total? Math.round(done/total*100)+'%' : '0';
+  $('warmup-body').innerHTML = WARMUP.map(function(day,di){
+    var dTasks=day.tasks.map(function(t,ti){ var ck=!!st[di+'_'+ti];
+      return '<label style="display:flex;gap:9px;align-items:flex-start;padding:5px 0;font-size:13px;color:var(--t1);cursor:pointer">'+
+        '<input type="checkbox" '+(ck?'checked':'')+' onchange="wuToggle('+di+','+ti+',this.checked)" style="width:16px;height:16px;margin-top:1px;accent-color:var(--o1)">'+
+        '<span'+(ck?' style="color:var(--t3);text-decoration:line-through"':'')+'>'+esc(t)+'</span></label>';
+    }).join('');
+    var dayDone=day.tasks.every(function(t,ti){ return st[di+'_'+ti]; });
+    return '<div class="card" style="margin-bottom:10px">'+
+      '<div class="row" style="align-items:center;gap:10px;margin-bottom:4px"><span class="pill '+(dayDone?'promo':'rd')+'">Day '+day.d+'</span><b style="font-size:14px">'+esc(day.h)+'</b></div>'+
+      dTasks+'</div>';
+  }).join('');
+}
+function wuToggle(di,ti,ck){ var st=wuState(); if(ck) st[di+'_'+ti]=1; else delete st[di+'_'+ti]; try{ localStorage.setItem(wuKey(),JSON.stringify(st)); }catch(e){} renderWarmup(); }
+function resetWarmup(){ if(!confirm('Reset your warm-up progress?')) return; try{ localStorage.removeItem(wuKey()); }catch(e){} renderWarmup(); }
 
 /* ---- eligibility + last posted ---- */
 function lastPosted(gid){ var d=null; LOG.forEach(function(e){ if(e.gid===gid && (!d || e.date>d)) d=e.date; }); return d; }
