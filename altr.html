@@ -613,16 +613,34 @@ function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('show'); c
 function fnum(n){ n=parseInt(n,10); return isNaN(n)?0:n; }
 function configured(){ return ALTR_URL && ALTR_URL.indexOf('PASTE_')<0 && /^https?:/.test(ALTR_URL); }
 
-/* ---- API ---- */
-function apiGet(params){
+/* ---- API (reads: timeout + 1 retry + in-flight dedupe + short TTL cache) ---- */
+var _altrCache={}, _altrInflight={};
+function _altrText(url,tries,timeout){
+  return new Promise(function(res,rej){
+    var ctrl=window.AbortController?new AbortController():null;
+    var to=setTimeout(function(){ try{ ctrl&&ctrl.abort(); }catch(e){} }, timeout||15000);
+    fetch(url, ctrl?{signal:ctrl.signal}:undefined)
+      .then(function(r){ return r.text(); })
+      .then(function(t){ clearTimeout(to); res(t); })
+      .catch(function(e){ clearTimeout(to); if((tries||1)>1) _altrText(url,(tries||1)-1,timeout).then(res,rej); else rej(e); });
+  });
+}
+function apiGet(params, ttl){
+  ttl = (ttl==null?1500:ttl);
   var qs = Object.keys(params).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(params[k]); }).join('&');
-  return fetch(ALTR_URL+'?'+qs).then(function(r){ return r.json(); });
+  var url=ALTR_URL+'?'+qs, key=qs.replace(/(^|&)_=\d+/,''), now=Date.now(), c=_altrCache[key];
+  var clone=function(d){ return d==null?d:JSON.parse(JSON.stringify(d)); };
+  if(ttl>0 && c && (now-c.t)<ttl) return Promise.resolve(clone(c.d));
+  if(ttl>0 && _altrInflight[key]) return _altrInflight[key].then(clone);
+  var p=_altrText(url, ttl>0?2:1, 15000).then(function(t){ var d=null; try{ d=JSON.parse(t); }catch(e){} if(ttl>0 && d) _altrCache[key]={t:Date.now(),d:d}; delete _altrInflight[key]; return d; }, function(e){ delete _altrInflight[key]; throw e; });
+  if(ttl>0) _altrInflight[key]=p;
+  return p.then(clone);
 }
 var PENDING=0, LAST_ACT=0;
 function apiPost(obj){
   PENDING++; LAST_ACT=Date.now();
   return fetch(ALTR_URL, { method:'POST', body: JSON.stringify(obj) }).then(function(r){ return r.json(); })
-    .finally(function(){ PENDING=Math.max(0,PENDING-1); LAST_ACT=Date.now(); });
+    .finally(function(){ _altrCache={}; PENDING=Math.max(0,PENDING-1); LAST_ACT=Date.now(); });   // bust read cache after any write
 }
 /* live auto-refresh so admin & employees see each other's progress in near real-time,
    without ever clobbering an edit-in-progress */
