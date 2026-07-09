@@ -237,8 +237,13 @@ button.promosel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
 .adminbtn:hover{opacity:.92}
 .ghost{font-size:12px;font-weight:600;color:var(--t2);background:none;border:1px solid var(--line);border-radius:9px;padding:8px 13px;cursor:pointer;font-family:inherit}
 .ghost:hover{color:var(--t1);border-color:var(--line-hi)}
-#eod-modal,#eod-warn,#phone-reminder,#reels-alarm,#acct-edit-modal,#audio-add-modal,#alt-dialog{position:fixed;inset:0;z-index:340;display:none;align-items:center;justify-content:center;background:rgba(7,9,13,.8);backdrop-filter:blur(8px);padding:1.5rem}
-#eod-modal.open,#eod-warn.open,#phone-reminder.open,#reels-alarm.open,#acct-edit-modal.open,#audio-add-modal.open,#alt-dialog.open{display:flex;animation:docFade .2s ease}
+#eod-modal,#eod-warn,#phone-reminder,#reels-alarm,#acct-edit-modal,#audio-add-modal,#alt-dialog,#assign-modal{position:fixed;inset:0;z-index:340;display:none;align-items:center;justify-content:center;background:rgba(7,9,13,.8);backdrop-filter:blur(8px);padding:1.5rem}
+#eod-modal.open,#eod-warn.open,#phone-reminder.open,#reels-alarm.open,#acct-edit-modal.open,#audio-add-modal.open,#alt-dialog.open,#assign-modal.open{display:flex;animation:docFade .2s ease}
+#assign-list .arow{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#0c0f15;border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+#assign-list .arow .anm{font-size:13.5px;font-weight:600;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#assign-list .pseg{display:flex;gap:4px;flex:0 0 auto}
+#assign-list .popt{font-size:12px;font-weight:600;color:var(--t2);background:#151a22;border:1px solid var(--line);border-radius:7px;padding:6px 11px;cursor:pointer}
+#assign-list .popt.on{color:#fff;background:linear-gradient(135deg,var(--o1),var(--o2));border-color:transparent}
 #alt-dialog .empin{box-sizing:border-box}
 #audio-add-modal .ae-field input{width:100%;box-sizing:border-box;background:#0c0f15;border:1px solid var(--line);border-radius:8px;color:#fff;padding:10px 12px;font:14px/1.2 inherit;text-transform:none;letter-spacing:0}
 #audio-add-modal .ae-field input:focus{outline:none;border-color:var(--o2)}
@@ -539,6 +544,16 @@ button.promosel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
     <div class="eodsub" id="ad-msg" style="white-space:pre-line"></div>
     <input id="ad-input" class="empin" style="width:100%;max-width:none;margin-top:.5rem;display:none" autocomplete="off">
     <div class="eodbtns"><button class="ghost" id="ad-cancel">Cancel</button><button class="adminbtn" id="ad-ok">OK</button></div>
+  </div>
+</div>
+
+<!-- Auto-assign portions modal -->
+<div id="assign-modal">
+  <div class="eodbox" style="max-width:460px">
+    <div class="eodhd">Auto-assign phones</div>
+    <div class="eodsub">Set each employee's share of the daily target. New members can take a smaller portion (75% or 50%) so they get fewer phones.</div>
+    <div id="assign-list" style="display:flex;flex-direction:column;gap:9px;margin:.5rem 0 .3rem;max-height:52vh;overflow:auto"></div>
+    <div class="eodbtns"><button class="ghost" onclick="closeAssign()">Cancel</button><button class="adminbtn" id="assign-go" onclick="confirmAssign()">Assign phones</button></div>
   </div>
 </div>
 
@@ -1666,8 +1681,26 @@ async function resetTodaySourced(){
     else toast((r&&r.error)||'Failed');
   }catch(e){ toast('Failed'); }
 }
-async function autoAssign(){
-  if(!confirm('Auto-assign all phones across the employees, balanced by their red-box targets?\nThis overwrites the current phone assignments.')) return;
+var ASSIGN_PORTIONS={};   // sourcer id -> 100 | 75 | 50
+function autoAssign(){
+  var sourcers=(STATE.sourcers||[]).filter(function(s){ return String(s.active||'').toUpperCase()!=='FALSE'; }).sort(function(a,b){ return fnum(a.id)-fnum(b.id); });
+  if(!sourcers.length){ toast('Tick the employees working today first'); return; }
+  var html='';
+  sourcers.forEach(function(s){
+    var cur=ASSIGN_PORTIONS[s.id]||100;
+    var seg=[100,75,50].map(function(p){ return '<button type="button" class="popt'+(p===cur?' on':'')+'" data-id="'+esc(s.id)+'" data-p="'+p+'" onclick="pickPortion(this)">'+p+'%</button>'; }).join('');
+    html+='<div class="arow"><span class="anm">'+esc(s.name||('#'+s.id))+'</span><span class="pseg">'+seg+'</span></div>';
+  });
+  $('assign-list').innerHTML=html;
+  $('assign-modal').classList.add('open');
+}
+function pickPortion(btn){
+  var id=btn.getAttribute('data-id'), p=fnum(btn.getAttribute('data-p'));
+  ASSIGN_PORTIONS[id]=p;
+  var seg=btn.parentNode; Array.prototype.forEach.call(seg.querySelectorAll('.popt'),function(b){ b.classList.toggle('on', b===btn); });
+}
+function closeAssign(){ $('assign-modal').classList.remove('open'); }
+async function confirmAssign(){
   var redByPhone={}, phonesSet={};
   (STATE.accounts||[]).forEach(function(a){ phonesSet[String(a.phone)]=true; });
   Object.keys(phonesSet).forEach(function(ph){ var st=phoneStats_(ph); redByPhone[ph]=st.red; redByPhone['_t'+ph]=st.red+st.sourced; });
@@ -1676,15 +1709,21 @@ async function autoAssign(){
   if(!phones.length){ toast('No phones have a target yet — assign red boxes first'); return; }
   var sourcers=(STATE.sourcers||[]).filter(function(s){ return String(s.active||'').toUpperCase()!=='FALSE'; }).sort(function(a,b){ return fnum(a.id)-fnum(b.id); });
   if(!sourcers.length){ toast('Tick the employees working today first'); return; }
-  var buckets=sourcers.map(function(s){ return { id:s.id, sum:0, phones:[] }; });
+  // weighted buckets: a 50% member accumulates workload twice as fast, so ends up with ~half the target
+  var buckets=sourcers.map(function(s){ var w=(ASSIGN_PORTIONS[s.id]||100)/100; return { id:s.id, sum:0, phones:[], w:(w>0?w:1) }; });
   phones.forEach(function(ph){
-    var best=buckets[0];
-    for(var i=1;i<buckets.length;i++){ if(buckets[i].sum<best.sum || (buckets[i].sum===best.sum && buckets[i].phones.length<best.phones.length)) best=buckets[i]; }
+    var best=buckets[0], bestScore=buckets[0].sum/buckets[0].w;
+    for(var i=1;i<buckets.length;i++){
+      var sc=buckets[i].sum/buckets[i].w;
+      if(sc<bestScore || (sc===bestScore && buckets[i].phones.length<best.phones.length)){ best=buckets[i]; bestScore=sc; }
+    }
     best.phones.push(ph); best.sum += (redByPhone[ph]||0);
   });
   buckets.forEach(function(b){ b.list=b.phones.sort(function(a,c){ return fnum(a)-fnum(c); }).join(', '); var s=(STATE.sourcers||[]).filter(function(x){ return String(x.id)===String(b.id); })[0]; if(s) s.phones=b.list; });
-  renderTargets();
-  try{ for(var i=0;i<buckets.length;i++){ await apiPost({ action:'sourcer_set', id:buckets[i].id, phones:buckets[i].list }); } toast('Phones auto-assigned across '+buckets.length+' employees'); }
+  closeAssign(); renderTargets();
+  var full=buckets.filter(function(b){return b.w>=1;}).length, part=buckets.length-full;
+  try{ for(var i=0;i<buckets.length;i++){ await apiPost({ action:'sourcer_set', id:buckets[i].id, phones:buckets[i].list }); }
+    toast('Phones assigned across '+buckets.length+' employees'+(part?(' ('+part+' on reduced share)'):'')); }
   catch(e){ toast('Save failed'); }
 }
 async function setSrc(va, field, val){
