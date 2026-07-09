@@ -571,6 +571,16 @@ button.promosel.has{border-color:rgba(255,107,26,.5);color:var(--o3)}
 var PORTAL_URL = "https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByOLL4TuRPKvtPh2rjY-b3rOJ5aBoIc8sOmO9kP/exec"; // for employee ID+PIN login
 var ALTR_URL   = "https://script.google.com/macros/s/AKfycbw_qxqgOi2ceuSgJBpSSNt1QXjGhHhSnCO4w9y4f21-SHlfY3m7YDxWiYbFjHZJxIFJHQ/exec"; // deployed altr-apps-script.gs /exec URL
 var ADMIN_PASS = "JMBeast_020298";
+/* Employee IDs granted ADMIN-level access to ALTR when they log in with their own ID + PIN.
+   Add a user's employee ID here (as it appears in the Employees sheet) to promote them.
+   Case-insensitive; whitespace ignored. */
+var ADMIN_IDS = [
+  "JMB006",
+];
+function isAdminId(eid){
+  var k=String(eid||'').trim().toUpperCase();
+  return ADMIN_IDS.some(function(x){ return String(x||'').trim().toUpperCase()===k; });
+}
 var DEFAULT_SOURCERS = [
   { name:'Escoreal, Chyrajane', target:22 },
   { name:'Pascual, Cherry Rose', target:20 },
@@ -758,7 +768,7 @@ async function doLogin(){
     if(data && data.error==='NOT_FOUND'){ err.textContent='Employee ID not found.'; err.style.display='block'; return; }
     if(data && (data.error==='SHEET_NOT_FOUND'||data.error==='BAD_SHEET_HEADERS')){ err.textContent='Login service is misconfigured (backend). Tell your admin.'; err.style.display='block'; return; }
     if(!data || data.error || !data.employee_id) throw new Error(data&&data.error?data.error:'bad');
-    enterApp(data, false);
+    enterApp(data, isAdminId(data.employee_id));
   }catch(e){ err.textContent='Couldn’t reach the login service. Check connection / try again.'; err.style.display='block'; }
   finally{ btn.disabled=false; btn.textContent='Sign in'; }
 }
