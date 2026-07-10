@@ -650,8 +650,15 @@ function onDrop(e, stage){
   // Moving to Interview: collect a schedule and email the applicant an invitation
   if(stage==='interview' && String(c.stage)!=='interview'){ openInterviewModal(c); return; }
   var wasHired=String(c.stage)==='hired';
+  var prevStage=String(c.stage||'').toLowerCase();
   c.stage=stage; renderBoard();
-  apiPost({action:'candidate_stage', id:id, stage:stage}).catch(function(){ toast('Save failed'); });
+  apiPost({action:'candidate_stage', id:id, stage:stage}).then(function(r){
+    if(stage==='rejected' && ['screening','assessment','interview','offer'].indexOf(prevStage)>=0){
+      if(r && r.emailed) toast('Moved to Rejected — decision email sent to '+(c.name||'the applicant')+'.');
+      else if(r && r.email_error) toast('Rejected, but email failed: '+r.email_error);
+      else toast('Moved to Rejected.');
+    }
+  }).catch(function(){ toast('Save failed'); });
   if(stage==='hired' && !wasHired){ toast('Moved to Hired — set up onboarding in the Onboarding tab.'); renderOnb(); }
 }
 
