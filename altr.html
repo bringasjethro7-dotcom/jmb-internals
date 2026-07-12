@@ -591,6 +591,7 @@ var ADMIN_PASS = "JMBeast_020298";
    Case-insensitive; whitespace ignored. */
 var ADMIN_IDS = [
   "JMB006",
+  "JMB013",
 ];
 function isAdminId(eid){
   var k=String(eid||'').trim().toUpperCase();
@@ -2325,10 +2326,28 @@ function qaPosterForPhone(phone){
   }
   return null;
 }
+/* The shift day runs 07:30 → 07:30 (PHT). Work out which window we are CURRENTLY in.
+   The old code always used "today 07:30 → tomorrow 07:30" — so if you opened the QA tab
+   before 07:30 (e.g. at 4 AM, reviewing the night's work) the window sat entirely in the
+   FUTURE and every account counted zero. Before the cutoff, the live window is the one
+   that started YESTERDAY. Also computed in PHT, not the reviewer's local timezone. */
+function qaShiftWindow(){
+  var p = new Date(Date.now() + 8*3600*1000);           // "now" in PHT, read via UTC getters
+  var y = p.getUTCFullYear(), m = p.getUTCMonth(), d = p.getUTCDate();
+  var minsNow = p.getUTCHours()*60 + p.getUTCMinutes();
+  if (minsNow < (7*60 + 30)) d -= 1;                    // before 07:30 → we're still in yesterday's shift
+  var start = new Date(Date.UTC(y, m, d));
+  var end   = new Date(Date.UTC(y, m, d + 1));
+  function fmt(dt){
+    return dt.getUTCFullYear() + '-' + _qaPad(dt.getUTCMonth()+1) + '-' + _qaPad(dt.getUTCDate());
+  }
+  return { from: fmt(start) + 'T07:30', to: fmt(end) + 'T07:30' };
+}
 function renderQA(){
   var f=$('qa-from'), t=$('qa-to');
-  if(f && !f.value){ var now=new Date(); f.value=_qaLocalDate(now)+'T07:30'; }
-  if(t && !t.value){ var n2=new Date(); var nd=new Date(n2.getFullYear(),n2.getMonth(),n2.getDate()+1); t.value=_qaLocalDate(nd)+'T07:30'; }
+  var w = qaShiftWindow();
+  if(f && !f.value) f.value = w.from;
+  if(t && !t.value) t.value = w.to;
   qaBuildScope();
 }
 function qaBuildScope(){
@@ -2344,6 +2363,12 @@ async function runReelsQA(){
   if(!fromV || !toV){ toast('Pick a start and end time.'); return; }
   var win={ start:qaParsePHT(fromV), end:qaParsePHT(toV) };
   if(!(win.end>win.start)){ toast('End must be after start.'); return; }
+  // A window that hasn't started yet would return 0 for everyone and look like the whole
+  // team posted nothing. Say so plainly instead of silently reporting zeros.
+  if(win.start > Date.now()){
+    toast('That window starts in the future — nothing could have been posted yet.');
+    return;
+  }
   var scope=$('qa-scope').value;
   var accts=((STATE&&STATE.accounts)||[]).filter(function(a){ return (!a.status||a.status==='active') && String(a.handle||'').trim()!==''; });
   if(scope!=='all'){
@@ -2356,7 +2381,7 @@ async function runReelsQA(){
   _qaRunning=true;
   var box=$('qa-progress'), fill=$('qa-progress-fill'), lab=$('qa-progress-label');
   if(box) box.style.display='block';
-  var perPoster={}, perAccount=[], ok=0, fail=0, rl=0, consec=0, stopped=false, total=0;
+  var perPoster={}, perAccount=[], ok=0, fail=0, rl=0, consec=0, stopped=false, total=0, noTs=0;
   for(var i=0;i<accts.length;i++){
     var a=accts[i];
     if(lab) lab.textContent='Scanning '+(i+1)+'/'+accts.length+' — @'+a.handle+(rl?(' · '+rl+' rate-limited'):'');
@@ -2366,7 +2391,13 @@ async function runReelsQA(){
       var r=await apiPost({ action:'ig_reels', handle:a.handle, amount:48 });
       if(r && r.ok && r.reels){
         fetched=true; ok++; consec=0;
-        r.reels.forEach(function(x){ if(x && x.ts && x.ts>=win.start && x.ts<win.end) cnt++; });
+        r.reels.forEach(function(x){
+          if(!x) return;
+          // A reel with no readable timestamp can't be placed in the window. Count how many
+          // so an undercount shows up as a warning instead of passing as a real zero.
+          if(!x.ts){ noTs++; return; }
+          if(x.ts>=win.start && x.ts<win.end) cnt++;
+        });
       } else { fail++; if(r && Number(r.code)===429){ rl++; consec++; } }
     }catch(e){ fail++; }
     if(fetched){
@@ -2384,7 +2415,7 @@ async function runReelsQA(){
   if(fill) fill.style.width='100%';
   setTimeout(function(){ if(box) box.style.display='none'; }, 1400);
   _qaRunning=false;
-  _qaLast={ fromV:fromV, toV:toV, perPoster:perPoster, perAccount:perAccount, meta:{ ok:ok, fail:fail, rl:rl, total:total, stopped:stopped } };
+  _qaLast={ fromV:fromV, toV:toV, perPoster:perPoster, perAccount:perAccount, meta:{ ok:ok, fail:fail, rl:rl, total:total, stopped:stopped, noTs:noTs } };
   qaRenderResults();
 }
 var _qaLast=null;
@@ -2399,7 +2430,7 @@ function qaRenderResults(){
   var rangeLabel=qaFmtRange(_qaLast.fromV)+' → '+qaFmtRange(_qaLast.toV);
   var perDay=qaPerDay();
   var st=$('qa-stats');
-  if(st) st.innerHTML = statCard('Reels in range', meta.total, 'g')+statCard('Accounts scanned', meta.ok, '')+statCard('Rate-limited', meta.rl, meta.rl?'a':'')+(meta.stopped?statCard('Stopped','yes','r'):'');
+  if(st) st.innerHTML = statCard('Reels in range', meta.total, 'g')+statCard('Accounts scanned', meta.ok, '')+statCard('Failed', meta.fail, meta.fail?'r':'')+statCard('Rate-limited', meta.rl, meta.rl?'a':'')+(meta.noTs?statCard('No timestamp', meta.noTs, 'a'):'')+(meta.stopped?statCard('Stopped','yes','r'):'');
   var list=Object.keys(perPoster).map(function(k){ return perPoster[k]; }).sort(function(a,b){ return b.count-a.count; });
   var grp = list.length ? ('<table class="srctable"><thead><tr><th>Poster</th><th>Accounts</th><th>Expected</th><th>Actual reels</th><th>Accuracy</th></tr></thead><tbody>'
     + list.map(function(p){
