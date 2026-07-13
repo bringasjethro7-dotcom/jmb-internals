@@ -2671,6 +2671,15 @@ async function runReelsQA(){
       phs=poster?String(poster.phones||'').split(',').map(function(x){return x.trim();}).filter(Boolean):[]; }
     accts=accts.filter(function(a){ return phs.indexOf(String(a.phone))>=0; });
   }
+  // Only scan accounts RECORDED as posted on that day (falls back to all if backend not yet redeployed)
+  try{
+    var pr=await apiPost({ action:'posted_accounts', date:String(fromV).slice(0,10) });
+    if(pr && pr.ok && pr.accounts){
+      var pset={}; pr.accounts.forEach(function(x){ pset[[x.phone,x.user,x.acct,x.handle].join('|')]=1; });
+      accts=accts.filter(function(a){ return pset[[a.phone,a.user,a.acct,a.handle].join('|')]; });
+      if(!accts.length){ toast('No accounts were recorded as posted on '+String(fromV).slice(0,10)+'.'); return; }
+    }
+  }catch(e){}
   if(!accts.length){ toast('No active accounts in scope.'); return; }
   if(!confirm('Count reels posted between '+qaFmtRange(fromV)+' and '+qaFmtRange(toV)+' (PHT) for '+accts.length+' account'+(accts.length>1?'s':'')+'?\nEach account = 1 RapidAPI call.')) return;
   _qaRunning=true;
@@ -2696,6 +2705,7 @@ async function runReelsQA(){
       } else { fail++; if(r && Number(r.code)===429){ rl++; consec++; } }
     }catch(e){ fail++; }
     if(fetched){
+      var _cap=qaPerDay(); if(cnt>_cap) cnt=_cap;   // cap each account at the per-day target (e.g. 4)
       total+=cnt;
       var poster2=qaPosterForPhone(a.phone);
       var pid=poster2?String(poster2.id):'__none';
