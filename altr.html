@@ -635,12 +635,15 @@ body::after{ content:""; position:fixed; left:-120px; top:-120px; width:380px; h
 <div id="eod-settings-modal" style="display:none;position:fixed;inset:0;z-index:9600;align-items:center;justify-content:center;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);padding:16px;">
   <div style="width:480px;max-width:100%;background:var(--bg2,#ffffff);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 30px 90px rgba(0,0,0,.6);">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-      <div style="font-size:16px;font-weight:800;color:var(--t1);">⏰ Auto end-of-day</div>
+      <div style="font-size:16px;font-weight:800;color:var(--t1);">⏰ Automation</div>
       <button class="ghost" onclick="closeEodSettings()">✕ Close</button>
     </div>
-    <div style="color:var(--t2);font-size:12.5px;line-height:1.5;margin-bottom:14px">Runs the end-of-day count automatically each night (Manila) and emails the summary. Same effect as pressing <b>End of day</b> — it records completion and clears posted items from the sourcing queue.</div>
-    <label style="display:flex;align-items:center;gap:10px;color:var(--t1);font-size:14px;margin-bottom:14px;cursor:pointer">
+    <div style="color:var(--t2);font-size:12.5px;line-height:1.5;margin-bottom:14px">Runs the end-of-day count automatically each night (Manila) and emails the summary — same effect as pressing <b>End of day</b>. The QA option scans yesterday's 07:30→07:30 shift each morning and emails the results (incl. the ≤2-reel investigation list).</div>
+    <label style="display:flex;align-items:center;gap:10px;color:var(--t1);font-size:14px;margin-bottom:12px;cursor:pointer">
       <input type="checkbox" id="eod-auto"> <span>Enable automatic end-of-day</span>
+    </label>
+    <label style="display:flex;align-items:center;gap:10px;color:var(--t1);font-size:14px;margin-bottom:14px;cursor:pointer">
+      <input type="checkbox" id="qa-auto"> <span>Auto-run QA at 10 AM PHT (previous 07:30→07:30 shift)</span>
     </label>
     <div style="margin-bottom:12px">
       <div style="color:var(--t3);font-size:12px;margin-bottom:5px">Send summary to (comma-separated emails)</div>
@@ -2712,7 +2715,7 @@ async function runReelsQA(){
       var pname=poster2?(poster2.name||('Poster '+poster2.id)):'Unassigned';
       if(!perPoster[pid]) perPoster[pid]={ id:pid, name:pname, count:0, accounts:0 };
       perPoster[pid].count+=cnt; perPoster[pid].accounts+=1;
-      perAccount.push({ handle:a.handle, phone:a.phone, poster:pname, count:cnt });
+      perAccount.push({ handle:a.handle, phone:a.phone, user:a.user, acct:a.acct, poster:pname, count:cnt });
     }
     if(consec>=6){ stopped=true; break; }
     await new Promise(function(res){ setTimeout(res, 900); });
@@ -2723,6 +2726,26 @@ async function runReelsQA(){
   _qaLast={ fromV:fromV, toV:toV, perPoster:perPoster, perAccount:perAccount, meta:{ ok:ok, fail:fail, rl:rl, total:total, stopped:stopped, noTs:noTs } };
   qaRenderResults();
   if(!stopped) qaSaveRun();   // record completed runs for the poster scorecard (skip runs cut short by rate-limit)
+  qaSyncInvestigations();     // update the persistent investigation list (adds ≤2, clears recovered >2)
+}
+/* push this run's per-account counts to the persistent investigation store, then show the open list */
+async function qaSyncInvestigations(){
+  if(!_qaLast) return;
+  var payload=(_qaLast.perAccount||[]).map(function(a){ return { phone:a.phone,user:a.user,acct:a.acct,handle:a.handle,poster:a.poster,count:a.count }; });
+  try{
+    var r=await apiPost({ action:'qa_investigate_update', date:String(_qaLast.fromV).slice(0,10), accounts:JSON.stringify(payload) });
+    if(r && r.ok && r.open){ renderInvestigationList(r.open); }
+  }catch(e){ /* backend not redeployed yet — keep this run's flagged list as shown */ }
+}
+function renderInvestigationList(open){
+  var box=$('qa-investigate'); if(!box) return;
+  var numEl=$('qa-inv-num'); if(numEl) numEl.textContent=open.length;
+  if(!open.length){ box.innerHTML='<div style="font-weight:700;margin:1.1rem 0 .4rem;font-size:14px;color:#16a34a">✓ No accounts currently under investigation</div>'; return; }
+  var invBadge='<span style="font-size:9.5px;font-weight:700;letter-spacing:.04em;color:#dc2626;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);border-radius:20px;padding:2px 7px;margin-left:7px">INVESTIGATE</span>';
+  box.innerHTML='<div style="font-weight:700;margin:1.1rem 0 .4rem;font-size:14px;color:#dc2626">⚠ Under investigation — '+open.length+' account'+(open.length>1?'s':'')+' <span style="font-weight:500;color:var(--t3);font-size:12px">(≤2 reels · auto-clears when a later scan shows &gt;2)</span></div>'
+    +'<table class="srctable"><thead><tr><th>Handle</th><th>Phone</th><th>Poster</th><th>Last reels</th><th>Since</th></tr></thead><tbody>'
+    +open.map(function(r){ return '<tr style="background:rgba(239,68,68,.05)"><td>@'+esc(r.handle)+'</td><td>P'+esc(r.phone)+'</td><td>'+esc(r.poster||'')+'</td><td style="font-weight:700;color:#dc2626">'+esc(r.count)+invBadge+'</td><td style="color:var(--t3);font-size:11.5px">'+esc(String(r.added_at||''))+'</td></tr>'; }).join('')
+    +'</tbody></table>';
 }
 /* persist this run's per-poster accuracy so the scorecard can chart trends over time */
 async function qaSaveRun(){
@@ -2797,6 +2820,7 @@ async function openEodSettings(){
     $('eod-auto').checked=!!j.auto;
     $('eod-emails').value=j.emails||'';
     $('eod-hour').value=(j.hour==null||isNaN(j.hour))?22:j.hour;
+    try{ var rq=await fetch(ALTR_URL+'?action=qa_auto_get'); var jq=await rq.json(); $('qa-auto').checked=!!(jq&&jq.auto); }catch(_e){}
     if(s) s.textContent='';
   }catch(e){ if(s) s.textContent='Couldn’t load settings.'; }
 }
@@ -2806,7 +2830,8 @@ async function saveEodSettings(){
   var payload={ action:'eod_settings_set', auto:($('eod-auto').checked?'1':'0'), emails:$('eod-emails').value, hour:$('eod-hour').value };
   try{
     var r=await apiPost(payload);
-    if(r && r.ok){ if(s) s.textContent=r.trigger||'Saved.'; toast('Auto-EOD settings saved'); }
+    var rq=await apiPost({ action:'qa_auto_set', auto:($('qa-auto').checked?'1':'0') });
+    if(r && r.ok){ if(s) s.textContent=(r.trigger||'Saved.')+(rq&&rq.trigger?(' · '+rq.trigger):''); toast('Automation settings saved'); }
     else { if(s) s.textContent=(r&&r.error)||'Save failed'; }
   }catch(e){ if(s) s.textContent='Save failed'; }
 }
@@ -2829,8 +2854,11 @@ function qaRenderResults(){
   var perPoster=_qaLast.perPoster, perAccount=_qaLast.perAccount, meta=_qaLast.meta;
   var rangeLabel=qaFmtRange(_qaLast.fromV)+' → '+qaFmtRange(_qaLast.toV);
   var perDay=qaPerDay();
+  // accounts that posted 2 or fewer reels are flagged for investigation
+  var flagged=perAccount.filter(function(a){ return Number(a.count)<=2; }).sort(function(a,b){ return a.count-b.count || String(a.handle).localeCompare(String(b.handle)); });
   var st=$('qa-stats');
-  if(st) st.innerHTML = statCard('Reels in range', meta.total, 'g')+statCard('Accounts scanned', meta.ok, '')+statCard('Failed', meta.fail, meta.fail?'r':'')+statCard('Rate-limited', meta.rl, meta.rl?'a':'')+(meta.noTs?statCard('No timestamp', meta.noTs, 'a'):'')+(meta.stopped?statCard('Stopped','yes','r'):'');
+  var invCard='<div class="stat"><div class="lab">Under investigation</div><div class="num '+(flagged.length?'r':'')+'" id="qa-inv-num">'+flagged.length+'</div></div>';
+  if(st) st.innerHTML = statCard('Reels in range', meta.total, 'g')+statCard('Accounts scanned', meta.ok, '')+invCard+statCard('Failed', meta.fail, meta.fail?'r':'')+statCard('Rate-limited', meta.rl, meta.rl?'a':'')+(meta.noTs?statCard('No timestamp', meta.noTs, 'a'):'')+(meta.stopped?statCard('Stopped','yes','r'):'');
   var list=Object.keys(perPoster).map(function(k){ return perPoster[k]; }).sort(function(a,b){ return b.count-a.count; });
   var grp = list.length ? ('<table class="srctable"><thead><tr><th>Poster</th><th>Accounts</th><th>Expected</th><th>Actual reels</th><th>Accuracy</th></tr></thead><tbody>'
     + list.map(function(p){
@@ -2840,13 +2868,21 @@ function qaRenderResults(){
         return '<tr><td style="color:var(--t1)">'+esc(p.name)+'</td><td>'+p.accounts+'</td><td style="color:var(--t2)">'+expected+'</td><td style="font-weight:700;color:var(--o3)">'+p.count+'</td><td>'+accCell+'</td></tr>';
       }).join('')
     + '</tbody></table>') : '<div class="muted">No reels found for that day'+(meta.stopped?' (run stopped early on rate-limit)':'')+'.</div>';
+  // ⚠ investigation list — accounts with ≤2 reels, shown up front (not hidden in the details)
+  var invBadge='<span style="font-size:9.5px;font-weight:700;letter-spacing:.04em;color:#dc2626;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);border-radius:20px;padding:2px 7px;margin-left:7px">INVESTIGATE</span>';
+  var flagHtml = flagged.length ? (
+    '<div style="font-weight:700;margin:1.1rem 0 .4rem;font-size:14px;color:#dc2626">⚠ For investigation — '+flagged.length+' account'+(flagged.length>1?'s':'')+' with 2 or fewer reels</div>'
+    + '<table class="srctable"><thead><tr><th>Handle</th><th>Phone</th><th>Poster</th><th>Reels</th></tr></thead><tbody>'
+    + flagged.map(function(a){ return '<tr style="background:rgba(239,68,68,.05)"><td>@'+esc(a.handle)+'</td><td>P'+esc(a.phone)+'</td><td>'+esc(a.poster)+'</td><td style="font-weight:700;color:#dc2626">'+a.count+invBadge+'</td></tr>'; }).join('')
+    + '</tbody></table>'
+  ) : '';
   var accSorted=perAccount.slice().sort(function(a,b){ return b.count-a.count; });
   var acc2 = '<details style="margin-top:1rem"><summary style="cursor:pointer;color:var(--t2);font-size:13px">Per-account breakdown ('+perAccount.length+' accounts)</summary>'
     + '<table class="srctable" style="margin-top:.5rem"><thead><tr><th>Handle</th><th>Phone</th><th>Poster</th><th>Reels</th></tr></thead><tbody>'
-    + accSorted.map(function(a){ return '<tr><td>@'+esc(a.handle)+'</td><td>P'+esc(a.phone)+'</td><td>'+esc(a.poster)+'</td><td style="font-weight:700;color:'+(a.count>0?'#4ade80':'var(--t3)')+'">'+a.count+'</td></tr>'; }).join('')
+    + accSorted.map(function(a){ return '<tr'+(Number(a.count)<=2?' style="background:rgba(239,68,68,.04)"':'')+'><td>@'+esc(a.handle)+'</td><td>P'+esc(a.phone)+'</td><td>'+esc(a.poster)+'</td><td style="font-weight:700;color:'+(Number(a.count)<=2?'#dc2626':'#16a34a')+'">'+a.count+'</td></tr>'; }).join('')
     + '</tbody></table></details>';
   var importBtn = (ISADMIN && list.length) ? '<button class="adminbtn" style="margin:.1rem 0 .8rem" onclick="qaImportWeekly()">⬆ Import accuracy to weekly QA</button>' : '';
-  var res=$('qa-results'); if(res) res.innerHTML='<div style="font-weight:700;margin:.4rem 0 .3rem;font-size:15px">Reels posted '+esc(rangeLabel)+' (PHT) — by poster</div><div style="color:var(--t3);font-size:12px;margin-bottom:.7rem">expected = accounts × '+perDay+'/day · accuracy = actual ÷ expected</div>'+importBtn+grp+acc2;
+  var res=$('qa-results'); if(res) res.innerHTML='<div style="font-weight:700;margin:.4rem 0 .3rem;font-size:15px">Reels posted '+esc(rangeLabel)+' (PHT) — by poster</div><div style="color:var(--t3);font-size:12px;margin-bottom:.7rem">expected = accounts × '+perDay+'/day · accuracy = actual ÷ expected · ≤2 reels = flagged for investigation</div>'+importBtn+grp+'<div id="qa-investigate">'+flagHtml+'</div>'+acc2;
 }
 function _qnorm(s){ return String(s||'').toLowerCase().replace(/\s+/g,' ').trim(); }
 function qaMatchEmployee(name, emps){
