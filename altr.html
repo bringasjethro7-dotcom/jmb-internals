@@ -607,9 +607,10 @@ body::after{ content:""; position:fixed; left:-120px; top:-120px; width:380px; h
     <!-- QA CHECKER — reels posted per day, grouped by poster -->
     <div class="page" id="page-qa">
       <div class="toolbar">
-        <label style="color:var(--t2);font-size:12px;display:flex;align-items:center;gap:5px">From <input type="datetime-local" class="dt" id="qa-from"></label>
+        <label style="color:var(--t2);font-size:12px;display:flex;align-items:center;gap:5px">From <input type="datetime-local" class="dt" id="qa-from" onchange="qaOnFromChange()"></label>
         <label style="color:var(--t2);font-size:12px;display:flex;align-items:center;gap:5px">To <input type="datetime-local" class="dt" id="qa-to"></label>
         <select class="sel" id="qa-scope"><option value="all">All posters</option></select>
+        <span id="qa-asgn-note" style="display:none;font-size:11.5px;color:var(--teal-dd,#0f766e);background:rgba(20,184,166,.1);border:1px solid rgba(20,184,166,.3);border-radius:20px;padding:4px 10px;white-space:nowrap"></span>
         <label style="color:var(--t2);font-size:13px;display:flex;align-items:center;gap:6px">Reels/acct/day <input id="qa-perday" type="number" min="1" value="4" onchange="if(_qaLast)qaRenderResults()" style="width:54px;background:var(--bg2);border:1px solid var(--line);border-radius:8px;color:var(--t1);padding:6px 8px;font-size:13px;text-align:center;font-family:inherit"></label>
         <button class="adminbtn" onclick="runReelsQA()">▶ Run reels count</button>
         <button class="adminbtn" onclick="openScorecard()">📊 Scorecard</button>
@@ -1100,10 +1101,14 @@ function renderPosting(){
   accts.forEach(function(a){ if(a.status && a.status!=='active') return; var r=map[postKey(a)]; if(!r) return; var n=boxesFor('post',a); green+=countAt(r.cells,n,2); orange+=countAt(r.cells,n,1); if(r.va_code===MYVA) mine+=countAt(r.cells,n,2); });
   var postable = accts.filter(function(a){ return (!a.status||a.status==='active'); }).length;
   var pct = postable ? Math.round(green/postable*100) : 0;
+  // distinct notes entered today (identical notes count once); resets daily with _NOTEMAP
+  var _noteSet={}; Object.keys(_NOTEMAP).forEach(function(k){ var t=String(_NOTEMAP[k]||'').trim().toLowerCase(); if(t) _noteSet[t]=1; });
+  var distinctNotes=Object.keys(_noteSet).length;
   $('post-stats').innerHTML=
     statCard('Posted', green, 'g')+
     statCard('Target', postable, 'o')+
-    statCard('Completion', pct+'%', pct>=100?'g':(pct>=50?'a':'r'));
+    statCard('Completion', pct+'%', pct>=100?'g':(pct>=50?'a':'r'))+
+    statCard("Today's notes", distinctNotes, distinctNotes>0?'g':'');
   var rows=filterAccounts('post', accts, map, ff, q);
   if(!rows.length){ $('posting').innerHTML='<div class="muted">No accounts match.</div>'; return; }
   var activeRows=rows.filter(function(a){ return !a.status||a.status==='active'; });
@@ -2528,12 +2533,14 @@ async function loadHistory(){
   $('hist-src').innerHTML='<div class="muted">Loading…</div>'; $('hist-post').innerHTML='';
   try{
     var d=await apiPost({ action:'daily_history', date:wanted });
-    if(!d||!d.ok){ $('hist-src').innerHTML='<div class="muted">Could not load history.</div>'; return; }
+    if(!d){ $('hist-src').innerHTML='<div class="muted">Could not load history (no response). Redeploy the Apps Script as a New version.</div>'; return; }
+    if(d.error){ $('hist-src').innerHTML='<div class="muted">Could not load history: '+esc(d.error)+'</div>'; return; }
     // date dropdown
     if(sel){ var opts=(d.dates||[]); if(!opts.length) opts=[d.date];
       sel.innerHTML=opts.map(function(dt){ return '<option'+(dt===d.date?' selected':'')+'>'+esc(dt)+'</option>'; }).join(''); }
     renderHistory(d);
-  }catch(e){ $('hist-src').innerHTML='<div class="muted">Network error.</div>'; }
+    if(d.err){ var hs=$('hist-src'); if(hs) hs.insertAdjacentHTML('afterbegin','<div class="muted" style="margin-bottom:8px">Note: '+esc(d.err)+'</div>'); }
+  }catch(e){ $('hist-src').innerHTML='<div class="muted">Network error: '+esc(String(e&&e.message||e))+'</div>'; }
 }
 function _histTable(rows, cols){
   if(!rows.length) return '<div class="muted">No records for this date.</div>';
@@ -2566,13 +2573,43 @@ function _qaLocalDate(d){ return d.getFullYear()+'-'+_qaPad(d.getMonth()+1)+'-'+
 /* a datetime-local value (no tz) is read as PHT so the window is consistent for any reviewer */
 function qaParsePHT(v){ return v ? Date.parse(v.length<=16 ? (v+':00+08:00') : (v+'+08:00')) : NaN; }
 function qaFmtRange(v){ return String(v||'').replace('T',' '); }
+/* Historical assignment map for a chosen QA date: { phoneStr: {id,name} }.
+   null = use the CURRENT live posting-team assignment. Loaded from that date's
+   end-of-day history so a back-dated scan credits whoever held the phones THEN. */
+var _qaHistAsgn=null, _qaHistDate='';
+async function qaLoadAssignments(date){
+  _qaHistAsgn=null; _qaHistDate='';
+  var today=(STATE&&(STATE.today||STATE.date))||'';
+  if(!date || date===today) { qaAsgnNote(''); return; }   // today → live assignment
+  try{
+    var d=await apiPost({ action:'daily_history', date:date });
+    if(d && d.ok && d.posting && d.posting.length){
+      var m={};
+      d.posting.forEach(function(r){
+        String(r.phones||'').split(/[\s,]+/).filter(Boolean).forEach(function(ph){
+          m[String(ph)]={ id:String(r.poster_id||r.id||''), name:String(r.name||('Poster '+(r.poster_id||''))) };
+        });
+      });
+      if(Object.keys(m).length){ _qaHistAsgn=m; _qaHistDate=date; qaAsgnNote('Using assignments from '+date+' (from history)'); return; }
+    }
+    qaAsgnNote('No saved assignments for '+date+' — using current');
+  }catch(e){ qaAsgnNote('Couldn’t load '+date+' assignments — using current'); }
+}
+function qaAsgnNote(txt){ var el=$('qa-asgn-note'); if(el){ el.textContent=txt||''; el.style.display=txt?'inline':'none'; } }
 function qaPosterForPhone(phone){
+  if(_qaHistAsgn){ return _qaHistAsgn[String(phone)] || null; }   // historical attribution
   var posters=(STATE&&STATE.posters)||[];
   for(var i=0;i<posters.length;i++){
     var phs=String(posters[i].phones||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
     if(phs.indexOf(String(phone))>=0) return posters[i];
   }
   return null;
+}
+/* reload assignments + scope when the QA From date changes */
+async function qaOnFromChange(){
+  var fromV=($('qa-from')||{}).value||'';
+  await qaLoadAssignments(fromV.slice(0,10));
+  qaBuildScope();
 }
 /* The shift day runs 07:30 → 07:30 (PHT). Work out which window we are CURRENTLY in.
    The old code always used "today 07:30 → tomorrow 07:30" — so if you opened the QA tab
@@ -2600,9 +2637,15 @@ function renderQA(){
 }
 function qaBuildScope(){
   var sel=$('qa-scope'); if(!sel) return;
-  var cur=sel.value;
-  var posters=((STATE&&STATE.posters)||[]).filter(function(p){ return String(p.active||'').toUpperCase()!=='FALSE'; });
-  sel.innerHTML='<option value="all">All posters</option>'+posters.map(function(p){ return '<option value="'+esc(p.id)+'">'+esc(p.name||('Poster '+p.id))+'</option>'; }).join('');
+  var cur=sel.value, list;
+  if(_qaHistAsgn){   // posters as they were assigned on the chosen history date
+    var byId={}; Object.keys(_qaHistAsgn).forEach(function(ph){ var p=_qaHistAsgn[ph]; var k=p.id||p.name; byId[k]={id:p.id||k,name:p.name}; });
+    list=Object.keys(byId).map(function(k){ return byId[k]; });
+  } else {
+    list=((STATE&&STATE.posters)||[]).filter(function(p){ return String(p.active||'').toUpperCase()!=='FALSE'; })
+      .map(function(p){ return { id:p.id, name:p.name||('Poster '+p.id) }; });
+  }
+  sel.innerHTML='<option value="all">All posters</option>'+list.map(function(p){ return '<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>'; }).join('');
   if(cur) sel.value=cur;
 }
 async function runReelsQA(){
@@ -2617,11 +2660,15 @@ async function runReelsQA(){
     toast('That window starts in the future — nothing could have been posted yet.');
     return;
   }
+  // make sure attribution matches the assignment in effect on the scanned date
+  await qaLoadAssignments(String(fromV).slice(0,10));
   var scope=$('qa-scope').value;
   var accts=((STATE&&STATE.accounts)||[]).filter(function(a){ return (!a.status||a.status==='active') && String(a.handle||'').trim()!==''; });
   if(scope!=='all'){
-    var poster=((STATE&&STATE.posters)||[]).filter(function(p){ return String(p.id)===String(scope); })[0];
-    var phs=poster?String(poster.phones||'').split(',').map(function(x){return x.trim();}).filter(Boolean):[];
+    var phs;
+    if(_qaHistAsgn){ phs=Object.keys(_qaHistAsgn).filter(function(ph){ return String(_qaHistAsgn[ph].id)===String(scope); }); }
+    else { var poster=((STATE&&STATE.posters)||[]).filter(function(p){ return String(p.id)===String(scope); })[0];
+      phs=poster?String(poster.phones||'').split(',').map(function(x){return x.trim();}).filter(Boolean):[]; }
     accts=accts.filter(function(a){ return phs.indexOf(String(a.phone))>=0; });
   }
   if(!accts.length){ toast('No active accounts in scope.'); return; }
