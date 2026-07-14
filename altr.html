@@ -1055,13 +1055,28 @@ window.openInvestigate=function(){
   var m=$('investigate-modal'); if(!m) return; m.style.display='flex';
   var b=$('investigate-body'); if(b) b.innerHTML='<div class="muted">Loading…</div>';
   fetch(ALTR_URL+'?action=qa_investigations&_='+Date.now()).then(function(r){return r.json();})
-    .then(function(d){ renderInvestigateModal((d&&d.open)||[]); })
+    .then(function(d){
+      // Don't silently show "all clear" when the backend actually errored — that's how a broken
+      // route looked like a clean bill of health.
+      if(!d || !d.ok){
+        var e=$('investigate-body');
+        if(e) e.innerHTML='<div style="font-weight:700;color:#dc2626;font-size:13.5px;">Couldn’t load the investigation list</div>'+
+          '<div class="muted" style="margin-top:5px;font-size:12px;">'+esc((d&&d.error)||'No response from the backend')+
+          ' — redeploy the ALTR Apps Script as a <b>New version</b>.</div>';
+        return;
+      }
+      renderInvestigateModal(d.open||[]);
+    })
     .catch(function(){ var e=$('investigate-body'); if(e) e.innerHTML='<div class="muted">Couldn’t load — redeploy the Apps Script if this persists.</div>'; });
 };
 window.closeInvestigate=function(){ var m=$('investigate-modal'); if(m) m.style.display='none'; };
 function renderInvestigateModal(open){
   var b=$('investigate-body'); if(!b) return;
-  if(!open.length){ b.innerHTML='<div style="font-weight:700;color:#16a34a;font-size:14px;padding:8px 0;">✓ No accounts under investigation right now</div>'; return; }
+  if(!open.length){
+    b.innerHTML='<div style="font-weight:700;color:#16a34a;font-size:14px;padding:8px 0;">✓ No accounts under investigation right now</div>'+
+      '<div class="muted" style="font-size:11.5px;">This list is filled by the QA Checker. If you haven’t run a QA scan since the last deploy, run one — flagged accounts are written when the scan finishes.</div>';
+    return;
+  }
   var inv='<span style="font-size:9.5px;font-weight:700;letter-spacing:.04em;color:#dc2626;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.4);border-radius:20px;padding:2px 7px;margin-left:6px">INVESTIGATE</span>';
   b.innerHTML='<div style="font-weight:700;font-size:13.5px;color:#dc2626;margin-bottom:8px;">'+open.length+' account'+(open.length>1?'s':'')+' flagged</div>'+
     '<table class="srctable"><thead><tr><th>Handle</th><th>Phone</th><th>Poster</th><th>Last reels</th><th>Since</th></tr></thead><tbody>'+
