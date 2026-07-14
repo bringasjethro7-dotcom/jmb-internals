@@ -8,14 +8,27 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0b0e14;--bg2:#0d1117;--card:#151b24;--card2:#1b222d;--line:rgba(255,255,255,.09);
- --o1:#ff6b1a;--o2:#e83d00;--t1:#e8eaf0;--t2:#9aa3b2;--t3:#5a6072;--green:#34d399;--red:#f87171;--blue:#38bdf8;--amber:#fbbf24;}
+/* ── LIGHT THEME ──────────────────────────────────────────────────────────────
+   Everything in this file draws from these six surface/text vars, so the whole tool
+   flips by redefining them. Accents (JMB orange) are unchanged; the status colours are
+   darkened so they still read as green/red/amber against white instead of glowing. */
+:root{--bg:#f4f6fa;--bg2:#ffffff;--card:#ffffff;--card2:#f1f4f9;--line:rgba(15,23,42,.10);
+ --o1:#ff6b1a;--o2:#e83d00;--o3:#c2410c;
+ --t1:#0f172a;--t2:#475569;--t3:#94a3b8;
+ --green:#15803d;--red:#dc2626;--blue:#0284c7;--amber:#b45309;
+ --shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px -12px rgba(15,23,42,.12);
+ --shadow-lg:0 20px 50px -20px rgba(15,23,42,.25);}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t1);min-height:100vh;font-size:14px}
+body{font-family:'Inter',sans-serif;color:var(--t1);min-height:100vh;font-size:14px;
+  background:
+    radial-gradient(1100px 520px at 12% -8%, rgba(255,107,26,.07), transparent 60%),
+    radial-gradient(900px 480px at 92% 0%, rgba(56,189,248,.06), transparent 60%),
+    var(--bg);
+  background-attachment:fixed;}
 button{font-family:inherit;cursor:pointer}
 .mono{font-family:'JetBrains Mono',monospace}
 #signin{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,rgba(255,107,26,.12),transparent 60%),var(--bg);z-index:50;padding:16px}
-.sicard{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:32px 28px;width:340px;max-width:100%;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.sicard{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:32px 28px;width:340px;max-width:100%;text-align:center;box-shadow:var(--shadow-lg)}
 .sicard h1{font-family:'Rajdhani',sans-serif;font-size:24px;letter-spacing:.04em;margin-bottom:2px}
 .sicard h1 b{color:var(--o1)}
 .sicard p{color:var(--t2);font-size:12.5px;margin-bottom:16px}
@@ -29,7 +42,7 @@ button{font-family:inherit;cursor:pointer}
 .btn.ghost:hover{color:var(--t1);border-color:var(--o1)}
 .btn.tiny{padding:3px 9px;font-size:11px;border-radius:7px}
 .err{color:var(--red);font-size:12.5px;margin-top:4px;display:none}
-header{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);background:rgba(13,17,23,.85);position:sticky;top:0;z-index:20;backdrop-filter:blur(10px)}
+header{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.82);position:sticky;top:0;z-index:20;backdrop-filter:blur(10px)}
 .logo{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;letter-spacing:.06em}
 .logo b{color:var(--o1)}
 .spacer{flex:1}
@@ -94,7 +107,7 @@ textarea.note:focus{border-color:var(--o1)}
 .slrow b{color:var(--t1)}
 .pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(56,189,248,.15);color:var(--blue)}
 .empty{color:var(--t3);font-size:12.5px;padding:8px 0}
-#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card2);border:1px solid var(--line);color:var(--t1);padding:11px 18px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:.25s;z-index:60;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card2);border:1px solid var(--line);color:var(--t1);padding:11px 18px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:.25s;z-index:60;box-shadow:0 12px 40px rgba(15,23,42,.18)}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 /* view nav */
 .nav{display:flex;gap:6px}
@@ -113,6 +126,24 @@ textarea.note:focus{border-color:var(--o1)}
 .wkcell{display:inline-flex;align-items:center;justify-content:center;width:46px;height:31px;border-radius:8px;font-weight:800;font-size:12px;border:1px solid var(--line);background:var(--card2);color:var(--t3)}
 .wkcell.done{background:rgba(52,211,153,.16);color:var(--green);border-color:rgba(52,211,153,.5)}
 .wkcell.overdue{background:rgba(248,113,113,.16);color:var(--red);border-color:rgba(248,113,113,.5)}
+/* Editable weekly score box (admins). Same footprint as .wkcell so the grid doesn't shift. */
+.wkin{width:52px;height:31px;border-radius:8px;font-weight:800;font-size:12px;text-align:center;
+  border:1px solid var(--line);background:var(--card2);color:var(--t1);font-family:inherit;outline:none;
+  padding:0 2px;transition:border-color .15s,background .15s}
+.wkin::placeholder{color:var(--t3);font-weight:800}
+.wkin:hover{border-color:var(--o1)}
+.wkin:focus{border-color:var(--o1);background:var(--card);box-shadow:0 0 0 3px rgba(255,107,26,.15)}
+.wkin.done{background:rgba(52,211,153,.16);color:var(--green);border-color:rgba(52,211,153,.5)}
+.wkin.overdue{background:rgba(248,113,113,.16);color:var(--red);border-color:rgba(248,113,113,.5)}
+.wkin:disabled{opacity:.55;cursor:wait}
+/* hide the number spinners — they're noise at this size */
+.wkin::-webkit-outer-spin-button,.wkin::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.wkin[type=number]{-moz-appearance:textfield}
+/* Scores are private. Non-admins see the status colour but the NUMBER is blurred out —
+   the value never even reaches a readable state on screen. Not selectable, so you can't
+   copy it out of the DOM by dragging over it either. */
+.wkcell.blurred{filter:blur(6px);user-select:none;pointer-events:none;letter-spacing:1px}
+.subok.blurred-avg{filter:blur(5px);user-select:none}
 .schedrow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:6px 0 2px}
 @media(max-width:640px){.schedrow{grid-template-columns:repeat(2,1fr)}}
 .schedrow .sc{background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
@@ -125,6 +156,99 @@ textarea.note:focus{border-color:var(--o1)}
 .subbtn{padding:6px 13px;font-size:12px;border-radius:8px}
 .subok{font-size:11.5px;color:var(--green);font-weight:700}
 .subok span{display:block;color:var(--t3);font-weight:500;font-size:10px}
+
+/* ══════════════ LIGHT-THEME POLISH (loaded last, wins the cascade) ══════════════
+   The base rules above were written for a dark canvas: translucent white fills, glowing
+   status tints and heavy black shadows. On white those read as washed-out grey. This layer
+   re-grounds every surface with real elevation, tightens contrast, and gives the tool a
+   crisper, more "instrument" feel. */
+
+/* Cards: real elevation instead of a 1px outline floating on grey. */
+.card,.sicard{box-shadow:var(--shadow)}
+.card{transition:box-shadow .2s}
+.card:hover{box-shadow:0 1px 2px rgba(15,23,42,.05),0 14px 34px -16px rgba(15,23,42,.18)}
+.card h2{color:var(--t1);letter-spacing:.02em}
+.card .sub{color:var(--t2)}
+
+/* Header: crisp white glass with a hairline + subtle lift. */
+header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
+.logo{color:var(--t1)}
+
+/* Score bar: warm tinted panel, not a grey smear. */
+.scorebar{background:linear-gradient(135deg,rgba(255,107,26,.10),rgba(255,255,255,.9) 55%,#fff);
+  box-shadow:var(--shadow);border-color:rgba(255,107,26,.22)}
+.scorebar .big{color:var(--t1)}
+.progress{background:rgba(15,23,42,.07)}
+.progress>span{box-shadow:0 0 0 1px rgba(255,107,26,.25) inset}
+
+/* Inputs & selects: white fields with a visible, focusable border. */
+.controls select,.controls input,.inp,.acctname,.schedrow .sc input{
+  background:#fff;border-color:rgba(15,23,42,.14);box-shadow:0 1px 2px rgba(15,23,42,.03)}
+.controls select:focus,.controls input:focus,.inp:focus,.acctname:focus,.schedrow .sc input:focus{
+  border-color:var(--o1);box-shadow:0 0 0 3px rgba(255,107,26,.14)}
+.controls label{color:var(--t2);font-weight:600}
+
+/* Buttons: give the primary a lift, the ghost a real edge. */
+.btn{box-shadow:0 1px 2px rgba(232,61,0,.2),0 6px 16px -8px rgba(232,61,0,.5)}
+.btn:hover{filter:brightness(1.04);transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn{transition:transform .12s,filter .12s,box-shadow .12s}
+.btn.ghost{background:#fff;border-color:rgba(15,23,42,.14);color:var(--t2);box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.btn.ghost:hover{color:var(--o3);border-color:var(--o1);background:rgba(255,107,26,.05)}
+
+/* Grid: zebra striping + hover row, which is what makes a wide checklist readable. */
+.gridwrap{box-shadow:var(--shadow);background:#fff}
+.qgrid thead th{background:#f8fafc;color:var(--t2);border-bottom:2px solid rgba(15,23,42,.10)}
+.qgrid thead th.crit{background:#f8fafc}
+.qgrid tbody tr:nth-child(even) td{background:#fbfcfe}
+.qgrid tbody tr:nth-child(even) td.crit{background:#fbfcfe}
+.qgrid tbody tr:hover td{background:rgba(255,107,26,.05)}
+.qgrid tbody tr:hover td.crit{background:rgba(255,107,26,.07)}
+.qgrid td.crit,.qgrid th.crit{background:#fff;font-weight:500;color:var(--t1)}
+.subtot td,.qgrid .subtot td.crit{background:#f1f4f9!important;color:var(--t1);font-weight:800}
+
+/* Pass / Fail cells: solid, confident, high-contrast. */
+.cell{background:#fff;border-color:rgba(15,23,42,.14);color:var(--t3);transition:transform .1s,box-shadow .1s}
+.cell:hover{transform:scale(1.08);box-shadow:0 2px 8px rgba(15,23,42,.12)}
+.cell.pass{background:#dcfce7;color:#15803d;border-color:#86efac}
+.cell.fail{background:#fee2e2;color:#dc2626;border-color:#fca5a5}
+.critlbl:hover{color:var(--o3);text-decoration:underline;text-underline-offset:2px}
+
+/* Weekly boxes. */
+.wkcell{background:#fff;border-color:rgba(15,23,42,.14);color:var(--t3)}
+.wkcell.done{background:#dcfce7;color:#15803d;border-color:#86efac}
+.wkcell.overdue{background:#fee2e2;color:#dc2626;border-color:#fca5a5}
+.wkin{background:#fff;border-color:rgba(15,23,42,.14);color:var(--t1)}
+.wkin.done{background:#dcfce7;color:#15803d;border-color:#86efac}
+.wkin.overdue{background:#fee2e2;color:#dc2626;border-color:#fca5a5}
+.wkin:hover{border-color:var(--o1);box-shadow:0 1px 4px rgba(15,23,42,.08)}
+
+/* Week chips + schedule tiles. */
+.wc,.clientqa,.schedrow .sc{background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.wc.sel{border-color:var(--o1);box-shadow:0 0 0 3px rgba(255,107,26,.14)}
+.clientqa:hover{border-color:var(--o1)}
+
+/* Dashboard table. */
+.dtable thead th,.dtable thead th.nm{background:#f8fafc;color:var(--t2);border-bottom:2px solid rgba(15,23,42,.10)}
+.dtable td.nm{background:#fff}
+.dtable tbody tr:hover td{background:rgba(255,107,26,.04)}
+.dwrap{box-shadow:var(--shadow);background:#fff;border-radius:12px}
+
+/* Sign-in: warm, welcoming, not a black void. */
+#signin{background:radial-gradient(ellipse at 50% -10%,rgba(255,107,26,.14),transparent 62%),
+  linear-gradient(180deg,#f8fafc,#eef2f7)}
+
+/* Selection + scrollbars — small things, but they're what make it feel finished. */
+::selection{background:rgba(255,107,26,.22)}
+*::-webkit-scrollbar{width:11px;height:11px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:rgba(15,23,42,.18);border-radius:99px;border:3px solid transparent;background-clip:content-box}
+*::-webkit-scrollbar-thumb:hover{background:rgba(15,23,42,.32);background-clip:content-box}
+
+@media(prefers-reduced-motion:reduce){
+  .btn:hover,.cell:hover{transform:none}
+  .card,.btn,.cell{transition:none}
+}
 </style>
 </head>
 <body>
@@ -225,7 +349,7 @@ textarea.note:focus{border-color:var(--o1)}
     </div>
     <div class="card" style="margin-top:16px">
       <h2>Monthly QA completion</h2>
-      <div class="sub">Green = QA saved · Red = overdue (past due date) · Blank = pending. <b>Submit</b> enables once all 4 weeks are green — it locks the month average into the employee's scorecard and the admin portal record.</div>
+      <div class="sub" id="dash-sub">Green = QA saved · Red = overdue (past due date) · Blank = pending. <b>Submit</b> enables once all 4 weeks are green — it locks the month average into the employee's scorecard and the admin portal record.</div>
       <div class="legend2">
         <span><i style="background:rgba(52,211,153,.7)"></i>Submitted</span>
         <span><i style="background:rgba(248,113,113,.7)"></i>Overdue</span>
@@ -322,26 +446,18 @@ var PROJECTS = {
     label: 'X - John',
     tasks: [
       { name: 'Warm-up (Day 1-3)', accounts: 5, criteria: [
-        'Airplane Mode ON to OFF Before Switching Account',
-        'VPN ON with a Random US City',
         'Correct Container / Account Opened',
         'Profile Set Up (Name, US Location, Bio per File)',
         'Username Changed Using Suggestions',
         'Photos Posted with Correct Captions',
         'Photo 1 Pinned',
         'Retweets Completed per SOP',
-        'Follows Completed per Warm-up SOP (Day 2-3: 10/day)',
-        'Human-like Behavior (scroll, random likes, natural pacing)'
+        'Follows Completed per Warm-up SOP (Day 2-3: 10/day)'
       ] },
       { name: 'Daily Follows (Day 4+)', accounts: 5, criteria: [
-        'Airplane Mode ON to OFF Before Switching Account',
-        'VPN ON with a Random US City',
         'Correct Container / Account Opened',
-        'Feed Scrolled 20-40s Before Actions',
         '1-3 Posts Liked per Session (natural)',
-        'Target Geography Checked Before Following (US / UK / CA / AUS per SOP)',
-        '50 Follows Completed per Account (split 10/10/15/15 across 4 opens)',
-        'Time Gaps Between Opens (not rushed / human behavior)',
+        '50 Follows Completed per Account',
         'Daily Tracker Updated'
       ] }
     ]
@@ -649,18 +765,74 @@ async function saveSchedule(week, val){
     else toast('Save failed: '+((d&&d.error)||'unknown'));
   }catch(e){ toast('Network error — try again.'); }
 }
-function wkCell(c){
-  if(c.state==='done') return '<span class="wkcell done" title="Saved '+esc(c.score)+'%">'+esc(c.score)+'</span>';
+/* Admins type the score straight into the box. Non-admins (and any month already submitted &
+   locked) still see the read-only chip. Blank the box to clear that week back to pending. */
+function wkCell(c, rowIdx, week, locked){
+  if(IS_ADMIN && !locked){
+    var val = (c.state==='done' && c.score!=null && c.score!=='') ? esc(c.score) : '';
+    var cls = 'wkin' + (c.state==='done' ? ' done' : (c.state==='overdue' ? ' overdue' : ''));
+    var tip = c.due ? ('Due '+esc(c.due)) : 'No schedule';
+    return '<input class="'+cls+'" type="number" min="0" max="100" step="0.01" inputmode="decimal" '+
+           'value="'+val+'" placeholder="–" title="'+tip+' — type a score (0-100), blank to clear" '+
+           'onchange="saveWeekScore('+rowIdx+','+week+',this)" '+
+           'onkeydown="if(event.key===\'Enter\'){this.blur();}">';
+  }
+  // Non-admins: the STATUS is public (done / overdue / pending) but the NUMBER is not —
+  // nobody should be able to read a colleague's QA score off a shared screen.
+  if(c.state==='done') return '<span class="wkcell done blurred" title="Saved — score visible to admin only">'+esc(c.score)+'</span>';
   if(c.state==='overdue') return '<span class="wkcell overdue" title="Overdue — due '+esc(c.due)+'">!</span>';
   return '<span class="wkcell" title="'+(c.due?('Due '+esc(c.due)):'No schedule')+'">–</span>';
 }
+/* Write a single week's score. The month average + Submit gate recompute from the server, so we
+   just reload the dashboard rather than trying to keep two copies of the truth in sync. */
+async function saveWeekScore(rowIdx, week, input){
+  var r=DASH_ROWS[rowIdx]; if(!r) return;
+  if(!IS_ADMIN){ toast('Only admin can enter QA scores.'); return; }
+  if(r.submitted){ toast('That month is already submitted and locked.'); loadDashboard(); return; }
+
+  var raw=String(input.value||'').trim();
+  if(raw!==''){
+    var n=parseFloat(raw);
+    if(isNaN(n) || n<0 || n>100){ toast('Score must be between 0 and 100.'); input.focus(); return; }
+    raw=String(n);
+  }
+  var month=$('d-month').value;
+  input.disabled=true;
+  try{
+    var res=await fetch(PORTAL_URL+'?action=save_qa_weekly'
+      +'&employee_id='+encodeURIComponent(r.employee_id)
+      +'&month='+encodeURIComponent(month)
+      +'&week='+week
+      +'&score='+encodeURIComponent(raw)                 // '' clears the week
+      +'&by='+encodeURIComponent(USER.name||USER.id)
+      +'&_='+Date.now());
+    var d=await res.json();
+    if(d && d.ok){
+      toast(raw==='' ? ('Week '+week+' cleared for '+r.full_name+'.')
+                     : (r.full_name+' — Week '+week+': '+raw+'%'));
+      loadDashboard();                                   // refresh greens, avg + Submit gate
+    } else {
+      toast('Save failed: '+((d&&d.error)||'unknown'));
+      input.disabled=false;
+    }
+  }catch(e){ toast('Network error — try again.'); input.disabled=false; }
+}
 function renderDash(rows){
+  var sub=$('dash-sub');
+  if(sub) sub.innerHTML = IS_ADMIN
+    ? '<b>Type a score (0–100) straight into any week box</b> and press Enter or click away — it saves instantly. Leave it blank to clear that week. Green = saved · Red = overdue · Blank = pending. <b>Submit</b> enables once all 4 weeks are filled, locking the month average into the employee\'s scorecard.'
+    : 'Green = QA saved · Red = overdue (past due date) · Blank = pending. <b>Scores are hidden</b> — only an admin can see or enter the numbers.';
   if(!rows.length){ $('dash-body').innerHTML='<tr><td colspan="6" class="empty">No employees.</td></tr>'; return; }
   $('dash-body').innerHTML=rows.map(function(r,i){
-    var cells=r.cells.map(function(c){ return '<td>'+wkCell(c)+'</td>'; }).join('');
+    var cells=r.cells.map(function(c,ci){ return '<td>'+wkCell(c, i, ci+1, !!r.submitted)+'</td>'; }).join('');
     var last;
     if(r.submitted){
-      last='<span class="subok">✓ Submitted'+(r.avg!=null?' · '+r.avg+'%':'')+'<span>'+esc((r.submitted_by||'')+(r.submitted_at?(' · '+String(r.submitted_at).slice(0,10)):''))+'</span></span>';
+      // Same rule as the week boxes: the fact it's submitted is public, the average isn't.
+      var avgTxt = (r.avg!=null)
+        ? (IS_ADMIN ? (' · '+r.avg+'%')
+                    : ' · <span class="wkcell blurred" style="width:auto;height:auto;border:0;background:none;padding:0;font-size:inherit;">'+esc(r.avg)+'%</span>')
+        : '';
+      last='<span class="subok">✓ Submitted'+avgTxt+'<span>'+esc((r.submitted_by||'')+(r.submitted_at?(' · '+String(r.submitted_at).slice(0,10)):''))+'</span></span>';
     } else if(r.complete){
       last='<button class="btn subbtn" id="sub-'+i+'" onclick="submitMonth('+i+')">Submit</button>';
     } else {
