@@ -1044,7 +1044,13 @@ function renderPresence(users){
   var max=6, shown=users.slice(0,max), extra=users.length-shown.length;
   host.innerHTML=shown.map(function(u){ var nm=String(u.name||u.employee_id); var init=nm.charAt(0).toUpperCase();
     var col=pal[_presHash(u.employee_id)%pal.length]; var isMe=String(u.employee_id).toLowerCase()===me;
-    var inner=u.photo?('<img src="'+escAttr(u.photo)+'" alt="">'):('<span>'+esc(init)+'</span>');
+    // Only trust a photo that's actually a URL — and if it still fails to load, fall back to the
+    // initial rather than leaving a broken-image icon sitting in the header.
+    var ph=String(u.photo||'');
+    var usable=(ph.indexOf('http')===0 || ph.indexOf('data:')===0);
+    var inner = usable
+      ? '<img src="'+escAttr(ph)+'" alt="" onerror="this.parentNode.innerHTML=\'<span>'+esc(init)+'</span>\';">'
+      : '<span>'+esc(init)+'</span>';
     return '<div class="pres-av'+(isMe?' me':'')+'" title="'+escAttr(nm)+(isMe?' (you)':'')+'" style="background:'+col+'">'+inner+'</div>';
   }).join('') + (extra>0?'<div class="pres-av more" title="'+extra+' more online">+'+extra+'</div>':'');
 }
