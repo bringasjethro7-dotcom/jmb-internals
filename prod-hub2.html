@@ -186,10 +186,12 @@ table tbody tr:hover td{background:rgba(255,107,26,.05)}
         </select>
       </label>
       <button class="btn ghost sm" onclick="loadReview()">↻ Refresh</button>
+      <button class="btn ghost sm" onclick="botReview()" style="border-color:rgba(167,139,250,.55);color:#7c3aed;font-weight:700;">🤖 Auto-review</button>
       <span class="spacer" style="flex:1"></span>
-      <button class="btn ghost sm" onclick="revApproveAll()" style="border-color:rgba(52,211,153,.4);color:#34d399;">✔ Approve all shown (as logged)</button>
+      <button class="btn ghost sm" onclick="revApproveAll()" style="border-color:rgba(52,211,153,.4);color:#15803d;">✔ Approve all shown (as logged)</button>
       <button class="btn ghost sm" onclick="revResetAllShown()" style="border-color:rgba(148,163,184,.45);color:#94a3b8;">↩ Reset all shown → Pending</button>
     </div>
+    <div id="bot-panel" style="display:none;margin-bottom:14px;"></div>
     <div id="rev-body"><div class="empty">Loading…</div></div>
   </div>
 </div>
@@ -393,6 +395,106 @@ function revToggleAll(on){
   document.querySelectorAll('.rev-cb:not([disabled])').forEach(function(cb){ cb.checked=on; });
   revCbChange();
 }
+/* ═══════════════ 🤖 AUTO-REVIEW BOT ═══════════════
+   Always previews first. The bot never writes anything until a human has seen exactly what it
+   intends to do and clicked Apply. */
+var BOT_LAST=null;
+async function botReview(){
+  var panel=$('bot-panel'); if(!panel) return;
+  panel.style.display='block';
+  panel.innerHTML='<div class="card" style="padding:14px;"><b>🤖 Auto-review</b><div style="font-size:12px;color:var(--t2);margin-top:4px;">Analysing the pending queue against each person’s own history…</div></div>';
+  var url=PORTAL_URL+'?action=vol_auto_review&dry=1'
+    +'&from='+encodeURIComponent($('from').value)+'&to='+encodeURIComponent($('to').value)
+    +'&by_id='+encodeURIComponent(USER.id)+'&by_name='+encodeURIComponent(USER.name)+'&_='+Date.now();
+  try{
+    var r=await fetch(url); var d=await r.json();
+    if(!d||!d.ok){ panel.innerHTML='<div class="card" style="padding:14px;color:var(--red);">Auto-review failed: '+esc((d&&d.error)||'unknown')+'</div>'; return; }
+    BOT_LAST=d;
+    renderBotPreview(d);
+  }catch(e){ panel.innerHTML='<div class="card" style="padding:14px;color:var(--red);">Network error.</div>'; }
+}
+function botRow(x){
+  var col={approved:'#15803d', rejected:'#dc2626', pending:'#b45309'}[x.action];
+  var bg ={approved:'#dcfce7', rejected:'#fee2e2', pending:'#fef3c7'}[x.action];
+  var tag={approved:'APPROVE', rejected:'REJECT', pending:'LEAVE FOR YOU'}[x.action];
+  return '<tr>'
+    +'<td style="padding:7px 8px;"><span style="background:'+bg+';color:'+col+';font-weight:800;font-size:10px;padding:3px 8px;border-radius:20px;white-space:nowrap;">'+tag+'</span></td>'
+    +'<td style="padding:7px 8px;font-weight:600;">'+esc(x.full_name)+'</td>'
+    +'<td style="padding:7px 8px;color:var(--t2);">'+esc(x.task)+'</td>'
+    +'<td style="padding:7px 8px;color:var(--t3);white-space:nowrap;">'+esc(x.date)+'</td>'
+    +'<td style="padding:7px 8px;text-align:right;white-space:nowrap;">'+x.volume+' / '+x.hours+'h</td>'
+    +'<td style="padding:7px 8px;text-align:right;font-weight:700;white-space:nowrap;">'+(x.rate!=null?x.rate:'—')
+      +(x.baseline!=null?('<span style="color:var(--t3);font-weight:400;"> vs '+x.baseline+'</span>'):'')+'</td>'
+    +'<td style="padding:7px 8px;font-size:11.5px;color:var(--t2);line-height:1.4;">'+esc(x.reason)+'</td>'
+    +'</tr>';
+}
+function renderBotPreview(d){
+  var s=d.summary||{}, dec=d.decisions||[];
+  var willWrite=(s.approved||0)+(s.rejected||0);
+  var head='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">'
+    +'<b style="font-size:15px;">🤖 Auto-review — preview</b>'
+    +'<span style="font-size:12px;color:var(--t2);">Nothing has been saved yet.</span>'
+    +'<span class="spacer" style="flex:1"></span>'
+    +'<span style="font-size:12px;"><b style="color:#15803d;">'+(s.approved||0)+'</b> approve · '
+      +'<b style="color:#dc2626;">'+(s.rejected||0)+'</b> reject · '
+      +'<b style="color:#b45309;">'+(s.pending||0)+'</b> left for you</span>'
+    +'</div>';
+  if(!dec.length){
+    $('bot-panel').innerHTML='<div class="card" style="padding:14px;">'+head
+      +'<div class="empty" style="padding:10px;">Nothing pending in this date range — the queue is already clear.</div>'
+      +'<button class="btn ghost sm" onclick="botClose()">Close</button></div>';
+    return;
+  }
+  var rule='<div style="font-size:11.5px;color:var(--t3);background:var(--card2);border-radius:8px;padding:8px 10px;margin-bottom:10px;line-height:1.5;">'
+    +'<b>How it decides:</b> baseline = the median rate of that person’s own previously-approved work on the same task (or the team’s median if they’re new). '
+    +'Over <b>'+d.thresholds.reject+'×</b> baseline → rejected as suspected inflation. '
+    +'<b>'+d.thresholds.flag+'–'+d.thresholds.reject+'×</b> → left pending for you. Anything else → approved. '
+    +'<b>A slow day is never rejected</b> — rejecting it would remove the weak volume and actually <i>raise</i> that person’s QPH.'
+    +'</div>';
+  var table='<div style="max-height:46vh;overflow:auto;border:1px solid var(--line);border-radius:10px;">'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12.5px;">'
+    +'<thead><tr style="position:sticky;top:0;">'
+    +['Decision','Who','Task','Date','Vol / Hrs','Rate','Why'].map(function(h){
+        return '<th style="padding:8px;text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;">'+h+'</th>'; }).join('')
+    +'</tr></thead><tbody>'+dec.map(botRow).join('')+'</tbody></table></div>';
+  var actions='<div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap;">'
+    +(willWrite
+      ? '<button class="btn sm" onclick="botApply()">✅ Apply — '+willWrite+' decision'+(willWrite===1?'':'s')+'</button>'
+      : '<span style="font-size:12px;color:var(--t2);">The bot isn’t confident about any of these — nothing to apply.</span>')
+    +'<button class="btn ghost sm" onclick="botClose()">Cancel</button>'
+    +'<span class="spacer" style="flex:1"></span>'
+    +'<span style="font-size:11px;color:var(--t3);">Anything left pending stays in your queue.</span>'
+    +'</div>';
+  $('bot-panel').innerHTML='<div class="card" style="padding:14px;">'+head+rule+table+actions+'</div>';
+}
+async function botApply(){
+  if(!BOT_LAST) return;
+  var s=BOT_LAST.summary||{};
+  if(!confirm('Apply the bot’s decisions?\n\n'
+    +'· '+(s.approved||0)+' will be APPROVED\n'
+    +'· '+(s.rejected||0)+' will be REJECTED (their volume stops counting toward QPH)\n'
+    +'· '+(s.pending||0)+' left pending for you\n\nYou can undo any of these afterwards.')) return;
+  var url=PORTAL_URL+'?action=vol_auto_review&dry=0'
+    +'&from='+encodeURIComponent($('from').value)+'&to='+encodeURIComponent($('to').value)
+    +'&by_id='+encodeURIComponent(USER.id)+'&by_name='+encodeURIComponent(USER.name)+'&_='+Date.now();
+  try{
+    var r=await fetch(url); var d=await r.json();
+    if(d&&d.ok){
+      var t=d.summary||{};
+      $('bot-panel').innerHTML='<div class="card" style="padding:14px;"><b>🤖 Done.</b> '
+        +'<span style="color:#15803d;font-weight:700;">'+(t.approved||0)+'</span> approved · '
+        +'<span style="color:#dc2626;font-weight:700;">'+(t.rejected||0)+'</span> rejected · '
+        +'<span style="color:#b45309;font-weight:700;">'+(t.pending||0)+'</span> still need you. '
+        +'<span style="color:var(--t3);font-size:12px;">('+d.written+' rows updated — every one is marked “🤖 Auto-review”, and you can Undo any of them.)</span> '
+        +'<button class="btn ghost sm" style="margin-left:8px;" onclick="botClose()">Close</button></div>';
+      loadReview();
+    } else {
+      alert('Failed: '+((d&&d.error==='NOT_LEAD')?'not authorized (leads only)':((d&&d.error)||'error')));
+    }
+  }catch(e){ alert('Network error.'); }
+}
+function botClose(){ var p=$('bot-panel'); if(p){ p.style.display='none'; p.innerHTML=''; } BOT_LAST=null; }
+
 async function revApproveSelected(){
   var ids=[]; document.querySelectorAll('.rev-cb:checked').forEach(function(cb){ var x=REV[+cb.getAttribute('data-i')]; if(x&&x.ids&&x.vol_status!=='approved') ids.push(x.ids); });
   if(!ids.length){ alert('Tick at least one row (or a project) to approve.'); return; }
