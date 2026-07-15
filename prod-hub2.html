@@ -207,8 +207,9 @@ table tbody tr:hover td{background:rgba(255,107,26,.05)}
     </div>
     <div style="font-size:12px;color:var(--t2);margin-bottom:6px;line-height:1.5;">
       Productivity is finalized <b>twice a month</b>, one score per payroll cutoff (1–15 and 16–end).
-      Each task scores against the team average — at/above = <b style="color:#15803d;">100</b>, below scales down.
-      The cutoff total is those task scores <b>weighted by hours</b>. The monthly scorecard uses the <b>average of both cutoffs</b>.
+      Shared tasks score against the <b>top performer</b> — matching the best = <b style="color:#15803d;">100</b>, behind scales down.
+      Solo tasks (one person) score on <b style="color:#7c3aed;">daily consistency</b> instead. The cutoff total is those task
+      scores <b>weighted by hours</b>; the monthly scorecard is the <b>average of both cutoffs</b>.
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
       <button class="btn ghost sm" id="cut-finalize" onclick="finalizeCutoffs()" style="border-color:rgba(124,58,237,.45);color:#7c3aed;">🔒 Finalize closed cutoffs now</button>
@@ -335,8 +336,11 @@ window.toggleCutTasks=function(tr){
       cell.innerHTML=(d.cutoffs||[]).map(function(c){
         if(!c.tasks||!c.tasks.length) return '<div style="font-size:11px;color:var(--t3);margin:4px 0;"><b>'+esc(c.label)+':</b> no scored tasks</div>';
         var rows=c.tasks.map(function(t){
+          var how = t.mode==='consistency'
+            ? '<span title="Solo task — scored on daily consistency'+(t.cv!=null?(' (CV '+t.cv+')'):'')+'" style="color:#7c3aed;font-size:9px;">⟳ steady</span>'
+            : '<span title="Scored vs the top performer'+(t.top_qph!=null?(' ('+t.top_qph+'/hr)'):'')+'" style="color:var(--t3);font-size:9px;">vs top</span>';
           return '<span style="display:inline-flex;gap:5px;align-items:center;font-size:11px;background:#fff;border:1px solid var(--line);border-radius:20px;padding:3px 9px;margin:2px 4px 2px 0;">'+
-            esc(t.task)+' <b style="color:'+scoreColor(t.score)+'">'+t.score+'</b>'+
+            esc(t.task)+' <b style="color:'+scoreColor(t.score)+'">'+t.score+'</b> '+how+
             '<span style="color:var(--t3);">'+(Math.round(t.hours*10)/10)+'h</span></span>';
         }).join('');
         return '<div style="margin:6px 0;"><div style="font-size:10.5px;font-weight:800;color:var(--t2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;">'+esc(c.label)+' — hours-weighted → <span style="color:'+scoreColor(c.score)+'">'+(c.score==null?'—':c.score)+'/100</span></div>'+rows+'</div>';
