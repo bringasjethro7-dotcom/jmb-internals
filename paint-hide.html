@@ -7,6 +7,7 @@
 <title>JMB Virtuals — Paint &amp; Hide</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Rajdhani:wght@600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 :root{--bg:#f4f6fa;--bg2:#ffffff;--card:#ffffff;--card2:#f1f4f9;--line:rgba(15,23,42,.10);
  --o1:#ff6b1a;--o2:#e83d00;--o3:#c2410c;--t1:#0f172a;--t2:#475569;--t3:#94a3b8;
@@ -220,14 +221,23 @@ var THEMES=[
  { name:'Office',      wall:['#e2e8f0','#cbd5e1','#f1f5f9','#94a3b8'], floor:'#9a8f80', pats:['panel','solid','panel'], obj:'#64748b' },
  { name:'Neon Arcade', wall:['#1e1b4b','#4c1d95','#831843','#0e7490'], floor:'#111827', pats:['grid','spray','grid'], obj:'#7c3aed' }
 ];
-function rnd(){ return Math.random(); }
+// Seedable RNG — in multiplayer every client seeds with the same number so the room
+// generates a byte-identical scene. Solo just reseeds randomly each round.
+var _rngState=(Math.random()*4294967296)>>>0;
+function seedRng(n){ _rngState=(n>>>0)||1; }
+function rnd(){ // mulberry32
+  _rngState|=0; _rngState=_rngState+0x6D2B79F5|0;
+  var t=Math.imul(_rngState^_rngState>>>15,1|_rngState);
+  t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296;
+}
 function pick(a){ return a[Math.floor(rnd()*a.length)]; }
 function shade(hex,amt){ var c=hex.replace('#',''); if(c.length===3)c=c.split('').map(function(x){return x+x;}).join('');
   var r=parseInt(c.slice(0,2),16),g=parseInt(c.slice(2,4),16),b=parseInt(c.slice(4,6),16);
   r=Math.max(0,Math.min(255,r+amt));g=Math.max(0,Math.min(255,g+amt));b=Math.max(0,Math.min(255,b+amt));
   return 'rgb('+r+','+g+','+b+')'; }
 
-function genScene(){
+function genScene(seed){
+  if(seed!=null) seedRng(seed); else seedRng((Math.random()*4294967296)>>>0);
   var th=THEMES[(LEVEL-1)%THEMES.length];
   // add variety on later loops
   if(LEVEL>THEMES.length) th=pick(THEMES);
@@ -362,6 +372,10 @@ function render(){
     ctx.stroke(buildSilhouette(bx)); ctx.restore();
   } else if(PHASE==='hunt'||PHASE==='done'){
     ctx.drawImage(charCv,0,0);
+  } else if(PHASE==='mpwait'){
+    ctx.drawImage(charCv,0,0);                 // you see your own hidden body while you wait
+  } else if(PHASE==='mphunt'){
+    mpRenderHunt();
   }
 }
 
@@ -375,6 +389,7 @@ stage.addEventListener('pointerdown',function(e){ e.preventDefault(); ac();
   var pos=evtPos(e);
   if(PHASE==='place'){ dragging=true; CHAR.x=pos.x; CHAR.y=pos.y; clampChar(); render(); }
   else if(PHASE==='paint'){ if(TOOL==='eye'){ eyedrop(pos); } else { pushUndo(); painting=true; paintAt(pos); } }
+  else if(PHASE==='mphunt' && MP.myRole==='seeker'){ mpSeekerTag(pos); }
 });
 stage.addEventListener('pointermove',function(e){ var pos=evtPos(e);
   if(PHASE==='place'&&dragging){ CHAR.x=pos.x; CHAR.y=pos.y; clampChar(); render(); }
@@ -506,6 +521,7 @@ function surfaceBehind(bx){
 /* ══════════════ HUNT ══════════════ */
 function beginHunt(){
   if(PHASE!=='paint') return;
+  if(MODE==='mp'){ mpLockAndHide(false); return; }   // multiplayer: lock in, wait for the seeker
   var res=scoreCamo();
   PHASE='hunt'; $('paint-tools').style.display='none';
   $('phase-tag').textContent='🔫 The seeker is hunting…'; $('timer').textContent='';
@@ -582,8 +598,10 @@ function startRound(){
 function lockPlacement(){
   PHASE='paint'; $('place-tools').style.display='none'; $('paint-tools').style.display='flex';
   $('phase-tag').textContent='Paint yourself to blend in';
-  var secs = Math.max(45, 120 - (LEVEL-1)*8);
-  startTimer(secs, beginHunt);
+  if(MODE!=='mp'){                                   // MP prep timer is driven by mpTick
+    var secs = Math.max(45, 120 - (LEVEL-1)*8);
+    startTimer(secs, beginHunt);
+  }
   render();
 }
 function startTimer(secs, onEnd){
@@ -657,16 +675,274 @@ function startMenu(){ var m=$('mcard');
    '<h1>PAINT &amp; <b>HIDE</b></h1>'+
    '<div class="lead">You\'re a human chameleon. Paint your white body to melt into the room, strike a pose, and survive the seeker\'s sweep.</div>'+
    '<input class="name-in" id="name-in" maxlength="18" placeholder="Your name for the board" value="'+esc(localStorage.getItem('ph_name')||'')+'">'+
-   '<button class="btn purple" style="width:100%;font-size:16px;padding:13px" onclick="beginGame()">▶ Start hiding</button>'+
+   '<button class="btn purple" style="width:100%;font-size:16px;padding:13px" onclick="beginGame()">▶ Solo — vs a bot seeker</button>'+
+   '<button class="btn sec" style="width:100%;margin-top:8px;font-size:15px;padding:12px" onclick="openMPLobby()">👥 Multiplayer — hide with the team</button>'+
    (b?'<div class="muted">Your best camouflage: <b style="color:#15803d">'+b+'/100</b></div>':'<div class="muted">First round is Level 1 — an easy warehouse.</div>')+
    '<button class="btn sec sm" style="margin-top:12px" onclick="openRules()">How to play</button>';
   ov(true);
 }
 function beginGame(){ var n=($('name-in').value||'').trim().slice(0,18); PLAYER=n||'You';
   localStorage.setItem('ph_name',PLAYER); if(n){ $('who-chip').style.display=''; $('who-chip').textContent='🎨 '+PLAYER; }
-  LEVEL=1; ac(); startRound(); }
+  MODE='solo'; LEVEL=1; ac(); startRound(); }
 
-/* boot */
+/* ══════════════════════════════════════════════════════════════════
+   ═══════════════════  MULTIPLAYER (Phase 2)  ═══════════════════════
+   Live rooms over Supabase realtime. Every client seeds the SAME scene,
+   the prep/hunt timers are timestamp-driven (no host needed mid-round),
+   hiders broadcast a tiny PNG of their painted body at lock-in, and one
+   player is the SEEKER who hunts by clicking. Camouflage still matters:
+   a well-blended body is genuinely hard for the seeker to see.
+   ══════════════════════════════════════════════════════════════════ */
+var SB_URL='https://rvyrnkjqxnijxydloujk.supabase.co';
+var SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2eXJua2pxeG5panh5ZGxvdWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NzAwODQsImV4cCI6MjA5NzE0NjA4NH0.SwkSkmbeWrhm5PZZDSZ1Z4hbjpQ0L2CRtuKQmpHshBE';
+var sbClient=null;
+function sbReady(cb,tries){ tries=tries||0; var L=window.supabase||window.Supabase;
+  if(L&&L.createClient){ if(!sbClient) sbClient=L.createClient(SB_URL,SB_KEY); cb(sbClient); }
+  else if(tries<25){ setTimeout(function(){ sbReady(cb,tries+1); },400); }
+  else { flashTip('Realtime unavailable — check your connection.'); } }
+
+var MP={ code:'', me:{id:'',name:''}, host:false, players:{}, seekerId:null,
+         seed:0, startAt:0, prep:90, hunt:28, myRole:'hider', chan:null,
+         hides:{}, tagged:{}, imgs:{}, scores:{}, roundActive:false, lastSeeker:'', loop:null, everCaught:false };
+function mpSend(e,p){ try{ if(MP.chan) MP.chan.send({type:'broadcast',event:e,payload:p}); }catch(x){} }
+
+window.openMPLobby=function(){
+  var m=$('mcard');
+  m.innerHTML=
+    '<div style="font-size:44px;line-height:1;margin-bottom:2px">👥</div>'+
+    '<h1>Play with the <b>team</b></h1>'+
+    '<div class="lead">Join a room and hide together. One of you becomes the <b>seeker</b> each round — everyone else paints and hides.</div>'+
+    '<input class="name-in" id="mp-name" maxlength="18" placeholder="Your name" value="'+esc(localStorage.getItem('ph_name')||'')+'">'+
+    '<input class="name-in" id="mp-code" maxlength="6" placeholder="Room code (e.g. TEAM)" value="TEAM" style="text-transform:uppercase;letter-spacing:.2em;font-weight:800">'+
+    '<button class="btn purple" style="width:100%;font-size:15px;padding:12px" onclick="mpConnect()">Join room →</button>'+
+    '<button class="btn sec sm" style="margin-top:10px" onclick="startMenu()">← Back</button>'+
+    '<div class="muted">Share the room code with teammates so you land in the same room.</div>';
+  ov(true);
+};
+window.mpConnect=function(){
+  var name=($('mp-name').value||'').trim().slice(0,18)||'Player';
+  var code=($('mp-code').value||'TEAM').trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6)||'TEAM';
+  localStorage.setItem('ph_name',name);
+  MODE='mp'; PLAYER=name;
+  MP.code=code; MP.me={ id:'p'+Math.random().toString(36).slice(2,9), name:name };
+  MP.players={}; MP.scores={}; MP.roundActive=false;
+  $('who-chip').style.display=''; $('who-chip').textContent='👥 '+name+' · '+code;
+  mpLobbyWaiting('Connecting…');
+  sbReady(function(sb){
+    if(MP.chan){ try{ sb.removeChannel(MP.chan); }catch(e){} }
+    MP.chan=sb.channel('ph-room-'+code,{config:{presence:{key:MP.me.id},broadcast:{self:true}}});
+    MP.chan
+      .on('broadcast',{event:'round'},  function(p){ mpOnRound(p.payload); })
+      .on('broadcast',{event:'hide'},   function(p){ mpOnHide(p.payload); })
+      .on('broadcast',{event:'tag'},    function(p){ mpOnTag(p.payload); })
+      .on('broadcast',{event:'name'},   function(p){ if(p.payload&&p.payload.id) { MP.players[p.payload.id]=MP.players[p.payload.id]||{}; MP.players[p.payload.id].name=p.payload.name; if(!MP.roundActive) mpRenderLobby(); } })
+      .on('presence',{event:'sync'}, mpPresence)
+      .subscribe(function(st){ if(st==='SUBSCRIBED'){
+        try{ MP.chan.track({ name:name }); }catch(e){}
+        mpSend('name',{id:MP.me.id,name:name});
+        mpPresence();
+      } });
+  });
+};
+function mpPresence(){
+  if(!MP.chan) return;
+  var state={}; try{ state=MP.chan.presenceState(); }catch(e){}
+  var ids=Object.keys(state);
+  var players={};
+  ids.forEach(function(id){ var meta=(state[id]&&state[id][0])||{}; players[id]={ name:(MP.players[id]&&MP.players[id].name)||meta.name||'Player' }; });
+  MP.players=players;
+  // Host = lexicographically smallest present id (stable, no election needed).
+  var hostId=ids.slice().sort()[0]; MP.host=(hostId===MP.me.id);
+  if(!MP.roundActive) mpRenderLobby();
+}
+function mpLobbyWaiting(msg){ var m=$('mcard');
+  m.innerHTML='<div style="font-size:40px">📡</div><h1>Room <b>'+esc(MP.code)+'</b></h1><div class="lead">'+esc(msg)+'</div>'; ov(true); }
+function mpRenderLobby(){
+  if(MP.roundActive) return;
+  var m=$('mcard'); var ids=Object.keys(MP.players);
+  var rows=ids.map(function(id){ var p=MP.players[id]; var me=id===MP.me.id;
+    var sc=MP.scores[id]||0;
+    return '<div class="lb-row'+(me?' me':'')+'"><span style="flex:1">'+esc(p.name)+(me?' <span style="color:var(--o1);font-size:10px">(you)</span>':'')+(id===Object.keys(MP.players).slice().sort()[0]?' <span style="color:var(--purple);font-size:9px;font-weight:800">HOST</span>':'')+'</span>'+(sc?'<b style="color:#15803d">'+sc+'</b>':'')+'</div>'; }).join('');
+  m.innerHTML=
+    '<div style="font-size:40px;line-height:1">🎨</div>'+
+    '<h1>Room <b>'+esc(MP.code)+'</b></h1>'+
+    '<div class="lead">'+ids.length+' player'+(ids.length===1?'':'s')+' here.'+(ids.length<2?' You can start solo vs a bot, or wait for teammates.':' One will be the seeker each round.')+'</div>'+
+    '<div class="lb" style="margin-top:0">'+rows+'</div>'+
+    (MP.host
+      ? '<button class="btn purple" style="width:100%;margin-top:14px;font-size:15px;padding:12px" onclick="mpHostStart()">Start round →</button>'
+      : '<div class="muted" style="margin-top:14px">Waiting for the host to start…</div>')+
+    '<button class="btn sec sm" style="margin-top:10px" onclick="mpLeave()">Leave room</button>';
+  ov(true);
+}
+window.mpLeave=function(){ try{ if(MP.chan) sbClient.removeChannel(MP.chan); }catch(e){} MP.chan=null; MODE='solo';
+  $('who-chip').style.display='none'; clearInterval(MP.loop); startMenu(); };
+
+window.mpHostStart=function(){
+  if(!MP.host) return;
+  var ids=Object.keys(MP.players);
+  // rotate the seeker; never the same person twice running if avoidable
+  var pool=ids.filter(function(i){ return i!==MP.lastSeeker; }); if(!pool.length) pool=ids;
+  var seeker = ids.length>=2 ? pool[Math.floor(Math.random()*pool.length)] : '';   // solo → bot seeker (no id)
+  MP.lastSeeker=seeker;
+  var lvl=(MP.level||1);
+  mpSend('round',{ seed:(Math.random()*4294967296)>>>0, seekerId:seeker, startAt:Date.now()+1500,
+                   prep:Math.max(45,90-(lvl-1)*6), hunt:28, level:lvl });
+};
+function mpOnRound(p){
+  MP.roundActive=true; MP.seed=p.seed; MP.seekerId=p.seekerId; MP.startAt=p.startAt;
+  MP.prep=p.prep; MP.hunt=p.hunt; MP.level=p.level; LEVEL=p.level;
+  MP.hides={}; MP.tagged={}; MP.imgs={}; MP.everCaught=false;
+  MP.myRole = (p.seekerId===MP.me.id) ? 'seeker' : 'hider';
+  MP.locked=false;
+  ov(false);
+  // build the identical board
+  genScene(p.seed); buildSwatches(); buildPoses();
+  POSE='stand'; CHAR={x:W*0.5,y:SCENE.floorY,scale:1}; clampChar();
+  cctx.clearRect(0,0,W,H); undoStack=[];
+  $('lvl-chip').textContent='Level '+LEVEL; $('scene-tag').textContent='🎨 '+SCENE.theme.name;
+  if(MP.myRole==='seeker'){
+    PHASE='mpwait'; $('place-tools').style.display='none'; $('paint-tools').style.display='none';
+    $('phase-tag').textContent='🔫 You are the SEEKER — hiders are painting…';
+    render();
+  } else {
+    PHASE='place'; $('place-tools').style.display='flex'; $('paint-tools').style.display='none';
+    $('phase-tag').textContent='Place your character — HIDE!';
+    render();
+  }
+  clearInterval(MP.loop); MP.loop=setInterval(mpTick,200); mpTick();
+}
+function mpTick(){
+  if(!MP.roundActive) return;
+  var now=Date.now(); var prepEnd=MP.startAt+MP.prep*1000, huntEnd=prepEnd+MP.hunt*1000;
+  if(now<MP.startAt){ $('timer').textContent='Ready…'; return; }
+  if(now<prepEnd){
+    var left=Math.ceil((prepEnd-now)/1000); var el=$('timer'); el.textContent='0:'+(left<10?'0':'')+left; el.classList.toggle('warn',left<=10);
+    if(left<=5) sfxTick();
+    if(MP.myRole==='seeker'){ $('phase-tag').textContent='🔫 Seeker — hiders painting… '+left+'s'; }
+  } else if(now<huntEnd){
+    if(PHASE!=='mphunt'){ mpEnterHunt(); }
+    var hleft=Math.ceil((huntEnd-now)/1000); var el2=$('timer'); el2.textContent='0:'+(hleft<10?'0':'')+hleft; el2.classList.toggle('warn',hleft<=8);
+    if(MP.myRole==='seeker'){ var rem=mpRemaining(); $('phase-tag').textContent='🔫 Tag them! '+rem+' still hidden · '+hleft+'s'; }
+    else { $('phase-tag').textContent = MP.tagged[MP.me.id]?'💥 You were spotted!':'🫥 Stay hidden… '+hleft+'s'; }
+    if(PHASE==='mphunt') render();
+  } else {
+    clearInterval(MP.loop); MP.loop=null; mpResults();
+  }
+}
+function mpEnterHunt(){
+  // hider: lock + broadcast our painted body (if we haven't yet)
+  if(MP.myRole==='hider' && !MP.locked){
+    if(PHASE==='place') lockPlacement();   // auto-lock if they never started painting
+    mpLockAndHide(true);
+  }
+  PHASE='mphunt'; $('place-tools').style.display='none'; $('paint-tools').style.display='none';
+  stage.style.cursor = MP.myRole==='seeker'?'crosshair':'default';
+  render();
+  // No human seeker in the room → the host runs a bot seeker so camo still matters.
+  if(MP.host && !MP.seekerId){ setTimeout(mpBotSeeker, 900); }
+}
+function mpBotSeeker(){
+  if(!MP.host || MP.seekerId) return;
+  var thr = 55 + (MP.level-1)*4;                         // harder each level; blend above this survives
+  Object.keys(MP.hides).forEach(function(id){
+    var h=MP.hides[id]; var camo=(h.camo!=null?h.camo:50);
+    if(camo < thr && !MP.tagged[id]){
+      var when = 1200 + Math.random()*(MP.hunt*1000*0.7);  // caught at a dramatic moment mid-hunt
+      setTimeout(function(){ if(!MP.tagged[id]){ mpOnTag({targetId:id,by:'bot'}); mpSend('tag',{targetId:id,by:'bot'}); } }, when);
+    }
+  });
+}
+function mpLockAndHide(silent){
+  if(MP.locked) { if(!silent){ PHASE='mpwait'; $('paint-tools').style.display='none'; $('phase-tag').textContent='🫥 Hidden! Waiting for the hunt…'; render(); } return; }
+  MP.locked=true;
+  // capture the painted body as a small PNG + its box, broadcast to the room
+  var bx=charBox();
+  var t=document.createElement('canvas'); t.width=bx.w; t.height=bx.h;
+  t.getContext('2d').drawImage(charCv,bx.x,bx.y,bx.w,bx.h,0,0,bx.w,bx.h);
+  var res=scoreCamo();
+  var hide={ id:MP.me.id, name:MP.me.name, pose:POSE, x:bx.x, y:bx.y, w:bx.w, h:bx.h,
+             camo:res.camo, bmp:t.toDataURL('image/png') };
+  MP.myHide=hide; mpOnHide(hide); mpSend('hide',hide);
+  if(!silent){ PHASE='mpwait'; $('paint-tools').style.display='none'; $('phase-tag').textContent='🫥 Hidden! Waiting for the hunt…'; render(); }
+}
+function mpOnHide(h){
+  if(!h||!h.id) return; MP.hides[h.id]=h;
+  var im=new Image(); im.onload=function(){ MP.imgs[h.id]=im; }; im.src=h.bmp;
+}
+function mpRemaining(){ var n=0; Object.keys(MP.hides).forEach(function(id){ if(!MP.tagged[id]) n++; }); return n; }
+function mpSeekerTag(pos){
+  // find the topmost un-tagged hider whose body box contains the click
+  var ids=Object.keys(MP.hides);
+  for(var i=ids.length-1;i>=0;i--){ var id=ids[i]; if(MP.tagged[id]) continue; var h=MP.hides[id];
+    if(pos.x>=h.x && pos.x<=h.x+h.w && pos.y>=h.y && pos.y<=h.y+h.h){ mpOnTag({targetId:id,by:MP.me.id}); mpSend('tag',{targetId:id,by:MP.me.id}); sfxSpray(); return; }
+  }
+  // missed — small paint splat feedback, no penalty
+  sfxSpray();
+}
+function mpOnTag(p){ if(!p||!p.targetId) return; if(MP.tagged[p.targetId]) return;
+  MP.tagged[p.targetId]=p.by||true;
+  if(p.targetId===MP.me.id){ MP.everCaught=true; sfxCaught(); }
+  if(PHASE==='mphunt') render();
+}
+function mpRenderHunt(){
+  // scene already drawn by render(); composite hiders
+  Object.keys(MP.hides).forEach(function(id){ var h=MP.hides[id], im=MP.imgs[id];
+    if(im){ ctx.drawImage(im,h.x,h.y); }
+    if(MP.tagged[id]){ // red splat over the caught hider
+      ctx.save(); for(var k=0;k<16;k++){ var a=rnd()*7,r=rnd()*Math.max(h.w,h.h)*0.5;
+        ctx.fillStyle='rgba(220,38,38,'+(.4+rnd()*.4)+')'; ctx.beginPath();
+        ctx.arc(h.x+h.w/2+Math.cos(a)*r,h.y+h.h/2+Math.sin(a)*r,3+rnd()*6,0,7); ctx.fill(); } ctx.restore();
+      ctx.fillStyle='#fff'; ctx.font='700 11px Inter'; ctx.textAlign='center';
+      ctx.fillText('✓ '+esc(h.name),h.x+h.w/2,h.y-4);
+    }
+  });
+  // hider sees their own tension; seeker sees a subtle vignette
+  if(MP.myRole==='seeker'){ ctx.save(); ctx.strokeStyle='rgba(220,38,38,.5)'; ctx.lineWidth=4; ctx.strokeRect(2,2,W-4,H-4); ctx.restore(); }
+}
+function mpResults(){
+  PHASE='done';
+  // survivors = hiders that were never tagged
+  var hiderIds=Object.keys(MP.hides);
+  var survivors=hiderIds.filter(function(id){ return !MP.tagged[id]; });
+  var caught=hiderIds.filter(function(id){ return MP.tagged[id]; });
+  // scoring: survive +100, each catch +60 for the seeker
+  survivors.forEach(function(id){ MP.scores[id]=(MP.scores[id]||0)+100; });
+  if(MP.seekerId){ MP.scores[MP.seekerId]=(MP.scores[MP.seekerId]||0)+caught.length*60; }
+  // clear caught paint so the scene shows what happened, then modal
+  render(); mpRenderHunt();
+  var iWon = MP.myRole==='seeker' ? caught.length>survivors.length : survivors.indexOf(MP.me.id)>=0;
+  if(iWon && MP.myRole!=='seeker') { sfxSurvive(); confetti(); }
+  setTimeout(function(){ mpShowResults(survivors,caught); }, 600);
+}
+function mpShowResults(survivors,caught){
+  MP.roundActive=false;
+  var board=Object.keys(MP.scores).map(function(id){ return {id:id,name:(MP.players[id]&&MP.players[id].name)||(MP.hides[id]&&MP.hides[id].name)||'Player',sc:MP.scores[id]}; })
+    .sort(function(a,b){ return b.sc-a.sc; }).slice(0,8);
+  var name=function(id){ return esc((MP.hides[id]&&MP.hides[id].name)||(MP.players[id]&&MP.players[id].name)||'Player'); };
+  var mine = MP.myRole==='seeker'
+    ? { emoji:'🔫', head:'You hunted!', sub:'You caught <b>'+caught.length+'</b> of '+(caught.length+survivors.length)+' hiders.' }
+    : (survivors.indexOf(MP.me.id)>=0
+        ? { emoji:'🫥', head:'You <b style="color:#15803d">survived!</b>', sub:'The seeker never found you. +100.' }
+        : { emoji:'🎯', head:'<b style="color:#dc2626">Spotted!</b>', sub:'The seeker tagged you this round.' });
+  var m=$('mcard');
+  m.innerHTML=
+    '<div style="font-size:44px;line-height:1;margin-bottom:2px">'+mine.emoji+'</div>'+
+    '<h1>'+mine.head+'</h1><div class="lead">'+mine.sub+'</div>'+
+    '<div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px">'+
+      '<div class="chip" style="background:rgba(21,128,61,.1);color:#15803d;border-color:rgba(21,128,61,.3)">🫥 '+survivors.length+' survived</div>'+
+      '<div class="chip" style="background:rgba(220,38,38,.1);color:#dc2626;border-color:rgba(220,38,38,.3)">🎯 '+caught.length+' caught</div>'+
+    '</div>'+
+    (survivors.length?'<div style="font-size:11.5px;color:var(--t2);margin-bottom:10px">Survivors: '+survivors.map(name).join(' · ')+'</div>':'')+
+    '<div class="lb"><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin-bottom:6px">🏆 Room scoreboard</div>'+
+      board.map(function(r,i){ return '<div class="lb-row'+(r.id===MP.me.id?' me':'')+'"><span class="rk">'+(i+1)+'</span><span style="flex:1">'+esc(r.name)+'</span><b style="color:#15803d">'+r.sc+'</b></div>'; }).join('')+'</div>'+
+    (MP.host
+      ? '<button class="btn purple" style="width:100%;margin-top:16px" onclick="MP.level=(MP.level||1)+1;mpHostStart()">Next round →</button>'
+      : '<div class="muted" style="margin-top:16px">Waiting for the host to start the next round…</div>')+
+    '<button class="btn sec sm" style="margin-top:10px" onclick="mpLeave()">Leave room</button>';
+  ov(true);
+}
+
+/* boot — MP handlers (openMPLobby, mpConnect, mpHostStart, mpLeave) are already on window. */
 loadBest(); startMenu();
 window.setTool=setTool; window.pickCustom=pickCustom; window.syncSwatch=syncSwatch; window.syncPat=syncPat;
 window.autoBlend=autoBlend; window.undoPaint=undoPaint; window.clearPaint=clearPaint; window.setPose=setPose;
