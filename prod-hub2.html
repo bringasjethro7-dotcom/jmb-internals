@@ -152,6 +152,7 @@ table tbody tr:hover td{background:rgba(255,107,26,.05)}
     <span class="spacer"></span>
     <span class="who">Hi, <b id="who-name">—</b></span>
     <button class="btn ghost sm" onclick="openReview()" style="border-color:rgba(21,128,61,.45);color:#15803d;">✔ Review volumes</button>
+    <button class="btn ghost sm" onclick="openCutoffs()" style="border-color:rgba(124,58,237,.45);color:#7c3aed;">📊 Cutoff scores</button>
     <button class="btn ghost sm" onclick="load()">↻ Refresh</button>
     <button class="btn ghost sm" onclick="signOut()">Sign out</button>
   </header>
@@ -192,6 +193,28 @@ table tbody tr:hover td{background:rgba(255,107,26,.05)}
     </div>
     <div id="bot-panel" style="display:none;margin-bottom:14px;"></div>
     <div id="rev-body"><div class="empty">Loading…</div></div>
+  </div>
+</div>
+
+<!-- CUTOFF SCORES MODAL -->
+<div id="cut-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:120;padding:20px;overflow:auto;">
+  <div style="max-width:920px;margin:24px auto;background:#fff;border:1px solid rgba(15,23,42,.10);border-radius:16px;padding:20px 22px;box-shadow:var(--shadow-lg);">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px;">
+      <div style="font-size:16px;font-weight:800;">📊 Productivity — cutoff scores</div>
+      <span class="spacer" style="flex:1"></span>
+      <input type="month" id="cut-month" onchange="loadCutoffs()" style="background:#fff;border:1px solid rgba(15,23,42,.14);border-radius:9px;padding:7px 10px;font:600 12.5px/1 inherit;">
+      <button class="btn ghost sm" onclick="closeCutoffs()">✕ Close</button>
+    </div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:6px;line-height:1.5;">
+      Productivity is finalized <b>twice a month</b>, one score per payroll cutoff (1–15 and 16–end).
+      Each task scores against the team average — at/above = <b style="color:#15803d;">100</b>, below scales down.
+      The cutoff total is those task scores <b>weighted by hours</b>. The monthly scorecard uses the <b>average of both cutoffs</b>.
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+      <button class="btn ghost sm" id="cut-finalize" onclick="finalizeCutoffs()" style="border-color:rgba(124,58,237,.45);color:#7c3aed;">🔒 Finalize closed cutoffs now</button>
+      <span style="font-size:11px;color:var(--t3);">Locks a snapshot so later edits don't move a finalized score. Runs nightly too.</span>
+    </div>
+    <div id="cut-body"><div class="empty">Pick a month.</div></div>
   </div>
 </div>
 
@@ -251,6 +274,85 @@ function pvApplyLock(){
     if(!n){ var st=document.getElementById('stats'); if(st){ n=document.createElement('div'); n.id='pv-note'; n.className='pv-note'; n.innerHTML='🔒 Productivity scores &amp; rankings are visible to <b>admins</b> only. Sign in as <b>ADMIN</b> to view them.'; st.parentNode.insertBefore(n, st); } }
     if(n) n.style.display='block';
   } else if(n){ n.style.display='none'; }
+}
+
+/* ═══════════ CUTOFF SCORES ═══════════ */
+function scoreColor(s){ return s==null?'var(--t3)':(s>=95?'#15803d':(s>=80?'#b45309':'#dc2626')); }
+window.openCutoffs=function(){
+  var m=$('cut-modal'); if(!m) return; m.style.display='block';
+  if(!$('cut-month').value){ var d=new Date(); $('cut-month').value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+  var canFin=(USER && (String(USER.id).toUpperCase()==='ADMIN' || clRank(USER)>=7));
+  var fb=$('cut-finalize'); if(fb) fb.style.display=canFin?'':'none';
+  loadCutoffs();
+};
+window.closeCutoffs=function(){ var m=$('cut-modal'); if(m) m.style.display='none'; };
+async function loadCutoffs(){
+  var month=$('cut-month').value; if(!month) return;
+  $('cut-body').innerHTML='<div class="empty">Loading…</div>';
+  try{
+    var r=await fetch(PORTAL_URL+'?action=prod_cutoffs_all&month='+encodeURIComponent(month)+'&_='+Date.now());
+    var d=await r.json();
+    if(!d||!d.ok){ $('cut-body').innerHTML='<div class="empty" style="color:var(--red)">Could not load ('+esc((d&&d.error)||'error')+').</div>'; return; }
+    renderCutoffs(d);
+  }catch(e){ $('cut-body').innerHTML='<div class="empty" style="color:var(--red)">Network error.</div>'; }
+}
+function pill(c){
+  if(c.score==null) return '<span style="color:var(--t3);font-size:12px;">—</span>';
+  var tag=c.final?'<span title="Finalized — locked snapshot" style="font-size:9px;color:#7c3aed;">🔒</span>'
+                 :(c.closed?'':'<span title="Live — cutoff still open" style="font-size:9px;color:var(--t3);">•live</span>');
+  return '<b style="color:'+scoreColor(c.score)+';font-size:15px;">'+c.score+'</b>'+
+         '<span style="color:var(--t3);font-size:10px;"> /100 '+tag+'</span>'+
+         '<div style="font-size:9.5px;color:var(--t3);">'+(Math.round(c.hours*10)/10)+'h</div>';
+}
+function renderCutoffs(d){
+  var L=d.labels||[], rows=d.rows||[];
+  if(!rows.length){ $('cut-body').innerHTML='<div class="empty">No scorable output for this month yet.</div>'; return; }
+  var head='<tr><th style="text-align:left;padding:9px 10px;">Employee</th>'+
+    L.map(function(x){ return '<th style="padding:9px 10px;">'+esc(x.label)+(x.closed?'':' <span style="color:var(--t3);font-weight:500;font-size:10px;">(open)</span>')+'</th>'; }).join('')+
+    '<th style="padding:9px 10px;">Monthly<br><span style="font-weight:500;color:var(--t3);font-size:10px;">(avg of both)</span></th></tr>';
+  var body=rows.map(function(r){
+    return '<tr style="border-top:1px solid rgba(15,23,42,.08);cursor:pointer;" onclick="toggleCutTasks(this)">'+
+      '<td style="padding:9px 10px;font-weight:600;text-align:left;">'+esc(r.full_name)+
+        '<div style="font-size:10px;color:var(--t3);font-weight:400;">'+esc(r.employee_id)+' · tap for tasks</div></td>'+
+      r.cutoffs.map(function(c){ return '<td style="padding:9px 10px;text-align:center;">'+pill(c)+'</td>'; }).join('')+
+      '<td style="padding:9px 10px;text-align:center;"><b style="color:'+scoreColor(r.monthly)+';font-size:17px;">'+(r.monthly==null?'—':r.monthly)+'</b></td></tr>'+
+      '<tr class="cut-tasks" style="display:none;background:#f8fafc;"><td colspan="'+(L.length+2)+'" style="padding:4px 14px 12px;" data-emp="'+esc(r.employee_id)+'"></td></tr>';
+  }).join('');
+  $('cut-body').innerHTML='<div style="overflow:auto;border:1px solid var(--line);border-radius:12px;">'+
+    '<table style="width:100%;border-collapse:collapse;font-size:13px;text-align:center;">'+
+    '<thead style="background:#f8fafc;">'+head+'</thead><tbody>'+body+'</tbody></table></div>';
+}
+window.toggleCutTasks=function(tr){
+  var det=tr.nextElementSibling; if(!det||!det.classList.contains('cut-tasks')) return;
+  var open=det.style.display!=='none';
+  det.style.display = open?'none':'';
+  if(open) return;
+  var cell=det.querySelector('td'), emp=cell.getAttribute('data-emp');
+  cell.innerHTML='<span style="font-size:11px;color:var(--t3);">Loading tasks…</span>';
+  fetch(PORTAL_URL+'?action=prod_cutoffs&employee_id='+encodeURIComponent(emp)+'&month='+encodeURIComponent($('cut-month').value)+'&_='+Date.now())
+    .then(function(r){return r.json();}).then(function(d){
+      if(!d||!d.ok){ cell.innerHTML='<span style="font-size:11px;color:var(--red)">Could not load.</span>'; return; }
+      cell.innerHTML=(d.cutoffs||[]).map(function(c){
+        if(!c.tasks||!c.tasks.length) return '<div style="font-size:11px;color:var(--t3);margin:4px 0;"><b>'+esc(c.label)+':</b> no scored tasks</div>';
+        var rows=c.tasks.map(function(t){
+          return '<span style="display:inline-flex;gap:5px;align-items:center;font-size:11px;background:#fff;border:1px solid var(--line);border-radius:20px;padding:3px 9px;margin:2px 4px 2px 0;">'+
+            esc(t.task)+' <b style="color:'+scoreColor(t.score)+'">'+t.score+'</b>'+
+            '<span style="color:var(--t3);">'+(Math.round(t.hours*10)/10)+'h</span></span>';
+        }).join('');
+        return '<div style="margin:6px 0;"><div style="font-size:10.5px;font-weight:800;color:var(--t2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;">'+esc(c.label)+' — hours-weighted → <span style="color:'+scoreColor(c.score)+'">'+(c.score==null?'—':c.score)+'/100</span></div>'+rows+'</div>';
+      }).join('');
+    }).catch(function(){ cell.innerHTML='<span style="font-size:11px;color:var(--red)">Network error.</span>'; });
+};
+async function finalizeCutoffs(){
+  if(!confirm('Finalize all CLOSED cutoffs now? This locks a snapshot of each score so later volume edits won\'t move a finalized number.')) return;
+  var b=$('cut-finalize'); if(b){ b.disabled=true; b.textContent='Finalizing…'; }
+  try{
+    var r=await fetch(PORTAL_URL+'?action=prod_finalize&by_id='+encodeURIComponent(USER.id)+'&by_name='+encodeURIComponent(USER.name)+'&_='+Date.now());
+    var d=await r.json();
+    if(d&&d.ok){ alert('Finalized '+d.finalized+' score(s) across: '+(d.periods.join(', ')||'no closed cutoffs')+'.'); loadCutoffs(); }
+    else alert('Failed: '+((d&&d.error==='NOT_LEAD')?'leads only':((d&&d.error)||'error')));
+  }catch(e){ alert('Network error.'); }
+  finally{ if(b){ b.disabled=false; b.textContent='🔒 Finalize closed cutoffs now'; } }
 }
 
 /* ---- load + render ---- */
