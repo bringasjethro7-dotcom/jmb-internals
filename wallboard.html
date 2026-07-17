@@ -22,8 +22,9 @@
   html,body{height:100%;overflow:hidden}
   body{font-family:var(--sans);color:var(--ink);height:100vh;width:100vw;cursor:none;
     background:radial-gradient(1500px 900px at 50% -22%, rgba(255,90,0,.08), transparent 55%),linear-gradient(180deg,var(--bg1),var(--bg0));}
-  /* Fill the whole screen with just a hair of safe edge so TV overscan doesn't clip anything. */
-  .wrap{position:absolute;inset:1.4vh 1.6vw;display:flex;flex-direction:column}
+  /* Fill the whole screen with just a hair of safe edge so TV overscan doesn't clip anything.
+     Explicit top/left/right/bottom (not the `inset` shorthand) for older smart-TV browsers. */
+  .wrap{position:absolute;top:1.4vh;left:1.6vw;right:1.6vw;bottom:1.4vh;display:flex;flex-direction:column}
 
   header{display:flex;align-items:center;justify-content:space-between;padding:.6vh .6vw 0}
   .brand{display:flex;align-items:center;gap:1.4vw}
@@ -39,7 +40,7 @@
   .clock .d{font-size:1.45vh;color:var(--ink2);font-weight:600;margin-top:1vh;letter-spacing:.03em}
 
   .stage{flex:1;min-height:0;position:relative;margin:2.6vh 1vw 1vh}
-  .panel{position:absolute;inset:0;overflow:hidden;opacity:0;transform:translateY(1.8vh);transition:opacity .9s ease,transform .9s ease;pointer-events:none}
+  .panel{position:absolute;top:0;left:0;right:0;bottom:0;overflow:hidden;opacity:0;transform:translateY(1.8vh);transition:opacity .9s ease,transform .9s ease;pointer-events:none}
   .panel.active{opacity:1;transform:none}
   /* auto-fit wrapper: scaled by JS so a panel's content always fits the screen exactly */
   .pin{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;transform-origin:top left}
@@ -255,8 +256,9 @@ function fitPanel(panel){ if(!panel) return; var pin=ensurePin(panel);
   pin.style.width='100%'; pin.style.height='100%'; pin.style.transform='none';
   requestAnimationFrame(function(){
     var sh=pin.scrollHeight, sw=pin.scrollWidth, ch=panel.clientHeight, cw=panel.clientWidth;
+    if(ch<40 || cw<40) return;   // not laid out yet — never scale to a bad value
     var sc=Math.min(1, (ch-1)/(sh||1), (cw-1)/(sw||1));
-    if(sc<1){ pin.style.height=(100/sc)+'%'; pin.style.width=(100/sc)+'%'; pin.style.transform='scale('+sc.toFixed(4)+')'; }
+    if(sc>0 && sc<0.999){ pin.style.height=(100/sc)+'%'; pin.style.width=(100/sc)+'%'; pin.style.transform='scale('+sc.toFixed(4)+')'; }
   });
 }
 function buildStage(){ var P=panelList(); var stage=document.getElementById('stage'); stage.innerHTML=P.map(function(fn){ return fn(); }).join('');
