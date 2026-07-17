@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>JMB Quiz Bee — Play</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--bg0:#0b1020;--bg1:#121a30;--ink:#f2f5ff;--ink2:#9fb0d0;--ink3:#5f6f92;--o1:#ff7a29;--o2:#ff5a00;
+    --morn:#f59e0b;--night:#7c8cff;--card:rgba(255,255,255,.06);--line:rgba(255,255,255,.12);
+    --green:#34d399;--red:#f87171;--sans:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{font-family:var(--sans);color:var(--ink);min-height:100vh;
+    background:radial-gradient(900px 500px at 15% -10%,rgba(245,158,11,.14),transparent 55%),
+      radial-gradient(900px 500px at 90% 110%,rgba(124,140,255,.16),transparent 58%),
+      linear-gradient(180deg,var(--bg1),var(--bg0));display:flex;flex-direction:column}
+  .wrap{flex:1;display:flex;flex-direction:column;padding:22px 18px;max-width:520px;margin:0 auto;width:100%}
+  .brand{text-align:center;font-size:26px;font-weight:800;margin-bottom:2px}.brand em{font-style:normal;color:var(--o1)}
+  .sub{text-align:center;font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink3);font-weight:700;margin-bottom:26px}
+
+  .scene{display:none;flex:1;flex-direction:column}.scene.active{display:flex}
+  label{font-size:12px;font-weight:700;color:var(--ink2);text-transform:uppercase;letter-spacing:.1em;margin:16px 0 7px;display:block}
+  input{width:100%;background:var(--card);border:1px solid var(--line);border-radius:14px;color:var(--ink);font:700 20px var(--sans);padding:16px 16px;outline:none}
+  input:focus{border-color:var(--o1)}
+  input.code{text-transform:uppercase;letter-spacing:.2em;text-align:center}
+  .shifts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .sbtn{display:flex;flex-direction:column;align-items:center;gap:8px;background:var(--card);border:2px solid var(--line);border-radius:16px;padding:20px 12px;font-size:17px;font-weight:800;color:var(--ink2);cursor:pointer}
+  .sbtn svg{width:34px;height:34px}
+  .sbtn.morn.on{border-color:var(--morn);color:var(--morn);background:rgba(245,158,11,.14)}
+  .sbtn.night.on{border-color:var(--night);color:var(--night);background:rgba(124,140,255,.16)}
+  .go{width:100%;margin-top:28px;background:linear-gradient(135deg,var(--o1),var(--o2));border:none;border-radius:16px;color:#fff;font:800 20px var(--sans);padding:18px;cursor:pointer;box-shadow:0 10px 30px rgba(255,90,0,.35)}
+  .go:disabled{opacity:.4;box-shadow:none}
+  .err{color:var(--red);font-size:13px;font-weight:700;text-align:center;margin-top:12px;min-height:16px}
+
+  .waitwrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px}
+  .you{font-size:15px;color:var(--ink2);font-weight:700}
+  .badge{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:20px;padding:10px 18px;border-radius:99px}
+  .badge.morn{color:var(--morn);background:rgba(245,158,11,.14)}.badge.night{color:var(--night);background:rgba(124,140,255,.16)}
+  .badge svg{width:22px;height:22px}
+  .pulse{font-size:22px;font-weight:800;margin-top:10px}.pulse .d{animation:blink 1.4s infinite}
+  .pulse .d:nth-child(2){animation-delay:.2s}.pulse .d:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
+  .score-pill{margin-top:8px;font-size:14px;color:var(--ink3);font-weight:700}.score-pill b{color:var(--o1);font-size:18px}
+
+  /* question */
+  .qhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .qmeta{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)}
+  .qtimer{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--o1)}
+  .qtimer.low{color:var(--red)}
+  .qtext{font-size:23px;font-weight:800;line-height:1.25;margin-bottom:20px}
+  .qtag{display:inline-block;font-size:11px;font-weight:800;color:var(--o2);background:rgba(255,90,0,.14);border:1px solid rgba(255,90,0,.3);border-radius:99px;padding:4px 10px;margin-bottom:14px}
+  .aopts{display:flex;flex-direction:column;gap:12px}
+  .aopt{display:flex;align-items:center;gap:14px;background:var(--card);border:2px solid var(--line);border-radius:16px;padding:18px 16px;font-size:18px;font-weight:700;cursor:pointer;text-align:left;color:var(--ink)}
+  .aopt .lt{width:38px;height:38px;border-radius:11px;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:var(--ink2);flex-shrink:0}
+  .aopt.sel{border-color:var(--o1);background:rgba(255,122,41,.14)}.aopt.sel .lt{background:var(--o1);color:#fff}
+  .aopt.correct{border-color:var(--green);background:rgba(52,211,153,.16)}.aopt.correct .lt{background:var(--green);color:#062a1c}
+  .aopt.wrong{border-color:var(--red);background:rgba(248,113,113,.14)}.aopt.wrong .lt{background:var(--red);color:#3a0d0d}
+  .aopt.lock{pointer-events:none}.aopt.fade{opacity:.4}
+  .result{text-align:center;margin-top:20px;font-size:20px;font-weight:800;min-height:26px}
+  .result.win{color:var(--green)}.result.lose{color:var(--red)}.result.wait{color:var(--ink3);font-size:15px}
+
+  .endwrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px}
+  .endwrap .big{font-size:40px;font-weight:800;color:var(--o1)}
+  .endwrap .lab{font-size:14px;color:var(--ink3);font-weight:700;text-transform:uppercase;letter-spacing:.16em}
+  /* Kahoot-style animations */
+  @keyframes pin{0%{opacity:0;transform:translateY(22px)}100%{opacity:1;transform:none}}
+  @keyframes pop{0%{transform:scale(1)}45%{transform:scale(1.05)}100%{transform:scale(1)}}
+  @keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-9px)}40%,60%{transform:translateX(9px)}}
+  @keyframes cglow{0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}50%{box-shadow:0 0 26px 2px rgba(52,211,153,.55)}}
+  @keyframes tp{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
+  @keyframes bpop{0%{opacity:0;transform:scale(.6)}60%{transform:scale(1.15)}100%{opacity:1;transform:scale(1)}}
+  .q-anim .aopt{animation:pin .45s cubic-bezier(.2,.9,.25,1) both}
+  .q-anim .aopt:nth-child(1){animation-delay:.04s}.q-anim .aopt:nth-child(2){animation-delay:.1s}
+  .q-anim .aopt:nth-child(3){animation-delay:.16s}.q-anim .aopt:nth-child(4){animation-delay:.22s}
+  .aopt.sel{animation:pop .3s ease}
+  .aopt.correct{animation:pop .35s ease, cglow 1s ease .2s 2}
+  .aopt.wrong{animation:shake .5s ease}
+  .qtimer.low{animation:tp .5s ease infinite;display:inline-block}
+  .big.win{animation:bpop .5s cubic-bezier(.2,.9,.25,1) both}
+  #muteBtn{position:fixed;top:10px;right:10px;z-index:50;background:var(--card);border:1px solid var(--line);color:var(--ink3);font:700 11px var(--sans);padding:7px 11px;border-radius:99px;cursor:pointer}
+</style>
+</head>
+<body>
+<button id="muteBtn" onclick="toggleMute()">♪ Sound</button>
+<div class="wrap">
+  <div class="brand">JMB <em>Quiz Bee</em></div>
+  <div class="sub">Morning vs Night</div>
+
+  <!-- JOIN -->
+  <div class="scene active" id="sc-join">
+    <label>Room code</label>
+    <input class="code" id="in-room" maxlength="4" placeholder="ABCD" autocomplete="off">
+    <label>Your name</label>
+    <input id="in-name" maxlength="24" placeholder="Juan D." autocomplete="off">
+    <label>Your shift</label>
+    <div class="shifts">
+      <button class="sbtn morn" id="sb-morn" onclick="pickShift('morn')"><span id="ic-morn"></span>Morning</button>
+      <button class="sbtn night" id="sb-night" onclick="pickShift('night')"><span id="ic-night"></span>Night</button>
+    </div>
+    <button class="go" id="joinBtn" onclick="doJoin()" disabled>Join the Quiz</button>
+    <div class="err" id="err"></div>
+  </div>
+
+  <!-- WAITING / LOBBY -->
+  <div class="scene" id="sc-wait">
+    <div class="waitwrap">
+      <div class="you">You're in as</div>
+      <div class="badge" id="w-badge"></div>
+      <div class="you" id="w-name"></div>
+      <div class="pulse" id="w-msg">Waiting for the host<span class="d">.</span><span class="d">.</span><span class="d">.</span></div>
+      <div class="score-pill" id="w-score" style="display:none">Your score · <b>0</b></div>
+    </div>
+  </div>
+
+  <!-- QUESTION -->
+  <div class="scene" id="sc-q">
+    <div class="qhead"><span class="qmeta" id="q-meta">Q1 / 20</span><span class="qtimer" id="q-timer">15</span></div>
+    <span class="qtag" id="q-tag">1 pt</span>
+    <div class="qtext" id="q-text">—</div>
+    <div class="aopts" id="q-opts"></div>
+    <div class="result" id="q-result"></div>
+  </div>
+
+  <!-- END -->
+  <div class="scene" id="sc-end">
+    <div class="endwrap">
+      <div class="lab">Your final score</div>
+      <div class="big" id="e-score">0</div>
+      <div class="you" id="e-team"></div>
+      <div class="pulse" style="font-size:16px;color:var(--ink2)">Check the TV for the winning shift 🏆</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+var SUPA_URL='https://rvyrnkjqxnijxydloujk.supabase.co';
+var SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2eXJua2pxeG5panh5ZGxvdWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NzAwODQsImV4cCI6MjA5NzE0NjA4NH0.SwkSkmbeWrhm5PZZDSZ1Z4hbjpQ0L2CRtuKQmpHshBE';
+function el(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+var SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+var MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+el('ic-morn').innerHTML=SUN;el('ic-night').innerHTML=MOON;
+
+/* ═══ Kahoot-style sound + haptics (procedural, no asset files) ═══ */
+var _AC=null,_mg=null,_muted=false;
+function AC(){ if(!_AC){ try{ _AC=new (window.AudioContext||window.webkitAudioContext)(); _mg=_AC.createGain(); _mg.gain.value=.55; _mg.connect(_AC.destination); }catch(e){} } if(_AC&&_AC.state==='suspended'){ try{_AC.resume();}catch(e){} } return _AC; }
+function tone(f,st,d,ty,v){ var c=AC(); if(!c||_muted) return; var o=c.createOscillator(),g=c.createGain(); o.type=ty||'sine'; o.frequency.value=f; var t=c.currentTime+(st||0); g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(v||.3,t+.012); g.gain.exponentialRampToValueAtTime(.0001,t+d); o.connect(g); g.connect(_mg); o.start(t); o.stop(t+d+.03); }
+function noise(d,v,ff){ var c=AC(); if(!c||_muted) return; var n=Math.floor(c.sampleRate*d),b=c.createBuffer(1,n,c.sampleRate),da=b.getChannelData(0); for(var i=0;i<n;i++) da[i]=Math.random()*2-1; var s=c.createBufferSource(); s.buffer=b; var f=c.createBiquadFilter(); f.type='bandpass'; f.frequency.value=ff||1200; var g=c.createGain(); var t=c.currentTime; g.gain.setValueAtTime(v||.2,t); g.gain.exponentialRampToValueAtTime(.0001,t+d); s.connect(f); f.connect(g); g.connect(_mg); s.start(t); s.stop(t+d); }
+function vib(p){ try{ if(navigator.vibrate&&!_muted) navigator.vibrate(p); }catch(e){} }
+function sfxTap(){ tone(680,0,.09,'square',.22); vib(25); }
+function sfxWhoosh(){ noise(.28,.14,800); }
+function sfxCorrect(){ [523.25,659.25,783.99,880].forEach(function(f,i){ tone(f,i*.09,.2,'triangle',.32); }); vib([30,40,70]); }
+function sfxWrong(){ tone(200,0,.32,'sawtooth',.28); tone(150,.1,.3,'sawtooth',.24); vib(180); }
+function sfxTick(){ tone(1400,0,.05,'square',.14); }
+function sfxFanfare(){ [[261.63,0],[329.63,.12],[392,.24],[523.25,.36],[392,.5],[523.25,.62]].forEach(function(p){ tone(p[0],p[1],.4,'triangle',.32); }); }
+function toggleMute(){ _muted=!_muted; el('muteBtn').textContent=_muted?'♪ Muted':'♪ Sound'; el('muteBtn').style.opacity=_muted?'.5':'1'; }
+
+var ID='p_'+Math.random().toString(36).slice(2,10);
+var shift=null, myName='', ROOM='', supa=null, ch=null, joined=false;
+var score=0, curQ=null, myChoice=null, locked=false, qtimer=null, tleft=15, revealedQi=-1;
+
+// prefill room from ?room=
+try{ var m=location.search.match(/room=([A-Za-z0-9]{4})/); if(m){ el('in-room').value=m[1].toUpperCase(); } }catch(e){}
+
+function LT(i){ return String.fromCharCode(65+i); }
+function pickShift(s){ shift=s; el('sb-morn').classList.toggle('on',s==='morn'); el('sb-night').classList.toggle('on',s==='night'); validate(); }
+function validate(){ var ok=el('in-room').value.trim().length===4 && el('in-name').value.trim().length>=1 && shift; el('joinBtn').disabled=!ok; }
+el('in-room').addEventListener('input',function(){ this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,''); validate(); });
+el('in-name').addEventListener('input',validate);
+
+function show(id){ ['sc-join','sc-wait','sc-q','sc-end'].forEach(function(s){ el(s).classList.toggle('active',s===id); }); }
+
+function doJoin(){ ROOM=el('in-room').value.trim().toUpperCase(); myName=el('in-name').value.trim(); if(ROOM.length!==4||!myName||!shift) return;
+  AC(); sfxTap(); el('joinBtn').disabled=true; el('err').textContent='Connecting…';
+  try{ supa=window.supabase.createClient(SUPA_URL,SUPA_KEY);
+    ch=supa.channel('quizbee-'+ROOM,{config:{broadcast:{self:false}}});
+    ch.on('broadcast',{event:'host'},function(){ if(!joined){ joined=true; onJoined(); } });
+    ch.on('broadcast',{event:'q'},function(m){ onQ(m.payload||{}); });
+    ch.on('broadcast',{event:'reveal'},function(m){ onReveal(m.payload||{}); });
+    ch.on('broadcast',{event:'ended'},function(){ onEnded(); });
+    ch.on('broadcast',{event:'reset'},function(){ onReset(); });
+    ch.subscribe(function(st){ if(st==='SUBSCRIBED'){ sendJoin();
+      // if no host ack in 2.5s, still let them in (host may already be running)
+      setTimeout(function(){ if(!joined){ joined=true; onJoined(); } },2500); } });
+  }catch(e){ el('err').textContent='Connection failed. Check your internet and retry.'; el('joinBtn').disabled=false; }
+}
+function sendJoin(){ bc('join',{id:ID,name:myName,shift:shift}); }
+function bc(ev,p){ try{ if(ch) ch.send({type:'broadcast',event:ev,payload:p||{}}); }catch(e){} }
+
+function onJoined(){ el('w-badge').className='badge '+shift; el('w-badge').innerHTML=(shift==='morn'?SUN:MOON)+(shift==='morn'?'Morning':'Night')+' Shift';
+  el('w-name').textContent=myName; show('sc-wait'); sendJoin(); }
+
+function onQ(p){ if(!p||p.qi==null) return; curQ=p; myChoice=null; locked=false; revealedQi=-1;
+  el('q-meta').textContent='Q'+(p.num||p.qi+1)+' / '+(p.total||20);
+  el('q-tag').textContent=(p.pts||1)+' pt'+((p.pts||1)>1?'s':'')+' · '+(p.tag||'');
+  el('q-text').textContent=p.q;
+  el('q-result').textContent=''; el('q-result').className='result';
+  el('q-opts').innerHTML=(p.o||[]).map(function(o,i){ return '<button class="aopt" id="a-'+i+'" onclick="answer('+i+')"><span class="lt">'+LT(i)+'</span><span>'+esc(o)+'</span></button>'; }).join('');
+  show('sc-q'); sfxWhoosh();
+  var sc=el('sc-q'); sc.classList.remove('q-anim'); void sc.offsetWidth; sc.classList.add('q-anim');
+  startT(p.dur||15); }
+function startT(d){ tleft=d; el('q-timer').textContent=tleft; el('q-timer').classList.remove('low'); clearInterval(qtimer);
+  qtimer=setInterval(function(){ tleft--; el('q-timer').textContent=Math.max(0,tleft); if(tleft<=5) el('q-timer').classList.add('low');
+    if(tleft<=3&&tleft>0){ sfxTick(); vib(25); }
+    if(tleft<=0){ clearInterval(qtimer); lockAll(); if(myChoice==null){ el('q-result').className='result wait'; el('q-result').textContent="Time's up — waiting for the answer…"; } } },1000); }
+function answer(i){ if(locked||!curQ) return; myChoice=i; locked=true; sfxTap();
+  for(var k=0;k<(curQ.o||[]).length;k++){ el('a-'+k).classList.add('lock'); if(k===i) el('a-'+k).classList.add('sel'); else el('a-'+k).classList.add('fade'); }
+  el('q-result').className='result wait'; el('q-result').textContent='Locked in ✓  waiting for reveal…';
+  bc('answer',{id:ID,qi:curQ.qi,choice:i}); }
+function lockAll(){ locked=true; if(curQ) for(var k=0;k<(curQ.o||[]).length;k++) el('a-'+k) && el('a-'+k).classList.add('lock'); }
+
+function onReveal(p){ if(!curQ||p==null||p.qi!==curQ.qi||revealedQi===p.qi) return; revealedQi=p.qi; clearInterval(qtimer); lockAll();
+  var c=p.correct, pts=p.pts||curQ.pts||1;
+  for(var k=0;k<(curQ.o||[]).length;k++){ var b=el('a-'+k); if(!b) continue; b.classList.remove('fade','sel');
+    if(k===c) b.classList.add('correct'); else if(k===myChoice) b.classList.add('wrong'); else b.classList.add('fade'); }
+  if(myChoice===c){ score+=pts; sfxCorrect(); el('q-result').className='result win'; el('q-result').textContent='Correct!  +'+pts+' pt'+(pts>1?'s':'')+'   ·   '+score+' total'; }
+  else if(myChoice==null){ sfxWrong(); el('q-result').className='result lose'; el('q-result').textContent='No answer   ·   '+score+' total'; }
+  else{ sfxWrong(); el('q-result').className='result lose'; el('q-result').textContent='Not this time   ·   '+score+' total'; }
+  el('w-score').style.display=''; el('w-score').innerHTML='Your score · <b>'+score+'</b>'; }
+
+function onEnded(){ clearInterval(qtimer); el('e-score').textContent=score; el('e-score').classList.add('win'); el('e-team').innerHTML='Team '+(shift==='morn'?'Morning':'Night'); show('sc-end'); sfxFanfare(); vib([40,60,40,60,120]); }
+function onReset(){ score=0; curQ=null; myChoice=null; locked=false; el('w-score').style.display='none'; onJoined(); }
+</script>
+</body>
+</html>

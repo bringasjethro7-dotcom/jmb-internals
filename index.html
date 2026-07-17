@@ -567,7 +567,8 @@ var TOOLS = [
   { kind:'auto', title:'Productivity Hub', sub:'QPH per task · team comparison (leads)', url:'prod-hub2.html', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l3-4 3 2 4-6"/></svg>' },
   { kind:'auto', title:'QA Computer', sub:'Weekly QA scoring per project (leads)', url:'qa-computer.html', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>' },
   { kind:'auto', title:'Project Automations', sub:'Custom tools we build per project', url:'#', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>' },
-  { kind:'tool', title:'Office Wallboard', sub:'Live TV display · presence, announcements, celebrations', url:'wallboard.html', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>' }
+  { kind:'tool', title:'Office Wallboard', sub:'Live TV display · presence, announcements, celebrations', url:'wallboard.html', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>' },
+  { kind:'tool', admin:true, title:'Quiz Bee', sub:'Meeting game · Morning vs Night, host-run on the TV (admin)', url:'quizbee.html', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.1 9a3 3 0 1 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="10"/></svg>' }
 ];
 
 var ANNOUNCEMENTS = [
@@ -827,7 +828,8 @@ function renderLinks(){
 }
 function renderTools(){
   var go='<span class="go"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>';
-  document.getElementById('tools').innerHTML = TOOLS.filter(function(t){ return t.url && t.url!=='#'; }).map(function(t){   // only show published tools/automations
+  var _isAdmin=false; try{ var _u=JSON.parse(sessionStorage.getItem('internals_user')||'null'); _isAdmin=!!(_u && String(_u.employee_id).toUpperCase()==='ADMIN'); }catch(e){}
+  document.getElementById('tools').innerHTML = TOOLS.filter(function(t){ return t.url && t.url!=='#' && (!t.admin || _isAdmin); }).map(function(t){   // only show published tools; admin-only tiles hidden from staff
     var badge='<span class="badge '+(t.kind==='auto'?'auto':'tool')+'">'+(t.kind==='auto'?'Automation':'Tool')+'</span>';
     var inner='<span class="ic">'+t.icon+'</span><span class="tx"><b>'+esc(t.title)+'</b><span>'+esc(t.sub)+'</span></span>'+badge;
     return '<a class="link" href="'+t.url+'" target="_blank" rel="noopener">'+inner+go+'</a>';

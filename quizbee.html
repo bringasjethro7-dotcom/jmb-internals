@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JMB Quiz Bee — Host (TV)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--bg0:#0b1020;--bg1:#121a30;--ink:#f2f5ff;--ink2:#9fb0d0;--ink3:#5f6f92;--o1:#ff7a29;--o2:#ff5a00;
+    --morn:#f59e0b;--mornSoft:rgba(245,158,11,.15);--night:#7c8cff;--nightSoft:rgba(124,140,255,.18);
+    --card:rgba(255,255,255,.05);--line:rgba(255,255,255,.10);--green:#34d399;--red:#f87171;
+    --sans:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden}
+  body{font-family:var(--sans);color:var(--ink);height:100vh;width:100vw;
+    background:radial-gradient(1400px 800px at 18% -10%,rgba(245,158,11,.14),transparent 55%),
+      radial-gradient(1400px 800px at 92% 112%,rgba(124,140,255,.16),transparent 58%),
+      linear-gradient(180deg,var(--bg1),var(--bg0));}
+  .wrap{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;padding:2.4vh 2.6vw 1.6vh}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.8vh}
+  .brand{font-size:2.8vh;font-weight:800}.brand em{font-style:normal;color:var(--o1)}
+  .brand .s{font-size:1.2vh;color:var(--ink3);font-weight:700;letter-spacing:.26em;text-transform:uppercase;margin-top:.5vh}
+  .join{text-align:right}.join .jc{font-size:2.6vh;font-weight:800}.join .jc b{color:var(--o1);letter-spacing:.14em}
+  .join .ju{font-size:1.25vh;color:var(--ink3);font-weight:600;margin-top:.3vh}
+
+  /* mini team bar */
+  .mini{display:flex;gap:1.4vw;margin-bottom:1.8vh}
+  .mteam{flex:1;display:flex;align-items:center;gap:.9vw;background:var(--card);border:1px solid var(--line);border-radius:1.3vh;padding:1.2vh 1.4vw}
+  .mteam.morn{color:var(--morn)}.mteam.night{color:var(--night)}.mteam.lead{box-shadow:0 0 0 2px currentColor inset}
+  .mteam.morn.lead{background:var(--mornSoft)}.mteam.night.lead{background:var(--nightSoft)}
+  .mteam svg{width:3.4vh;height:3.4vh}.mteam .nm{font-size:2vh;font-weight:800;color:var(--ink)}
+  .mteam .ct{font-size:1.3vh;color:var(--ink3);font-weight:700;margin-left:.6vw}
+  .mteam .av{margin-left:auto;font-size:3.4vh;font-weight:800;color:currentColor;font-variant-numeric:tabular-nums}
+  .mteam .av small{font-size:1.4vh;color:var(--ink3);font-weight:700}
+
+  .stage{flex:1;position:relative;min-height:0}
+  .scene{position:absolute;top:0;left:0;right:0;bottom:0;display:none;flex-direction:column}
+  .scene.active{display:flex}
+  .center{align-items:center;justify-content:center;text-align:center}
+
+  /* lobby */
+  .lob .big{font-size:8vh;font-weight:800;line-height:1}.lob .big em{font-style:normal;color:var(--o1)}
+  .lob .code{font-size:3.4vh;font-weight:800;margin-top:2.4vh}.lob .code b{color:var(--o1);letter-spacing:.2em}
+  .lob .url{font-size:1.7vh;color:var(--ink3);font-weight:600;margin-top:.8vh}
+  .lob .cnt{font-size:2.4vh;color:var(--ink2);font-weight:700;margin-top:3vh}
+  .lob .hint{font-size:1.8vh;color:var(--ink3);font-weight:600;margin-top:3vh}.lob .hint b{color:var(--ink2)}
+  .chips{display:flex;flex-wrap:wrap;gap:.7vw;justify-content:center;max-width:80vw;margin-top:2vh}
+  .chip{font-size:1.6vh;font-weight:700;padding:.7vh 1.2vw;border-radius:99px;border:1px solid var(--line)}
+  .chip.morn{color:var(--morn);background:var(--mornSoft)}.chip.night{color:var(--night);background:var(--nightSoft)}
+
+  /* question */
+  .qtop{display:flex;align-items:center;gap:1.2vw;margin-bottom:1.6vh}
+  .qnum{font-size:1.7vh;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--ink2)}
+  .qtag{font-size:1.4vh;font-weight:800;color:var(--o2);background:rgba(255,90,0,.14);border:1px solid rgba(255,90,0,.3);border-radius:99px;padding:.5vh 1vw}
+  .qans{margin-left:auto;font-size:1.6vh;font-weight:700;color:var(--ink3)}
+  .timer{width:9vh;height:9vh;position:relative;flex-shrink:0}
+  .timer svg{transform:rotate(-90deg)}.timer .tt{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:3.4vh;font-weight:800}
+  .qtext{font-size:5.2vh;font-weight:800;line-height:1.14;text-align:center;margin:auto 0 2.2vh;max-width:92vw}
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:1.4vw 1.6vw}
+  .opt{display:flex;align-items:center;gap:1.2vw;background:var(--card);border:1px solid var(--line);border-radius:1.6vh;padding:2.2vh 2vw;font-size:3vh;font-weight:700;transition:background .3s,border-color .3s}
+  .opt .lt{width:5vh;height:5vh;border-radius:1vh;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:2.4vh;font-weight:800;color:var(--ink2);flex-shrink:0}
+  .opt.correct{background:rgba(52,211,153,.18);border-color:var(--green)}.opt.correct .lt{background:var(--green);color:#062a1c}
+  .opt.dim{opacity:.4}
+
+  /* end */
+  .win{font-size:11vh;font-weight:800;line-height:.95}.win.morn{color:var(--morn)}.win.night{color:var(--night)}.win.tie{color:var(--o1)}
+  .fsc{font-size:4vh;font-weight:700;color:var(--ink2);margin-top:2.4vh}
+  .mvp{font-size:2.4vh;color:var(--ink2);margin-top:2.4vh}.mvp b{color:var(--ink)}
+
+  .foot{display:flex;align-items:center;gap:1.2vw;margin-top:1.4vh;font-size:1.4vh;color:var(--ink3);font-weight:600}
+  #conf{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  .cf{position:absolute;top:-4vh;width:1.1vh;height:1.6vh;border-radius:2px;animation:fall linear forwards}
+  @keyframes fall{to{transform:translateY(112vh) rotate(680deg)}}
+  #fsbtn{position:fixed;bottom:1.2vh;right:1vw;z-index:99;background:var(--card);border:1px solid var(--line);color:var(--ink2);font:600 1.3vh/1 inherit;padding:1vh 1.2vw;border-radius:1vh;cursor:pointer}
+  #muteBtn{position:fixed;bottom:1.2vh;left:1vw;z-index:99;background:var(--card);border:1px solid var(--line);color:var(--ink2);font:600 1.3vh/1 inherit;padding:1vh 1.2vw;border-radius:1vh;cursor:pointer;display:none}
+  /* Kahoot-style animations */
+  @keyframes qin{from{opacity:0;transform:translateY(3vh) scale(.97)}to{opacity:1;transform:none}}
+  @keyframes optin{0%{opacity:0;transform:translateY(4vh) scale(.9)}100%{opacity:1;transform:none}}
+  @keyframes cpop{0%{transform:scale(1)}40%{transform:scale(1.05)}100%{transform:scale(1)}}
+  @keyframes cglow{0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,0)}50%{box-shadow:0 0 4vh .4vh rgba(52,211,153,.55)}}
+  @keyframes tpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+  @keyframes bump{0%{transform:scale(1)}45%{transform:scale(1.28)}100%{transform:scale(1)}}
+  @keyframes ringpop{0%{opacity:0;transform:scale(.5) rotate(-90deg)}100%{opacity:1;transform:scale(1) rotate(-90deg)}}
+  .q-anim .qtext{animation:qin .5s cubic-bezier(.2,.9,.25,1) both}
+  .q-anim .opt{animation:optin .5s cubic-bezier(.2,.9,.25,1) both}
+  .q-anim .opt:nth-child(1){animation-delay:.05s}.q-anim .opt:nth-child(2){animation-delay:.12s}
+  .q-anim .opt:nth-child(3){animation-delay:.19s}.q-anim .opt:nth-child(4){animation-delay:.26s}
+  .opt.correct{animation:cpop .5s ease, cglow 1.2s ease .3s infinite}
+  .timer.low{animation:tpulse .5s ease infinite}
+  .av.bump{display:inline-block;animation:bump .4s ease}
+  /* admin lock */
+  #lock{position:fixed;top:0;left:0;right:0;bottom:0;z-index:200;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(1000px 600px at 50% -10%,rgba(245,158,11,.14),transparent 55%),linear-gradient(180deg,var(--bg1),var(--bg0))}
+  #lock .box{width:min(90vw,420px);text-align:center;padding:40px 34px;background:var(--card);border:1px solid var(--line);border-radius:22px}
+  #lock .ico{width:54px;height:54px;margin:0 auto 16px;color:var(--o1)}
+  #lock h1{font-size:24px;font-weight:800}#lock p{color:var(--ink3);font-weight:600;font-size:13px;margin:6px 0 22px}
+  #lock input{width:100%;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:14px;color:var(--ink);font:700 18px var(--sans);padding:15px 16px;outline:none;text-align:center}
+  #lock input:focus{border-color:var(--o1)}
+  #lock button{width:100%;margin-top:14px;background:linear-gradient(135deg,var(--o1),var(--o2));border:none;border-radius:14px;color:#fff;font:800 17px var(--sans);padding:15px;cursor:pointer}
+  #lock .le{color:var(--red);font-size:13px;font-weight:700;margin-top:12px;min-height:16px}
+</style>
+</head>
+<body>
+<div id="lock">
+  <div class="box">
+    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    <h1>Host access</h1>
+    <p>Admins only — enter the admin password to run the Quiz Bee.</p>
+    <input id="lpw" type="password" placeholder="Admin password" autocomplete="off">
+    <button onclick="tryUnlock()">Unlock host</button>
+    <div class="le" id="lerr"></div>
+  </div>
+</div>
+<button id="fsbtn" onclick="goFull()" style="display:none">⛶ Full screen</button>
+<button id="muteBtn" onclick="toggleMute()">Sound on</button>
+<div id="conf"></div>
+<div class="wrap">
+  <header>
+    <div><div class="brand">JMB <em>Quiz Bee</em></div><div class="s">Morning vs Night · Host</div></div>
+    <div class="join"><div class="jc">Room · <b id="rc">····</b></div><div class="ju" id="ju">quizbee-play.html</div></div>
+  </header>
+  <div class="mini">
+    <div class="mteam morn" id="m-morn"><span id="i-morn"></span><span class="nm">Morning</span><span class="ct" id="ct-morn">0</span><span class="av"><span id="a-morn">0.0</span> <small>avg</small></span></div>
+    <div class="mteam night" id="m-night"><span id="i-night"></span><span class="nm">Night</span><span class="ct" id="ct-night">0</span><span class="av"><span id="a-night">0.0</span> <small>avg</small></span></div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="scene center active lob" id="sc-lobby">
+      <div class="big">JMB <em>Quiz Bee</em></div>
+      <div class="code">Room code · <b id="rc2">····</b></div>
+      <div class="url" id="ju2">Open quizbee-play.html on your phone</div>
+      <div class="cnt"><b id="joined">0</b> players joined</div>
+      <div class="chips" id="chips"></div>
+      <div class="hint">Press <b>Space</b> to start · 20 questions · 15s each</div>
+    </div>
+    <div class="scene" id="sc-q">
+      <div class="qtop"><span class="qnum" id="q-num">Question 1 / 20</span><span class="qtag" id="q-tag">1 pt</span>
+        <span class="qans" id="q-answered">0 answered</span>
+        <span class="timer" id="timer"><svg width="100%" height="100%" viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="8"/><circle id="t-ring" cx="50" cy="50" r="44" fill="none" stroke="#ff7a29" stroke-width="8" stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="0"/></svg><span class="tt" id="t-num">15</span></span>
+      </div>
+      <div class="qtext" id="q-text">—</div>
+      <div class="opts" id="q-opts"></div>
+    </div>
+    <div class="scene center" id="sc-end">
+      <div class="s" style="color:var(--o1);font-weight:800;letter-spacing:.3em;text-transform:uppercase;font-size:2vh;margin-bottom:2vh">Final Result</div>
+      <div class="win" id="e-win">—</div><div class="fsc" id="e-sc">—</div><div class="mvp" id="e-mvp"></div>
+      <div class="hint" style="color:var(--ink3);font-size:1.6vh;margin-top:3vh">Press R to reset</div>
+    </div>
+  </div>
+  <div class="foot"><span><b id="pc">0</b> players · Space = reveal / next · R = reset · F = full screen</span></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+/* ═══ JMB QUIZ BEE — host-paced, 15s timer, 20 hard questions (10 work · 10 general) ═══
+   Points escalate: Q1-5 = 1pt, Q6-10 = 2pt, Q11-15 = 3pt, Q16-20 = 4pt. Max = 50.
+   Team score = AVERAGE of that shift's players' totals. Highest average wins. */
+var QUESTIONS=[
+  // ── Tier 1 · 1 pt ──
+  { q:"The demerit score formula is…", o:["points × 10","100 − (points × 10)","100 ÷ points","100 − points"], c:1, pts:1, tag:"Work" },
+  { q:"What is the smallest prime number greater than 100?", o:["101","103","107","111"], c:0, pts:1, tag:"General" },
+  { q:"How often is Productivity finalized in the portal?", o:["Once a month","Per cutoff — twice a month","Weekly","Per project"], c:1, pts:1, tag:"Work" },
+  { q:"The Great Barrier Reef lies off the coast of which country?", o:["Indonesia","Philippines","Australia","Fiji"], c:2, pts:1, tag:"General" },
+  { q:"Engagement rate measures interactions relative to…", o:["number of posts","reach or followers","hashtags used","hours online"], c:1, pts:1, tag:"Work" },
+  // ── Tier 2 · 2 pts ──
+  { q:"With 3.5 demerit points this month, your demerit score is…", o:["35 / 100","50 / 100","65 / 100","90 / 100"], c:2, pts:2, tag:"Work" },
+  { q:"Which element has the chemical symbol “W”?", o:["Tin","Tungsten","Titanium","Uranium"], c:1, pts:2, tag:"General" },
+  { q:"Team Sales is scored relative to…", o:["a fixed quota","last month's total","the top performer","the team average"], c:2, pts:2, tag:"Work" },
+  { q:"The currency of Vietnam is the…", o:["Baht","Ringgit","Dong","Kip"], c:2, pts:2, tag:"General" },
+  { q:"The scorecard's QA 20% is based on which weekly scores?", o:["the latest week","the highest week","the average of the weeks","week 1 only"], c:2, pts:2, tag:"Work" },
+  // ── Tier 3 · 3 pts ──
+  { q:"Monthly demerit points are capped at…", o:["5","8","10","15"], c:2, pts:3, tag:"Work" },
+  { q:"What is 7 factorial (7!)?", o:["2,520","5,040","40,320","720"], c:1, pts:3, tag:"General" },
+  { q:"Which infractions are EXCLUDED from the demerit score (counted in Attendance)?", o:["Overbreak & idle","Late & Absent","Missed EOD","Conduct"], c:1, pts:3, tag:"Work" },
+  { q:"Mount Everest sits on the border of Nepal and which country?", o:["India","China","Bhutan","Pakistan"], c:1, pts:3, tag:"General" },
+  { q:"Volumes count toward QPH only when they are…", o:["logged","lead-approved","over 10","idle"], c:1, pts:3, tag:"Work" },
+  // ── Tier 4 · 4 pts (super hard) ──
+  { q:"Assessment, Team Sales and Demerit are EACH worth what % of the scorecard?", o:["5%","10%","15%","20%"], c:1, pts:4, tag:"Work" },
+  { q:"Who painted “The Persistence of Memory” (the melting clocks)?", o:["Picasso","Salvador Dalí","René Magritte","Joan Miró"], c:1, pts:4, tag:"General" },
+  { q:"Which blood type is the universal PLASMA donor?", o:["O negative","O positive","AB positive","B negative"], c:2, pts:4, tag:"General" },
+  { q:"The binary number 1010 equals which decimal?", o:["8","10","12","20"], c:1, pts:4, tag:"General" },
+  { q:"Which Shakespeare play features the character Iago?", o:["Hamlet","Othello","Macbeth","King Lear"], c:1, pts:4, tag:"General" }
+];
+var QDUR=15;  // seconds per question
+var MAXPTS=(function(){var s=0;QUESTIONS.forEach(function(q){s+=q.pts;});return s;})();
+
+var SUPA_URL='https://rvyrnkjqxnijxydloujk.supabase.co';
+var SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2eXJua2pxeG5panh5ZGxvdWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NzAwODQsImV4cCI6MjA5NzE0NjA4NH0.SwkSkmbeWrhm5PZZDSZ1Z4hbjpQ0L2CRtuKQmpHshBE';
+function el(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+var SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+var MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+el('i-morn').innerHTML=SUN;el('i-night').innerHTML=MOON;
+
+/* ═══ Kahoot-style sound engine — procedural Web Audio, no asset files ═══ */
+var _AC=null,_mg=null,_muted=false,_musicT=null,_mStep=0,_mNotes=null,_mBeat=.16;
+function AC(){ if(!_AC){ try{ _AC=new (window.AudioContext||window.webkitAudioContext)(); _mg=_AC.createGain(); _mg.gain.value=.5; _mg.connect(_AC.destination); }catch(e){} } if(_AC&&_AC.state==='suspended'){ try{_AC.resume();}catch(e){} } return _AC; }
+function tone(f,st,d,ty,v){ var c=AC(); if(!c||_muted) return; var o=c.createOscillator(),g=c.createGain(); o.type=ty||'sine'; o.frequency.value=f; var t=c.currentTime+(st||0); g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(v||.25,t+.012); g.gain.exponentialRampToValueAtTime(.0001,t+d); o.connect(g); g.connect(_mg); o.start(t); o.stop(t+d+.03); }
+function noise(d,v,ff,st){ var c=AC(); if(!c||_muted) return; var n=Math.floor(c.sampleRate*d),b=c.createBuffer(1,n,c.sampleRate),da=b.getChannelData(0); for(var i=0;i<n;i++) da[i]=Math.random()*2-1; var s=c.createBufferSource(); s.buffer=b; var f=c.createBiquadFilter(); f.type='bandpass'; f.frequency.value=ff||1200; var g=c.createGain(); var t=c.currentTime+(st||0); g.gain.setValueAtTime(v||.2,t); g.gain.exponentialRampToValueAtTime(.0001,t+d); s.connect(f); f.connect(g); g.connect(_mg); s.start(t); s.stop(t+d); }
+var N={A2:110,C3:130.81,D3:146.83,E3:164.81,F3:174.61,G3:196,A3:220,B3:246.94,C4:261.63,D4:293.66,E4:329.63,F4:349.23,G4:392,A4:440,B4:493.88,C5:523.25,D5:587.33,E5:659.25,F5:698.46,G5:783.99,A5:880};
+function sfxTick(hi){ tone(hi?1500:950,0,.06,'square',.16); }
+function sfxWhoosh(){ noise(.32,.16,700); }
+function sfxCorrect(){ [N.C5,N.E5,N.G5,N.A5].forEach(function(f,i){ tone(f,i*.09,.2,'triangle',.28); }); }
+function sfxTimeup(){ tone(N.A3,0,.18,'sawtooth',.2); tone(N.F3,.14,.3,'sawtooth',.2); }
+function sfxFanfare(){ [[N.C4,0],[N.E4,.12],[N.G4,.24],[N.C5,.36],[N.G4,.5],[N.C5,.62]].forEach(function(p){ tone(p[0],p[1],.42,'triangle',.3); }); noise(.5,.1,2200,.36); }
+var LOBBY=[[N.C4,N.C3],[N.E4],[N.G4],[N.C5],[N.G4],[N.E4],[N.A4,N.A2],[N.G4]];
+var QLOOP=[[N.A3,N.A2],[0],[N.C4],[0],[N.E4,N.A2],[0],[N.C4],[N.B3]];
+function startMusic(pat,beat){ stopMusic(); _mNotes=pat; _mBeat=beat||.16; _mStep=0;
+  _musicT=setInterval(function(){ if(_muted||!_mNotes) return; var ch=_mNotes[_mStep%_mNotes.length]; for(var i=0;i<ch.length;i++){ if(ch[i]) tone(ch[i],0,_mBeat*1.4,i===0?'triangle':'sine', i>0?.06:.11); } _mStep++; }, _mBeat*1000); }
+function stopMusic(){ if(_musicT){ clearInterval(_musicT); _musicT=null; } }
+function toggleMute(){ _muted=!_muted; el('muteBtn').textContent=_muted?'Sound off':'Sound on';
+  if(_muted){ stopMusic(); } else { if(scene==='lobby') startMusic(LOBBY,.17); else if(scene==='q'&&!revealed) startMusic(QLOOP,.16); } }
+
+var ROOM=(function(){var c='',A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';for(var i=0;i<4;i++)c+=A[Math.floor(Math.random()*A.length)];return c;})();
+var players={};   // id -> {name,shift,score}
+var scene='lobby', qi=-1, revealed=false, curAns={}, timer=null, tleft=QDUR;
+var supa=null, ch=null;
+
+function init(){
+  try{ supa=window.supabase.createClient(SUPA_URL,SUPA_KEY);
+    ch=supa.channel('quizbee-'+ROOM,{config:{broadcast:{self:false}}});
+    ch.on('broadcast',{event:'join'},function(m){ onJoin(m.payload||{}); });
+    ch.on('broadcast',{event:'answer'},function(m){ onAnswer(m.payload||{}); });
+    ch.subscribe(function(st){ if(st==='SUBSCRIBED') bc('host',{room:ROOM}); });
+  }catch(e){}
+  el('rc').textContent=ROOM; el('rc2').textContent=ROOM;
+  try{ var base=location.href.replace(/[^\/]*$/,''); var u=base+'quizbee-play.html?room='+ROOM; el('ju').textContent=u; el('ju2').textContent=u; }catch(e){}
+  renderMini();
+}
+function bc(ev,p){ try{ if(ch) ch.send({type:'broadcast',event:ev,payload:p||{}}); }catch(e){} }
+
+function onJoin(p){ if(!p||!p.id||!p.shift) return; if(!players[p.id]) players[p.id]={name:p.name||'Player',shift:(p.shift==='night'?'night':'morn'),score:0};
+  else { players[p.id].name=p.name||players[p.id].name; players[p.id].shift=(p.shift==='night'?'night':'morn'); }
+  bc('host',{room:ROOM});   // re-announce so late joiners sync
+  renderLobby(); renderMini(); }
+function onAnswer(p){ if(scene!=='q'||revealed||!p||!p.id) return; if(p.qi!==qi) return; if(curAns[p.id]!=null) return;
+  curAns[p.id]=p.choice; el('q-answered').textContent=Object.keys(curAns).length+' answered'; }
+
+function teamStats(shift){ var arr=[]; for(var k in players) if(players[k].shift===shift) arr.push(players[k].score);
+  var n=arr.length,sum=arr.reduce(function(a,b){return a+b;},0); return {n:n,avg:n?sum/n:0}; }
+function renderMini(){ var m=teamStats('morn'),ni=teamStats('night');
+  el('a-morn').textContent=m.avg.toFixed(1); el('a-night').textContent=ni.avg.toFixed(1);
+  el('ct-morn').textContent='('+m.n+')'; el('ct-night').textContent='('+ni.n+')';
+  el('m-morn').classList.toggle('lead',m.avg>ni.avg); el('m-night').classList.toggle('lead',ni.avg>m.avg);
+  el('pc').textContent=Object.keys(players).length; }
+function renderLobby(){ var all=[]; for(var k in players) all.push(players[k]); el('joined').textContent=all.length;
+  el('chips').innerHTML=all.map(function(p){ return '<span class="chip '+p.shift+'">'+esc(p.name)+'</span>'; }).join(''); }
+
+function showScene(id){ ['sc-lobby','sc-q','sc-end'].forEach(function(s){ el(s).classList.toggle('active',s===id); }); }
+function LT(i){ return String.fromCharCode(65+i); }
+
+function showQuestion(){ scene='q'; revealed=false; curAns={}; var Q=QUESTIONS[qi];
+  el('q-num').textContent='Question '+(qi+1)+' / '+QUESTIONS.length;
+  el('q-tag').textContent=Q.pts+' pt'+(Q.pts>1?'s':'')+' · '+Q.tag;
+  el('q-answered').textContent='0 answered';
+  el('q-text').textContent=Q.q;
+  el('q-opts').innerHTML=Q.o.map(function(o,i){ return '<div class="opt" id="opt-'+i+'"><span class="lt">'+LT(i)+'</span><span>'+esc(o)+'</span></div>'; }).join('');
+  showScene('sc-q');
+  var sc=el('sc-q'); sc.classList.remove('q-anim'); void sc.offsetWidth; sc.classList.add('q-anim');
+  sfxWhoosh(); startMusic(QLOOP,.16);
+  bc('q',{qi:qi,q:Q.q,o:Q.o,pts:Q.pts,tag:Q.tag,dur:QDUR,num:qi+1,total:QUESTIONS.length});
+  startTimer();
+}
+function startTimer(){ tleft=QDUR; updateRing(); clearInterval(timer);
+  timer=setInterval(function(){ tleft--; updateRing(); if(tleft>0) sfxTick(tleft<=5); if(tleft<=0){ clearInterval(timer); reveal(); } },1000); }
+function updateRing(){ el('t-num').textContent=Math.max(0,tleft); var frac=Math.max(0,tleft)/QDUR;
+  el('t-ring').style.strokeDashoffset=(276.5*(1-frac)).toFixed(1);
+  el('t-ring').setAttribute('stroke', tleft<=5?'#f87171':(tleft<=10?'#f59e0b':'#ff7a29'));
+  el('timer').classList.toggle('low', tleft<=5 && tleft>0); }
+function reveal(){ if(revealed) return; revealed=true; clearInterval(timer); var Q=QUESTIONS[qi];
+  el('timer').classList.remove('low'); stopMusic(); sfxTimeup(); setTimeout(sfxCorrect,260);
+  for(var i=0;i<Q.o.length;i++){ var o=el('opt-'+i); if(i===Q.c) o.classList.add('correct'); else o.classList.add('dim'); }
+  // score every submitted answer
+  for(var id in curAns){ if(players[id] && curAns[id]===Q.c) players[id].score+=Q.pts; }
+  var correctN=0; for(var id2 in curAns){ if(curAns[id2]===Q.c) correctN++; }
+  el('q-answered').textContent=correctN+' correct of '+Object.keys(curAns).length;
+  renderMini(); bumpAvg(); bc('reveal',{qi:qi,correct:Q.c,pts:Q.pts}); }
+function bumpAvg(){ ['a-morn','a-night'].forEach(function(id){ var e=el(id); if(!e) return; e=e.parentNode; e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); }); }
+function nextStep(){
+  if(scene==='lobby'){ qi=0; showQuestion(); return; }
+  if(scene==='q'){ if(!revealed){ reveal(); return; } if(qi<QUESTIONS.length-1){ qi++; showQuestion(); } else endGame(); return; }
+  if(scene==='end'){ resetGame(); }
+}
+function endGame(){ scene='end'; clearInterval(timer); var m=teamStats('morn'),ni=teamStats('night');
+  var w=m.avg>ni.avg?'morn':(ni.avg>m.avg?'night':'tie');
+  el('e-win').className='win '+w; el('e-win').textContent=w==='morn'?'Morning Shift Wins!':(w==='night'?'Night Shift Wins!':"It's a Tie!");
+  el('e-sc').textContent='Morning '+m.avg.toFixed(1)+'  —  '+ni.avg.toFixed(1)+' Night   (average points)';
+  var all=[]; for(var k in players) all.push(players[k]); all.sort(function(a,b){return b.score-a.score;});
+  if(all.length){ var mv=all[0]; el('e-mvp').innerHTML='MVP · <b>'+esc(mv.name)+'</b> ('+(mv.shift==='morn'?'Morning':'Night')+') — '+mv.score+' / '+MAXPTS+' pts'; }
+  showScene('sc-end'); stopMusic(); sfxFanfare(); bc('ended',{morn:m.avg,night:ni.avg}); if(w!=='tie') confetti(w==='morn'?['#f59e0b','#fbbf24','#fff']:['#7c8cff','#a5b4fc','#fff']); else confetti(['#ff7a29','#ffb37a','#fff']); }
+function resetGame(){ for(var k in players) players[k].score=0; scene='lobby'; qi=-1; el('conf').innerHTML=''; showScene('sc-lobby'); renderLobby(); renderMini(); startMusic(LOBBY,.17); bc('reset',{}); }
+
+document.addEventListener('keydown',function(e){ if(e.key===' '||e.key==='ArrowRight'||e.key==='PageDown'||e.key==='Enter'){ e.preventDefault(); nextStep(); }
+  else if(e.key==='r'||e.key==='R'){ resetGame(); } else if(e.key==='f'||e.key==='F'){ goFull(); } });
+function goFull(){ var x=document.documentElement; (x.requestFullscreen||x.webkitRequestFullscreen||function(){}).call(x); el('fsbtn').style.display='none'; }
+function confetti(cols){ var c=el('conf'); for(var i=0;i<150;i++){ (function(i){ setTimeout(function(){ var d=document.createElement('div'); d.className='cf'; d.style.left=Math.random()*100+'vw'; d.style.background=cols[i%cols.length]; d.style.animationDuration=(Math.random()*2+2.5)+'s'; d.style.width=(Math.random()*.8+.7)+'vh'; c.appendChild(d); setTimeout(function(){d.remove();},5000); }, i*16); })(i); } }
+
+/* ═══ Admin gate — host runs only for admins (same password as the hub/admin panel) ═══ */
+var ADMIN_PASS='JMBeast_020298';
+var _started=false;
+function isAdmin(){ try{ var u=JSON.parse(sessionStorage.getItem('internals_user')||'null'); return !!(u && String(u.employee_id).toUpperCase()==='ADMIN'); }catch(e){ return false; } }
+function unlock(){ if(_started) return; _started=true; el('lock').style.display='none'; el('fsbtn').style.display=''; el('muteBtn').style.display=''; init(); AC(); startMusic(LOBBY,.17); }
+function tryUnlock(){ var v=(el('lpw').value||'').trim();
+  if(v===ADMIN_PASS){ try{ sessionStorage.setItem('internals_user', JSON.stringify({employee_id:'ADMIN', full_name:'Admin (JMB Virtuals)'})); }catch(e){} unlock(); }
+  else{ el('lerr').textContent='Incorrect password.'; el('lpw').value=''; el('lpw').focus(); } }
+if(isAdmin()){ unlock(); }
+else{ var lp=el('lpw'); if(lp){ lp.focus(); lp.addEventListener('keydown',function(e){ if(e.key==='Enter') tryUnlock(); }); } }
+</script>
+</body>
+</html>
