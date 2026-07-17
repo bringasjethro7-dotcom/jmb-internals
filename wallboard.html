@@ -40,10 +40,8 @@
   .clock .d{font-size:1.45vh;color:var(--ink2);font-weight:600;margin-top:1vh;letter-spacing:.03em}
 
   .stage{flex:1;min-height:0;position:relative;margin:2.6vh 1vw 1vh}
-  .panel{position:absolute;top:0;left:0;right:0;bottom:0;overflow:hidden;opacity:0;transform:translateY(1.8vh);transition:opacity .9s ease,transform .9s ease;pointer-events:none}
+  .panel{position:absolute;top:0;left:0;right:0;bottom:0;overflow:hidden;opacity:0;transform:translateY(1.8vh);transition:opacity .9s ease,transform .9s ease;pointer-events:none;display:flex;flex-direction:column}
   .panel.active{opacity:1;transform:none}
-  /* auto-fit wrapper: scaled by JS so a panel's content always fits the screen exactly */
-  .pin{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;transform-origin:top left}
   .eyebrow{display:flex;align-items:center;gap:1vw;margin-bottom:3vh}
   .eyebrow .ei{width:2.8vh;height:2.8vh;color:var(--o1)}
   .eyebrow .et{font-size:1.7vh;font-weight:800;letter-spacing:.26em;text-transform:uppercase;color:var(--o1)}
@@ -189,7 +187,12 @@ var SVG={
 };
 function ic(n){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'+(SVG[n]||'')+'</svg>'; }
 
-var EMPLOYEES=[], ONLINE=[], ANNS=[], supa=null;
+var EMPLOYEES=[], ONLINE=[], ANNS=[], supa=null, EMP_BY_ID={};
+function indexEmployees(){ EMP_BY_ID={}; EMPLOYEES.forEach(function(e){ if(e.employee_id) EMP_BY_ID[String(e.employee_id).trim().toLowerCase()]=e; }); }
+function empPhoto(id, presencePhoto){ if(presencePhoto) return presencePhoto; var e=EMP_BY_ID[String(id||'').trim().toLowerCase()]; return (e&&e.photo)?e.photo:''; }
+/* Only show people who are still in the ACTIVE roster — hides stale presence rows from
+   employees who were removed/deactivated in admin. (If the roster hasn't loaded, show all.) */
+function onlineActive(){ if(!Object.keys(EMP_BY_ID).length) return ONLINE; return ONLINE.filter(function(p){ return EMP_BY_ID[String(p.employee_id||'').trim().toLowerCase()]; }); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function initials(n){ var p=String(n||'').trim().split(/[\s,]+/).filter(Boolean); return ((p[0]||'?')[0]+(p[1]?p[1][0]:'')).toUpperCase(); }
 function av(photo,name,cls){ return photo ? '<img class="'+cls+'" src="'+esc(photo)+'" alt="">' : '<div class="'+cls+'">'+esc(initials(name))+'</div>'; }
@@ -200,7 +203,7 @@ function tickClock(){ var now=new Date();
 setInterval(tickClock,1000); tickClock();
 
 async function loadEmployees(){ try{ var r=await fetch(APPS_SCRIPT_URL+'?action=get_all_employees&_='+Date.now()); var d=await r.json();
-  EMPLOYEES=(d.employees||[]).filter(function(e){ var s=String(e.status||'active').toLowerCase(); return s!=='inactive'&&s!=='resigned'&&s!=='terminated'&&s!=='archived'; }); }catch(e){} }
+  EMPLOYEES=(d.employees||[]).filter(function(e){ var s=String(e.status||'active').toLowerCase(); return s!=='inactive'&&s!=='resigned'&&s!=='terminated'&&s!=='archived'; }); indexEmployees(); }catch(e){} }
 async function loadAnns(){ try{ var r=await fetch(APPS_SCRIPT_URL+'?action=get_notifications&employee_id=&_='+Date.now()); var d=await r.json();
   ANNS=(d.notifications||[]).filter(function(n){ return n.title; }).slice(0,6); }catch(e){} }
 async function loadPresence(){ if(!supa) return; try{ var res=await supa.from('presence').select('*');
@@ -234,13 +237,15 @@ function pPrinciples(){ var p=COMPANY.principles.map(function(x,i){ return '<div
   return '<div class="panel" data-p><div class="eyebrow"><span class="ei">'+ic('shield')+'</span><span class="et">How We Work</span><span class="eln"></span></div><div class="prins">'+p+'</div></div>'; }
 
 function pOnline(){ var stMap={working:'Working',online:'Online',paused:'On break',idle:'Idle',meeting:'In a meeting',break:'On break'};
-  var MAX=21, show=ONLINE.slice(0,MAX), extra=ONLINE.length-show.length;   // cap so it never overflows the TV
+  var LIST=onlineActive();
+  var MAX=21, show=LIST.slice(0,MAX), extra=LIST.length-show.length;   // cap so it never overflows the TV
   var cards=show.map(function(p){ var st=String(p.status||'online').toLowerCase(); var cls=(st==='working'||st==='online'||st==='paused'||st==='idle')?st:'online';
-    return '<div class="ocard">'+av(p.photo,p.employee_name,'oav')+'<div style="min-width:0"><div class="oc-name">'+esc(p.employee_name||p.employee_id)+'</div><div class="oc-stat s-'+cls+'"><span class="dot"></span>'+esc(stMap[st]||'Online')+'</div></div></div>'; }).join('');
+    var nm=p.employee_name||(EMP_BY_ID[String(p.employee_id||'').toLowerCase()]||{}).full_name||p.employee_id;
+    return '<div class="ocard">'+av(empPhoto(p.employee_id,p.photo),nm,'oav')+'<div style="min-width:0"><div class="oc-name">'+esc(nm)+'</div><div class="oc-stat s-'+cls+'"><span class="dot"></span>'+esc(stMap[st]||'Online')+'</div></div></div>'; }).join('');
   if(extra>0){ cards+='<div class="ocard" style="justify-content:center"><div class="oc-name" style="color:var(--o1)">+'+extra+' more online</div></div>'; }
   return '<div class="panel" data-p><div class="eyebrow"><span class="ei">'+ic('users')+'</span><span class="et">Our Team, Live</span><span class="eln"></span></div>'+
-    '<div class="onlinehead"><span class="big">'+ONLINE.length+'</span><span class="lbl">teammate'+(ONLINE.length===1?'':'s')+' online right now</span></div>'+
-    (ONLINE.length? '<div class="ogrid">'+cards+'</div>' : '<div class="empty-note">A quiet moment — no one is clocked in just now.</div>')+'</div>'; }
+    '<div class="onlinehead"><span class="big">'+LIST.length+'</span><span class="lbl">teammate'+(LIST.length===1?'':'s')+' online right now</span></div>'+
+    (LIST.length? '<div class="ogrid">'+cards+'</div>' : '<div class="empty-note">A quiet moment — no one is clocked in just now.</div>')+'</div>'; }
 
 function pAnns(){ var list=ANNS.slice(0,3).map(function(a){ return '<div class="ann"><div class="a-t">'+esc(a.title)+'</div>'+(a.body?'<div class="a-b">'+esc(a.body)+'</div>':'')+(a.created_at?'<div class="a-m">'+esc(a.created_at)+'</div>':'')+'</div>'; }).join('');
   return '<div class="panel" data-p><div class="eyebrow"><span class="ei">'+ic('megaphone')+'</span><span class="et">Announcements</span><span class="eln"></span></div>'+
@@ -249,30 +254,17 @@ function pAnns(){ var list=ANNS.slice(0,3).map(function(a){ return '<div class="
 /* Announcements panel only appears in rotation when there is something to show. */
 function panelList(){ var base=[pHero,pWho,pServices,pNumbers,pPrinciples,pOnline]; if(ANNS.length) base.splice(5,0,pAnns); return base; }
 var cur=0;
-/* Wrap a panel's content and scale it down if it's taller/wider than the screen — nothing is ever cut off. */
-function ensurePin(panel){ var pin=panel.querySelector('.pin');
-  if(!pin){ pin=document.createElement('div'); pin.className='pin'; while(panel.firstChild) pin.appendChild(panel.firstChild); panel.appendChild(pin); } return pin; }
-function fitPanel(panel){ if(!panel) return; var pin=ensurePin(panel);
-  pin.style.width='100%'; pin.style.height='100%'; pin.style.transform='none';
-  requestAnimationFrame(function(){
-    var sh=pin.scrollHeight, sw=pin.scrollWidth, ch=panel.clientHeight, cw=panel.clientWidth;
-    if(ch<40 || cw<40) return;   // not laid out yet — never scale to a bad value
-    var sc=Math.min(1, (ch-1)/(sh||1), (cw-1)/(sw||1));
-    if(sc>0 && sc<0.999){ pin.style.height=(100/sc)+'%'; pin.style.width=(100/sc)+'%'; pin.style.transform='scale('+sc.toFixed(4)+')'; }
-  });
-}
 function buildStage(){ var P=panelList(); var stage=document.getElementById('stage'); stage.innerHTML=P.map(function(fn){ return fn(); }).join('');
   document.getElementById('dots').innerHTML=P.map(function(_,i){ return '<i'+(i===cur?' class="on"':'')+'></i>'; }).join('');
-  var els=stage.querySelectorAll('.panel'); els.forEach(function(e){ ensurePin(e); }); if(els[cur]){ els[cur].classList.add('active'); fitPanel(els[cur]); } }
+  var els=stage.querySelectorAll('.panel'); if(els[cur]) els[cur].classList.add('active'); }
 function showPanel(i){ var P=panelList(); var stage=document.getElementById('stage'); var els=stage.querySelectorAll('.panel');
   if(els.length!==P.length){ cur=((i%P.length)+P.length)%P.length; buildStage(); return; }
   els.forEach(function(e){ e.classList.remove('active'); }); cur=((i%P.length)+P.length)%P.length; els[cur].outerHTML=P[cur]();
-  els=stage.querySelectorAll('.panel'); ensurePin(els[cur]); els[cur].classList.add('active'); fitPanel(els[cur]);
+  els=stage.querySelectorAll('.panel'); els[cur].classList.add('active');
   var dots=document.getElementById('dots').children; for(var k=0;k<dots.length;k++) dots[k].className=(k===cur?'on':''); }
 function nextPanel(){ showPanel(cur+1); }
-window.addEventListener('resize', function(){ var a=document.querySelector('.panel.active'); if(a) fitPanel(a); });
 
-function updateTicker(){ var bits=['We run the work behind the work','<b>'+ONLINE.length+'</b> teammates online now'];
+function updateTicker(){ var bits=['We run the work behind the work','<b>'+onlineActive().length+'</b> teammates online now'];
   ANNS.slice(0,3).forEach(function(a){ bits.push(esc(a.title)); }); bits.push(esc(COMPANY.positioning));
   document.getElementById('tk').innerHTML=bits.join('<span class="sep">◆</span>'); }
 function goFull(){ var el=document.documentElement; (el.requestFullscreen||el.webkitRequestFullscreen||function(){}).call(el); document.getElementById('fsbtn').style.display='none'; }
