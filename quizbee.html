@@ -41,8 +41,12 @@
 
   /* lobby */
   .lob .big{font-size:8vh;font-weight:800;line-height:1}.lob .big em{font-style:normal;color:var(--o1)}
-  .lob .code{font-size:3.4vh;font-weight:800;margin-top:2.4vh}.lob .code b{color:var(--o1);letter-spacing:.2em}
+  .lob .code{font-size:3.4vh;font-weight:800;margin-top:2vh}.lob .code b{color:var(--o1);letter-spacing:.2em}
   .lob .url{font-size:1.7vh;color:var(--ink3);font-weight:600;margin-top:.8vh}
+  .qrcard{margin-top:2.2vh;background:#fff;border-radius:2vh;padding:2vh;box-shadow:0 1.4vh 4vh rgba(0,0,0,.4);display:inline-flex;flex-direction:column;align-items:center;gap:1.2vh}
+  .qrcard img,.qrcard canvas{width:26vh;height:26vh;display:block;border-radius:.6vh}
+  .qrcard .sc{font-size:1.5vh;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#0b1020}
+  .qrcard .sc b{color:var(--o2)}
   .lob .cnt{font-size:2.4vh;color:var(--ink2);font-weight:700;margin-top:3vh}
   .lob .hint{font-size:1.8vh;color:var(--ink3);font-weight:600;margin-top:3vh}.lob .hint b{color:var(--ink2)}
   .chips{display:flex;flex-wrap:wrap;gap:.7vw;justify-content:center;max-width:80vw;margin-top:2vh}
@@ -129,6 +133,7 @@
     <div class="scene center active lob" id="sc-lobby">
       <div class="big">JMB <em>Quiz Bee</em></div>
       <div class="code">Room code · <b id="rc2">····</b></div>
+      <div class="qrcard" id="qrcard"><div id="qr"></div><div class="sc">Scan to join · <b id="qrc">····</b></div></div>
       <div class="url" id="ju2">Open quizbee-play.html on your phone</div>
       <div class="cnt"><b id="joined">0</b> players joined</div>
       <div class="chips" id="chips"></div>
@@ -151,6 +156,7 @@
   <div class="foot"><span><b id="pc">0</b> players · Space = reveal / next · R = reset · F = full screen</span></div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 /* ═══ JMB QUIZ BEE — host-paced, 15s timer, 20 hard questions (10 work · 10 general) ═══
@@ -225,10 +231,11 @@ function init(){
     ch.subscribe(function(st){ if(st==='SUBSCRIBED') bc('host',{room:ROOM}); });
   }catch(e){}
   el('rc').textContent=ROOM; el('rc2').textContent=ROOM;
-  try{ var base=location.href.replace(/[^\/]*$/,''); var u=base+'quizbee-play.html?room='+ROOM; el('ju').textContent=u; el('ju2').textContent=u; }catch(e){}
+  try{ var base=location.href.replace(/[^\/]*$/,''); var u=base+'quizbee-play.html?room='+ROOM; el('ju').textContent=u; el('ju2').textContent=u; makeQR(u); }catch(e){}
   renderMini();
 }
 function bc(ev,p){ try{ if(ch) ch.send({type:'broadcast',event:ev,payload:p||{}}); }catch(e){} }
+function makeQR(url){ try{ var box=el('qr'); box.innerHTML=''; new QRCode(box,{text:url,width:320,height:320,colorDark:'#0b1020',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M}); el('qrc').textContent=ROOM; }catch(e){ var c=el('qrcard'); if(c) c.style.display='none'; } }
 
 function onJoin(p){ if(!p||!p.id||!p.shift) return; if(!players[p.id]) players[p.id]={name:p.name||'Player',shift:(p.shift==='night'?'night':'morn'),score:0};
   else { players[p.id].name=p.name||players[p.id].name; players[p.id].shift=(p.shift==='night'?'night':'morn'); }

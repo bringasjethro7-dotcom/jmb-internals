@@ -161,6 +161,8 @@ function toggleMute(){ _muted=!_muted; el('muteBtn').textContent=_muted?'♪ Mut
 var ID='p_'+Math.random().toString(36).slice(2,10);
 var shift=null, myName='', ROOM='', supa=null, ch=null, joined=false;
 var score=0, curQ=null, myChoice=null, locked=false, qtimer=null, tleft=15, revealedQi=-1;
+var order=[], myPos=null;   // per-player shuffle: order[displayedPos] = originalIndex (anti-copying)
+function shuffle(a){ for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i];a[i]=a[j];a[j]=t; } return a; }
 
 // prefill room from ?room=
 try{ var m=location.search.match(/room=([A-Za-z0-9]{4})/); if(m){ el('in-room').value=m[1].toUpperCase(); } }catch(e){}
@@ -193,12 +195,13 @@ function bc(ev,p){ try{ if(ch) ch.send({type:'broadcast',event:ev,payload:p||{}}
 function onJoined(){ el('w-badge').className='badge '+shift; el('w-badge').innerHTML=(shift==='morn'?SUN:MOON)+(shift==='morn'?'Morning':'Night')+' Shift';
   el('w-name').textContent=myName; show('sc-wait'); sendJoin(); }
 
-function onQ(p){ if(!p||p.qi==null) return; curQ=p; myChoice=null; locked=false; revealedQi=-1;
+function onQ(p){ if(!p||p.qi==null) return; curQ=p; myChoice=null; myPos=null; locked=false; revealedQi=-1;
   el('q-meta').textContent='Q'+(p.num||p.qi+1)+' / '+(p.total||20);
   el('q-tag').textContent=(p.pts||1)+' pt'+((p.pts||1)>1?'s':'')+' · '+(p.tag||'');
   el('q-text').textContent=p.q;
   el('q-result').textContent=''; el('q-result').className='result';
-  el('q-opts').innerHTML=(p.o||[]).map(function(o,i){ return '<button class="aopt" id="a-'+i+'" onclick="answer('+i+')"><span class="lt">'+LT(i)+'</span><span>'+esc(o)+'</span></button>'; }).join('');
+  var opts=p.o||[]; order=shuffle(opts.map(function(_,i){ return i; }));   // unique random order on THIS phone
+  el('q-opts').innerHTML=order.map(function(oi,pos){ return '<button class="aopt" id="a-'+pos+'" onclick="answer('+pos+')"><span class="lt">'+LT(pos)+'</span><span>'+esc(opts[oi])+'</span></button>'; }).join('');
   show('sc-q'); sfxWhoosh();
   var sc=el('sc-q'); sc.classList.remove('q-anim'); void sc.offsetWidth; sc.classList.add('q-anim');
   startT(p.dur||15); }
@@ -206,23 +209,23 @@ function startT(d){ tleft=d; el('q-timer').textContent=tleft; el('q-timer').clas
   qtimer=setInterval(function(){ tleft--; el('q-timer').textContent=Math.max(0,tleft); if(tleft<=5) el('q-timer').classList.add('low');
     if(tleft<=3&&tleft>0){ sfxTick(); vib(25); }
     if(tleft<=0){ clearInterval(qtimer); lockAll(); if(myChoice==null){ el('q-result').className='result wait'; el('q-result').textContent="Time's up — waiting for the answer…"; } } },1000); }
-function answer(i){ if(locked||!curQ) return; myChoice=i; locked=true; sfxTap();
-  for(var k=0;k<(curQ.o||[]).length;k++){ el('a-'+k).classList.add('lock'); if(k===i) el('a-'+k).classList.add('sel'); else el('a-'+k).classList.add('fade'); }
+function answer(pos){ if(locked||!curQ) return; myPos=pos; myChoice=order[pos]; locked=true; sfxTap();
+  for(var k=0;k<order.length;k++){ el('a-'+k).classList.add('lock'); if(k===pos) el('a-'+k).classList.add('sel'); else el('a-'+k).classList.add('fade'); }
   el('q-result').className='result wait'; el('q-result').textContent='Locked in ✓  waiting for reveal…';
-  bc('answer',{id:ID,qi:curQ.qi,choice:i}); }
-function lockAll(){ locked=true; if(curQ) for(var k=0;k<(curQ.o||[]).length;k++) el('a-'+k) && el('a-'+k).classList.add('lock'); }
+  bc('answer',{id:ID,qi:curQ.qi,choice:myChoice}); }   // report ORIGINAL index so host scores correctly
+function lockAll(){ locked=true; for(var k=0;k<order.length;k++) el('a-'+k) && el('a-'+k).classList.add('lock'); }
 
 function onReveal(p){ if(!curQ||p==null||p.qi!==curQ.qi||revealedQi===p.qi) return; revealedQi=p.qi; clearInterval(qtimer); lockAll();
-  var c=p.correct, pts=p.pts||curQ.pts||1;
-  for(var k=0;k<(curQ.o||[]).length;k++){ var b=el('a-'+k); if(!b) continue; b.classList.remove('fade','sel');
-    if(k===c) b.classList.add('correct'); else if(k===myChoice) b.classList.add('wrong'); else b.classList.add('fade'); }
+  var c=p.correct, pts=p.pts||curQ.pts||1, cpos=order.indexOf(c);   // where the correct answer sits on THIS phone
+  for(var k=0;k<order.length;k++){ var b=el('a-'+k); if(!b) continue; b.classList.remove('fade','sel');
+    if(k===cpos) b.classList.add('correct'); else if(k===myPos) b.classList.add('wrong'); else b.classList.add('fade'); }
   if(myChoice===c){ score+=pts; sfxCorrect(); el('q-result').className='result win'; el('q-result').textContent='Correct!  +'+pts+' pt'+(pts>1?'s':'')+'   ·   '+score+' total'; }
   else if(myChoice==null){ sfxWrong(); el('q-result').className='result lose'; el('q-result').textContent='No answer   ·   '+score+' total'; }
   else{ sfxWrong(); el('q-result').className='result lose'; el('q-result').textContent='Not this time   ·   '+score+' total'; }
   el('w-score').style.display=''; el('w-score').innerHTML='Your score · <b>'+score+'</b>'; }
 
 function onEnded(){ clearInterval(qtimer); el('e-score').textContent=score; el('e-score').classList.add('win'); el('e-team').innerHTML='Team '+(shift==='morn'?'Morning':'Night'); show('sc-end'); sfxFanfare(); vib([40,60,40,60,120]); }
-function onReset(){ score=0; curQ=null; myChoice=null; locked=false; el('w-score').style.display='none'; onJoined(); }
+function onReset(){ score=0; curQ=null; myChoice=null; myPos=null; order=[]; locked=false; el('w-score').style.display='none'; onJoined(); }
 </script>
 </body>
 </html>
