@@ -191,7 +191,7 @@ const COMPANY = {
 const VIDEOS = [
   { yt:"WTyXNlJ_WW0", secs:329, title:"JMB Nights" },  // 5:29
   { yt:"ta4fbYaqcgQ", secs:301 },                       // 5:01
-  { yt:"7ue8AYBnpIc", secs:267 },                       // 4:27
+  { yt:"7ue8AYBnpIc", secs:330 },                       // 5:30
 ];
 
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByOLL4TuRPKvtPh2rjY-b3rOJ5aBoIc8sOmO9kP/exec";
@@ -297,13 +297,19 @@ window.onYouTubeIframeAPIReady=function(){ activateCurrentVideo(); };   // build
 /* Build the YouTube player on the active video slide: autoplay, hidden controls, and
    auto-advance the board when the clip ENDS. Tries to play WITH sound; if the browser
    blocks unmuted autoplay it plays muted and shows a one-tap "Enable sound" pill. */
+var _vidTimer=null;
+function _clearVidTimer(){ if(_vidTimer){ clearTimeout(_vidTimer); _vidTimer=null; } }
+function _armVidSafety(remainSecs){ _clearVidTimer(); _vidTimer=setTimeout(nextPanel, Math.max(8, remainSecs)*1000); }
 function activateCurrentVideo(){
+  _clearVidTimer();
   if(_yt){ try{ _yt.destroy(); }catch(e){} _yt=null; }
   var stage=document.getElementById('stage'); if(!stage){ hideSndBtn(); return; }
   var el=stage.querySelector('.panel.active'); var mount=el&&el.querySelector('#ytmount');
   if(!mount){ hideSndBtn(); return; }                                   // not a video slide
-  if(!(window.YT&&window.YT.Player)){ loadYT(); return; }               // will re-run on API ready
   var v=VIDEOS[parseInt(mount.getAttribute('data-i'),10)]; if(!v){ hideSndBtn(); return; }
+  // Safety net so the board never gets STUCK on a video (replaced by the real duration once known).
+  _armVidSafety((parseFloat(v.secs)||300)+60);
+  if(!(window.YT&&window.YT.Player)){ loadYT(); return; }               // player built on API ready
   _yt=new YT.Player(mount, {
     width:'100%', height:'100%', videoId:v.yt,
     playerVars:{ autoplay:1, controls:0, rel:0, modestbranding:1, playsinline:1, fs:0, disablekb:1, iv_load_policy:3, mute:1 },
@@ -311,7 +317,13 @@ function activateCurrentVideo(){
       onReady:function(e){ try{ e.target.playVideo(); }catch(_){}
         try{ e.target.unMute(); e.target.setVolume(100); }catch(_){}    // sticks under kiosk flag or after a prior tap
         setTimeout(function(){ try{ if(e.target.isMuted()){ showSndBtn(); } else { _audioUnlocked=true; hideSndBtn(); } }catch(__){} }, 900); },
-      onStateChange:function(e){ if(e.data===YT.PlayerState.ENDED) nextPanel(); }
+      onStateChange:function(e){
+        if(e.data===YT.PlayerState.PLAYING){                            // now we know the REAL length — track it
+          var d=e.target.getDuration()||0, c=e.target.getCurrentTime()||0;
+          if(d>0) _armVidSafety((d-c)+8);
+        } else if(e.data===YT.PlayerState.ENDED){ _clearVidTimer(); nextPanel(); }
+      },
+      onError:function(){ _clearVidTimer(); nextPanel(); }              // skip a video that won't play
     }
   });
 }
@@ -364,7 +376,9 @@ function showPanel(i){ var P=panelList(); var stage=document.getElementById('sta
   var dots=document.getElementById('dots').children; for(var k=0;k<dots.length;k++) dots[k].className=(k===cur?'on':'');
   activateCurrentVideo(); scheduleNext(); }
 function nextPanel(){ showPanel(cur+1); }
-function scheduleNext(){ if(_rotTimer) clearTimeout(_rotTimer); var P=panelList(); var secs=(P[cur]&&P[cur].secs)||15; _rotTimer=setTimeout(nextPanel, secs*1000); }
+function scheduleNext(){ if(_rotTimer){ clearTimeout(_rotTimer); _rotTimer=null; } var P=panelList(); var p=P[cur];
+  if(p&&p.video) return;   // video slides are advanced by the YouTube player (real end + duration safety), not this timer
+  var secs=(p&&p.secs)||15; _rotTimer=setTimeout(nextPanel, secs*1000); }
 
 function updateTicker(){ var bits=['We run the work behind the work','<b>'+onlineActive().length+'</b> teammates online now'];
   ANNS.slice(0,3).forEach(function(a){ bits.push(esc(a.title)); }); bits.push(esc(COMPANY.positioning));
