@@ -164,7 +164,7 @@ header{position:sticky;top:0;z-index:50;display:flex;align-items:center;justify-
 .arow.post .audsel{font-family:inherit;font-size:10.5px;color:var(--t2);background:rgba(15,43,46,.04);border:1px solid rgba(15,43,46,.14);border-radius:7px;padding:3px 7px;max-width:150px;cursor:pointer;outline:none}
 .arow.post .audsel.has{border-color:rgba(20,184,166,.5);color:var(--o3)}
 .arow.post .audsel:focus{border-color:var(--o1)}
-.arow.post .acctnote{font-family:inherit;font-size:10.5px;color:var(--t2);background:rgba(15,43,46,.04);border:1px solid rgba(15,43,46,.14);border-radius:7px;padding:3px 7px;width:96px;max-width:96px;outline:none}
+.arow.post .acctnote{font-family:inherit;font-size:10.5px;color:var(--t2);background:rgba(15,43,46,.04);border:1px solid rgba(15,43,46,.14);border-radius:7px;padding:3px 6px;width:74px;max-width:74px;outline:none}
 .arow.post .acctnote.has{border-color:rgba(20,184,166,.5);color:var(--o3)}
 .arow.post .acctnote:focus{border-color:var(--o1)}
 .arow.post .acctnote::placeholder{color:var(--t3,#7a8194)}
@@ -1177,8 +1177,8 @@ function setAllPhones(kind,on){ PHFILTER[kind]=[]; buildPhoneFilter(); if(kind==
 document.addEventListener('click', function(){ document.querySelectorAll('.msel.open').forEach(function(m){ m.classList.remove('open'); }); });
 /* today's per-account notes (reset daily, keyed by the current posting date) */
 var _NOTEMAP={};
-function buildNoteMap(){ _NOTEMAP={}; (STATE&&STATE.acctnotes||[]).forEach(function(r){ _NOTEMAP[[r.phone,r.user,r.acct,r.handle].join('|')]={ n1:String(r.note||''), n2:String(r.note2||'') }; }); }
-function noteFor(a){ return _NOTEMAP[[a.phone,a.user,a.acct,a.handle].join('|')] || {n1:'',n2:''}; }
+function buildNoteMap(){ _NOTEMAP={}; (STATE&&STATE.acctnotes||[]).forEach(function(r){ _NOTEMAP[[r.phone,r.user,r.acct,r.handle].join('|')]={ n1:String(r.note||''), n2:String(r.note2||''), n3:String(r.note3||''), n4:String(r.note4||'') }; }); }
+function noteFor(a){ return _NOTEMAP[[a.phone,a.user,a.acct,a.handle].join('|')] || {n1:'',n2:'',n3:'',n4:''}; }
 function renderPosting(){
   if(!STATE) return;
   buildNoteMap();
@@ -1191,7 +1191,7 @@ function renderPosting(){
   var postable = accts.filter(function(a){ return (!a.status||a.status==='active'); }).length;
   var pct = postable ? Math.round(green/postable*100) : 0;
   // distinct notes entered today (identical notes count once); resets daily with _NOTEMAP
-  var _noteSet={}; Object.keys(_NOTEMAP).forEach(function(k){ var o=_NOTEMAP[k]||{}; [o.n1,o.n2].forEach(function(v){ var t=String(v||'').trim().toLowerCase(); if(t) _noteSet[t]=1; }); });
+  var _noteSet={}; Object.keys(_NOTEMAP).forEach(function(k){ var o=_NOTEMAP[k]||{}; [o.n1,o.n2,o.n3,o.n4].forEach(function(v){ var t=String(v||'').trim().toLowerCase(); if(t) _noteSet[t]=1; }); });
   var distinctNotes=Object.keys(_noteSet).length;
   $('post-stats').innerHTML=
     statCard('Posted', green, 'g')+
@@ -1417,15 +1417,15 @@ function noteInputHTML(a){
   var cur=noteFor(a);   // today's notes {n1,n2} (reset daily)
   function box(slot,val,lbl){
     return '<input class="acctnote'+(val?' has':'')+'" type="text" maxlength="200" placeholder="'+lbl+' (required)…" '+
-      'value="'+escAttr(val||'')+'" title="'+lbl+' comment for this account — both required before ticking posted. Resets daily." '+
+      'value="'+escAttr(val||'')+'" title="'+lbl+' comment for this account — all four required before ticking posted. Resets daily." '+
       'data-slot="'+slot+'" onclick="event.stopPropagation()" '+
       'onchange="setAcctNote(\''+esc(a.phone)+'\',\''+esc(a.user)+'\',\''+esc(a.acct)+'\',\''+escAttr(a.handle)+'\','+slot+',this.value)">';
   }
-  return box(1,cur.n1,'Post 1')+box(2,cur.n2,'Post 2');
+  return box(1,cur.n1,'Post 1')+box(2,cur.n2,'Post 2')+box(3,cur.n3,'Post 3')+box(4,cur.n4,'Post 4');
 }
 function setAcctNote(phone, user, acct, handle, slot, note){
-  var key=[phone,user,acct,handle].join('|'); var o=_NOTEMAP[key]||{n1:'',n2:''};
-  if(String(slot)==='2') o.n2=note; else o.n1=note; _NOTEMAP[key]=o;   // optimistic
+  var key=[phone,user,acct,handle].join('|'); var o=_NOTEMAP[key]||{n1:'',n2:'',n3:'',n4:''};
+  var s=String(slot); if(s==='4') o.n4=note; else if(s==='3') o.n3=note; else if(s==='2') o.n2=note; else o.n1=note; _NOTEMAP[key]=o;   // optimistic
   apiPost({ action:'account_note', date:STATE.date, slot:slot, phone:phone, user:user, acct:acct, handle:handle, note:note, by:firstName(USER.full_name||USER.employee_id) })
     .then(function(){ toast('Note saved'); })
     .catch(function(){ toast('Save failed'); });
@@ -1795,14 +1795,15 @@ async function togglePostBox(phone,user,acct,handle){
   var posted = pr && cellAt(pr.cells,0)===String(greenState('post'));
   var GP=String(greenState('post'));                 // posting green = '2'
   if(!posted){
-    // require BOTH Post 1 and Post 2 notes for this account before it can be marked posted
+    // require ALL FOUR posts (Post 1–4) for this account before it can be marked posted
     var _nt=noteFor({phone:phone,user:user,acct:acct,handle:handle});
-    if(!String(_nt.n1||'').trim() || !String(_nt.n2||'').trim()){
-      toast('Add both Post 1 and Post 2 notes for @'+handle+' before marking it posted');
+    var _slots=[['1',_nt.n1],['2',_nt.n2],['3',_nt.n3],['4',_nt.n4]];
+    var _missing=_slots.filter(function(s){ return !String(s[1]||'').trim(); });
+    if(_missing.length){
+      toast('Add all four posts (Post 1–4) for @'+handle+' before marking it posted');
       var strip=document.querySelector('.cells[data-p="'+phone+'"][data-u="'+user+'"][data-a="'+acct+'"][data-h="'+CSS.escape(String(handle))+'"]');
       var wrap=strip && strip.parentNode ? strip.parentNode : null;
-      var want=!String(_nt.n1||'').trim()?'1':'2';
-      var inp=wrap ? wrap.querySelector('.acctnote[data-slot="'+want+'"]') : null;
+      var inp=wrap ? wrap.querySelector('.acctnote[data-slot="'+_missing[0][0]+'"]') : null;
       if(inp){ inp.focus(); }
       return;
     }
