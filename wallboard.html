@@ -126,6 +126,9 @@
   .vpanel{padding:0 !important;background:#000}
   .vpanel iframe{flex:1;width:100%;height:100%;border:0;background:#000;display:block}
   .vplaceholder{flex:1;background:#000}
+  .ytwrap{flex:1;position:relative;background:#000;overflow:hidden}
+  .ytwrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+  #ytmount{position:absolute;inset:0}
   .vlabel{position:absolute;left:2.2vw;bottom:2.4vh;background:rgba(0,0,0,.55);color:#fff;font-size:1.7vh;font-weight:600;
     padding:.7vh 1.3vw;border-radius:1vh;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);letter-spacing:.02em}
   /* Optional "Enable sound" pill — only shows if the browser blocked unmuted autoplay */
@@ -178,19 +181,17 @@ const COMPANY = {
   satisfaction: 99        // % client satisfaction
 };
 
-/* ── OFFICE VIDEOS (Google Drive) ─────────────────────────────────────────────
-   Each video plays FULL-SCREEN as its own slide, for its whole length, then the
-   board moves on to the next slide. To add your 4 videos:
-     1) In Google Drive, set each video to "Anyone with the link → Viewer".
-     2) Copy the ID from the share link — the part between /d/ and /view:
-        https://drive.google.com/file/d/THE_ID_IS_HERE/view  →  id: "THE_ID_IS_HERE"
-     3) Put the clip's length in SECONDS as "secs" (e.g. 1:30 = 90). This tells the
-        board how long to stay on the video before advancing, so set it to the real length.
+/* ── OFFICE VIDEOS (YouTube, unlisted) ────────────────────────────────────────
+   Each video plays FULL-SCREEN as its own slide via the YouTube player: it autoplays,
+   plays with sound, and the board advances the moment the clip ENDS. To change them:
+     • yt   = the video ID from the share link  (https://youtu.be/THE_ID  →  yt:"THE_ID")
+     • secs = the clip length in seconds, used only as a safety fallback if the END
+              event never fires (the real end is detected automatically).
    Leave the array empty ([]) to show no videos. */
 const VIDEOS = [
-  { id:"14DDkiXrWLGkz0j0IxvvlZKMGS8587Nbi", secs:329, title:"JMB Nights" },  // JMB NIGHTS SDE.mp4          · 5:29
-  { id:"1u-Ugp-GPb9glgZxPpVA4rDnAPXTNygE4", secs:301 },                        // snapsave 389815907549341  · 5:01
-  { id:"1rTCKKgI5dOlEkCHaZmVg1kmG28vHILO6", secs:267 },                        // snapsave 397371116061117  · 4:27
+  { yt:"WTyXNlJ_WW0", secs:329, title:"JMB Nights" },  // 5:29
+  { yt:"ta4fbYaqcgQ", secs:301 },                       // 5:01
+  { yt:"7ue8AYBnpIc", secs:267 },                       // 4:27
 ];
 
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByOLL4TuRPKvtPh2rjY-b3rOJ5aBoIc8sOmO9kP/exec";
@@ -282,28 +283,39 @@ function pAnns(){ var list=ANNS.slice(0,3).map(function(a){ return '<div class="
    slide is ACTIVE (build(true)); off-screen it renders a black placeholder so hidden
    videos don't stream or play audio in the background. */
 function pVideo(i, active){
-  var v=VIDEOS[i]; if(!v||!v.id) return '<div class="panel" data-p></div>';
+  var v=VIDEOS[i]; if(!v||!v.yt) return '<div class="panel" data-p></div>';
   var lbl = v.title ? '<div class="vlabel">'+esc(v.title)+'</div>' : '';
   if(!active) return '<div class="panel vpanel" data-p><div class="vplaceholder"></div>'+lbl+'</div>';
-  // Stream the MP4 directly from Drive so audio can play and we get an "ended" event.
-  var src='https://drive.usercontent.google.com/download?id='+encodeURIComponent(v.id)+'&export=download&confirm=t';
-  return '<div class="panel vpanel" data-p><video class="vid" src="'+src+'" preload="auto" playsinline></video>'+lbl+'</div>';
+  return '<div class="panel vpanel" data-p><div class="ytwrap"><div id="ytmount" data-i="'+i+'"></div></div>'+lbl+'</div>';
 }
-/* Autoplay the active slide's video WITH sound — no tapping required. If the browser blocks
-   unmuted autoplay (no kiosk flag yet), it falls back to muted so the clip still plays and a
-   one-click "Enable sound" pill appears. Advances the board the moment the clip ends. */
+/* Load the YouTube IFrame API once. */
+var YT_LOADED=false, _yt=null;
+function loadYT(){ if(YT_LOADED||window.YT) { YT_LOADED=true; return; } YT_LOADED=true;
+  var t=document.createElement('script'); t.src='https://www.youtube.com/iframe_api'; document.head.appendChild(t); }
+window.onYouTubeIframeAPIReady=function(){ activateCurrentVideo(); };   // build the player once the API is ready
+
+/* Build the YouTube player on the active video slide: autoplay, hidden controls, and
+   auto-advance the board when the clip ENDS. Tries to play WITH sound; if the browser
+   blocks unmuted autoplay it plays muted and shows a one-tap "Enable sound" pill. */
 function activateCurrentVideo(){
+  if(_yt){ try{ _yt.destroy(); }catch(e){} _yt=null; }
   var stage=document.getElementById('stage'); if(!stage){ hideSndBtn(); return; }
-  var el=stage.querySelector('.panel.active'); var vid=el&&el.querySelector('video.vid');
-  if(!vid){ hideSndBtn(); return; }
-  vid.onended=function(){ nextPanel(); };
-  try{ vid.currentTime=0; }catch(e){}
-  vid.muted=false;
-  var p=vid.play();
-  if(p&&p.then){ p.then(function(){ hideSndBtn(); }).catch(function(){ vid.muted=true; var q=vid.play(); if(q&&q.catch) q.catch(function(){}); showSndBtn(); }); }
-  else { hideSndBtn(); }
+  var el=stage.querySelector('.panel.active'); var mount=el&&el.querySelector('#ytmount');
+  if(!mount){ hideSndBtn(); return; }                                   // not a video slide
+  if(!(window.YT&&window.YT.Player)){ loadYT(); return; }               // will re-run on API ready
+  var v=VIDEOS[parseInt(mount.getAttribute('data-i'),10)]; if(!v){ hideSndBtn(); return; }
+  _yt=new YT.Player(mount, {
+    width:'100%', height:'100%', videoId:v.yt,
+    playerVars:{ autoplay:1, controls:0, rel:0, modestbranding:1, playsinline:1, fs:0, disablekb:1, iv_load_policy:3, mute:1 },
+    events:{
+      onReady:function(e){ try{ e.target.playVideo(); }catch(_){}
+        try{ e.target.unMute(); e.target.setVolume(100); }catch(_){}    // sticks under kiosk flag or after a prior tap
+        setTimeout(function(){ try{ if(e.target.isMuted()){ showSndBtn(); } else { _audioUnlocked=true; hideSndBtn(); } }catch(__){} }, 900); },
+      onStateChange:function(e){ if(e.data===YT.PlayerState.ENDED) nextPanel(); }
+    }
+  });
 }
-function enableSound(){ var stage=document.getElementById('stage'); var el=stage&&stage.querySelector('.panel.active'); var vid=el&&el.querySelector('video.vid'); if(vid){ vid.muted=false; var p=vid.play(); if(p&&p.catch) p.catch(function(){}); } hideSndBtn(); }
+function enableSound(){ _audioUnlocked=true; if(_yt){ try{ _yt.unMute(); _yt.setVolume(100); _yt.playVideo(); }catch(e){} } hideSndBtn(); }
 function showSndBtn(){ var b=document.getElementById('sndbtn'); if(b) b.style.display='inline-flex'; }
 function hideSndBtn(){ var b=document.getElementById('sndbtn'); if(b) b.style.display='none'; }
 /* Unlock audio on the FIRST interaction of any kind (click, key, touch, or entering
@@ -327,7 +339,7 @@ function panelList(){
     {build:pOnline,     secs:15}
   ];
   if(ANNS.length) info.splice(5,0,{build:pAnns, secs:15});
-  var vids=VIDEOS.map(function(v,i){ return { build:function(active){ return pVideo(i, active); }, secs:(parseFloat(v.secs)||60)+2, video:true }; });
+  var vids=VIDEOS.map(function(v,i){ return { build:function(active){ return pVideo(i, active); }, secs:(parseFloat(v.secs)||60)+25, video:true }; });
   if(!vids.length) return info;
   // Weave the videos evenly BETWEEN the info slides (one clip every few slides).
   var out=[], gap=Math.max(1, Math.floor(info.length/vids.length)), vi=0;
@@ -359,7 +371,7 @@ function updateTicker(){ var bits=['We run the work behind the work','<b>'+onlin
   document.getElementById('tk').innerHTML=bits.join('<span class="sep">◆</span>'); }
 function goFull(){ var el=document.documentElement; (el.requestFullscreen||el.webkitRequestFullscreen||function(){}).call(el); document.getElementById('fsbtn').style.display='none'; }
 document.addEventListener('keydown',function(e){ if(e.key==='f'||e.key==='F') goFull(); if(e.key==='ArrowRight') nextPanel(); if(e.key==='ArrowLeft') showPanel(cur-1); });
-async function boot(){ initSupa(); armAudioUnlock(); await Promise.all([loadEmployees(), loadAnns()]); buildStage(); updateTicker();
+async function boot(){ initSupa(); armAudioUnlock(); loadYT(); await Promise.all([loadEmployees(), loadAnns()]); buildStage(); updateTicker();
   setTimeout(function(){ var b=document.getElementById('fsbtn'); if(b) b.style.display='none'; }, 12000);   // auto-hide chrome
   scheduleNext(); setInterval(loadPresence,20000); setInterval(function(){ loadAnns().then(updateTicker); },60000); setInterval(loadEmployees,600000); setInterval(updateTicker,30000); }
 window.addEventListener('load', boot);
