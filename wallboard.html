@@ -122,9 +122,21 @@
     font-size:1.4vh;padding:1vh 1.4vw;border-radius:1vh;cursor:pointer;font-family:inherit;box-shadow:var(--shSoft);opacity:.5;display:flex;align-items:center;gap:.6vw}
   #fsbtn svg{width:1.7vh;height:1.7vh}
   #fsbtn:hover{opacity:1}
+  /* Video panels (Google Drive clips) */
+  .vpanel{padding:0 !important;background:#000}
+  .vpanel iframe{flex:1;width:100%;height:100%;border:0;background:#000;display:block}
+  .vplaceholder{flex:1;background:#000}
+  .vlabel{position:absolute;left:2.2vw;bottom:2.4vh;background:rgba(0,0,0,.55);color:#fff;font-size:1.7vh;font-weight:600;
+    padding:.7vh 1.3vw;border-radius:1vh;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);letter-spacing:.02em}
+  /* Optional "Enable sound" pill — only shows if the browser blocked unmuted autoplay */
+  #sndbtn{position:fixed;bottom:2vh;right:12vw;z-index:99;background:linear-gradient(135deg,#FF8E45,#E64C10);border:none;color:#fff;
+    font-size:1.5vh;font-weight:700;padding:1vh 1.6vw;border-radius:1vh;cursor:pointer;font-family:inherit;align-items:center;gap:.6vw;
+    box-shadow:0 .8vh 2.4vh rgba(230,76,16,.45)}
+  #sndbtn svg{width:1.9vh;height:1.9vh}
 </style>
 </head>
 <body>
+<button id="sndbtn" onclick="enableSound()" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/></svg> Enable sound</button>
 <button id="fsbtn" onclick="goFull()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg> Full screen</button>
 <div class="wrap">
   <header>
@@ -165,6 +177,21 @@ const COMPANY = {
   clientsServed: 50,      // edit to your real figure
   satisfaction: 99        // % client satisfaction
 };
+
+/* ── OFFICE VIDEOS (Google Drive) ─────────────────────────────────────────────
+   Each video plays FULL-SCREEN as its own slide, for its whole length, then the
+   board moves on to the next slide. To add your 4 videos:
+     1) In Google Drive, set each video to "Anyone with the link → Viewer".
+     2) Copy the ID from the share link — the part between /d/ and /view:
+        https://drive.google.com/file/d/THE_ID_IS_HERE/view  →  id: "THE_ID_IS_HERE"
+     3) Put the clip's length in SECONDS as "secs" (e.g. 1:30 = 90). This tells the
+        board how long to stay on the video before advancing, so set it to the real length.
+   Leave the array empty ([]) to show no videos. */
+const VIDEOS = [
+  { id:"14DDkiXrWLGkz0j0IxvvlZKMGS8587Nbi", secs:329, title:"JMB Nights" },  // JMB NIGHTS SDE.mp4          · 5:29
+  { id:"1u-Ugp-GPb9glgZxPpVA4rDnAPXTNygE4", secs:301 },                        // snapsave 389815907549341  · 5:01
+  { id:"1rTCKKgI5dOlEkCHaZmVg1kmG28vHILO6", secs:267 },                        // snapsave 397371116061117  · 4:27
+];
 
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByOLL4TuRPKvtPh2rjY-b3rOJ5aBoIc8sOmO9kP/exec";
 const SUPA_URL = 'https://rvyrnkjqxnijxydloujk.supabase.co';
@@ -251,27 +278,90 @@ function pAnns(){ var list=ANNS.slice(0,3).map(function(a){ return '<div class="
   return '<div class="panel" data-p><div class="eyebrow"><span class="ei">'+ic('megaphone')+'</span><span class="et">Announcements</span><span class="eln"></span></div>'+
     (ANNS.length? '<div class="anns">'+list+'</div>' : '<div class="empty-note">No announcements at the moment.</div>')+'</div>'; }
 
-/* Announcements panel only appears in rotation when there is something to show. */
-function panelList(){ var base=[pHero,pWho,pServices,pNumbers,pPrinciples,pOnline]; if(ANNS.length) base.splice(5,0,pAnns); return base; }
-var cur=0;
-function buildStage(){ var P=panelList(); var stage=document.getElementById('stage'); stage.innerHTML=P.map(function(fn){ return fn(); }).join('');
+/* One full-screen slide per Google-Drive video. The iframe is only injected when the
+   slide is ACTIVE (build(true)); off-screen it renders a black placeholder so hidden
+   videos don't stream or play audio in the background. */
+function pVideo(i, active){
+  var v=VIDEOS[i]; if(!v||!v.id) return '<div class="panel" data-p></div>';
+  var lbl = v.title ? '<div class="vlabel">'+esc(v.title)+'</div>' : '';
+  if(!active) return '<div class="panel vpanel" data-p><div class="vplaceholder"></div>'+lbl+'</div>';
+  // Stream the MP4 directly from Drive so audio can play and we get an "ended" event.
+  var src='https://drive.usercontent.google.com/download?id='+encodeURIComponent(v.id)+'&export=download&confirm=t';
+  return '<div class="panel vpanel" data-p><video class="vid" src="'+src+'" preload="auto" playsinline></video>'+lbl+'</div>';
+}
+/* Autoplay the active slide's video WITH sound — no tapping required. If the browser blocks
+   unmuted autoplay (no kiosk flag yet), it falls back to muted so the clip still plays and a
+   one-click "Enable sound" pill appears. Advances the board the moment the clip ends. */
+function activateCurrentVideo(){
+  var stage=document.getElementById('stage'); if(!stage){ hideSndBtn(); return; }
+  var el=stage.querySelector('.panel.active'); var vid=el&&el.querySelector('video.vid');
+  if(!vid){ hideSndBtn(); return; }
+  vid.onended=function(){ nextPanel(); };
+  try{ vid.currentTime=0; }catch(e){}
+  vid.muted=false;
+  var p=vid.play();
+  if(p&&p.then){ p.then(function(){ hideSndBtn(); }).catch(function(){ vid.muted=true; var q=vid.play(); if(q&&q.catch) q.catch(function(){}); showSndBtn(); }); }
+  else { hideSndBtn(); }
+}
+function enableSound(){ var stage=document.getElementById('stage'); var el=stage&&stage.querySelector('.panel.active'); var vid=el&&el.querySelector('video.vid'); if(vid){ vid.muted=false; var p=vid.play(); if(p&&p.catch) p.catch(function(){}); } hideSndBtn(); }
+function showSndBtn(){ var b=document.getElementById('sndbtn'); if(b) b.style.display='inline-flex'; }
+function hideSndBtn(){ var b=document.getElementById('sndbtn'); if(b) b.style.display='none'; }
+/* Unlock audio on the FIRST interaction of any kind (click, key, touch, or entering
+   fullscreen). After that, the browser lets every video play with sound automatically —
+   so no button-hunting. With the kiosk autoplay flag, sound plays with no interaction at all. */
+var _audioUnlocked=false;
+function _unlockAudio(){ if(_audioUnlocked) return; _audioUnlocked=true; enableSound();
+  ['pointerdown','keydown','touchstart','click'].forEach(function(ev){ document.removeEventListener(ev,_unlockAudio,true); }); }
+function armAudioUnlock(){ ['pointerdown','keydown','touchstart','click'].forEach(function(ev){ document.addEventListener(ev,_unlockAudio,true); });
+  document.addEventListener('fullscreenchange', function(){ if(document.fullscreenElement) _unlockAudio(); }); }
+
+/* Announcements panel only appears when there's something to show. Video slides are
+   appended, and each one dwells for its own length (secs) before the board advances. */
+function panelList(){
+  var info=[
+    {build:pHero,       secs:15},
+    {build:pWho,        secs:15},
+    {build:pServices,   secs:15},
+    {build:pNumbers,    secs:15},
+    {build:pPrinciples, secs:15},
+    {build:pOnline,     secs:15}
+  ];
+  if(ANNS.length) info.splice(5,0,{build:pAnns, secs:15});
+  var vids=VIDEOS.map(function(v,i){ return { build:function(active){ return pVideo(i, active); }, secs:(parseFloat(v.secs)||60)+2, video:true }; });
+  if(!vids.length) return info;
+  // Weave the videos evenly BETWEEN the info slides (one clip every few slides).
+  var out=[], gap=Math.max(1, Math.floor(info.length/vids.length)), vi=0;
+  for(var i=0;i<info.length;i++){ out.push(info[i]); if(vi<vids.length && (i+1)%gap===0) out.push(vids[vi++]); }
+  while(vi<vids.length) out.push(vids[vi++]);
+  return out;
+}
+var cur=0, _rotTimer=null;
+function buildStage(){ var P=panelList(); var stage=document.getElementById('stage'); stage.innerHTML=P.map(function(p){ return p.build(false); }).join('');
   document.getElementById('dots').innerHTML=P.map(function(_,i){ return '<i'+(i===cur?' class="on"':'')+'></i>'; }).join('');
-  var els=stage.querySelectorAll('.panel'); if(els[cur]) els[cur].classList.add('active'); }
+  var els=stage.querySelectorAll('.panel'); if(els[cur]){ els[cur].outerHTML=P[cur].build(true); stage.querySelectorAll('.panel')[cur].classList.add('active'); }
+  activateCurrentVideo(); }
 function showPanel(i){ var P=panelList(); var stage=document.getElementById('stage'); var els=stage.querySelectorAll('.panel');
-  if(els.length!==P.length){ cur=((i%P.length)+P.length)%P.length; buildStage(); return; }
-  els.forEach(function(e){ e.classList.remove('active'); }); cur=((i%P.length)+P.length)%P.length; els[cur].outerHTML=P[cur]();
+  if(els.length!==P.length){ cur=((i%P.length)+P.length)%P.length; buildStage(); scheduleNext(); return; }
+  var prev=cur;
+  els.forEach(function(e){ e.classList.remove('active'); });
+  cur=((i%P.length)+P.length)%P.length;
+  if(prev!==cur && els[prev]) els[prev].outerHTML=P[prev].build(false);   // stop the slide we're leaving (unloads a video)
+  els=stage.querySelectorAll('.panel');
+  els[cur].outerHTML=P[cur].build(true);                                  // load the slide we're entering
   els=stage.querySelectorAll('.panel'); els[cur].classList.add('active');
-  var dots=document.getElementById('dots').children; for(var k=0;k<dots.length;k++) dots[k].className=(k===cur?'on':''); }
+  var dots=document.getElementById('dots').children; for(var k=0;k<dots.length;k++) dots[k].className=(k===cur?'on':'');
+  activateCurrentVideo(); scheduleNext(); }
 function nextPanel(){ showPanel(cur+1); }
+function scheduleNext(){ if(_rotTimer) clearTimeout(_rotTimer); var P=panelList(); var secs=(P[cur]&&P[cur].secs)||15; _rotTimer=setTimeout(nextPanel, secs*1000); }
 
 function updateTicker(){ var bits=['We run the work behind the work','<b>'+onlineActive().length+'</b> teammates online now'];
   ANNS.slice(0,3).forEach(function(a){ bits.push(esc(a.title)); }); bits.push(esc(COMPANY.positioning));
   document.getElementById('tk').innerHTML=bits.join('<span class="sep">◆</span>'); }
 function goFull(){ var el=document.documentElement; (el.requestFullscreen||el.webkitRequestFullscreen||function(){}).call(el); document.getElementById('fsbtn').style.display='none'; }
 document.addEventListener('keydown',function(e){ if(e.key==='f'||e.key==='F') goFull(); if(e.key==='ArrowRight') nextPanel(); if(e.key==='ArrowLeft') showPanel(cur-1); });
-async function boot(){ initSupa(); await Promise.all([loadEmployees(), loadAnns()]); buildStage(); updateTicker();
+async function boot(){ initSupa(); armAudioUnlock(); await Promise.all([loadEmployees(), loadAnns()]); buildStage(); updateTicker();
   setTimeout(function(){ var b=document.getElementById('fsbtn'); if(b) b.style.display='none'; }, 12000);   // auto-hide chrome
-  setInterval(nextPanel,15000); setInterval(loadPresence,20000); setInterval(function(){ loadAnns().then(updateTicker); },60000); setInterval(loadEmployees,600000); setInterval(updateTicker,30000); }
+  scheduleNext(); setInterval(loadPresence,20000); setInterval(function(){ loadAnns().then(updateTicker); },60000); setInterval(loadEmployees,600000); setInterval(updateTicker,30000); }
 window.addEventListener('load', boot);
 </script>
 </body>
