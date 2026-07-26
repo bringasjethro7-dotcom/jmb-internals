@@ -136,6 +136,25 @@
     font-size:1.5vh;font-weight:700;padding:1vh 1.6vw;border-radius:1vh;cursor:pointer;font-family:inherit;align-items:center;gap:.6vw;
     box-shadow:0 .8vh 2.4vh rgba(230,76,16,.45)}
   #sndbtn svg{width:1.9vh;height:1.9vh}
+
+  /* ── Office login codes overlay — appears only when a staff member requests a code ── */
+  #codeOverlay{position:fixed;inset:0;z-index:400;display:none;align-items:center;justify-content:center;
+    background:rgba(14,11,8,.78);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);}
+  #codeOverlay.show{display:flex;animation:coFade .35s ease both;}
+  @keyframes coFade{from{opacity:0}to{opacity:1}}
+  #codeOverlay .cbox{background:linear-gradient(180deg,#ffffff,#fff6ee);border:1px solid var(--line2);border-radius:2.4vh;
+    box-shadow:var(--sh);padding:3.4vh 3vw;max-width:94vw;max-height:92vh;overflow:auto;text-align:center;}
+  #codeOverlay .ctitle{font-size:2.8vh;font-weight:800;color:var(--ink);letter-spacing:.01em;}
+  #codeOverlay .csub{font-size:1.7vh;color:var(--ink2);font-weight:600;margin:.8vh 0 2.8vh;}
+  #codeOverlay .cgrid{display:flex;flex-wrap:wrap;gap:2.4vh;justify-content:center;}
+  #codeOverlay .ccard{background:#fff;border:1px solid var(--line);border-radius:2vh;box-shadow:var(--shSoft);
+    padding:2.6vh 2.6vw;min-width:24vw;animation:coPop .4s cubic-bezier(.2,1.1,.3,1) both;}
+  @keyframes coPop{from{opacity:0;transform:translateY(1.4vh) scale(.97)}to{opacity:1;transform:none}}
+  #codeOverlay .cname{font-size:2.3vh;font-weight:700;color:var(--ink)}
+  #codeOverlay .cid{font-size:1.5vh;font-weight:600;color:var(--ink3);margin-left:.6vw}
+  #codeOverlay .ccode{font-size:10vh;font-weight:800;letter-spacing:1.6vh;line-height:1;margin:1.2vh 0 .8vh;
+    background:linear-gradient(180deg,#ff7a29,#e35000);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  #codeOverlay .cexp{font-size:1.5vh;color:var(--ink2);font-weight:600}
 </style>
 </head>
 <body>
@@ -153,6 +172,8 @@
   <div class="dots" id="dots"></div>
   <div class="ticker"><span class="tk-lbl">JMB Virtuals</span><div class="tk-track"><span class="tk-move" id="tk"></span></div></div>
 </div>
+<!-- Office login codes — only ever populated on a screen that holds the wall key (set once via ?codekey=) -->
+<div id="codeOverlay"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
@@ -385,9 +406,44 @@ function updateTicker(){ var bits=['We run the work behind the work','<b>'+onlin
   document.getElementById('tk').innerHTML=bits.join('<span class="sep">◆</span>'); }
 function goFull(){ var el=document.documentElement; (el.requestFullscreen||el.webkitRequestFullscreen||function(){}).call(el); document.getElementById('fsbtn').style.display='none'; }
 document.addEventListener('keydown',function(e){ if(e.key==='f'||e.key==='F') goFull(); if(e.key==='ArrowRight') nextPanel(); if(e.key==='ArrowLeft') showPanel(cur-1); });
+/* ── OFFICE LOGIN CODES ──────────────────────────────────────────────────────
+   This is the office TV. When staff request an office login code, it shows here as a big
+   overlay. SECURITY: codes are only fetched/shown on a screen that holds the wall key, set
+   ONCE on this office machine via  ...wallboard.html?codekey=THEKEY  (the param is then
+   stripped and remembered locally). A random person opening this URL from home has no key,
+   so no code is ever fetched or shown to them. */
+var WALL_KEY='';
+(function(){ try{
+  var m=location.search.match(/[?&]codekey=([^&]+)/);
+  if(m){ localStorage.setItem('jmb_wall_key', decodeURIComponent(m[1])); history.replaceState(null,'',location.pathname); }
+  WALL_KEY=localStorage.getItem('jmb_wall_key')||'';
+}catch(e){ WALL_KEY=''; } })();
+async function loadOfficeCodes(){
+  if(!WALL_KEY) return;
+  try{
+    var r=await fetch(APPS_SCRIPT_URL+'?action=office_otp_board&pass='+encodeURIComponent(WALL_KEY)+'&_='+Date.now());
+    var d=await r.json(); renderOfficeCodes(d);
+  }catch(e){}
+}
+function renderOfficeCodes(d){
+  var ov=document.getElementById('codeOverlay'); if(!ov) return;
+  if(!d || d.error){ if(d && d.error==='UNAUTHORIZED'){ try{ localStorage.removeItem('jmb_wall_key'); }catch(e){} WALL_KEY=''; } ov.classList.remove('show'); return; }
+  var codes=d.codes||[];
+  if(!codes.length){ ov.classList.remove('show'); ov.innerHTML=''; return; }
+  ov.innerHTML='<div class="cbox"><div class="ctitle">🔐 Office Login Code</div>'
+    +'<div class="csub">Type your code on the login screen to sign in — expires in 5 minutes.</div>'
+    +'<div class="cgrid">'+codes.map(function(c){
+        var s=Math.max(0,c.expires_in|0), mm=Math.floor(s/60), ss=s%60;
+        return '<div class="ccard"><div><span class="cname">'+esc(c.name)+'</span><span class="cid">'+esc(c.id)+'</span></div>'
+          +'<div class="ccode">'+esc(c.code)+'</div><div class="cexp">expires in '+mm+':'+(ss<10?'0':'')+ss+'</div></div>';
+      }).join('')+'</div></div>';
+  ov.classList.add('show');
+}
+
 async function boot(){ initSupa(); armAudioUnlock(); loadYT(); await Promise.all([loadEmployees(), loadAnns()]); buildStage(); updateTicker();
   setTimeout(function(){ var b=document.getElementById('fsbtn'); if(b) b.style.display='none'; }, 12000);   // auto-hide chrome
-  scheduleNext(); setInterval(loadPresence,20000); setInterval(function(){ loadAnns().then(updateTicker); },60000); setInterval(loadEmployees,600000); setInterval(updateTicker,30000); }
+  scheduleNext(); setInterval(loadPresence,20000); setInterval(function(){ loadAnns().then(updateTicker); },60000); setInterval(loadEmployees,600000); setInterval(updateTicker,30000);
+  loadOfficeCodes(); setInterval(loadOfficeCodes, 4000); }   // office login codes overlay
 window.addEventListener('load', boot);
 </script>
 </body>
