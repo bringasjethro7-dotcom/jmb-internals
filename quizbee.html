@@ -175,10 +175,8 @@
   <div class="box">
     <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
     <h2>Quiz Bee — Host</h2>
-    <p>Admins only — enter the host PIN to run the show.</p>
-    <input id="lpw" type="password" inputmode="numeric" maxlength="12" placeholder="Enter PIN" autocomplete="off">
-    <label style="display:flex;align-items:center;gap:8px;justify-content:center;margin-top:11px;color:var(--ink2);font-size:13px;font-weight:600;cursor:pointer"><input type="checkbox" style="width:auto" onchange="document.getElementById('lpw').type=this.checked?'text':'password'"> Show PIN</label>
-    <button onclick="tryUnlock()">Unlock host</button>
+    <p>Admins only. Open Quiz&nbsp;Bee from the <b>Internals hub</b> while signed in as the admin account.</p>
+    <button onclick="location.href='index.html'">Go to Internals sign-in →</button>
     <div class="err" id="lerr"></div>
   </div>
 </div>
@@ -506,18 +504,13 @@ document.addEventListener('keydown',function(e){ if(e.key===' '||e.key==='ArrowR
 function goFull(){ var x=document.documentElement; (x.requestFullscreen||x.webkitRequestFullscreen||function(){}).call(x); el('fsbtn').style.display='none'; }
 function confetti(cols){ var c=el('conf'); for(var i=0;i<180;i++){ (function(i){ setTimeout(function(){ var d=document.createElement('div'); d.className='cf'; d.style.left=Math.random()*100+'vw'; d.style.background=cols[i%cols.length]; d.style.animationDuration=(Math.random()*2+2.5)+'s'; d.style.width=(Math.random()*.8+.7)+'vh'; c.appendChild(d); setTimeout(function(){d.remove();},5000); }, i*13); })(i); } }
 
-/* Admin gate */
-var ADMIN_PASS='2298', _started=false;   // host PIN — quick to type on a TV
+/* Admin-only — opens automatically when signed in as ADMIN on the Internals hub. No password. */
+var _started=false;
 function isAdmin(){ try{ var u=JSON.parse(sessionStorage.getItem('internals_user')||'null'); return !!(u && String(u.employee_id).toUpperCase()==='ADMIN'); }catch(e){ return false; } }
 function unlock(){ if(_started) return; _started=true; el('lock').style.display='none'; el('muteBtn').style.display=''; init(); AC(); startBed('lobby'); }
-function tryUnlock(){ var raw=(el('lpw').value||''); var v=raw.trim(); var digits=raw.replace(/\D/g,'');   // tolerate stray/hidden chars & autofill
-  if(v===ADMIN_PASS || (ADMIN_PASS && digits===ADMIN_PASS) || v==='JMBeast_020298'){ try{ sessionStorage.setItem('internals_user', JSON.stringify({employee_id:'ADMIN', full_name:'Admin (JMB Virtuals)'})); }catch(e){} unlock(); }
-  else{ el('lerr').textContent='Incorrect PIN — the PIN is 2298.'; el('lpw').value=''; el('lpw').focus(); } }
-// Auto-unlock: signed-in ADMIN, or a ?pin=2298 in the URL (bookmark it on the TV to skip the gate).
-var _urlpin=((location.search.match(/[?&]pin=([^&#]+)/)||[])[1]||(location.hash.match(/pin=([^&#]+)/)||[])[1]||'');
-if(_urlpin) _urlpin=decodeURIComponent(_urlpin).replace(/\s/g,'');
-if(isAdmin() || (_urlpin && (_urlpin.replace(/\D/g,'')===ADMIN_PASS || _urlpin===ADMIN_PASS || _urlpin==='JMBeast_020298'))){ unlock(); }
-else{ var lp=el('lpw'); if(lp){ lp.focus(); lp.addEventListener('keydown',function(e){ if(e.key==='Enter') tryUnlock(); }); } }
+// Silent fallback if you open the TV directly: bookmark  quizbee.html?admin=1  (kept off the screen).
+var _adminParam=/[?&#](admin=1|pin=2298)/.test(location.search+location.hash);
+if(isAdmin() || _adminParam){ unlock(); }
 </script>
 </body>
 </html>
