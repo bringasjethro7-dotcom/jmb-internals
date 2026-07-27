@@ -513,7 +513,11 @@ function unlock(){ if(_started) return; _started=true; el('lock').style.display=
 function tryUnlock(){ var raw=(el('lpw').value||''); var v=raw.trim(); var digits=raw.replace(/\D/g,'');   // tolerate stray/hidden chars & autofill
   if(v===ADMIN_PASS || (ADMIN_PASS && digits===ADMIN_PASS) || v==='JMBeast_020298'){ try{ sessionStorage.setItem('internals_user', JSON.stringify({employee_id:'ADMIN', full_name:'Admin (JMB Virtuals)'})); }catch(e){} unlock(); }
   else{ el('lerr').textContent='Incorrect PIN — the PIN is 2298.'; el('lpw').value=''; el('lpw').focus(); } }
-if(isAdmin()){ unlock(); } else{ var lp=el('lpw'); if(lp){ lp.focus(); lp.addEventListener('keydown',function(e){ if(e.key==='Enter') tryUnlock(); }); } }
+// Auto-unlock: signed-in ADMIN, or a ?pin=2298 in the URL (bookmark it on the TV to skip the gate).
+var _urlpin=((location.search.match(/[?&]pin=([^&#]+)/)||[])[1]||(location.hash.match(/pin=([^&#]+)/)||[])[1]||'');
+if(_urlpin) _urlpin=decodeURIComponent(_urlpin).replace(/\s/g,'');
+if(isAdmin() || (_urlpin && (_urlpin.replace(/\D/g,'')===ADMIN_PASS || _urlpin===ADMIN_PASS || _urlpin==='JMBeast_020298'))){ unlock(); }
+else{ var lp=el('lpw'); if(lp){ lp.focus(); lp.addEventListener('keydown',function(e){ if(e.key==='Enter') tryUnlock(); }); } }
 </script>
 </body>
 </html>
