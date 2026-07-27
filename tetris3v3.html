@@ -44,7 +44,8 @@
   .pcard{background:var(--card);border:1px solid var(--line);border-radius:1.4vh;padding:1vh;display:flex;flex-direction:column;align-items:center;gap:.7vh;min-height:0;position:relative;overflow:hidden}
   .pcard.morn{border-top:.4vh solid var(--morn)} .pcard.night{border-top:.4vh solid var(--night)}
   .pcard .pn{font-size:1.7vh;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-  .pcard canvas{flex:1;min-height:0;background:#070b16;border-radius:.8vh;border:1px solid var(--line)}
+  .pcard .rankbadge{font-size:1.25vh;font-weight:800;letter-spacing:.05em;min-height:1.5vh;text-transform:uppercase}
+  .pcard canvas{flex:1;min-height:0;background:#070b16;border-radius:.8vh;border:1px solid var(--line);transition:box-shadow .45s ease,border-color .45s ease}
   .pcard .pl{font-size:1.5vh;font-weight:800;color:var(--ink2)}.pcard .pl b{font-family:var(--disp);color:var(--ink);font-size:2vh}
   .pcard.empty{opacity:.5;justify-content:center;color:var(--ink3);font-weight:700;font-size:1.6vh}
   .pcard.dead::after{content:'TOP OUT';position:absolute;top:40%;left:0;right:0;text-align:center;font-family:var(--disp);font-weight:800;color:var(--red);font-size:2.2vh;letter-spacing:.1em}
@@ -86,12 +87,27 @@
   .cf{position:absolute;top:-6vh;width:1vh;height:1.6vh;border-radius:2px;animation:fall linear forwards}
   @keyframes fall{to{transform:translateY(112vh) rotate(720deg);opacity:.85}}
   #fsbtn{position:fixed;bottom:1.2vh;right:1vw;z-index:99;background:var(--card);border:1px solid var(--line);color:var(--ink2);font:700 1.3vh/1 var(--sans);padding:1vh 1.2vw;border-radius:1vh;cursor:pointer}
+
+  /* ═══════════ GRAND FINAL — premium layer ═══════════ */
+  body::before{content:"";position:fixed;inset:-25%;z-index:0;pointer-events:none;opacity:.6;
+    background:conic-gradient(from 0deg at 50% 118%, transparent 0 10deg, rgba(249,182,37,.06) 10deg 18deg, transparent 18deg 42deg, rgba(138,151,255,.06) 42deg 50deg, transparent 50deg 92deg);
+    animation:gfBeams 26s linear infinite}
+  @keyframes gfBeams{to{transform:rotate(22deg)}}
+  .wrap{z-index:1}
+  .brand em, #lobby .lt em{background:linear-gradient(180deg,#ffe9b0,#ff9d3a 55%,#ff6a00);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  #lobby .lt{text-shadow:0 .6vh 5vh rgba(255,120,20,.22)}
+  .brand .sub{color:#d9b877}
+  .pcard{background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.02));box-shadow:0 1vh 3vh rgba(0,0,0,.34)}
+  #cd .n{background:linear-gradient(180deg,#ffe9b0,#ff9d3a 55%,#ff6a00);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 .6vh 4vh rgba(255,120,20,.55))}
+  #endov{background:radial-gradient(1200px 800px at 50% 32%,rgba(255,120,20,.15),transparent 60%),rgba(5,7,15,.9)}
+  #endov .win{text-shadow:0 0 6vh rgba(255,150,40,.45)}
+  #endov .win.morn, #endov .win.night{background:linear-gradient(180deg,#fff5df,currentColor);-webkit-background-clip:text;background-clip:text}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <div class="brand">JMB <em>Tetris</em> · 3v3<span class="sub">Monthly Team Battle · Morning ⚔ Night</span></div>
+    <div class="brand">JMB <em>Tetris</em> · 3v3<span class="sub">The Grand Final · Monthly Team Battle · Morning ⚔ Night</span></div>
     <div style="display:flex;align-items:center;gap:1.2vw">
       <span class="month" id="monthlbl">—</span>
       <span class="clock" id="clock" style="display:none">3:00</span>
@@ -136,15 +152,18 @@
 <div id="conf"></div>
 <button id="fsbtn" onclick="goFull()">⤢ Full screen</button>
 
+<script src="tet-skins.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
+var APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByOLL4TuRPKvtPh2rjY-b3rOJ5aBoIc8sOmO9kP/exec';
 var SUPA_URL='https://rvyrnkjqxnijxydloujk.supabase.co';
 var SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2eXJua2pxeG5panh5ZGxvdWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NzAwODQsImV4cCI6MjA5NzE0NjA4NH0.SwkSkmbeWrhm5PZZDSZ1Z4hbjpQ0L2CRtuKQmpHshBE';
 function el(id){return document.getElementById(id);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 var W=10,H=20, DUR=180;
-var COLORS=['#070b16','#31c7ef','#f7d308','#ad4d9c','#42b642','#ef2029','#5a65ad','#ef7921','#6b7280'];  // 8 = garbage
+if(typeof COLORS!=='undefined'){ COLORS[8]='#5b6b82'; }   // garbage; COLORS + blockAs from tet-skins.js
+var _ranks={};
 el('monthlbl').textContent=new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'}).toUpperCase();
 
 var ROOM=(function(){var c='',A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';for(var i=0;i<4;i++)c+=A[Math.floor(Math.random()*A.length)];return c;})();
@@ -160,6 +179,7 @@ function init(){
   }catch(e){}
   el('rc').textContent=ROOM;
   try{ var base=location.href.replace(/[^\/]*$/,''); el('playurl').textContent=(base+'tetris3v3-play.html').replace(/^https?:\/\//,''); }catch(e){}
+  loadRanks();
 }
 // Route a line-clear attack to a random ALIVE opponent on the other team.
 function onAttack(p){ if(phase!=='play'||!p||!p.side||!p.n) return; var target=(p.side==='morn')?'night':'morn';
@@ -170,28 +190,35 @@ function bc(ev,p){ try{ if(ch) ch.send({type:'broadcast',event:ev,payload:p||{}}
 function mkQR(id,url){ try{ var b=el(id); b.innerHTML=''; new QRCode(b,{text:url,width:150,height:150,colorDark:'#0b1020',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M}); }catch(e){} }
 
 function onJoin(p){ if(!p||!p.id||!p.side) return; var s=(p.side==='night'?'night':'morn');
-  if(!players[p.id]){ players[p.id]={id:p.id,side:s,name:p.name||'Player',lines:0,score:0,alive:true,grid:null};
+  if(!players[p.id]){ players[p.id]={id:p.id,side:s,name:p.name||'Player',lines:0,score:0,alive:true,grid:null,skin:p.sk||'classic',empId:p.employee_id||''};
     if(order[s].indexOf(p.id)<0 && order[s].length<3) order[s].push(p.id); }
-  else players[p.id].name=p.name||players[p.id].name;
+  else { players[p.id].name=p.name||players[p.id].name; players[p.id].skin=p.sk||players[p.id].skin; if(p.employee_id) players[p.id].empId=p.employee_id; }
   bc('host',{room:ROOM}); if(phase==='lobby') renderLobbyNames();
 }
 function renderLobbyNames(){ ['morn','night'].forEach(function(s){ var ns=order[s].map(function(id){return esc(players[id].name);}); el('names-'+s).innerHTML = ns.length? ns.join(' · ') : 'Waiting for players…'; }); }
 
-function onState(p){ if(!p||!p.id||!players[p.id]) return; var pl=players[p.id]; pl.lines=p.lines||0; pl.score=p.score||0; pl.alive=!!p.alive; pl.grid=p.grid||pl.grid;
+function onState(p){ if(!p||!p.id||!players[p.id]) return; var pl=players[p.id]; pl.lines=p.lines||0; pl.score=p.score||0; pl.alive=!!p.alive; pl.grid=p.grid||pl.grid; if(p.sk) pl.skin=p.sk;
   if(phase==='play'){ drawPlayer(p.id); updateTotals(); checkAllDone(); } }
 
 /* ── rendering ── */
 function slotCanvasId(s,i){ return 'cv-'+s+'-'+i; }
 function buildArena(){ ['morn','night'].forEach(function(s){ var col=el('col-'+s); col.innerHTML='';
   for(var i=0;i<3;i++){ var id=order[s][i]; var card=document.createElement('div'); card.className='pcard '+s+(id?'':' empty'); card.id='card-'+s+'-'+i;
-    if(id){ card.innerHTML='<div class="pn">'+esc(players[id].name)+'</div><canvas id="'+slotCanvasId(s,i)+'" width="120" height="240"></canvas><div class="pl">Lines <b id="ln-'+s+'-'+i+'">0</b></div>'; }
+    if(id){ card.innerHTML='<div class="pn">'+esc(players[id].name)+'</div><div class="rankbadge" id="rk-'+s+'-'+i+'"></div><canvas id="'+slotCanvasId(s,i)+'" width="120" height="240"></canvas><div class="pl">Lines <b id="ln-'+s+'-'+i+'">0</b></div>'; }
     else card.innerHTML='<div>Empty slot</div>';
     col.appendChild(card);
   }
-}); }
+}); applyRanks(); }
+function rankOf(empId){ if(!empId || typeof rankFromStars!=='function') return null; var st=_ranks[String(empId).toLowerCase()]; return (st!=null)?rankFromStars(st):null; }
+function applyRanks(){ ['morn','night'].forEach(function(s){ for(var i=0;i<3;i++){ var id=order[s][i]; if(!id||!players[id]) continue; var R=rankOf(players[id].empId);
+  var badge=el('rk-'+s+'-'+i), cv=el(slotCanvasId(s,i));
+  if(R){ var col=tierColor(R.tier); if(badge){ badge.textContent=R.tier+(R.god?' 👑':''); badge.style.color=col; } if(cv){ cv.style.boxShadow='0 0 0 2px '+col+', 0 0 16px '+col+'aa'; cv.style.borderColor=col; } }
+  else { if(badge) badge.textContent=''; }
+}}); }
+function loadRanks(){ try{ fetch(APPS_SCRIPT_URL+'?action=tetris_ranking&_='+Date.now()).then(function(r){return r.json();}).then(function(d){ if(d&&d.ranking){ d.ranking.forEach(function(row){ if(row&&row.employee_id!=null) _ranks[String(row.employee_id).toLowerCase()]=parseInt(row.stars,10)||0; }); if(phase==='play'||phase==='count') applyRanks(); } }).catch(function(){}); }catch(e){} }
 function drawPlayer(id){ ['morn','night'].forEach(function(s){ var i=order[s].indexOf(id); if(i<0) return; var pl=players[id]; var cv=el(slotCanvasId(s,i)); if(!cv) return; var ctx=cv.getContext('2d');
-  ctx.clearRect(0,0,cv.width,cv.height); var g=cv.width/W;
-  if(pl.grid){ for(var y=0;y<H;y++) for(var x=0;x<W;x++){ var k=+pl.grid[y*W+x]; if(k){ ctx.fillStyle=COLORS[k]||'#888'; ctx.fillRect(x*g+1,y*g+1,g-2,g-2); } } }
+  ctx.clearRect(0,0,cv.width,cv.height); var g=cv.width/W; ctx.fillStyle='#070b16'; ctx.fillRect(0,0,cv.width,cv.height);
+  if(pl.grid){ var sk=pl.skin||'classic'; for(var y=0;y<H;y++) for(var x=0;x<W;x++){ var k=+pl.grid[y*W+x]; if(k){ blockAs(ctx,x,y,g, k===8?'#5b6b82':COLORS[k], sk); } } }
   var lnEl=el('ln-'+s+'-'+i); if(lnEl) lnEl.textContent=pl.lines;
   var card=el('card-'+s+'-'+i); if(card) card.classList.toggle('dead', !pl.alive);
 }); }
@@ -208,11 +235,12 @@ function updateTotals(){ var ml=teamLines('morn'),nl=teamLines('night'),mk=teamK
 function bump(id){ var e=el(id); e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); }
 
 /* ── flow ── */
+function sfx(fn){ try{ if(typeof window[fn]==='function') window[fn](); }catch(e){} }
 function start(){ if(phase!=='lobby') return; if(!order.morn.length && !order.night.length) return;
   phase='count'; el('lobby').style.display='none'; el('totals').style.display='flex'; el('arena').style.display='flex'; el('clock').style.display='';
-  buildArena(); updateTotals();
-  var n=3; el('cd-n').textContent=n; el('cd').classList.add('on');
-  var t=setInterval(function(){ n--; if(n>0){ el('cd-n').textContent=n; } else if(n===0){ el('cd-n').textContent='GO!'; } else { clearInterval(t); el('cd').classList.remove('on'); go(); } }, 900);
+  buildArena(); updateTotals(); try{ ac(); }catch(e){}
+  var n=3; el('cd-n').textContent=n; el('cd').classList.add('on'); sfx('sfxTick');
+  var t=setInterval(function(){ n--; if(n>0){ el('cd-n').textContent=n; sfx('sfxTick'); } else if(n===0){ el('cd-n').textContent='GO!'; sfx('sfxGo'); } else { clearInterval(t); el('cd').classList.remove('on'); go(); } }, 900);
 }
 function go(){ phase='play'; var seed=(Math.random()*1e9)>>>0; matchEnd=Date.now()+DUR*1000;
   bc('go',{seed:seed,dur:DUR,startAt:Date.now()});
@@ -235,7 +263,7 @@ function finish(){ if(phase==='end') return; phase='end'; if(clockTimer){ clearI
   // MVP = top individual lines
   var best=null; order.morn.concat(order.night).forEach(function(id){ var pl=players[id]; if(pl && (!best||pl.lines>best.lines)) best=pl; });
   if(best && best.lines>0){ el('e-mvp').style.display=''; el('e-mvp').innerHTML='⭐ MVP · <b style="color:var(--o1)">'+esc(best.name)+'</b> ('+(best.side==='morn'?'Morning':'Night')+') — '+best.lines+' lines'; } else el('e-mvp').style.display='none';
-  el('endov').classList.add('on');
+  el('endov').classList.add('on'); sfx('sfxWin');
   if(w!=='tie') confetti(w==='morn'?['#f9b625','#ffd97a','#fff']:['#8a97ff','#c3caff','#fff']);
 }
 function resetAll(){ phase='lobby'; players={}; order={morn:[],night:[]}; _lastTot={morn:-1,night:-1};

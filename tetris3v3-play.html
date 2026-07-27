@@ -86,6 +86,8 @@
         <button class="sbtn morn" id="sb-morn" onclick="pickSide('morn')">☀️ Morning</button>
         <button class="sbtn night" id="sb-night" onclick="pickSide('night')">🌙 Night</button>
       </div>
+      <label style="width:100%;max-width:340px">Block design</label>
+      <select id="skin-pick" onchange="setSkin(this.value)" style="width:100%;max-width:340px;background:var(--card);border:1px solid var(--line);border-radius:12px;color:var(--ink);font:700 16px var(--sans);padding:13px"></select>
       <button class="go" id="goBtn" onclick="doJoin()" style="max-width:340px">Join match</button>
       <div class="err" id="err2"></div>
       <div class="wsub" style="margin-top:6px">Up to 3 per team. Controls: <b>←</b> <b>→</b> move · <b>↑</b> rotate · <b>↓</b> soft-drop · <b>Space</b> hard-drop.</div>
@@ -129,15 +131,16 @@
   </div>
 </div>
 
+<script src="tet-skins.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
+if(typeof COLORS!=='undefined'){ COLORS[8]='#5b6b82'; }   // garbage color (portal-matched)
 var SUPA_URL='https://rvyrnkjqxnijxydloujk.supabase.co';
 var SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2eXJua2pxeG5panh5ZGxvdWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NzAwODQsImV4cCI6MjA5NzE0NjA4NH0.SwkSkmbeWrhm5PZZDSZ1Z4hbjpQ0L2CRtuKQmpHshBE';
 function el(id){return document.getElementById(id);}
 
 /* ── Tetris engine (10x20, seeded 7-bag, matrix rotation) ── */
-var W=10,H=20;
-var COLORS=['#070b16','#31c7ef','#f7d308','#ad4d9c','#42b642','#ef2029','#5a65ad','#ef7921','#6b7280'];  // 8 = garbage (gray)
+var W=10,H=20;   // COLORS + block()/ghostCell()/DESIGNS come from tet-skins.js
 var PIECES={
   I:{k:1,m:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]]},
   O:{k:2,m:[[2,2],[2,2]]},
@@ -159,30 +162,37 @@ function spawn(){ var t=nextType(); var p=PIECES[t]; cur={m:p.m.map(function(r){
 function collide(m,px,py){ for(var r=0;r<m.length;r++) for(var c=0;c<m.length;c++){ if(!m[r][c]) continue; var x=px+c,y=py+r; if(x<0||x>=W||y>=H) return true; if(y>=0 && board[y][x]) return true; } return false; }
 function merge(){ for(var r=0;r<cur.m.length;r++) for(var c=0;c<cur.m.length;c++){ if(cur.m[r][c]){ var x=cur.x+c,y=cur.y+r; if(y>=0&&y<H&&x>=0&&x<W) board[y][x]=cur.m[r][c]; } } }
 var ATK={1:0,2:1,3:2,4:4}, pendingGarbage=0;   // lines cleared → garbage sent to the enemy team
-function clearLines(){ var n=0; for(var y=H-1;y>=0;y--){ var full=true; for(var x=0;x<W;x++){ if(!board[y][x]){ full=false; break; } } if(full){ board.splice(y,1); board.unshift(new Array(W).fill(0)); n++; y++; } }
-  if(n){ lines+=n; score+=[0,100,300,500,800][n]||0; dropMs=Math.max(120, 800-Math.floor(lines/10)*70); } return n; }
+function clearLines(){ var n=0, ys=[]; for(var y=H-1;y>=0;y--){ var full=true; for(var x=0;x<W;x++){ if(!board[y][x]){ full=false; break; } } if(full){ ys.push(y); board.splice(y,1); board.unshift(new Array(W).fill(0)); n++; y++; } }
+  if(n){ lines+=n; score+=[0,100,300,500,800][n]||0; dropMs=Math.max(120, 800-Math.floor(lines/10)*70); flash={t0:Date.now(),ys:ys}; try{ sfxClear(n); }catch(e){} } return n; }
 function addGarbage(g){ var hole=Math.floor(Math.random()*W), lost=false;
   for(var i=0;i<g;i++){ var top=board.shift(); if(top.some(function(v){return v;})) lost=true; var row=new Array(W).fill(8); row[hole]=0; board.push(row); }
   if(lost || (cur && collide(cur.m,cur.x,cur.y))) topOut(); }
-function lockPiece(){ merge(); var n=clearLines();
-  if(n>0){ var atk=ATK[n]||0; if(atk>0){ var cancel=Math.min(atk,pendingGarbage); pendingGarbage-=cancel; var send=atk-cancel; if(send>0) bc('attack',{id:ID,side:side,n:send}); } }
+function lockPiece(){ merge(); sfx('sfxLock'); var n=clearLines();
+  if(n>0){ var atk=ATK[n]||0; if(atk>0){ var cancel=Math.min(atk,pendingGarbage); pendingGarbage-=cancel; var send=atk-cancel; if(send>0){ bc('attack',{id:ID,side:side,n:send}); sfx('sfxAttack'); } } }
   else if(pendingGarbage>0){ var g=Math.min(pendingGarbage,6); pendingGarbage-=g; addGarbage(g); }
   if(alive) spawn();
   updateWarn(); draw(); }
-function move(dx){ if(!alive) return; if(!collide(cur.m,cur.x+dx,cur.y)){ cur.x+=dx; draw(); } }
-function rotate(){ if(!alive) return; var r=rotCW(cur.m); var kicks=[0,-1,1,-2,2]; for(var i=0;i<kicks.length;i++){ if(!collide(r,cur.x+kicks[i],cur.y)){ cur.m=r; cur.x+=kicks[i]; draw(); return; } } }
+function sfx(fn){ try{ if(typeof window[fn]==='function') window[fn].apply(null,[].slice.call(arguments,1)); }catch(e){} }
+function move(dx){ if(!alive) return; if(!collide(cur.m,cur.x+dx,cur.y)){ cur.x+=dx; sfx('sfxMove'); draw(); } }
+function rotate(){ if(!alive) return; var r=rotCW(cur.m); var kicks=[0,-1,1,-2,2]; for(var i=0;i<kicks.length;i++){ if(!collide(r,cur.x+kicks[i],cur.y)){ cur.m=r; cur.x+=kicks[i]; sfx('sfxRot'); draw(); return; } } }
 function softDrop(){ if(!alive) return; if(!collide(cur.m,cur.x,cur.y+1)){ cur.y++; score+=1; draw(); } else { lockPiece(); } }
-function hardDrop(){ if(!alive) return; var d=0; while(!collide(cur.m,cur.x,cur.y+1)){ cur.y++; d++; } score+=d*2; lockPiece(); }
-function topOut(){ alive=false; playing=false; pendingGarbage=0; updateWarn(); if(rafId) cancelAnimationFrame(rafId); draw(); el('p-over-s').textContent=lines+' lines cleared'; el('p-over').classList.add('on'); sendState(); }
+function hardDrop(){ if(!alive) return; var d=0; while(!collide(cur.m,cur.x,cur.y+1)){ cur.y++; d++; } score+=d*2; sfx('sfxDrop'); lockPiece(); }
+function topOut(){ alive=false; playing=false; pendingGarbage=0; updateWarn(); sfx('sfxLose'); if(rafId) cancelAnimationFrame(rafId); draw(); el('p-over-s').textContent=lines+' lines cleared'; el('p-over').classList.add('on'); sendState(); }
 
 /* ── render ── */
-var ctx=null, CELL=20;
-function draw(){ if(!ctx) return; var cv=el('board'); ctx.clearRect(0,0,cv.width,cv.height);
-  for(var y=0;y<H;y++) for(var x=0;x<W;x++){ if(board[y][x]) cell(x,y,board[y][x]); }
-  if(cur && alive){ for(var r=0;r<cur.m.length;r++) for(var c=0;c<cur.m.length;c++){ if(cur.m[r][c]){ var yy=cur.y+r; if(yy>=0) cell(cur.x+c,yy,cur.m[r][c]); } } }
+var ctx=null, flash=null;
+function draw(){ if(!ctx) return; var cv=el('board'), cs=cv.width/W;
+  ctx.clearRect(0,0,cv.width,cv.height); ctx.fillStyle='#070b16'; ctx.fillRect(0,0,cv.width,cv.height);
+  for(var y=0;y<H;y++) for(var x=0;x<W;x++){ var v=board[y][x]; if(v) block(ctx,x,y,cs, v===8?'#5b6b82':COLORS[v]); }
+  if(cur && alive){
+    var gy=cur.y; while(!collide(cur.m,cur.x,gy+1)) gy++;
+    var m=cur.m,r,c;
+    if(gy>cur.y){ for(r=0;r<m.length;r++)for(c=0;c<m.length;c++){ if(m[r][c]) ghostCell(ctx,cur.x+c,gy+r,cs,COLORS[m[r][c]]); } }
+    for(r=0;r<m.length;r++)for(c=0;c<m.length;c++){ if(m[r][c]){ var yy=cur.y+r; if(yy>=0) block(ctx,cur.x+c,yy,cs,COLORS[m[r][c]],true); } }
+  }
+  if(flash){ var e=(Date.now()-flash.t0)/230; if(e<1){ ctx.save(); ctx.globalAlpha=(1-e)*0.9; ctx.fillStyle='#fff'; flash.ys.forEach(function(ry){ ctx.fillRect(0,ry*cs,cv.width,cs); }); ctx.restore(); } else flash=null; }
   el('p-lines').textContent=lines;
 }
-function cell(x,y,k){ var g=CELL; ctx.fillStyle=COLORS[k]||'#888'; ctx.fillRect(x*g+1,y*g+1,g-2,g-2); ctx.fillStyle='rgba(255,255,255,.16)'; ctx.fillRect(x*g+1,y*g+1,g-2,3); }
 function updateWarn(){ var w=el('p-warn'); if(w) w.textContent = pendingGarbage>0 ? ('⚠ '+pendingGarbage+' garbage incoming — clear lines to cancel!') : ''; }
 
 /* ── packed grid for streaming (200 chars, includes current piece) ── */
@@ -205,7 +215,11 @@ document.addEventListener('keydown',function(e){ if(!alive) return; var k=e.key;
 /* ── networking ── */
 var APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByOLL4TuRPKvtPh2rjY-b3rOJ5aBoIc8sOmO9kP/exec';
 var ADMIN_PASS='JMBeast_020298';
-var side=null, name='', ROOM='', supa=null, ch=null, ID='p_'+Math.random().toString(36).slice(2,9), joined=false, stTimer=null;
+var side=null, name='', empId='', ROOM='', supa=null, ch=null, ID='p_'+Math.random().toString(36).slice(2,9), joined=false, stTimer=null;
+function setSkin(v){ EQUIPPED=v||'classic'; try{ localStorage.setItem('tet3v3skin',EQUIPPED); }catch(e){} }
+function populateSkins(){ var sel=el('skin-pick'); if(!sel||typeof DESIGNS==='undefined') return; var saved=''; try{ saved=localStorage.getItem('tet3v3skin')||''; }catch(e){}
+  EQUIPPED=(saved && DESIGNS[saved])?saved:'classic'; sel.innerHTML='';
+  Object.keys(DESIGNS).forEach(function(k){ var o=document.createElement('option'); o.value=k; o.textContent=DESIGNS[k].name||k; if(k===EQUIPPED) o.selected=true; sel.appendChild(o); }); }
 (function(){ try{ var r=location.search.match(/room=([A-Za-z0-9]{4})/); if(r) ROOM=r[1].toUpperCase(); }catch(e){} })();
 function pickSide(x){ side=x; el('sb-morn').classList.toggle('on',x==='morn'); el('sb-night').classList.toggle('on',x==='night'); }
 el('in-room') && el('in-room').addEventListener('input',function(){ this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,''); });
@@ -219,15 +233,15 @@ async function doLogin(){
   el('err').textContent='';
   if(ROOM.length!==4){ el('err').textContent='Enter the 4-letter room code from the TV.'; return; }
   if(!id||!pin){ el('err').textContent='Enter your Employee ID and PIN.'; return; }
-  if(id.toUpperCase()==='ADMIN'){ if(pin===ADMIN_PASS){ name='Admin'; return afterLogin(); } el('err').textContent='Invalid admin password.'; return; }
+  if(id.toUpperCase()==='ADMIN'){ if(pin===ADMIN_PASS){ name='Admin'; empId='ADMIN'; return afterLogin(); } el('err').textContent='Invalid admin password.'; return; }
   el('loginBtn').disabled=true; el('loginBtn').textContent='Signing in…';
   try{ var res=await fetch(APPS_SCRIPT_URL+'?id='+encodeURIComponent(id)+'&pin='+encodeURIComponent(pin)); var data=await res.json();
     if(!data || data.error || !data.employee_id){ throw new Error('Invalid ID or PIN.'); }
-    name=String(data.full_name||data.employee_id); afterLogin();
+    name=String(data.full_name||data.employee_id); empId=String(data.employee_id||id).toUpperCase(); afterLogin();
   }catch(e){ el('err').textContent=(e.message==='Invalid ID or PIN.')?'Invalid ID or PIN.':'Could not sign in. Check your ID/PIN and internet.'; }
   finally{ el('loginBtn').disabled=false; el('loginBtn').textContent='Sign in'; }
 }
-function afterLogin(){ el('who-name').textContent=name; show('sc-team'); }
+function afterLogin(){ el('who-name').textContent=name; populateSkins(); try{ ac(); }catch(e){} show('sc-team'); }
 
 function doJoin(){
   if(!side){ if(el('sb-morn').classList.contains('on')) side='morn'; else if(el('sb-night').classList.contains('on')) side='night'; }
@@ -237,14 +251,14 @@ function doJoin(){
     ch=supa.channel('tet3v3-'+ROOM,{config:{broadcast:{self:false}}});
     ch.on('broadcast',{event:'host'},function(){ if(!joined){ joined=true; onJoined(); } });
     ch.on('broadcast',{event:'go'},function(m){ startMatch(m.payload||{}); });
-    ch.on('broadcast',{event:'garbage'},function(m){ var p=m.payload||{}; if(p.to===ID && alive){ pendingGarbage+=(p.n||0); updateWarn(); } });
+    ch.on('broadcast',{event:'garbage'},function(m){ var p=m.payload||{}; if(p.to===ID && alive){ pendingGarbage+=(p.n||0); updateWarn(); sfx('sfxGarbage'); } });
     ch.on('broadcast',{event:'end'},function(){ onEnd(); });
     ch.on('broadcast',{event:'reset'},function(){ location.reload(); });
     ch.subscribe(function(st){ if(st==='SUBSCRIBED'){ sendJoin(); setTimeout(function(){ if(!joined){ joined=true; onJoined(); } },2500); } });
   }catch(e){ el('err').textContent='Connection failed. Retry.'; el('goBtn').disabled=false; }
 }
 function bc(ev,p){ try{ if(ch) ch.send({type:'broadcast',event:ev,payload:p||{}}); }catch(e){} }
-function sendJoin(){ bc('join',{id:ID,side:side,name:name}); }
+function sendJoin(){ bc('join',{id:ID,side:side,name:name,sk:EQUIPPED,employee_id:empId}); }
 function onJoined(){ el('w-pill').textContent=(side==='morn'?'☀️ Morning':'🌙 Night')+' team'; el('w-name').textContent=name; show('sc-wait'); sendJoin(); }
 
 function startMatch(p){ var seed=(p.seed>>>0)||12345; var dur=(p.dur||180);
@@ -252,11 +266,11 @@ function startMatch(p){ var seed=(p.seed>>>0)||12345; var dur=(p.dur||180);
   matchEnd=(p.startAt||Date.now())+dur*1000;
   el('p-me').textContent=name; el('p-over').classList.remove('on'); updateWarn();
   ctx=el('board').getContext('2d');
-  spawn(); draw(); show('sc-play');
+  spawn(); draw(); show('sc-play'); try{ ac(); }catch(e){} sfx('sfxGo');
   if(stTimer) clearInterval(stTimer); stTimer=setInterval(sendState, 350);
   rafId=requestAnimationFrame(loop);
 }
-function sendState(){ bc('state',{id:ID,side:side,name:name,grid:packGrid(),lines:lines,score:score,alive:alive}); }
+function sendState(){ bc('state',{id:ID,side:side,name:name,grid:packGrid(),lines:lines,score:score,alive:alive,sk:EQUIPPED,employee_id:empId}); }
 function endLocal(why){ playing=false; alive=false; if(rafId) cancelAnimationFrame(rafId); draw(); sendState(); /* stay on board until host end */ }
 function onEnd(){ playing=false; alive=false; if(rafId) cancelAnimationFrame(rafId); if(stTimer){ clearInterval(stTimer); stTimer=null; } sendState(); el('d-lines').textContent=lines; show('sc-done'); }
 </script>
