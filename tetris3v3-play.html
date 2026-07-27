@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>JMB Tetris 3v3 — Play</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--bg0:#0a0f1e;--bg1:#111a30;--ink:#f2f5ff;--ink2:#9fb0d0;--ink3:#5f6f92;--o1:#ff7a29;--o2:#ff5a00;
+    --morn:#f9b625;--night:#8a97ff;--card:rgba(255,255,255,.06);--line:rgba(255,255,255,.12);
+    --green:#34d399;--red:#f87171;--sans:'Manrope',system-ui,sans-serif;--disp:'Sora',system-ui,sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{height:100%;overflow:hidden}
+  body{font-family:var(--sans);color:var(--ink);height:100vh;display:flex;flex-direction:column;
+    background:radial-gradient(800px 500px at 50% -10%,rgba(255,90,0,.14),transparent 60%),linear-gradient(180deg,var(--bg1),var(--bg0))}
+  body.morn{--team:var(--morn)} body.night{--team:var(--night)}
+  .wrap{flex:1;display:flex;flex-direction:column;padding:14px 14px calc(14px + env(safe-area-inset-bottom));max-width:520px;margin:0 auto;width:100%;min-height:0}
+  .brand{text-align:center;font-family:var(--disp);font-size:19px;font-weight:800}.brand em{font-style:normal;color:var(--o1)}
+  .scene{display:none;flex:1;flex-direction:column;min-height:0}.scene.on{display:flex}
+
+  label{font-size:11px;font-weight:800;color:var(--ink2);text-transform:uppercase;letter-spacing:.1em;margin:14px 0 6px;display:block}
+  input{width:100%;background:var(--card);border:1px solid var(--line);border-radius:13px;color:var(--ink);font:700 18px var(--sans);padding:14px 15px;outline:none}
+  input:focus{border-color:var(--o1)}
+  input.code{text-transform:uppercase;letter-spacing:.2em;text-align:center;font-family:var(--disp)}
+  .shifts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .sbtn{background:var(--card);border:2px solid var(--line);border-radius:14px;padding:16px;font-size:16px;font-weight:800;color:var(--ink2);cursor:pointer}
+  .sbtn.morn.on{border-color:var(--morn);color:var(--morn);background:rgba(249,182,37,.14)}
+  .sbtn.night.on{border-color:var(--night);color:var(--night);background:rgba(138,151,255,.16)}
+  .go{width:100%;margin-top:20px;background:linear-gradient(135deg,var(--o1),var(--o2));border:none;border-radius:15px;color:#fff;font:800 18px var(--sans);padding:16px;cursor:pointer}
+  .go:disabled{opacity:.4}
+  .err{color:var(--red);font-size:13px;font-weight:700;text-align:center;margin-top:10px;min-height:16px}
+
+  .waitwrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px}
+  .pill{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:16px;padding:9px 16px;border-radius:99px;background:rgba(255,255,255,.08);color:var(--team,#fff)}
+  .wbig{font-family:var(--disp);font-size:22px;font-weight:800}
+  .wsub{font-size:14px;color:var(--ink2);max-width:320px;line-height:1.5}
+  .pulse .d{animation:blink 1.4s infinite}.pulse .d:nth-child(2){animation-delay:.2s}.pulse .d:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
+
+  /* PLAY */
+  #sc-play{min-height:0}
+  .phead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-weight:800}
+  .phead .me{color:var(--team,#fff);font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:45%}
+  .phead .st{font-family:var(--disp);font-size:15px}
+  .phead .st b{color:var(--o1)}
+  .boardwrap{flex:1;min-height:0;display:flex;justify-content:center;align-items:center}
+  #board{background:#070b16;border:2px solid var(--line);border-radius:10px;touch-action:none;max-height:100%}
+  .ctrls{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:10px}
+  .cbtn{background:var(--card);border:1px solid var(--line);border-radius:14px;color:var(--ink);font-size:24px;font-weight:800;padding:16px 0;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .cbtn:active{background:rgba(255,122,41,.22);border-color:var(--o1)}
+  .cbtn.hard{color:var(--o1)}
+  .over{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:6px;background:rgba(7,11,22,.82);border-radius:10px;text-align:center;padding:16px}
+  .over.on{display:flex}
+  .over .t{font-family:var(--disp);font-size:22px;font-weight:800;color:var(--red)}
+  .over .s{font-size:14px;color:var(--ink2)}
+  .boardbox{position:relative;height:100%;display:flex}
+
+  #sc-done{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px}
+  #sc-done .big{font-family:var(--disp);font-size:26px;font-weight:800;color:var(--o1)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand" style="margin-bottom:2px">JMB <em>Tetris</em> · 3v3</div>
+
+  <!-- SETUP -->
+  <div class="scene on" id="sc-setup">
+    <div id="pick-side" style="display:none">
+      <label>Room code</label>
+      <input class="code" id="in-room" maxlength="4" placeholder="ABCD">
+      <label>Your team</label>
+      <div class="shifts">
+        <button class="sbtn morn" id="sb-morn" onclick="pickSide('morn')">☀️ Morning</button>
+        <button class="sbtn night" id="sb-night" onclick="pickSide('night')">🌙 Night</button>
+      </div>
+    </div>
+    <label>Your name</label>
+    <input id="in-name" maxlength="20" placeholder="Juan D.">
+    <button class="go" id="goBtn" onclick="doJoin()">Join the match</button>
+    <div class="err" id="err"></div>
+    <div class="wsub" style="margin:16px auto 0;text-align:center">Up to 3 players per team. Your lines add to your team's total — clear as many as you can!</div>
+  </div>
+
+  <!-- WAIT -->
+  <div class="scene" id="sc-wait">
+    <div class="waitwrap">
+      <div class="pill" id="w-pill"></div>
+      <div class="wbig" id="w-name"></div>
+      <div class="wsub">You're in. When the host starts the match, your board appears here and the clock runs.</div>
+      <div class="wbig pulse">Waiting for the host<span class="d">.</span><span class="d">.</span><span class="d">.</span></div>
+    </div>
+  </div>
+
+  <!-- PLAY -->
+  <div class="scene" id="sc-play">
+    <div class="phead">
+      <span class="me" id="p-me">You</span>
+      <span class="st">Lines <b id="p-lines">0</b> · <span id="p-time">3:00</span></span>
+    </div>
+    <div class="boardwrap"><div class="boardbox">
+      <canvas id="board" width="200" height="400"></canvas>
+      <div class="over" id="p-over"><div class="t">TOPPED OUT</div><div class="s" id="p-over-s"></div></div>
+    </div></div>
+    <div class="ctrls">
+      <button class="cbtn" ontouchstart="press('L',event)" onmousedown="press('L',event)">◀</button>
+      <button class="cbtn" ontouchstart="press('R',event)" onmousedown="press('R',event)">▶</button>
+      <button class="cbtn" ontouchstart="press('ROT',event)" onmousedown="press('ROT',event)">⟳</button>
+      <button class="cbtn" ontouchstart="press('SOFT',event)" onmousedown="press('SOFT',event)">▼</button>
+      <button class="cbtn hard" ontouchstart="press('HARD',event)" onmousedown="press('HARD',event)">⤓</button>
+    </div>
+  </div>
+
+  <!-- DONE -->
+  <div class="scene" id="sc-done">
+    <div class="big">Match over! 🏆</div>
+    <div class="wsub">You cleared <b id="d-lines">0</b> lines. Check the TV for the winning team.</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+var SUPA_URL='https://rvyrnkjqxnijxydloujk.supabase.co';
+var SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2eXJua2pxeG5panh5ZGxvdWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NzAwODQsImV4cCI6MjA5NzE0NjA4NH0.SwkSkmbeWrhm5PZZDSZ1Z4hbjpQ0L2CRtuKQmpHshBE';
+function el(id){return document.getElementById(id);}
+
+/* ── Tetris engine (10x20, seeded 7-bag, matrix rotation) ── */
+var W=10,H=20;
+var COLORS=['#070b16','#31c7ef','#f7d308','#ad4d9c','#42b642','#ef2029','#5a65ad','#ef7921'];
+var PIECES={
+  I:{k:1,m:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]]},
+  O:{k:2,m:[[2,2],[2,2]]},
+  T:{k:3,m:[[0,3,0],[3,3,3],[0,0,0]]},
+  S:{k:4,m:[[0,4,4],[4,4,0],[0,0,0]]},
+  Z:{k:5,m:[[5,5,0],[0,5,5],[0,0,0]]},
+  J:{k:6,m:[[6,0,0],[6,6,6],[0,0,0]]},
+  L:{k:7,m:[[0,0,7],[7,7,7],[0,0,0]]}
+};
+var TYPES=['I','O','T','S','Z','J','L'];
+function rotCW(m){ var n=m.length,r=[]; for(var i=0;i<n;i++){ r.push([]); for(var j=0;j<n;j++) r[i].push(m[n-1-j][i]); } return r; }
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; var t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+
+var board=null, cur=null, rng=null, bag=[], lines=0, score=0, alive=false, playing=false;
+var dropMs=800, dropAcc=0, lastT=0, rafId=null, matchEnd=0;
+function emptyBoard(){ var b=[]; for(var y=0;y<H;y++){ b.push(new Array(W).fill(0)); } return b; }
+function nextType(){ if(!bag.length){ bag=TYPES.slice(); for(var i=bag.length-1;i>0;i--){ var j=Math.floor(rng()*(i+1)); var t=bag[i];bag[i]=bag[j];bag[j]=t; } } return bag.shift(); }
+function spawn(){ var t=nextType(); var p=PIECES[t]; cur={m:p.m.map(function(r){return r.slice();}), x:Math.floor((W-p.m.length)/2), y:0}; if(collide(cur.m,cur.x,cur.y)){ topOut(); } }
+function collide(m,px,py){ for(var r=0;r<m.length;r++) for(var c=0;c<m.length;c++){ if(!m[r][c]) continue; var x=px+c,y=py+r; if(x<0||x>=W||y>=H) return true; if(y>=0 && board[y][x]) return true; } return false; }
+function merge(){ for(var r=0;r<cur.m.length;r++) for(var c=0;c<cur.m.length;c++){ if(cur.m[r][c]){ var x=cur.x+c,y=cur.y+r; if(y>=0&&y<H&&x>=0&&x<W) board[y][x]=cur.m[r][c]; } } }
+function clearLines(){ var n=0; for(var y=H-1;y>=0;y--){ var full=true; for(var x=0;x<W;x++){ if(!board[y][x]){ full=false; break; } } if(full){ board.splice(y,1); board.unshift(new Array(W).fill(0)); n++; y++; } }
+  if(n){ lines+=n; score+=[0,100,300,500,800][n]||0; dropMs=Math.max(120, 800-Math.floor(lines/10)*70); } }
+function lockPiece(){ merge(); clearLines(); spawn(); draw(); }
+function move(dx){ if(!alive) return; if(!collide(cur.m,cur.x+dx,cur.y)){ cur.x+=dx; draw(); } }
+function rotate(){ if(!alive) return; var r=rotCW(cur.m); var kicks=[0,-1,1,-2,2]; for(var i=0;i<kicks.length;i++){ if(!collide(r,cur.x+kicks[i],cur.y)){ cur.m=r; cur.x+=kicks[i]; draw(); return; } } }
+function softDrop(){ if(!alive) return; if(!collide(cur.m,cur.x,cur.y+1)){ cur.y++; score+=1; draw(); } else { lockPiece(); } }
+function hardDrop(){ if(!alive) return; var d=0; while(!collide(cur.m,cur.x,cur.y+1)){ cur.y++; d++; } score+=d*2; lockPiece(); }
+function topOut(){ alive=false; playing=false; if(rafId) cancelAnimationFrame(rafId); draw(); el('p-over-s').textContent=lines+' lines cleared'; el('p-over').classList.add('on'); sendState(); }
+
+/* ── render ── */
+var ctx=null, CELL=20;
+function draw(){ if(!ctx) return; var cv=el('board'); ctx.clearRect(0,0,cv.width,cv.height);
+  for(var y=0;y<H;y++) for(var x=0;x<W;x++){ if(board[y][x]) cell(x,y,board[y][x]); }
+  if(cur && alive){ for(var r=0;r<cur.m.length;r++) for(var c=0;c<cur.m.length;c++){ if(cur.m[r][c]){ var yy=cur.y+r; if(yy>=0) cell(cur.x+c,yy,cur.m[r][c]); } } }
+  el('p-lines').textContent=lines;
+}
+function cell(x,y,k){ var g=CELL; ctx.fillStyle=COLORS[k]; ctx.fillRect(x*g+1,y*g+1,g-2,g-2); ctx.fillStyle='rgba(255,255,255,.16)'; ctx.fillRect(x*g+1,y*g+1,g-2,3); }
+
+/* ── packed grid for streaming (200 chars, includes current piece) ── */
+function packGrid(){ var b=board.map(function(r){return r.slice();}); if(cur&&alive){ for(var r=0;r<cur.m.length;r++) for(var c=0;c<cur.m.length;c++){ if(cur.m[r][c]){ var y=cur.y+r,x=cur.x+c; if(y>=0&&y<H&&x>=0&&x<W) b[y][x]=cur.m[r][c]; } } } var s=''; for(var yy=0;yy<H;yy++) for(var xx=0;xx<W;xx++) s+=b[yy][xx]; return s; }
+
+/* ── loop ── */
+function loop(t){ if(!playing){ return; } if(!lastT) lastT=t; var dt=t-lastT; lastT=t; dropAcc+=dt;
+  if(Date.now()>=matchEnd){ endLocal('time'); return; }
+  while(dropAcc>=dropMs){ dropAcc-=dropMs; if(!collide(cur.m,cur.x,cur.y+1)){ cur.y++; } else { lockPiece(); if(!alive) return; } }
+  draw();
+  var tl=Math.max(0,Math.ceil((matchEnd-Date.now())/1000)); el('p-time').textContent=Math.floor(tl/60)+':'+String(tl%60).padStart(2,'0');
+  rafId=requestAnimationFrame(loop); }
+
+/* ── controls ── */
+function press(a,ev){ if(ev){ ev.preventDefault(); } if(!alive) return;
+  if(a==='L') move(-1); else if(a==='R') move(1); else if(a==='ROT') rotate(); else if(a==='SOFT') softDrop(); else if(a==='HARD') hardDrop(); }
+document.addEventListener('keydown',function(e){ if(!alive) return; var k=e.key;
+  if(k==='ArrowLeft') move(-1); else if(k==='ArrowRight') move(1); else if(k==='ArrowUp'||k===' '){ e.preventDefault(); if(k===' ') hardDrop(); else rotate(); } else if(k==='ArrowDown') softDrop(); });
+
+/* ── networking ── */
+var side=null, name='', ROOM='', supa=null, ch=null, ID='p_'+Math.random().toString(36).slice(2,9), joined=false, stTimer=null;
+(function(){ try{ var q=location.search; var r=q.match(/room=([A-Za-z0-9]{4})/); if(r) ROOM=r[1].toUpperCase(); var s=q.match(/side=(morn|night)/); if(s) side=s[1]; }catch(e){} })();
+function pickSide(x){ side=x; el('sb-morn').classList.toggle('on',x==='morn'); el('sb-night').classList.toggle('on',x==='night'); }
+el('in-room') && el('in-room').addEventListener('input',function(){ this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,''); });
+function show(id){ ['sc-setup','sc-wait','sc-play','sc-done'].forEach(function(s){ el(s).classList.toggle('on',s===id); }); }
+
+function initSetup(){ if(side){ el('pick-side').style.display='none'; document.body.classList.add(side); } else { el('pick-side').style.display='block'; if(ROOM) el('in-room').value=ROOM; } }
+initSetup();
+
+function doJoin(){ name=(el('in-name').value||'').trim();
+  if(!side){ if(el('sb-morn').classList.contains('on')) side='morn'; else if(el('sb-night').classList.contains('on')) side='night'; }
+  if(!side){ el('err').textContent='Pick your team first.'; return; }
+  if(!ROOM){ ROOM=(el('in-room').value||'').trim().toUpperCase(); }
+  if(ROOM.length!==4){ el('err').textContent='Enter the 4-letter room code from the TV.'; return; }
+  if(!name){ el('err').textContent='Enter your name.'; return; }
+  document.body.classList.add(side); el('goBtn').disabled=true; el('err').textContent='Connecting…';
+  try{ supa=window.supabase.createClient(SUPA_URL,SUPA_KEY);
+    ch=supa.channel('tet3v3-'+ROOM,{config:{broadcast:{self:false}}});
+    ch.on('broadcast',{event:'host'},function(){ if(!joined){ joined=true; onJoined(); } });
+    ch.on('broadcast',{event:'go'},function(m){ startMatch(m.payload||{}); });
+    ch.on('broadcast',{event:'end'},function(){ onEnd(); });
+    ch.on('broadcast',{event:'reset'},function(){ location.reload(); });
+    ch.subscribe(function(st){ if(st==='SUBSCRIBED'){ sendJoin(); setTimeout(function(){ if(!joined){ joined=true; onJoined(); } },2500); } });
+  }catch(e){ el('err').textContent='Connection failed. Retry.'; el('goBtn').disabled=false; }
+}
+function bc(ev,p){ try{ if(ch) ch.send({type:'broadcast',event:ev,payload:p||{}}); }catch(e){} }
+function sendJoin(){ bc('join',{id:ID,side:side,name:name}); }
+function onJoined(){ el('w-pill').textContent=(side==='morn'?'☀️ Morning':'🌙 Night')+' team'; el('w-name').textContent=name; show('sc-wait'); sendJoin(); }
+
+function startMatch(p){ var seed=(p.seed>>>0)||12345; var dur=(p.dur||180);
+  rng=mulberry32(seed); bag=[]; board=emptyBoard(); lines=0; score=0; alive=true; playing=true; dropMs=800; dropAcc=0; lastT=0;
+  matchEnd=(p.startAt||Date.now())+dur*1000;
+  el('p-me').textContent=name; el('p-over').classList.remove('on');
+  ctx=el('board').getContext('2d');
+  spawn(); draw(); show('sc-play');
+  if(stTimer) clearInterval(stTimer); stTimer=setInterval(sendState, 350);
+  rafId=requestAnimationFrame(loop);
+}
+function sendState(){ bc('state',{id:ID,side:side,name:name,grid:packGrid(),lines:lines,score:score,alive:alive}); }
+function endLocal(why){ playing=false; alive=false; if(rafId) cancelAnimationFrame(rafId); draw(); sendState(); /* stay on board until host end */ }
+function onEnd(){ playing=false; alive=false; if(rafId) cancelAnimationFrame(rafId); if(stTimer){ clearInterval(stTimer); stTimer=null; } sendState(); el('d-lines').textContent=lines; show('sc-done'); }
+</script>
+</body>
+</html>

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JMB Tetris 3v3 — Host (TV)</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--bg0:#05070f;--bg1:#0c1428;--ink:#f2f6ff;--ink2:#9fb0d0;--ink3:#5f6f92;--o1:#ff7a29;--o2:#ff5a00;
+    --green:#34d399;--red:#f87171;--morn:#f9b625;--mornSoft:rgba(249,182,37,.14);--night:#8a97ff;--nightSoft:rgba(138,151,255,.16);
+    --card:rgba(255,255,255,.055);--line:rgba(255,255,255,.12);--sans:'Manrope',system-ui,sans-serif;--disp:'Sora',system-ui,sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden}
+  body{font-family:var(--sans);color:var(--ink);height:100vh;width:100vw;cursor:none;
+    background:radial-gradient(1200px 700px at 20% -12%,var(--mornSoft),transparent 55%),radial-gradient(1200px 700px at 80% -12%,var(--nightSoft),transparent 55%),linear-gradient(180deg,var(--bg1),var(--bg0))}
+  .wrap{position:absolute;top:2.2vh;left:2vw;right:2vw;bottom:2.2vh;display:flex;flex-direction:column}
+  header{display:flex;align-items:center;justify-content:space-between}
+  .brand{font-family:var(--disp);font-size:3.2vh;font-weight:800}.brand em{font-style:normal;color:var(--o1)}
+  .brand .sub{display:block;font-size:1.3vh;letter-spacing:.26em;text-transform:uppercase;color:var(--ink3);font-weight:700;margin-top:.7vh}
+  .month{font-size:1.6vh;font-weight:800;color:var(--o1);background:rgba(255,90,0,.12);border:1px solid rgba(255,90,0,.3);border-radius:99px;padding:.7vh 1.4vw}
+  .clock{font-family:var(--disp);font-size:3.4vh;font-weight:800;font-variant-numeric:tabular-nums}
+  .clock.low{color:var(--red)}
+
+  /* team totals bar */
+  .totals{display:flex;align-items:stretch;gap:1.2vw;margin-top:1.6vh}
+  .tside{flex:1;display:flex;align-items:center;gap:1vw;background:var(--card);border:1px solid var(--line);border-radius:1.5vh;padding:1.2vh 1.5vw;transition:.3s}
+  .tside .nm{font-size:1.7vh;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+  .tside.morn .nm{color:var(--morn)} .tside.night .nm{color:var(--night)}
+  .tside .tot{margin-left:auto;font-family:var(--disp);font-size:5.4vh;font-weight:800;line-height:.9;font-variant-numeric:tabular-nums}
+  .tside .lb{font-size:1.3vh;color:var(--ink3);font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+  .tside.morn.lead{border-color:var(--morn);background:linear-gradient(90deg,var(--mornSoft),transparent 60%)}
+  .tside.night.lead{border-color:var(--night);background:linear-gradient(90deg,var(--nightSoft),transparent 60%)}
+  .tmid{display:flex;align-items:center;font-family:var(--disp);font-size:2.4vh;font-weight:800;color:var(--ink3)}
+  .tot.bump{animation:bump .5s cubic-bezier(.2,1.3,.35,1)}
+  @keyframes bump{0%{transform:scale(1)}45%{transform:scale(1.3);color:var(--o1)}100%{transform:scale(1)}}
+
+  .arena{flex:1;min-height:0;display:flex;gap:1.4vw;margin-top:1.6vh}
+  .col{flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:1vw;min-height:0}
+  .pcard{background:var(--card);border:1px solid var(--line);border-radius:1.4vh;padding:1vh;display:flex;flex-direction:column;align-items:center;gap:.7vh;min-height:0;position:relative;overflow:hidden}
+  .pcard.morn{border-top:.4vh solid var(--morn)} .pcard.night{border-top:.4vh solid var(--night)}
+  .pcard .pn{font-size:1.7vh;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .pcard canvas{flex:1;min-height:0;background:#070b16;border-radius:.8vh;border:1px solid var(--line)}
+  .pcard .pl{font-size:1.5vh;font-weight:800;color:var(--ink2)}.pcard .pl b{font-family:var(--disp);color:var(--ink);font-size:2vh}
+  .pcard.empty{opacity:.5;justify-content:center;color:var(--ink3);font-weight:700;font-size:1.6vh}
+  .pcard.dead::after{content:'TOP OUT';position:absolute;top:40%;left:0;right:0;text-align:center;font-family:var(--disp);font-weight:800;color:var(--red);font-size:2.2vh;letter-spacing:.1em}
+  .pcard.dead canvas{opacity:.4}
+  .colmid{flex:0 0 auto;width:3vw;display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-size:3vh;font-weight:800;color:var(--ink3)}
+
+  /* lobby */
+  #lobby{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:1.8vh}
+  #lobby .lt{font-family:var(--disp);font-size:7vh;font-weight:800;line-height:.95}#lobby .lt em{font-style:normal;color:var(--o1)}
+  #lobby .ls{font-size:2vh;color:var(--ink2);font-weight:700;max-width:70vw}
+  .qrs{display:flex;gap:3vw;margin-top:.5vh}
+  .qrcard{background:#fff;border-radius:2vh;padding:1.6vh 1.8vw 1.2vh;color:#0b1020;display:flex;flex-direction:column;align-items:center;gap:.8vh;border:.4vh solid #fff}
+  .qrcard.morn{border-color:var(--morn)} .qrcard.night{border-color:var(--night)}
+  .qrcard .qh{font-family:var(--disp);font-size:2vh;font-weight:800}
+  .qrcard.morn .qh{color:#8a5a00} .qrcard.night .qh{color:#3a3f8f}
+  .qrcard .qbox{width:17vh;height:17vh}
+  .qrcard .names{font-size:1.4vh;font-weight:800;color:#0b1020;min-height:2vh;max-width:20vw}
+  .roomtag{font-family:var(--disp);font-size:1.7vh;color:var(--ink3);font-weight:700;letter-spacing:.1em}
+  .starthint{font-size:1.9vh;color:var(--ink3);font-weight:700}.starthint b{color:var(--ink)}
+
+  /* countdown + end overlays */
+  #cd{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(5,7,15,.7);z-index:30}
+  #cd.on{display:flex}
+  #cd .n{font-family:var(--disp);font-size:28vh;font-weight:800;color:var(--o1);animation:cdpop .9s ease}
+  @keyframes cdpop{0%{opacity:0;transform:scale(.4)}30%{opacity:1;transform:scale(1)}100%{opacity:.2;transform:scale(1.1)}}
+  #endov{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:2vh;background:rgba(5,7,15,.86);z-index:40}
+  #endov.on{display:flex}
+  #endov .win{font-family:var(--disp);font-size:9vh;font-weight:800;animation:cdpop .6s ease both}
+  #endov .win.morn{color:var(--morn)} #endov .win.night{color:var(--night)} #endov .win.tie{color:var(--o1)}
+  #endov .sc{font-family:var(--disp);font-size:4vh;font-weight:800}
+  #endov .sc .m{color:var(--morn)} #endov .sc .n{color:var(--night)}
+  #endov .mvp{font-size:2.2vh;font-weight:800;color:var(--ink2);background:var(--card);border:1px solid var(--line);border-radius:1.4vh;padding:1.2vh 2.2vw}
+  #endov .again{font-size:1.8vh;color:var(--ink3);font-weight:700}
+
+  #conf{position:fixed;inset:0;pointer-events:none;z-index:60;overflow:hidden}
+  .cf{position:absolute;top:-6vh;width:1vh;height:1.6vh;border-radius:2px;animation:fall linear forwards}
+  @keyframes fall{to{transform:translateY(112vh) rotate(720deg);opacity:.85}}
+  #fsbtn{position:fixed;bottom:1.2vh;right:1vw;z-index:99;background:var(--card);border:1px solid var(--line);color:var(--ink2);font:700 1.3vh/1 var(--sans);padding:1vh 1.2vw;border-radius:1vh;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">JMB <em>Tetris</em> · 3v3<span class="sub">Monthly Team Battle · Morning ⚔ Night</span></div>
+    <div style="display:flex;align-items:center;gap:1.2vw">
+      <span class="month" id="monthlbl">—</span>
+      <span class="clock" id="clock" style="display:none">3:00</span>
+    </div>
+  </header>
+
+  <div class="totals" id="totals" style="display:none">
+    <div class="tside morn" id="t-morn"><span class="nm">☀️ Morning</span><span class="tx"><span class="lb">team lines</span></span><span class="tot" id="tot-morn">0</span></div>
+    <div class="tmid">VS</div>
+    <div class="tside night" id="t-night"><span class="tot" id="tot-night">0</span><span class="tx"><span class="lb">team lines</span></span><span class="nm">🌙 Night</span></div>
+  </div>
+
+  <div class="arena" id="arena" style="display:none">
+    <div class="col" id="col-morn"></div>
+    <div class="colmid">VS</div>
+    <div class="col" id="col-night"></div>
+  </div>
+</div>
+
+<!-- LOBBY -->
+<div id="lobby">
+  <div class="lt">JMB <em>Tetris</em> · 3v3</div>
+  <div class="ls">Up to 3 players per team scan their team's code and play at once. Most lines cleared as a team wins. Morning ⚔ Night.</div>
+  <div class="qrs">
+    <div class="qrcard morn"><div class="qh">☀️ Morning team</div><div class="qbox" id="qr-morn"></div><div class="names" id="names-morn">Waiting for players…</div></div>
+    <div class="qrcard night"><div class="qh">🌙 Night team</div><div class="qbox" id="qr-night"></div><div class="names" id="names-night">Waiting for players…</div></div>
+  </div>
+  <div class="roomtag">Room · <b id="rc">····</b></div>
+  <div class="starthint"><b>3-minute</b> match · Press <b>Space</b> to start when players are in</div>
+</div>
+
+<div id="cd"><div class="n" id="cd-n">3</div></div>
+<div id="endov">
+  <div class="win" id="e-win">—</div>
+  <div class="sc" id="e-sc"></div>
+  <div class="mvp" id="e-mvp" style="display:none"></div>
+  <div class="again">Press <b>R</b> for a new match</div>
+</div>
+<div id="conf"></div>
+<button id="fsbtn" onclick="goFull()">⤢ Full screen</button>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+var SUPA_URL='https://rvyrnkjqxnijxydloujk.supabase.co';
+var SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2eXJua2pxeG5panh5ZGxvdWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NzAwODQsImV4cCI6MjA5NzE0NjA4NH0.SwkSkmbeWrhm5PZZDSZ1Z4hbjpQ0L2CRtuKQmpHshBE';
+function el(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+var W=10,H=20, DUR=180;
+var COLORS=['#070b16','#31c7ef','#f7d308','#ad4d9c','#42b642','#ef2029','#5a65ad','#ef7921'];
+el('monthlbl').textContent=new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'}).toUpperCase();
+
+var ROOM=(function(){var c='',A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';for(var i=0;i<4;i++)c+=A[Math.floor(Math.random()*A.length)];return c;})();
+var supa=null, ch=null, players={}, order={morn:[],night:[]}, phase='lobby', clockTimer=null, matchEnd=0;
+
+function init(){
+  try{ supa=window.supabase.createClient(SUPA_URL,SUPA_KEY);
+    ch=supa.channel('tet3v3-'+ROOM,{config:{broadcast:{self:false}}});
+    ch.on('broadcast',{event:'join'},function(m){ onJoin(m.payload||{}); });
+    ch.on('broadcast',{event:'state'},function(m){ onState(m.payload||{}); });
+    ch.subscribe(function(st){ if(st==='SUBSCRIBED') bc('host',{room:ROOM}); });
+  }catch(e){}
+  el('rc').textContent=ROOM;
+  try{ var base=location.href.replace(/[^\/]*$/,'');
+    mkQR('qr-morn', base+'tetris3v3-play.html?room='+ROOM+'&side=morn');
+    mkQR('qr-night', base+'tetris3v3-play.html?room='+ROOM+'&side=night');
+  }catch(e){}
+}
+function bc(ev,p){ try{ if(ch) ch.send({type:'broadcast',event:ev,payload:p||{}}); }catch(e){} }
+function mkQR(id,url){ try{ var b=el(id); b.innerHTML=''; new QRCode(b,{text:url,width:150,height:150,colorDark:'#0b1020',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M}); }catch(e){} }
+
+function onJoin(p){ if(!p||!p.id||!p.side) return; var s=(p.side==='night'?'night':'morn');
+  if(!players[p.id]){ players[p.id]={id:p.id,side:s,name:p.name||'Player',lines:0,score:0,alive:true,grid:null};
+    if(order[s].indexOf(p.id)<0 && order[s].length<3) order[s].push(p.id); }
+  else players[p.id].name=p.name||players[p.id].name;
+  bc('host',{room:ROOM}); if(phase==='lobby') renderLobbyNames();
+}
+function renderLobbyNames(){ ['morn','night'].forEach(function(s){ var ns=order[s].map(function(id){return esc(players[id].name);}); el('names-'+s).innerHTML = ns.length? ns.join(' · ') : 'Waiting for players…'; }); }
+
+function onState(p){ if(!p||!p.id||!players[p.id]) return; var pl=players[p.id]; pl.lines=p.lines||0; pl.score=p.score||0; pl.alive=!!p.alive; pl.grid=p.grid||pl.grid;
+  if(phase==='play'){ drawPlayer(p.id); updateTotals(); checkAllDone(); } }
+
+/* ── rendering ── */
+function slotCanvasId(s,i){ return 'cv-'+s+'-'+i; }
+function buildArena(){ ['morn','night'].forEach(function(s){ var col=el('col-'+s); col.innerHTML='';
+  for(var i=0;i<3;i++){ var id=order[s][i]; var card=document.createElement('div'); card.className='pcard '+s+(id?'':' empty'); card.id='card-'+s+'-'+i;
+    if(id){ card.innerHTML='<div class="pn">'+esc(players[id].name)+'</div><canvas id="'+slotCanvasId(s,i)+'" width="120" height="240"></canvas><div class="pl">Lines <b id="ln-'+s+'-'+i+'">0</b></div>'; }
+    else card.innerHTML='<div>Empty slot</div>';
+    col.appendChild(card);
+  }
+}); }
+function drawPlayer(id){ ['morn','night'].forEach(function(s){ var i=order[s].indexOf(id); if(i<0) return; var pl=players[id]; var cv=el(slotCanvasId(s,i)); if(!cv) return; var ctx=cv.getContext('2d');
+  ctx.clearRect(0,0,cv.width,cv.height); var g=cv.width/W;
+  if(pl.grid){ for(var y=0;y<H;y++) for(var x=0;x<W;x++){ var k=+pl.grid[y*W+x]; if(k){ ctx.fillStyle=COLORS[k]||'#888'; ctx.fillRect(x*g+1,y*g+1,g-2,g-2); } } }
+  var lnEl=el('ln-'+s+'-'+i); if(lnEl) lnEl.textContent=pl.lines;
+  var card=el('card-'+s+'-'+i); if(card) card.classList.toggle('dead', !pl.alive);
+}); }
+function teamLines(s){ var t=0; order[s].forEach(function(id){ t+=players[id]?players[id].lines:0; }); return t; }
+var _lastTot={morn:-1,night:-1};
+function updateTotals(){ var m=teamLines('morn'),n=teamLines('night');
+  if(m!==_lastTot.morn){ el('tot-morn').textContent=m; bump('tot-morn'); _lastTot.morn=m; }
+  if(n!==_lastTot.night){ el('tot-night').textContent=n; bump('tot-night'); _lastTot.night=n; }
+  el('t-morn').classList.toggle('lead',m>n); el('t-night').classList.toggle('lead',n>m);
+}
+function bump(id){ var e=el(id); e.classList.remove('bump'); void e.offsetWidth; e.classList.add('bump'); }
+
+/* ── flow ── */
+function start(){ if(phase!=='lobby') return; if(!order.morn.length && !order.night.length) return;
+  phase='count'; el('lobby').style.display='none'; el('totals').style.display='flex'; el('arena').style.display='flex'; el('clock').style.display='';
+  buildArena(); updateTotals();
+  var n=3; el('cd-n').textContent=n; el('cd').classList.add('on');
+  var t=setInterval(function(){ n--; if(n>0){ el('cd-n').textContent=n; } else if(n===0){ el('cd-n').textContent='GO!'; } else { clearInterval(t); el('cd').classList.remove('on'); go(); } }, 900);
+}
+function go(){ phase='play'; var seed=(Math.random()*1e9)>>>0; matchEnd=Date.now()+DUR*1000;
+  bc('go',{seed:seed,dur:DUR,startAt:Date.now()});
+  if(clockTimer) clearInterval(clockTimer);
+  clockTimer=setInterval(function(){ var left=Math.max(0,Math.ceil((matchEnd-Date.now())/1000));
+    el('clock').textContent=Math.floor(left/60)+':'+String(left%60).padStart(2,'0'); el('clock').classList.toggle('low',left<=15);
+    if(left<=0){ clearInterval(clockTimer); finish(); } }, 500);
+}
+function checkAllDone(){ var ids=order.morn.concat(order.night); if(!ids.length) return; var anyAlive=ids.some(function(id){ return players[id] && players[id].alive; });
+  if(!anyAlive && phase==='play'){ finish(); } }
+function finish(){ if(phase==='end') return; phase='end'; if(clockTimer){ clearInterval(clockTimer); clockTimer=null; } bc('end',{});
+  var m=teamLines('morn'),n=teamLines('night'), w=m>n?'morn':(n>m?'night':'tie');
+  el('e-win').className='win '+w; el('e-win').textContent=w==='morn'?'MORNING TEAM WINS!':(w==='night'?'NIGHT TEAM WINS!':"IT'S A TIE!");
+  el('e-sc').innerHTML='<span class="m">Morning '+m+'</span>  —  <span class="n">'+n+' Night</span>  <span style="color:var(--ink3);font-size:2.4vh">team lines</span>';
+  // MVP = top individual lines
+  var best=null; order.morn.concat(order.night).forEach(function(id){ var pl=players[id]; if(pl && (!best||pl.lines>best.lines)) best=pl; });
+  if(best && best.lines>0){ el('e-mvp').style.display=''; el('e-mvp').innerHTML='⭐ MVP · <b style="color:var(--o1)">'+esc(best.name)+'</b> ('+(best.side==='morn'?'Morning':'Night')+') — '+best.lines+' lines'; } else el('e-mvp').style.display='none';
+  el('endov').classList.add('on');
+  if(w!=='tie') confetti(w==='morn'?['#f9b625','#ffd97a','#fff']:['#8a97ff','#c3caff','#fff']);
+}
+function resetAll(){ phase='lobby'; players={}; order={morn:[],night:[]}; _lastTot={morn:-1,night:-1};
+  el('endov').classList.remove('on'); el('totals').style.display='none'; el('arena').style.display='none'; el('clock').style.display='none'; el('conf').innerHTML='';
+  el('tot-morn').textContent='0'; el('tot-night').textContent='0'; el('lobby').style.display='flex'; renderLobbyNames(); bc('reset',{});
+}
+
+document.addEventListener('keydown',function(e){ if(e.key===' '||e.key==='Enter'){ e.preventDefault(); if(phase==='lobby') start(); } else if(e.key==='r'||e.key==='R'){ if(phase==='end') resetAll(); } else if(e.key==='f'||e.key==='F'){ goFull(); } });
+function goFull(){ var x=document.documentElement; (x.requestFullscreen||x.webkitRequestFullscreen||function(){}).call(x); el('fsbtn').style.display='none'; }
+function confetti(cols){ var c=el('conf'); for(var i=0;i<160;i++){ (function(i){ setTimeout(function(){ var d=document.createElement('div'); d.className='cf'; d.style.left=Math.random()*100+'vw'; d.style.background=cols[i%cols.length]; d.style.animationDuration=(Math.random()*2+2.5)+'s'; c.appendChild(d); setTimeout(function(){d.remove();},5000); }, i*14); })(i); } }
+
+/* Admin-only — opens when reached from the Internals hub (same origin) or ?admin=1. */
+function isAdmin(){ try{ var u=JSON.parse(sessionStorage.getItem('internals_user')||localStorage.getItem('internals_user')||'null'); return !!(u && String(u.employee_id).toUpperCase()==='ADMIN'); }catch(e){ return false; } }
+var _adminParam=/[?&#](admin=1)/.test(location.search+location.hash);
+function _fromInternals(){ try{ return !!document.referrer && new URL(document.referrer).origin===location.origin; }catch(e){ return false; } }
+if(isAdmin() || _adminParam || _fromInternals()){ init(); }
+else { document.body.innerHTML='<div style="height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;text-align:center;font-family:var(--disp)"><div style="font-size:4vh;font-weight:800">🔒 Admins only</div><div style="font-size:2vh;color:#9fb0d0;font-weight:600">Open Tetris 3v3 from the Internals hub.</div><button onclick="location.href=\'index.html\'" style="background:linear-gradient(135deg,#ff7a29,#ff5a00);border:none;border-radius:12px;color:#fff;font:800 16px sans-serif;padding:13px 22px;cursor:pointer">Go to Internals →</button></div>'; }
+</script>
+</body>
+</html>
