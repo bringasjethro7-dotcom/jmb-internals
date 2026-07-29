@@ -55,8 +55,8 @@ a{color:var(--o2)}
 .cbtn{font-size:11px;font-weight:600;border-radius:7px;padding:5px 9px;border:1px solid var(--line);background:#f6f8fb;color:var(--t2);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:4px;font-family:inherit;transition:filter .12s}
 .cbtn:hover{filter:brightness(1.25)}
 .cbtn.open{color:#8bc0f0;border-color:rgba(55,138,221,.4)}
-.cbtn.pass{flex:1;justify-content:center;color:#4ade80;border-color:rgba(74,222,128,.45);background:rgba(74,222,128,.10)}
-.cbtn.fail{flex:1;justify-content:center;color:#f87171;border-color:rgba(248,113,113,.45);background:rgba(248,113,113,.10)}
+.cbtn.pass{flex:1;justify-content:center;color:#15803d;border-color:rgba(74,222,128,.45);background:rgba(74,222,128,.10)}
+.cbtn.fail{flex:1;justify-content:center;color:#dc2626;border-color:rgba(248,113,113,.45);background:rgba(248,113,113,.10)}
 .muted{color:var(--t3);font-size:13px;padding:1rem;text-align:center}
 /* onboarding */
 .onb-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.3rem;margin-bottom:1rem}
@@ -117,7 +117,7 @@ textarea.inp{min-height:72px;resize:vertical}
   .mb{ background:rgba(6,8,12,.66); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
   .mb.open{ animation:hrFade .22s ease; }
   .mb.open .modal{ animation:hrPop .36s cubic-bezier(.2,.85,.25,1.06); }
-  .modal{ box-shadow:0 30px 80px rgba(15,23,42,.55); }
+  .modal{ box-shadow:0 30px 80px rgba(15,23,42,.22); }
   @keyframes hrFade{from{opacity:0}to{opacity:1}}
   @keyframes hrPop{0%{opacity:0;transform:translateY(16px) scale(.965)}100%{opacity:1;transform:none}}
   /* login card entrance */
@@ -264,7 +264,7 @@ table tbody tr:hover td{background:rgba(255,107,26,.05)}
         <button class="btn primary" onclick="offStart()">Start offboarding</button>
       </div>
       <div id="off-fields" style="margin-top:10px;"></div>
-      <div style="font-size:11.5px;color:var(--t3);margin-top:8px;">Completing a case <b style="color:#f87171">deactivates the account</b> (no portal login) and <b style="color:#38bdf8">emails the employee</b> automatically.</div>
+      <div style="font-size:11.5px;color:var(--t3);margin-top:8px;">Completing a case <b style="color:#dc2626">deactivates the account</b> (no portal login) and <b style="color:#0284c7">emails the employee</b> automatically.</div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
       <b style="font-size:14px;">Offboarding cases</b>
@@ -400,7 +400,7 @@ function copyExamLink(e,id,token){
 var USER=null, ISADMIN=false, STATE={candidates:[]}, _editId=null, _acctCandId=null, _empCache=null;
 var STAGES=['applied','screening','assessment','interview','offer','hired','rejected'];
 var STAGE_LABEL={applied:'Applied',screening:'Resume review',assessment:'Assessment',interview:'Interview',offer:'Offer',hired:'Hired',rejected:'Rejected'};
-var STAGE_COLOR={applied:'#60a5fa',screening:'#a78bfa',assessment:'#22d3ee',interview:'#ffb066',offer:'#ff8a3c',hired:'#4ade80',rejected:'#f87171'};
+var STAGE_COLOR={applied:'#0284c7',screening:'#7c3aed',assessment:'#22d3ee',interview:'#ffb066',offer:'#ff8a3c',hired:'#15803d',rejected:'#dc2626'};
 var ONB_TASKS=['Signed contract','Submitted requirements / IDs','Company email created','Portal account created','Tools access (tracker · chat · voice)','Assigned to team / manager','Orientation & SOP walkthrough','First task assigned'];
 
 function $(id){ return document.getElementById(id); }
@@ -486,14 +486,14 @@ function candCard(c){
   if(c.resume){ extra+='<button class="cbtn open" onclick="openResume(event,\''+c.id+'\')">📄 View resume</button>'; }
   // assessment score badge once completed
   if(c.assess_at && c.assess_score!=='' && c.assess_score!=null){
-    var sc=parseFloat(c.assess_score); var col=sc>=80?'#4ade80':(sc>=60?'#ffb066':'#f87171');
+    var sc=parseFloat(c.assess_score); var col=sc>=80?'#15803d':(sc>=60?'#ffb066':'#dc2626');
     extra+='<span class="cbtn" style="cursor:default;border-color:'+col+'55;color:'+col+'" onclick="event.stopPropagation()">Assessment: '+Math.round(sc)+'%</span>';
   } else if(String(c.stage)==='assessment' && c.token){
     // in-office: copy the exam link for the examinee to paste on the office laptop
     extra+='<button class="cbtn open" onclick="copyExamLink(event,\''+c.id+'\',\''+esc(c.token)+'\')">🔗 Copy exam link</button>';
     var rv=String(c.assess_rsvp||'').toLowerCase();
-    if(rv==='attending') extra+='<span class="cbtn" style="cursor:default;border-color:#22c55e55;color:#4ade80" onclick="event.stopPropagation()">✅ Attending</span>';
-    else if(rv==='declined') extra+='<span class="cbtn" style="cursor:default;border-color:#f8717155;color:#f87171" onclick="event.stopPropagation()">❌ Declined</span>';
+    if(rv==='attending') extra+='<span class="cbtn" style="cursor:default;border-color:#22c55e55;color:#15803d" onclick="event.stopPropagation()">✅ Attending</span>';
+    else if(rv==='declined') extra+='<span class="cbtn" style="cursor:default;border-color:#dc262655;color:#dc2626" onclick="event.stopPropagation()">❌ Declined</span>';
     else extra+='<span class="cbtn" style="cursor:default;border-color:var(--line);color:var(--t3)" onclick="event.stopPropagation()">⏳ Awaiting RSVP</span>';
   }
   // pass/fail for resume-review stage
@@ -579,8 +579,8 @@ var OFF_CAUSES={
   ]
 };
 function offBadge(type){ return String(type||'').toLowerCase()==='termination'
-  ? '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(248,113,113,.15);color:#f87171;">Termination</span>'
-  : '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(56,189,248,.15);color:#38bdf8;">Resignation</span>'; }
+  ? '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(248,113,113,.15);color:#dc2626;">Termination</span>'
+  : '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(56,189,248,.15);color:#0284c7;">Resignation</span>'; }
 function offTypeFields(){
   var t=$('off-type').value; var groups=OFF_CAUSES[t]||OFF_CAUSES.termination;
   var html='<style>.offchip{display:inline-flex;font-size:12px;padding:5px 11px;border-radius:20px;border:1px solid var(--line);background:#fff;color:var(--t2);cursor:pointer;margin:0 6px 6px 0;}.offchip.on{background:rgba(255,107,26,.16);border-color:#ff6b1a;color:#ff8a3c;font-weight:600;}.offcat{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin:10px 0 5px;}</style>';
@@ -642,13 +642,36 @@ function offCard(c){
   var checks=(c.checklist||[]).map(function(x,i){ return '<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0;'+(completed?'opacity:.7;':'')+'">'+
     '<input type="checkbox" '+(x.done?'checked':'')+' '+(completed?'disabled':'')+' onchange="offToggle(\''+c.id+'\','+i+',this.checked)" style="width:16px;height:16px;accent-color:#ff6b1a;">'+
     '<span>'+esc(x.label)+(x.done&&x.at?(' <span style="color:var(--t3);font-size:11px">· '+esc(String(x.at).slice(0,10))+'</span>'):'')+'</span></label>'; }).join('');
-  var actions=completed?'':'<div style="display:flex;gap:8px;margin-top:10px;"><button class="btn" style="background:#f87171;color:#fff;border-color:#f87171;font-weight:600;" onclick="offComplete(\''+c.id+'\')">✓ Complete &amp; deactivate</button><button class="btn ghost sm" onclick="offCancel(\''+c.id+'\')">Cancel case</button></div>';
+  var actions=completed?'':'<div style="display:flex;gap:8px;margin-top:10px;"><button class="btn" style="background:#dc2626;color:#fff;border-color:#dc2626;font-weight:600;" onclick="offComplete(\''+c.id+'\')">✓ Complete &amp; deactivate</button><button class="btn ghost sm" onclick="offCancel(\''+c.id+'\')">Cancel case</button></div>';
+  // Personal resignation link (VA attaches letter + agrees to AWOL policy)
+  var ack=c.resign_ack, linkHtml='';
+  if(ack && ack.submitted_at){
+    var assetsN=(ack.assets||[]).length;
+    linkHtml='<div style="margin-top:10px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#166534;">'+
+      '<b>✅ Resignation received &amp; policy agreed</b> · '+esc(String(ack.submitted_at).slice(0,16))+'<br>'+
+      'Signed: <b>'+esc(ack.signature||'—')+'</b> · Last day: <b>'+esc(ack.last_day||'—')+'</b> · Assets confirmed: '+assetsN+'/3'+
+      (ack.file_url?(' · <a href="'+esc(ack.file_url)+'" target="_blank" style="color:#166534;font-weight:800;">View letter</a>'):'')+
+    '</div>';
+  } else if(!completed){
+    if(c.token){
+      var url='https://portal.jmbvirtuals.com/resign.html?t='+encodeURIComponent(c.token);
+      linkHtml='<div style="margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;">'+
+        '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--t3);margin-bottom:6px;">Resignation link — send to the VA</div>'+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;">'+
+          '<input readonly value="'+esc(url)+'" onclick="this.select()" style="flex:1;min-width:210px;font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:#fff;">'+
+          '<button class="btn sm" onclick="offCopyLink(\''+esc(c.token)+'\')">Copy</button>'+
+        '</div><div style="font-size:11px;color:var(--t3);margin-top:5px;">Awaiting the VA’s submission of their resignation &amp; policy agreement.</div>'+
+      '</div>';
+    } else {
+      linkHtml='<div style="margin-top:10px;"><button class="btn sm" onclick="offLink(\''+c.id+'\')">🔗 Generate resignation link</button> <span style="font-size:11px;color:var(--t3);">Lets the VA attach their resignation &amp; agree to the AWOL policy.</span></div>';
+    }
+  }
   return '<div style="background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;">'+
     '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><b style="font-size:14px;">'+esc(c.full_name)+'</b>'+offBadge(c.type)+
     (completed?'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(148,163,184,.18);color:var(--t2);">Completed</span>':'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(255,107,26,.15);color:#ff8a3c;">In progress · '+done+'/'+total+'</span>')+
     '<span style="margin-left:auto;font-size:11px;color:var(--t3);">'+esc(c.employee_id)+'</span></div>'+
     '<div style="font-size:12px;color:var(--t2);margin:6px 0 4px;">'+dates+(c.reason?(' · '+esc(c.reason)):'')+'</div>'+
-    '<div style="border-top:1px solid var(--line);margin-top:8px;padding-top:6px;">'+checks+'</div>'+actions+'</div>';
+    '<div style="border-top:1px solid var(--line);margin-top:8px;padding-top:6px;">'+checks+'</div>'+linkHtml+actions+'</div>';
 }
 function offToggle(id,i,checked){
   var c=(OFF_DATA.cases||[]).filter(function(x){return x.id===id;})[0]; if(!c||!c.checklist[i]) return;
@@ -669,6 +692,15 @@ function offCancel(id){
   if(!confirm('Cancel and delete this offboarding case? The employee stays active.')) return;
   fetch(PORTAL_URL+'?action=offboarding_cancel&id='+encodeURIComponent(id)+'&_='+Date.now())
     .then(function(r){return r.json();}).then(function(){ loadOff(); }).catch(function(){});
+}
+function offCopyText(txt){ try{ navigator.clipboard.writeText(txt); }catch(e){ var ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(_){} document.body.removeChild(ta); } }
+function offCopyLink(token){ offCopyText('https://portal.jmbvirtuals.com/resign.html?t='+encodeURIComponent(token)); toast('Resignation link copied.'); }
+function offLink(id){
+  fetch(PORTAL_URL+'?action=offb_link_new&id='+encodeURIComponent(id)+'&_='+Date.now())
+    .then(function(r){return r.json();}).then(function(d){
+      if(d&&d.ok){ var c=(OFF_DATA.cases||[]).filter(function(x){return x.id===id;})[0]; if(c) c.token=d.token; offCopyText(d.url); toast('Link generated & copied — send it to the VA.'); renderOff(); }
+      else toast('Could not generate link: '+((d&&d.error)||'unknown'));
+    }).catch(function(){ toast('Network error.'); });
 }
 var _dragId=null;
 function onDragStart(e,id){ _dragId=id; e.dataTransfer.effectAllowed='move'; try{ e.dataTransfer.setData('text/plain',id); }catch(_){} var el=e.target.closest('.cand'); if(el) el.classList.add('dragging'); }
@@ -748,12 +780,12 @@ function openCandidate(id){
 }
 function assessBreakdownHTML(c){
   var d={}; try{ d=JSON.parse(c.assess_detail||'{}'); }catch(_){}
-  var overall=Math.round(parseFloat(c.assess_score)); var oc=overall>=80?'#4ade80':(overall>=60?'#ffb066':'#f87171');
+  var overall=Math.round(parseFloat(c.assess_score)); var oc=overall>=80?'#15803d':(overall>=60?'#ffb066':'#dc2626');
   var rows=[['Grammar','grammar'],['Mathematics & Logic','mathlogic'],['Technology / VA & SMM','tech'],['Written exam','written'],['Typing','typing']];
   var html='<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px"><span style="font-weight:700">Assessment results</span><span style="font-weight:800;font-size:18px;color:'+oc+'">'+overall+'%</span></div>';
   rows.forEach(function(r){
     var v=(d[r[1]]!=null)?Math.round(d[r[1]]):null; if(v===null) return;
-    var col=v>=80?'#4ade80':(v>=60?'#ffb066':'#f87171');
+    var col=v>=80?'#15803d':(v>=60?'#ffb066':'#dc2626');
     html+='<div style="display:flex;align-items:center;gap:9px;margin:6px 0;font-size:12px">'
       +'<span style="width:128px;color:var(--t2)">'+r[0]+'</span>'
       +'<div style="flex:1;height:8px;background:var(--card2);border-radius:5px;overflow:hidden"><i style="display:block;height:100%;width:'+v+'%;background:'+col+'"></i></div>'
