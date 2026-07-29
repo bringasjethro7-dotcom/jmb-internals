@@ -508,9 +508,13 @@ function conRow(v){
   var signed=v.status==='signed';
   var right;
   if(signed){
+    var copyBits='';
+    if(v.copy_status==='pending'){ copyBits='<div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><span style="color:#b45309;font-weight:700;font-size:11.5px;">📄 Copy requested</span><button class="btn sm" onclick="conApproveCopy(\''+esc(v.employee_id)+'\',\''+esc(v.full_name).replace(/\x27/g,"\\\x27")+'\')">Approve copy</button></div>'; }
+    else if(v.copy_status==='approved'){ copyBits='<div style="margin-top:6px;color:#166534;font-size:11.5px;font-weight:700;">📄 Copy issued</div>'; }
     right='<div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:10px;padding:8px 11px;font-size:12px;color:#166534;min-width:210px;">'+
       '<b>✅ Signed</b> · '+esc(String(v.signed_at||'').slice(0,16))+'<br>signed by: <b>'+esc(v.signature||'—')+'</b>'+
-      (v.sig_url?(' · <a href="'+esc(v.sig_url)+'" target="_blank" style="color:#166534;font-weight:800;">view signature</a>'):'')+'</div>';
+      (v.pdf_url?(' · <a href="'+esc(v.pdf_url)+'" target="_blank" style="color:#166534;font-weight:800;">📄 signed PDF</a>'):'')+
+      (v.sig_url?(' · <a href="'+esc(v.sig_url)+'" target="_blank" style="color:#166534;font-weight:700;">signature</a>'):'')+copyBits+'</div>';
   } else if(v.token){
     var url='https://portal.jmbvirtuals.com/sign.html?t='+encodeURIComponent(v.token);
     right='<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-width:230px;">'+
@@ -530,6 +534,14 @@ function conLink(emp, full){
     .then(function(r){return r.json();}).then(function(d){
       if(d&&d.ok){ conCopyText(d.url); toast('Link generated & copied — send it to '+full+'.'); loadCon(); }
       else toast('Could not generate link: '+((d&&d.error)||'unknown'));
+    }).catch(function(){ toast('Network error.'); });
+}
+function conApproveCopy(emp, full){
+  if(!confirm('Approve the contract copy request for '+full+'? They will be able to download their copy from the portal.')) return;
+  fetch(PORTAL_URL+'?action=contract_copy_approve&employee_id='+encodeURIComponent(emp)+'&by='+encodeURIComponent(firstName(USER.full_name||USER.employee_id))+'&_='+Date.now())
+    .then(function(r){return r.json();}).then(function(d){
+      if(d&&d.ok){ toast('Copy approved for '+full+' — they’ve been emailed.'); loadCon(); }
+      else toast('Could not approve: '+((d&&d.error)||'unknown'));
     }).catch(function(){ toast('Network error.'); });
 }
 
