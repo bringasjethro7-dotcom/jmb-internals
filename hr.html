@@ -524,8 +524,20 @@ function conRow(v){
   } else {
     right='<button class="btn sm" onclick="conLink(\''+esc(v.employee_id)+'\',\''+esc(v.full_name).replace(/'/g,"\\'")+'\')">🔗 Generate link</button>';
   }
+  var nm=esc(v.full_name).replace(/'/g,"\\'");
   return '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between;background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 14px;margin-bottom:8px;">'+
-    '<div><b style="font-size:13.5px;">'+esc(v.full_name)+'</b> <span style="font-size:11px;color:var(--t3);">'+esc(v.employee_id)+'</span></div>'+right+'</div>';
+    '<div><b style="font-size:13.5px;">'+esc(v.full_name)+'</b> <span style="font-size:11px;color:var(--t3);">'+esc(v.employee_id)+'</span>'+
+    '<button class="btn sm ghost" style="margin-left:8px;" title="Email this hire their ID, PIN, signing link, portal &amp; hub links" onclick="sendOnbEmail(\''+esc(v.employee_id)+'\',\''+nm+'\')">✉ Onboarding email</button></div>'+right+'</div>';
+}
+function sendOnbEmail(emp, full){
+  if(!confirm('Send the onboarding email to '+full+'?\n\nThey will receive their Contractor ID, PIN, a personal signing link, and the portal + hub links with instructions.')) return;
+  toast('Sending onboarding email…');
+  fetch(PORTAL_URL+'?action=onboarding_email&employee_id='+encodeURIComponent(emp)+'&by='+encodeURIComponent(firstName(USER.full_name||USER.employee_id))+'&_='+Date.now())
+    .then(function(r){return r.json();}).then(function(d){
+      if(d&&d.ok){ toast('✅ Onboarding email sent to '+(d.email||full)+'.'); if(typeof loadCon==='function') loadCon(); }
+      else if(d&&d.error==='NO_EMAIL'){ toast('No email on file for '+full+' — add one in the Add tab / Employees first.'); }
+      else { toast('Could not send: '+((d&&d.error)||'error')); }
+    }).catch(function(){ toast('Network error — try again.'); });
 }
 function conCopyText(txt){ try{ navigator.clipboard.writeText(txt); }catch(e){ var ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(_){} document.body.removeChild(ta); } }
 function conCopy(token){ conCopyText('https://portal.jmbvirtuals.com/sign.html?t='+encodeURIComponent(token)); toast('Signing link copied.'); }
