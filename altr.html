@@ -1174,6 +1174,24 @@ function updateMselBtn(kind){ var sel=PHFILTER[kind]||[], lbl=$('ms-'+kind+'-lbl
 function toggleMsel(kind,e){ if(e) e.stopPropagation(); var el=$('ms-'+kind); var was=el.classList.contains('open'); document.querySelectorAll('.msel').forEach(function(m){ m.classList.remove('open'); }); if(!was) el.classList.add('open'); }
 function togglePhone(kind,phone,on){ var sel=PHFILTER[kind]; phone=String(phone); var i=sel.indexOf(phone); if(on){ if(i<0) sel.push(phone); } else if(i>=0){ sel.splice(i,1); } updateMselBtn(kind); if(kind==='src') renderSourcing(); else renderPosting(); }
 function setAllPhones(kind,on){ PHFILTER[kind]=[]; buildPhoneFilter(); if(kind==='src') renderSourcing(); else renderPosting(); }
+/* Every phone registered in the Digital tab (STATE.phones), by number. */
+function registeredPhoneList(){ var s={}; (STATE&&STATE.phones||[]).forEach(function(p){ if(p&&p.phone!=null&&String(p.phone).trim()!=='') s[String(p.phone).trim()]=true; }); return Object.keys(s); }
+/* Phones to render for a tab = phones that have active accounts, PLUS every registered phone
+   (so a connected phone with no active accounts never silently vanishes). On the default view
+   only — a search or content filter stays focused on accounts that match. */
+function phonesToRender(kind, byPhone, ff, q){
+  var set={}; Object.keys(byPhone).forEach(function(p){ set[String(p)]=true; });
+  var padOK = (!q) && (!ff || ff==='all' || ff==='active');
+  if(padOK){
+    var sel=PHFILTER[kind]||[];
+    registeredPhoneList().forEach(function(p){
+      if(set[p]) return;
+      if(sel.length && sel.indexOf(String(p))<0) return;   // respect the phone multi-filter
+      set[p]=true;
+    });
+  }
+  return Object.keys(set).sort(function(a,b){return fnum(a)-fnum(b);});
+}
 document.addEventListener('click', function(){ document.querySelectorAll('.msel.open').forEach(function(m){ m.classList.remove('open'); }); });
 /* today's per-account notes (reset daily, keyed by the current posting date) */
 var _NOTEMAP={};
@@ -1203,9 +1221,9 @@ function renderPosting(){
   var activeRows=rows.filter(function(a){ return !a.status||a.status==='active'; });
   var inactiveRows=rows.filter(function(a){ return a.status&&a.status!=='active'; });   // suspended / logged out
   var byPhone={}; activeRows.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
-  var phones=Object.keys(byPhone).sort(function(a,b){return fnum(a)-fnum(b);});
+  var phones=phonesToRender('post', byPhone, ff, q);
   if(Object.keys(OPEN.post).length===0 && phones.length<=2){ phones.forEach(function(p){ OPEN.post[p]=true; }); }
-  var html=phones.map(function(ph){ return groupHTML('post', ph, byPhone[ph], map, disc); }).join('');
+  var html=phones.map(function(ph){ return groupHTML('post', ph, byPhone[ph]||[], map, disc); }).join('');
   html+=inactiveSection('post', inactiveRows, map);
   $('posting').innerHTML = html || '<div class="muted">No accounts match.</div>';
 }
@@ -1439,14 +1457,19 @@ function groupHTML(kind, ph, list, map, disc){
   var pct=denom?Math.round(withGreen/denom*100):0;
   var isDisc = kind==='post' && !!disc[String(ph)];
   var badge = isDisc ? '<span class="discb">disconnected · can’t post yet</span>' : '';
+  var empty = denom===0;
+  var emptyBadge = empty ? '<span class="discb" style="background:rgba(148,163,184,.16);border-color:rgba(148,163,184,.5);color:var(--t3)">no active accounts</span>' : '';
   var open = !!OPEN[kind][ph];
-  var body = open ? list.map(function(a){ return acctRow(kind, a, map[keyOf(a)]); }).join('') : '';
+  var body = open
+    ? (empty ? '<div class="muted" style="padding:10px 12px;font-size:12px">No active accounts on this phone yet. Add accounts for it'+(kind==='post'?', or check its status in the Digital tab.':'.')+'</div>'
+             : list.map(function(a){ return acctRow(kind, a, map[keyOf(a)]); }).join(''))
+    : '';
   var phctrl = (kind==='src' && ISADMIN) ?
     '<button class="phbtn" title="Add a red cycle to every account on this phone (max '+SRC_QUEUE+')" onclick="event.stopPropagation();addPhoneCycle(\''+esc(ph)+'\')">+</button>'+
     '<button class="phbtn" title="Undo last added cycle for this phone" onclick="event.stopPropagation();undoPhoneCycle(\''+esc(ph)+'\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg></button>' : '';
-  return '<div class="acctgroup'+(isDisc?' disc':'')+'"><div class="agh" onclick="toggleGroup(\''+kind+'\',\''+esc(ph)+'\')">'+
-    '<div class="aghl"><b>Phone '+esc(ph)+'</b>'+phctrl+badge+'</div><div class="agbar"><i style="width:'+pct+'%"></i></div>'+
-    '<span class="agc">'+green+' ✓ · '+withGreen+'/'+denom+'</span></div>'+
+  return '<div class="acctgroup'+(isDisc?' disc':'')+(empty?' empty':'')+'"><div class="agh" onclick="toggleGroup(\''+kind+'\',\''+esc(ph)+'\')">'+
+    '<div class="aghl"><b>Phone '+esc(ph)+'</b>'+phctrl+badge+emptyBadge+'</div><div class="agbar"><i style="width:'+pct+'%"></i></div>'+
+    '<span class="agc">'+(empty?'—':(green+' ✓ · '+withGreen+'/'+denom))+'</span></div>'+
     '<div class="agbody'+(open?' open':'')+'">'+body+'</div></div>';
 }
 function toggleGroup(kind, ph){ OPEN[kind][ph]=!OPEN[kind][ph]; if(kind==='src') renderSourcing(); else renderPosting(); }
@@ -1955,9 +1978,9 @@ function renderSourcing(){
   var activeRows=rows.filter(function(a){ return !a.status||a.status==='active'; });
   var inactiveRows=rows.filter(function(a){ return a.status&&a.status!=='active'; });   // suspended / logged out
   var byPhone={}; activeRows.forEach(function(a){ (byPhone[a.phone]=byPhone[a.phone]||[]).push(a); });
-  var phones=Object.keys(byPhone).sort(function(a,b){return fnum(a)-fnum(b);});
+  var phones=phonesToRender('src', byPhone, ff, q);
   if(Object.keys(OPEN.src).length===0 && phones.length<=2){ phones.forEach(function(p){ OPEN.src[p]=true; }); }
-  var html=phones.map(function(ph){ return groupHTML('src', ph, byPhone[ph], map, {}); }).join('');
+  var html=phones.map(function(ph){ return groupHTML('src', ph, byPhone[ph]||[], map, {}); }).join('');
   html+=inactiveSection('src', inactiveRows, map);
   $('sourcing-list').innerHTML = html || '<div class="muted">No accounts match.</div>';
 }
