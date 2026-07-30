@@ -219,7 +219,7 @@ table tbody tr:hover td{background:rgba(255,107,26,.05)}
     <h1><span class="brand"><span class="logo">HR</span></span> JMB HR</h1>
     <div class="lsub">Hiring &amp; onboarding · admin/HR sign-in</div>
     <div class="lerr" id="lerr"></div>
-    <div class="fg"><label>Employee ID</label><input class="inp" id="lid" placeholder="JMB0XX or ADMIN" autocomplete="username"></div>
+    <div class="fg"><label>Contractor ID</label><input class="inp" id="lid" placeholder="JMB0XX or ADMIN" autocomplete="username"></div>
     <div class="fg"><label>PIN</label><input class="inp" id="lpin" type="password" placeholder="••••" autocomplete="current-password"></div>
     <button class="btn primary" style="width:100%;margin-top:.4rem" id="lbtn" onclick="doLogin()">Sign in</button>
     <div style="margin-top:1rem"><a class="back" href="https://internals.jmbvirtuals.com">← Back to hub</a></div>
@@ -260,12 +260,12 @@ table tbody tr:hover td{background:rgba(255,107,26,.05)}
     <div style="background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px;">
       <div style="font-weight:700;font-size:14px;margin-bottom:8px;">＋ Start offboarding</div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
-        <div class="fg" style="margin:0;min-width:220px;"><label>Employee</label><select class="inp" id="off-emp"><option value="">Loading…</option></select></div>
+        <div class="fg" style="margin:0;min-width:220px;"><label>Contractor</label><select class="inp" id="off-emp"><option value="">Loading…</option></select></div>
         <div class="fg" style="margin:0;min-width:150px;"><label>Type</label><select class="inp" id="off-type" onchange="offTypeFields()"><option value="resignation">Resignation</option><option value="termination">End of engagement</option></select></div>
         <button class="btn primary" onclick="offStart()">Start offboarding</button>
       </div>
       <div id="off-fields" style="margin-top:10px;"></div>
-      <div style="font-size:11.5px;color:var(--t3);margin-top:8px;">Completing a case <b style="color:#dc2626">deactivates the account</b> (no portal login) and <b style="color:#0284c7">emails the employee</b> automatically.</div>
+      <div style="font-size:11.5px;color:var(--t3);margin-top:8px;">Completing a case <b style="color:#dc2626">deactivates the account</b> (no portal login) and <b style="color:#0284c7">emails the contractor</b> automatically.</div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
       <b style="font-size:14px;">Offboarding cases</b>
@@ -323,7 +323,7 @@ table tbody tr:hover td{background:rgba(255,107,26,.05)}
         <div class="fg"><label>Date &amp; time *</label><input class="inp" id="iv-when" type="datetime-local"></div>
         <div class="fg"><label>Format</label><select class="inp" id="iv-mode" onchange="ivModeChange()"><option value="online">Online</option><option value="inperson">In Person</option></select></div>
       </div>
-      <div class="fg"><label>Interviewer — HR employee *</label><input class="inp" id="iv-with" placeholder="e.g. Maria Santos"></div>
+      <div class="fg"><label>Interviewer — HR staff *</label><input class="inp" id="iv-with" placeholder="e.g. Maria Santos"></div>
       <div class="fg"><label id="iv-loc-label">Meeting link</label><input class="inp" id="iv-loc" placeholder="https://meet.google.com/…"></div>
       <div class="fg"><label>Note to applicant (optional)</label><textarea class="inp" id="iv-note" placeholder="Anything they should prepare or bring…"></textarea></div>
       <div style="font-size:12px;color:var(--t3);margin-top:2px">An invitation email with these details will be sent to the applicant.</div>
@@ -375,7 +375,7 @@ table tbody tr:hover td{background:rgba(255,107,26,.05)}
     <div class="mbd">
       <div class="lsub" style="margin-bottom:1rem">Adds this contractor to the Contractor Portal so they can log in and be onboarded.</div>
       <div class="grid2">
-        <div class="fg"><label>Employee ID *</label><input class="inp" id="a-id" placeholder="JMB0XX"></div>
+        <div class="fg"><label>Contractor ID *</label><input class="inp" id="a-id" placeholder="JMB0XX"></div>
         <div class="fg"><label>PIN *</label><input class="inp" id="a-pin" placeholder="4–6 digits"></div>
       </div>
       <div class="fg"><label>Full name</label><input class="inp" id="a-name"></div>
@@ -430,7 +430,7 @@ function apiPost(obj){ return fetch(HR_URL,{ method:'POST', headers:{'Content-Ty
 async function doLogin(){
   var id=$('lid').value.trim(), pin=$('lpin').value.trim(), err=$('lerr'), btn=$('lbtn');
   err.style.display='none';
-  if(!id||!pin){ err.textContent='Enter your employee ID and PIN.'; err.style.display='block'; return; }
+  if(!id||!pin){ err.textContent='Enter your contractor ID and PIN.'; err.style.display='block'; return; }
   if(id.toUpperCase()==='ADMIN'){
     if(pin===ADMIN_PASS){ enterApp({full_name:'Admin (JMB Virtuals)',employee_id:'ADMIN'}, true); }
     else { err.textContent='Invalid admin password.'; err.style.display='block'; }
@@ -685,13 +685,13 @@ function loadOff(){
     if(!d||d.error){ if(body) body.innerHTML='<div class="muted">Could not load ('+esc((d&&d.error)||'error')+').</div>'; return; }
     OFF_DATA=d;
     var sel=$('off-emp'); if(sel){ var avail=(d.employees||[]).filter(function(e){return !e.has_open;});
-      sel.innerHTML='<option value="">Select employee…</option>'+avail.map(function(e){ return '<option value="'+esc(e.employee_id)+'">'+esc(e.full_name)+' ('+esc(e.employee_id)+')</option>'; }).join(''); }
+      sel.innerHTML='<option value="">Select contractor…</option>'+avail.map(function(e){ return '<option value="'+esc(e.employee_id)+'">'+esc(e.full_name)+' ('+esc(e.employee_id)+')</option>'; }).join(''); }
     renderOff();
   }).catch(function(){ if(body) body.innerHTML='<div class="muted">Network error.</div>'; });
 }
 function offStart(){
   var emp=$('off-emp').value, type=$('off-type').value;
-  if(!emp){ toast('Pick an employee first.'); return; }
+  if(!emp){ toast('Pick a contractor first.'); return; }
   var reason=offGatherReason();
   if(!reason){ toast('Select at least one '+(type==='termination'?'cause':'reason')+'.'); return; }
   var q=PORTAL_URL+'?action=offboarding_start&employee_id='+encodeURIComponent(emp)+'&type='+encodeURIComponent(type)+'&by='+encodeURIComponent(firstName(USER.full_name||USER.employee_id))+'&reason='+encodeURIComponent(reason);
@@ -699,7 +699,7 @@ function offStart(){
   else { q+='&notice_date='+encodeURIComponent((($('off-notice')||{}).value)||'')+'&last_day='+encodeURIComponent((($('off-last')||{}).value)||''); }
   fetch(q+'&_='+Date.now()).then(function(r){return r.json();}).then(function(d){
     if(d&&d.ok){ toast('Offboarding started.'); loadOff(); }
-    else toast('Could not start: '+((d&&d.error==='ALREADY_OPEN')?'this employee already has an open case.':((d&&d.error)||'unknown')));
+    else toast('Could not start: '+((d&&d.error==='ALREADY_OPEN')?'this contractor already has an open case.':((d&&d.error)||'unknown')));
   }).catch(function(){ toast('Network error.'); });
 }
 function renderOff(){
@@ -764,7 +764,7 @@ function offComplete(id){
     }).catch(function(){ toast('Network error.'); });
 }
 function offCancel(id){
-  if(!confirm('Cancel and delete this offboarding case? The employee stays active.')) return;
+  if(!confirm('Cancel and delete this offboarding case? The contractor stays active.')) return;
   fetch(PORTAL_URL+'?action=offboarding_cancel&id='+encodeURIComponent(id)+'&_='+Date.now())
     .then(function(r){return r.json();}).then(function(){ loadOff(); }).catch(function(){});
 }
@@ -954,7 +954,7 @@ async function openAcct(id){
 function closeAcct(){ $('acct-modal').classList.remove('open'); }
 async function submitAcct(){
   var empId=$('a-id').value.trim(), pin=$('a-pin').value.trim();
-  if(!empId||!pin){ toast('Employee ID and PIN are required.'); return; }
+  if(!empId||!pin){ toast('Contractor ID and PIN are required.'); return; }
   var q='?action=add_employee&employee_id='+encodeURIComponent(empId)+'&pin='+encodeURIComponent(pin)
     +'&full_name='+encodeURIComponent($('a-name').value.trim())
     +'&position='+encodeURIComponent($('a-pos').value.trim())
@@ -971,7 +971,7 @@ async function submitAcct(){
         apiPost({action:'onboarding_set', id:c.id, onboarding:c.onboarding}).catch(function(){}); }
       _empCache=null;
       closeAcct(); renderOnb(); toast('Portal account '+empId+' created.');
-    } else if(d && d.error==='ALREADY_EXISTS'){ toast('That Employee ID already exists.'); }
+    } else if(d && d.error==='ALREADY_EXISTS'){ toast('That Contractor ID already exists.'); }
     else { toast('Could not create account'+(d&&d.error?(': '+d.error):'.')); }
   }catch(e){ toast('Network error — try again.'); }
 }
