@@ -301,16 +301,16 @@
 /* ═══════════ JMB QUIZ BEE — MONTHLY 1v1 GAME SHOW · HOST ═══════════ */
 var QUESTIONS=[
   /* ══ ROUND 1 · EASY · 1 pt · 10 items ══ */
-  { q:"How many continents are there on Earth?", o:["5","6","7","8"], c:2, pts:1, tag:"General Knowledge" },
-  { q:"Who is regarded as the Philippine national hero?", o:["Andrés Bonifacio","José Rizal","Emilio Aguinaldo","Apolinario Mabini"], c:1, pts:1, tag:"Philippine History" },
-  { q:"All cats are animals. Tom is a cat. Therefore Tom is a…", o:["plant","animal","bird","fish"], c:1, pts:1, tag:"Logic" },
-  { q:"Which is the largest planet in our solar system?", o:["Earth","Saturn","Jupiter","Mars"], c:2, pts:1, tag:"General Knowledge" },
-  { q:"Which explorer's expedition reached the Philippines in 1521?", o:["Ferdinand Magellan","Christopher Columbus","Miguel López de Legazpi","Vasco da Gama"], c:0, pts:1, tag:"Philippine History" },
-  { q:"What number comes next: 2, 4, 6, 8, __ ?", o:["9","10","11","12"], c:1, pts:1, tag:"Logic" },
-  { q:"What is the capital of the Philippines?", o:["Cebu","Davao","Manila","Baguio"], c:2, pts:1, tag:"General Knowledge" },
-  { q:"In what year did the Philippines declare independence from Spain?", o:["1521","1872","1898","1946"], c:2, pts:1, tag:"Philippine History" },
-  { q:"If today is Monday, what day will it be after 2 days?", o:["Tuesday","Wednesday","Thursday","Friday"], c:1, pts:1, tag:"Logic" },
-  { q:"How many days are in a leap year?", o:["364","365","366","367"], c:2, pts:1, tag:"General Knowledge" },
+  { q:"How many days are there in one week?", o:["7","6","5","8"], c:0, pts:1, tag:"General Knowledge" },
+  { q:"What is the national language of the Philippines?", o:["English","Filipino","Spanish","Cebuano"], c:1, pts:1, tag:"Philippine History" },
+  { q:"Which is bigger: 1/2 or 1/4?", o:["1/4","They are equal","1/2","Cannot tell"], c:2, pts:1, tag:"Logic" },
+  { q:"How many legs does a spider have?", o:["6","8","10","12"], c:1, pts:1, tag:"General Knowledge" },
+  { q:"What is the currency of the Philippines?", o:["Dollar","Ringgit","Peso","Baht"], c:2, pts:1, tag:"Philippine History" },
+  { q:"Complete the pattern: A, B, C, D, __ ?", o:["F","D","G","E"], c:3, pts:1, tag:"Logic" },
+  { q:"What color do you get by mixing blue and yellow?", o:["Green","Orange","Purple","Brown"], c:0, pts:1, tag:"General Knowledge" },
+  { q:"How many stars are on the Philippine flag?", o:["1","3","5","8"], c:1, pts:1, tag:"Philippine History" },
+  { q:"If all roses are flowers, is a rose a flower?", o:["No","Sometimes","Yes","Cannot tell"], c:2, pts:1, tag:"Logic" },
+  { q:"At what temperature (°C) does water freeze?", o:["100°C","0°C","10°C","32°C"], c:1, pts:1, tag:"General Knowledge" },
 
   /* ══ ROUND 2 · MEDIUM · 2 pts · 10 items ══ */
   { q:"What is the chemical symbol for gold?", o:["Go","Gd","Au","Ag"], c:2, pts:2, tag:"General Knowledge" },
@@ -337,13 +337,14 @@ var QUESTIONS=[
   { q:"How many hearts does an octopus have?", o:["1","2","3","5"], c:2, pts:3, tag:"General Knowledge" },
 
   /* ══ FINAL ROUND · VERY DIFFICULT · 5 pts · 5 items ══ */
-  { q:"What is the value of π (pi) to two decimal places?", o:["3.12","3.14","3.16","3.18"], c:1, pts:5, tag:"General Knowledge" },
-  { q:"Who was the Commonwealth President of the Philippines during World War II?", o:["Manuel L. Quezon","Manuel Roxas","Elpidio Quirino","Ramon Magsaysay"], c:0, pts:5, tag:"Philippine History" },
-  { q:"I am an odd number. Remove one letter and I become even. What number am I?", o:["Five","Seven","Nine","Three"], c:1, pts:5, tag:"Logic" },
-  { q:"In binary, the decimal number 9 is written as…", o:["1001","1010","1100","1000"], c:0, pts:5, tag:"General Knowledge" },
-  { q:"The Philippine flag was first officially unfurled on June 12, 1898 in which town?", o:["Kawit, Cavite","Malolos, Bulacan","Biak-na-Bato","Manila"], c:0, pts:5, tag:"Philippine History" }
+  { q:"The Chandrasekhar limit (about 1.4 solar masses) sets the maximum mass of a stable…", o:["Red giant","White dwarf","Neutron star","Black hole"], c:1, pts:5, tag:"General Knowledge" },
+  { q:"Magellan's Malay interpreter, often argued to be the first person to circumnavigate the globe, was…", o:["Rajah Humabon","Lapu-Lapu","Enrique of Malacca","Datu Puti"], c:2, pts:5, tag:"Philippine History" },
+  { q:"Look-and-say sequence — what comes next: 1, 11, 21, 1211, 111221, __ ?", o:["13112221","122112","221121","312211"], c:3, pts:5, tag:"Logic" },
+  { q:"Which of these is a perfect number (equal to the sum of its proper divisors)?", o:["24","28","30","36"], c:1, pts:5, tag:"General Knowledge" },
+  { q:"The Malolos Constitution (1899) was principally drafted by…", o:["Felipe Calderón","Apolinario Mabini","Antonio Luna","Marcelo H. del Pilar"], c:0, pts:5, tag:"Philippine History" }
 ];
-var QDUR=15, SPEED_BONUS=1;
+var QDUR=15, QDUR_FINAL=35, SPEED_BONUS=1;   // Final round (5-pt questions) gets more time to think
+function qDur(){ return (QUESTIONS[qi] && QUESTIONS[qi].pts===5) ? QDUR_FINAL : QDUR; }
 /* Round / difficulty metadata (derived from point tiers, in order) */
 var DIFF={1:'Easy',2:'Medium',3:'Difficult',5:'Very Difficult'};
 var META=(function(){ var arr=[],rn=0,last=null,pos=0,tot={}; QUESTIONS.forEach(function(q){ tot[q.pts]=(tot[q.pts]||0)+1; });
@@ -414,7 +415,7 @@ function toggleMute(){ _muted=!_muted; el('muteBtn').textContent=_muted?'Sound o
 /* ═══════════ STATE ═══════════ */
 var ROOM=(function(){var c='',A='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';for(var i=0;i<4;i++)c+=A[Math.floor(Math.random()*A.length)];return c;})();
 var supa=null, ch=null;
-var scene='lobby', qi=-1, revealed=false, timer=null, tleft=QDUR, qStart=0, lastTick=99;
+var scene='lobby', qi=-1, revealed=false, timer=null, tleft=QDUR, qStart=0, lastTick=99, curQDur=QDUR;
 var rosters={morn:[],night:[]}, queue={morn:[],night:[]};
 var pick={morn:'',night:''};
 var totals={morn:0,night:0}, repScores={};
@@ -497,13 +498,13 @@ function showQuestion(){ if(_vsTimer){ clearTimeout(_vsTimer); _vsTimer=null; } 
   el('verdict').innerHTML='';
   showScene('sc-q'); var sc=el('sc-q'); sc.classList.remove('q-anim'); void sc.offsetWidth; sc.classList.add('q-anim');
   sfxWhoosh(); startBed('q'); qStart=Date.now(); lastTick=99;
-  bc('q',{qi:qi,num:qi+1,total:QUESTIONS.length,q:Q.q,o:Q.o,pts:Q.pts,tag:Q.tag,dur:QDUR,diff:m.diff,final:curFinal,morn:pick.morn,night:pick.night});
+  bc('q',{qi:qi,num:qi+1,total:QUESTIONS.length,q:Q.q,o:Q.o,pts:Q.pts,tag:Q.tag,dur:qDur(),diff:m.diff,final:curFinal,morn:pick.morn,night:pick.night});
   startTimer(); }
-function startTimer(){ tleft=QDUR; updateRing(); clearInterval(timer);
+function startTimer(){ curQDur=qDur(); tleft=curQDur; updateRing(); clearInterval(timer);
   timer=setInterval(function(){ tleft--; updateRing();
     if(tleft>0){ if(tleft<=5){ sfxTick(true); } else if(tleft<=10) sfxTick(false); if(tleft<=3) sfxCountBoom(); }
     if(tleft<=0){ clearInterval(timer); reveal(); } },1000); }
-function updateRing(){ el('t-num').textContent=Math.max(0,tleft); var frac=Math.max(0,tleft)/QDUR;
+function updateRing(){ el('t-num').textContent=Math.max(0,tleft); var frac=Math.max(0,tleft)/curQDur;
   el('t-ring').style.strokeDashoffset=(276.5*(1-frac)).toFixed(1);
   el('t-ring').setAttribute('stroke', tleft<=5?'#f87171':(tleft<=10?'#f59e0b':'#ff7a29'));
   el('timer').classList.toggle('low', tleft<=5 && tleft>0); }
