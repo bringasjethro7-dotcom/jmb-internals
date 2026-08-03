@@ -54,7 +54,7 @@
 
 <div class="wrap" id="app" style="display:none">
   <h1>🔴 JMB <em>Reddit Altz</em> <span style="font-size:12px;color:var(--ink3);font-weight:600" id="who"></span></h1>
-  <div class="sub">Accounts climb the strength ladder: <b>Warming → Comment Farming → NSFW → Day 1 → Early → +DMs → Medium → Strong → Super Strong</b>. Work each card's session checklist and tick — sessions, posts, and DMs are all <b>counted automatically</b>. Rotate subreddits, captions & photos — never repeat back-to-back.</div>
+  <div class="sub">Accounts climb the ladder: <b>Creation (4d) → Warming (1d) → Comment Farming (until 50 karma, max check at 7d) → NSFW (client updates) → Day 1 (1d) → Early → +DMs → Medium → Strong → Super Strong</b>. Work each card's session checklist and tick — sessions, posts, and DMs are all <b>counted automatically</b>. Rotate subreddits, captions & photos — never repeat back-to-back.</div>
   <div class="top" id="stats"></div>
   <div class="addbox">
     <input id="ra-user" placeholder="Account username (u/…)">
@@ -64,7 +64,11 @@
     <button onclick="addAcct()">＋ Add account</button>
   </div>
   <div class="reminder">🔎 <b>Every phase, every session:</b> check the profile for post/avatar removals (shadowban) & spam-filter flags, and the inbox for mod messages, warnings, or "unable to post". Spotted one? Hit <b>🛟 Spam filter</b> on the card.</div>
-  <div id="byva" style="margin-bottom:14px;"></div>
+  <div id="byva" style="margin-bottom:10px;"></div>
+  <div style="margin-bottom:14px;">
+    <button onclick="var m=document.getElementById('matrix'); m.style.display=(m.style.display==='none'?'block':'none');" style="border:1px solid var(--line);background:var(--card);border-radius:9px;padding:7px 13px;font:800 12px 'Manrope',sans-serif;color:var(--ink2);cursor:pointer;">📊 Accounts per VA × phase</button>
+    <div id="matrix" style="display:none;margin-top:8px;overflow-x:auto;"></div>
+  </div>
   <div class="grid" id="grid"><div class="muted">Loading…</div></div>
 </div>
 <div class="toast" id="toast"></div>
@@ -76,6 +80,9 @@ var USER=null, ROWS=[], NAMES={};
 async function loadNames(){ try{ var r=await fetch(API+'?action=get_all_employees&_='+Date.now()); var d=await r.json(); (d.employees||[]).forEach(function(e){ NAMES[String(e.employee_id).toLowerCase()]=e.full_name||e.employee_id; }); }catch(e){} }
 function vaName(id){ return NAMES[String(id||'').toLowerCase()]||id||'—'; }
 function today(){ try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){ return new Date().toISOString().slice(0,10); } }
+function pstartOf(r){ return (r.meta&&r.meta.pstart)||cdateOf(r)||''; }
+function daysIn(r){ var p=pstartOf(r); if(!p) return 0; return Math.max(0,Math.floor((Date.now()-new Date(p+'T00:00:00').getTime())/86400000)); }
+function karmaOf(r){ return (r.meta&&r.meta.karma!=null)?(parseInt(r.meta.karma,10)||0):0; }
 function cdateOf(r){ return (r.meta&&r.meta.cdate)||''; }
 function ageTxt(r){ var c=cdateOf(r); if(!c) return ''; var days=Math.max(0,Math.round((Date.now()-new Date(c+'T00:00:00').getTime())/86400000)); return c+' · '+days+'d old'; }
 function renderByVA(segs, doneFn, activeFn){
@@ -99,10 +106,11 @@ function renderByVA(segs, doneFn, activeFn){
   }).join('');
 }
 var PH=[
- {k:'warming',   n:'🌡 Warming',        c:'#f59e0b', plan:'5 min browsing · search 5 subreddits · upvote 2 · join 2', task:'Warm Session', tn:1},
- {k:'comment',   n:'💬 Comment Farm',   c:'#eab308', plan:'5 min browsing · search 5 · upvote 3 · join 2 · 2 SFW comments (approved subs)', task:'Warm Session', tn:1},
- {k:'nsfw',      n:'🔥 NSFW Comments',  c:'#f97316', plan:'5 min browsing · search 5 · upvote 3 · 2 comments/replies (approved subs)', task:'Warm Session', tn:1},
- {k:'day1',      n:'📮 Day 1 Posting',  c:'#fb7185', plan:'3 min browsing · set name/bio/avatar · upvote 2 · 2–3 comments · 1 post/session · ROTATE subs/captions/photos', task:'Posting', tn:1},
+ {k:'creation',  n:'🏗 Creation',       c:'#64748b', dur:4, plan:'Account creation process (iPhone farm SOP) — runs 4 days before Warming.', task:null},
+ {k:'warming',   n:'🌡 Warming',        c:'#f59e0b', dur:1, plan:'5 min browsing · search 5 subreddits · upvote 2 · join 2 — 1 day.', task:'Warm Session', tn:1},
+ {k:'comment',   n:'💬 Comment Farm',   c:'#eab308', maxDur:7, karma:50, plan:'5 min browsing · search 5 · upvote 3 · join 2 · 2 SFW comments (approved subs). Goal: 50 KARMA → NSFW. 7 days without 50 karma = stays here.', task:'Warm Session', tn:1},
+ {k:'nsfw',      n:'🔥 NSFW Comments',  c:'#f97316', client:true, plan:'5 min browsing · search 5 · upvote 3 · 2 comments/replies (approved subs). CLIENT updates this status.', task:'Warm Session', tn:1},
+ {k:'day1',      n:'📮 Day 1 Posting',  c:'#fb7185', dur:1, plan:'3 min browsing · set name/bio/avatar · upvote 2 · 2–3 comments · 1 post/session · ROTATE subs/captions/photos — 1 day.', task:'Posting', tn:1},
  {k:'early',     n:'📮 Early Posting',  c:'#f43f5e', plan:'3 min browsing · upvote 2 · 2–3 comments · 2 posts/session', task:'Posting', tn:2},
  {k:'earlydm',   n:'📨 Early + DMs',    c:'#ec4899', plan:'3 min browsing · 2–3 comments · 2 posts/session · 4 DMs AM + 4 DMs PM', task:'Posting', tn:2, dms:8},
  {k:'medium',    n:'📈 Medium + DMs',   c:'#d946ef', plan:'3 min browsing · 2–3 comments · 3 posts/session · 4 DMs AM + 4 DMs PM', task:'Posting', tn:3, dms:8},
@@ -139,8 +147,25 @@ async function load(){
     if(!d||!d.ok) throw new Error(); ROWS=d.rows||[]; render();
   }catch(e){ $('grid').innerHTML='<div class="muted">Could not load — redeploy the Apps Script (pa_list).</div>'; }
 }
+function renderMatrix(){
+  var host=document.getElementById('matrix'); if(!host) return;
+  var cols=PH.map(function(p){ return {k:p.k,n:p.n,c:p.c}; }).concat([{k:'recovery',n:'🛟 Recovery',c:'#0ea5e9'},{k:'banned',n:'⛔ Banned',c:'#ef4444'}]);
+  var by={}; ROWS.forEach(function(r){ var k=String(r.assigned_to||r.created_by||'—').toLowerCase(); (by[k]=by[k]||[]).push(r); });
+  var keys=Object.keys(by).sort(function(a,b){ return by[b].length-by[a].length; });
+  if(!keys.length){ host.innerHTML='<div class="muted">No accounts yet.</div>'; return; }
+  var head='<tr><th style="text-align:left;padding:6px 9px;position:sticky;left:0;background:var(--card);">VA</th>'+cols.map(function(c){ return '<th style="padding:6px 7px;font-size:10px;white-space:nowrap;color:'+c.c+';">'+c.n+'</th>'; }).join('')+'<th style="padding:6px 9px;">Total</th></tr>';
+  var totals={}; cols.forEach(function(c){ totals[c.k]=0; }); var grand=0;
+  var body=keys.map(function(k){
+    var rows=by[k]; var cells=cols.map(function(c){ var n=rows.filter(function(r){return r.status===c.k;}).length; totals[c.k]+=n;
+      return '<td style="text-align:center;padding:5px 7px;'+(n?('font-weight:800;color:'+c.c):'color:#c8cdd6')+'">'+(n||'·')+'</td>'; }).join('');
+    grand+=rows.length;
+    return '<tr style="border-top:1px solid var(--line);"><td style="padding:5px 9px;font-weight:700;white-space:nowrap;position:sticky;left:0;background:var(--card);">'+esc(vaName(k))+'</td>'+cells+'<td style="text-align:center;font-weight:900;padding:5px 9px;">'+rows.length+'</td></tr>';
+  }).join('');
+  var totRow='<tr style="border-top:2px solid var(--ink2);"><td style="padding:6px 9px;font-weight:900;position:sticky;left:0;background:var(--card);">TOTAL</td>'+cols.map(function(c){ return '<td style="text-align:center;font-weight:900;padding:6px 7px;color:'+c.c+';">'+(totals[c.k]||'·')+'</td>'; }).join('')+'<td style="text-align:center;font-weight:900;padding:6px 9px;">'+grand+'</td></tr>';
+  host.innerHTML='<table style="border-collapse:collapse;font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;min-width:100%;">'+head+body+totRow+'</table>';
+}
 function render(){
-  var warm=ROWS.filter(function(r){return ['warming','comment','nsfw'].indexOf(r.status)>=0;}).length;
+  var warm=ROWS.filter(function(r){return ['creation','warming','comment','nsfw'].indexOf(r.status)>=0;}).length;
   var posting=ROWS.filter(function(r){return ['day1','early','earlydm','medium'].indexOf(r.status)>=0;}).length;
   var strong=ROWS.filter(function(r){return ['strong','superstrong'].indexOf(r.status)>=0;}).length;
   $('stats').innerHTML=
@@ -151,12 +176,14 @@ function render(){
     '<div class="stat"><b style="color:#b91c1c">'+ROWS.filter(function(r){return r.status==='banned';}).length+'</b><span>Banned</span></div>'+
     '<div class="stat"><b>'+ROWS.filter(function(r){return r.status!=='banned';}).length+'</b><span>Active total</span></div>';
   renderByVA([
+    ['Creation','#64748b',function(r){return r.status==='creation';}],
     ['Warming','#f59e0b',function(r){return ['warming','comment','nsfw'].indexOf(r.status)>=0;}],
     ['Posting','#f43f5e',function(r){return ['day1','early','earlydm','medium'].indexOf(r.status)>=0;}],
     ['Strong+','#6d28d9',function(r){return ['strong','superstrong'].indexOf(r.status)>=0;}],
     ['Recovery','#0ea5e9',function(r){return r.status==='recovery';}],
     ['Banned','#ef4444',function(r){return r.status==='banned';}]
   ], function(r){ return r.meta && r.meta.last===today(); }, function(r){ return r.status!=='banned'; });
+  renderMatrix();
   if(!ROWS.length){ $('grid').innerHTML='<div class="muted">No accounts yet — create the first via the iPhone farm SOP and add it above.</div>'; return; }
   var ord=function(r){ if(r.status==='banned') return 99; if(r.status==='recovery') return 50; return phaseIx(r.status); };
   var sorted=ROWS.slice().sort(function(a,b){ return ord(a)-ord(b); });
@@ -170,13 +197,23 @@ function render(){
         '<button class="bad" onclick="setPhase(\''+r.id+'\',\'banned\')">⛔ Banned</button></div></div>';
     }
     var p=phase(r.status)||PH[0]; var ix=phaseIx(r.status); var next=PH[ix+1];
-    return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph" style="background:'+p.c+'">'+p.n+'</span></div>'+
+    var din=daysIn(r), km=karmaOf(r);
+    // phase gates → badge + whether the promote is unlocked
+    var gate='', canUp=true, upLabel=next?('⬆ '+next.n):'';
+    if(p.dur){ gate='<span class="ph" style="background:'+(din>=p.dur?'#10b981':'#94a3b8')+'">Day '+Math.min(din+1,p.dur)+'/'+p.dur+(din>=p.dur?' · READY':'')+'</span>'; canUp=din>=p.dur; }
+    if(p.karma){ var kOk=km>=p.karma;
+      gate='<span class="ph" style="background:'+(kOk?'#10b981':(din>=p.maxDur?'#ef4444':'#94a3b8'))+'">⭐ '+km+'/'+p.karma+' karma · D'+Math.min(din+1,99)+(kOk?' · READY':(din>=p.maxDur?' · 7d — stays here':''))+'</span>';
+      canUp=kOk; upLabel=next?(kOk?('⬆ '+next.n+' (50 karma ✓)'):('🔒 needs '+p.karma+' karma')):''; }
+    if(p.client){ upLabel=next?('⬆ '+next.n+' (client approved)'):''; }
+    return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b>'+gate+'<span class="ph" style="background:'+p.c+'">'+p.n+'</span></div>'+
       '<div style="font-size:10px;color:var(--ink3);margin-top:3px;">'+esc(vaName(r.assigned_to||r.created_by))+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+'</div>'+
       '<div class="plan">'+p.plan+'</div>'+
       '<div class="btns">'+
-        '<button class="go" onclick="sessionDone(\''+r.id+'\',\''+p.k+'\')">✓ Session done'+(p.task==='Posting'?' (+'+p.tn+' posts)':'')+'</button>'+
+        (p.task?('<button class="go" onclick="sessionDone(\''+r.id+'\',\''+p.k+'\')">✓ Session done'+(p.task==='Posting'?' (+'+p.tn+' posts)':'')+'</button>')
+               :('<button class="go" onclick="workedOnly(\''+r.id+'\')">✓ Worked today</button>'))+
         (p.dms?('<button class="dm" onclick="dmsDone(\''+r.id+'\','+p.dms+')">📨 DMs done (+'+p.dms+')</button>'):'')+
-        (next?('<button class="up" onclick="promote(\''+r.id+'\',\''+next.k+'\')">⬆ '+next.n+'</button>'):'')+
+        (p.karma?('<button onclick="setKarma(\''+r.id+'\','+km+')">⭐ Update karma</button>'):'')+
+        (next?('<button class="up" '+(canUp?'':'disabled style="opacity:.45;cursor:not-allowed" ')+'onclick="'+(canUp?('promote(\''+r.id+'\',\''+next.k+'\')'):'void(0)')+'">'+upLabel+'</button>'):'')+
         '<button class="rec" onclick="spamFilter(\''+r.id+'\',\''+p.k+'\')">🛟 Spam filter</button>'+
         '<button class="bad" onclick="setPhase(\''+r.id+'\',\'banned\')">⛔ Banned</button>'+
       '</div></div>';
@@ -184,10 +221,12 @@ function render(){
 }
 async function addAcct(){
   var u=$('ra-user').value.trim(); if(!u){ toast('Type the account username.'); return; }
-  var phk=($('ra-phase')||{}).value||'warming'; var isNew=($('ra-new')||{}).checked;
+  var phk=($('ra-phase')||{}).value||'creation'; var isNew=($('ra-new')||{}).checked;
   var cd=($('ra-cdate')||{}).value||'';
   try{
-    var meta=encodeURIComponent(JSON.stringify({cdate:cd}));
+    // phase clock starts from the CREATION DATE when seeding into Creation; otherwise from today
+    var ps=(phk==='creation'&&cd)?cd:(cd&&phk==='warming'?cd:today());
+    var meta=encodeURIComponent(JSON.stringify({cdate:cd, pstart:ps}));
     var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(u)+'&status='+encodeURIComponent(phk)+'&meta='+meta+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
     var d=await r.json();
     if(d&&d.ok){
@@ -205,10 +244,18 @@ async function stampWorked(id){
   try{ var r0=row(id); var m=Object.assign({}, (r0&&r0.meta)||{}, {last:today()});
     await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now()); }catch(e){}
 }
+async function workedOnly(id){ await stampWorked(id); toast('Logged — worked on it today ✓'); load(); }
+async function setKarma(id, cur){
+  var v=prompt('Current karma for this account:', cur||0); if(v===null) return;
+  var n=parseInt(v,10); if(isNaN(n)||n<0){ toast('Enter a number.'); return; }
+  try{ var r0=row(id); var m=Object.assign({}, (r0&&r0.meta)||{}, {karma:n});
+    var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now());
+    var d=await r.json(); if(d&&d.ok){ toast('Karma updated: '+n+(n>=50?' — 50 reached, NSFW unlocked! 🎉':'')); load(); } }catch(e){ toast('Connection error.'); }
+}
 async function sessionDone(id, phk){
   var p=phase(phk);
   if(phk==='recovery'){ await bump('Warm Session',1); await stampWorked(id); toast('+1 recovery session ✅'); load(); return; }
-  if(!p) return;
+  if(!p||!p.task){ await stampWorked(id); toast('Logged ✓'); load(); return; }
   await bump(p.task, p.tn); await stampWorked(id);
   toast(p.task==='Posting'?('+'+p.tn+' Posting ✅ — rotate subs, captions & photos!'):'+1 Warm Session ✅');
   load();
@@ -218,7 +265,8 @@ async function promote(id, nextk){
   var p=phase(nextk);
   if(!confirm('Promote this account to '+p.n+'? Do this only when the profile assessment is clean.')) return;
   try{
-    var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status='+encodeURIComponent(nextk)+'&_='+Date.now());
+    var r0=row(id); var m=Object.assign({}, (r0&&r0.meta)||{}, {pstart:today()});
+    var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status='+encodeURIComponent(nextk)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now());
     var d=await r.json(); if(d&&d.ok){ toast('Promoted → '+p.n+' 🎉'); load(); } else toast('Could not update.');
   }catch(e){ toast('Connection error.'); }
 }
