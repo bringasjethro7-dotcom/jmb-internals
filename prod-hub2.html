@@ -167,6 +167,30 @@ table tbody tr:hover td{background:rgba(255,107,26,.05)}
     <div class="stats" id="stats"></div>
     <div class="legend"><span><i style="background:#fff;opacity:.6"></i>Team average (QPH)</span><span><i style="background:var(--green)"></i>Above average</span><span><i style="background:var(--red)"></i>Below average</span></div>
     <div id="results"><div class="empty">Loading…</div></div>
+
+    <!-- 🗄 PROJECT DATA CENTER — shared per-project boards; VAs log & tick their outputs here -->
+    <div id="dc-wrap" style="margin-top:22px;">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+        <div style="font-weight:800;font-size:17px;">🗄 Project Data Center</div>
+        <select id="dcp-project" onchange="dcLoadBoard()" style="padding:7px 10px;border:1px solid rgba(15,23,42,.14);border-radius:9px;font:inherit;font-size:13px;min-width:160px;"></select>
+        <span id="dcp-date" style="font-size:12px;color:#8a93a3;"></span>
+        <span style="flex:1"></span>
+        <button class="btn ghost sm" onclick="dcLoadBoard()">↻ Refresh</button>
+      </div>
+      <div id="dcp-add" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;background:rgba(34,211,238,.06);border:1px solid rgba(15,23,42,.10);border-radius:11px;padding:10px;margin-bottom:10px;">
+        <input id="dcp-task" placeholder="Task (e.g. Account Creation)" style="flex:1;min-width:150px;padding:8px 10px;border:1px solid rgba(15,23,42,.14);border-radius:8px;font:inherit;font-size:13px;">
+        <input id="dcp-vol" type="number" min="1" step="1" placeholder="How many today?" style="width:130px;padding:8px 10px;border:1px solid rgba(15,23,42,.14);border-radius:8px;font:inherit;font-size:13px;">
+        <button class="btn sm" onclick="dcAddMine()" style="background:linear-gradient(135deg,#22d3ee,#0e7490);color:#fff;border:none;border-radius:9px;padding:8px 14px;font-weight:800;cursor:pointer;">+ Log my outputs</button>
+      </div>
+      <div id="dcp-admin" style="display:none;gap:6px;flex-wrap:wrap;align-items:center;background:rgba(232,89,12,.05);border:1px solid rgba(15,23,42,.10);border-radius:11px;padding:10px;margin-bottom:10px;">
+        <b style="font-size:12px;color:#e8590c;">Set target:</b>
+        <input id="dct-task" placeholder="Task" style="width:150px;padding:7px 9px;border:1px solid rgba(15,23,42,.14);border-radius:8px;font:inherit;font-size:12.5px;">
+        <input id="dct-num" type="number" min="0" placeholder="Target" style="width:90px;padding:7px 9px;border:1px solid rgba(15,23,42,.14);border-radius:8px;font:inherit;font-size:12.5px;">
+        <select id="dct-period" style="padding:7px 9px;border:1px solid rgba(15,23,42,.14);border-radius:8px;font:inherit;font-size:12.5px;"><option value="daily">per day</option><option value="pool">total pool</option></select>
+        <button class="btn ghost sm" onclick="dcSetTarget()">Save target</button>
+      </div>
+      <div id="dcp-board"><div class="empty">Pick a project…</div></div>
+    </div>
   </main>
 </div>
 
@@ -254,10 +278,8 @@ async function signIn(){
     var d=await r.json();
     b.disabled=false; b.textContent='Sign in';
     if(!d || d.error){ err.style.display='block'; err.textContent=(d&&d.error==='WRONG_PIN')?'Incorrect PIN.':'Employee not found.'; return; }
-    // ADMIN ONLY — the Productivity Hub is no longer open to leads or VAs.
-    var isAdmin=String(d.employee_id||'').toUpperCase()==='ADMIN';
-    if(!isAdmin){ err.style.display='block'; err.textContent='The Productivity Hub is admin-only. Sign in as ADMIN.'; return; }
-    USER={ id:d.employee_id, name:d.full_name||d.employee_id };
+    // VAs may sign in — they get their project's DATA CENTER only. Analytics stay admin-only.
+    USER={ id:d.employee_id, name:d.full_name||d.employee_id, client:String(d.client||d.project||'').trim() };
     try{ sessionStorage.setItem('prod_user', JSON.stringify(USER)); }catch(e){}
     startApp();
   }catch(e){ b.disabled=false; b.textContent='Sign in'; err.style.display='block'; err.textContent='Network error — try again.'; }
@@ -268,7 +290,11 @@ function startApp(){
   $('signin').style.display='none'; $('app').style.display='block';
   $('who-name').textContent=USER.name;
   IS_ADMIN = !!(USER && String(USER.id).toUpperCase()==='ADMIN');   // only ADMIN sees the actual scores/ranking
-  presetCutoff();   // sets dates + loads
+  // VAs: the hub is their project's DATA CENTER — analytics stay hidden (admin-only).
+  var ctl=document.querySelector('.controls'), res=$('results');
+  if(!IS_ADMIN){ if(ctl) ctl.style.display='none'; if(res) res.style.display='none'; }
+  else { presetCutoff(); }
+  dcInit();
 }
 function pvApplyLock(){
   var main=document.querySelector('main'); if(main) main.classList.toggle('pv-locked', !IS_ADMIN);
@@ -638,9 +664,93 @@ async function revResetAllShown(){
     else alert('Failed: '+((d&&d.error==='NOT_LEAD')?'not authorized (leads only)':((d&&d.error)||'error')));
   }catch(e){ alert('Network error.'); }
 }
+/* ═══════════ 🗄 PROJECT DATA CENTER — shared boards ═══════════ */
+var _DCB={project:'',data:null};
+function _dcToday(){ try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){ return new Date().toISOString().slice(0,10); } }
+async function dcInit(){
+  var sel=$('dcp-project'); if(!sel) return;
+  $('dcp-date').textContent='· today '+_dcToday();
+  if(IS_ADMIN) $('dcp-admin').style.display='flex';
+  var projects=[];
+  try{ var r=await fetch(PORTAL_URL+'?action=po_projects&_='+Date.now()); var d=await r.json(); projects=(d&&d.projects)||[]; }catch(e){}
+  var mine=(USER&&USER.client)?USER.client:'';
+  if(mine && projects.map(function(p){return p.toLowerCase();}).indexOf(mine.toLowerCase())<0) projects.unshift(mine);
+  if(!projects.length && mine) projects=[mine];
+  if(IS_ADMIN){
+    sel.innerHTML=(projects.length?projects:['—']).map(function(p){ return '<option>'+esc(p)+'</option>'; }).join('');
+  } else {
+    // VA: locked to their own project
+    sel.innerHTML='<option>'+esc(mine||'—')+'</option>'; sel.disabled=true;
+  }
+  _DCB.project=sel.value||mine;
+  if(_DCB.project && _DCB.project!=='—') dcLoadBoard();
+  else $('dcp-board').innerHTML='<div class="empty">No project on your record yet — ask an admin to set your Client/Project.</div>';
+}
+async function dcLoadBoard(){
+  var sel=$('dcp-project'); _DCB.project=(sel&&sel.value)||_DCB.project;
+  var host=$('dcp-board'); if(!host||!_DCB.project) return;
+  host.innerHTML='<div class="empty">Loading board…</div>';
+  try{
+    var r=await fetch(PORTAL_URL+'?action=po_project&project='+encodeURIComponent(_DCB.project)+'&date='+encodeURIComponent(_dcToday())+'&_='+Date.now());
+    var d=await r.json(); if(!d||!d.ok) throw new Error((d&&d.error)||'error');
+    _DCB.data=d; dcRenderBoard();
+  }catch(e){ host.innerHTML='<div class="empty">Could not load — redeploy the Apps Script (po_project).</div>'; }
+}
+function dcRenderBoard(){
+  var host=$('dcp-board'), d=_DCB.data; if(!host||!d) return;
+  if(!(d.tasks||[]).length){ host.innerHTML='<div class="empty">No outputs on this board yet — log the first ones above.</div>'; return; }
+  var me=String(USER.id||'').toLowerCase();
+  host.innerHTML=d.tasks.map(function(t){
+    var pr=t.progress;
+    var head='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
+      '<b style="font-size:14.5px;">'+esc(t.task)+'</b>'+
+      (pr?('<span style="font-size:11.5px;font-weight:800;color:'+(pr.pct>=100?'#15803d':'#0e7490')+';">'+pr.done+' / '+pr.target+(pr.period==='pool'?' (pool)':' today')+' · '+pr.pct+'%'+(pr.pct>=100?' ✓ 🎉':'')+'</span>')
+          :('<span style="font-size:11.5px;color:#8a93a3;">'+t.today_done+' done today'+(t.alltime_done>t.today_done?(' · '+t.alltime_done+' all-time'):'')+'</span>'))+
+      '</div>';
+    var bar=pr?('<div style="height:8px;background:rgba(15,23,42,.08);border-radius:5px;overflow:hidden;margin:7px 0 9px;"><i style="display:block;height:100%;width:'+Math.min(100,pr.pct)+'%;background:'+(pr.pct>=100?'linear-gradient(90deg,#22c55e,#15803d)':'linear-gradient(90deg,#22d3ee,#0e7490)')+';"></i></div>')
+               :'<div style="height:9px;"></div>';
+    var ppl=(t.people||[]).map(function(p){
+      var isMe=String(p.employee_id||'').toLowerCase()===me;
+      var pct=(p.vol>0)?Math.min(100,Math.round(p.done/p.vol*100)):0; var full=(p.vol>0&&p.done>=p.vol);
+      var ticks=isMe?('<button onclick="dcTick(\''+esc(p.id)+'\','+(p.done-1)+')" style="width:24px;height:24px;border-radius:6px;border:1px solid rgba(15,23,42,.16);background:#fff;cursor:pointer;font-weight:800;">−</button>'+
+                      '<button onclick="dcTick(\''+esc(p.id)+'\','+(p.done+1)+')" style="width:24px;height:24px;border-radius:6px;border:1px solid rgba(34,211,238,.5);background:rgba(34,211,238,.12);color:#0e7490;cursor:pointer;font-weight:800;">+</button>'):'';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px dashed rgba(15,23,42,.08);">'+
+        '<span style="flex:1;font-size:12.5px;font-weight:'+(isMe?'800':'600')+';">'+esc(p.name)+(isMe?' (you)':'')+'</span>'+
+        '<div style="width:110px;height:6px;background:rgba(15,23,42,.08);border-radius:4px;overflow:hidden;"><i style="display:block;height:100%;width:'+pct+'%;background:'+(full?'#22c55e':'#22d3ee')+';"></i></div>'+
+        '<span style="font-size:12px;font-weight:800;color:'+(full?'#15803d':'#334155')+';min-width:56px;text-align:right;">'+p.done+(p.vol?(' / '+p.vol):'')+'</span>'+ticks+
+      '</div>';
+    }).join('');
+    return '<div style="background:#fff;border:1px solid rgba(15,23,42,.10);border-radius:13px;padding:13px 15px;margin-bottom:11px;">'+head+bar+(ppl||'<div style="font-size:12px;color:#8a93a3;padding-top:4px;">Nobody has logged today yet.</div>')+'</div>';
+  }).join('');
+}
+async function dcAddMine(){
+  var task=($('dcp-task')||{value:''}).value.trim(), vol=($('dcp-vol')||{value:''}).value;
+  if(!task||!vol){ alert('Task and how many are required.'); return; }
+  try{
+    var r=await fetch(PORTAL_URL+'?action=po_set&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(_DCB.project)+'&task='+encodeURIComponent(task)+'&volume='+encodeURIComponent(vol)+'&date='+encodeURIComponent(_dcToday())+'&_='+Date.now());
+    var d=await r.json();
+    if(d&&d.ok){ $('dcp-task').value=''; $('dcp-vol').value=''; dcLoadBoard(); } else alert('Could not save: '+((d&&d.error)||'error'));
+  }catch(e){ alert('Connection error.'); }
+}
+async function dcTick(id,next){
+  if(next<0) return;
+  try{
+    var r=await fetch(PORTAL_URL+'?action=po_tick&id='+encodeURIComponent(id)+'&employee_id='+encodeURIComponent(USER.id)+'&done='+encodeURIComponent(next)+'&_='+Date.now());
+    var d=await r.json(); if(d&&d.ok) dcLoadBoard(); else alert('Could not update: '+((d&&d.error)||'error'));
+  }catch(e){}
+}
+async function dcSetTarget(){
+  var task=($('dct-task')||{value:''}).value.trim(), num=($('dct-num')||{value:''}).value, per=($('dct-period')||{value:'daily'}).value;
+  if(!task||num===''){ alert('Task and target required.'); return; }
+  try{
+    var r=await fetch(PORTAL_URL+'?action=target_set&project='+encodeURIComponent(_DCB.project)+'&task='+encodeURIComponent(task)+'&target='+encodeURIComponent(num)+'&period='+encodeURIComponent(per)+'&_='+Date.now());
+    var d=await r.json(); if(d&&d.ok){ $('dct-task').value=''; $('dct-num').value=''; dcLoadBoard(); } else alert('Could not save target.');
+  }catch(e){ alert('Connection error.'); }
+}
+
 /* ---- boot ---- */
 (function(){ var u=null; try{ u=JSON.parse(sessionStorage.getItem('prod_user')||'null'); }catch(e){}
-  if(u&&u.id&&String(u.id).toUpperCase()==='ADMIN'){ USER=u; startApp(); } else { try{ sessionStorage.removeItem('prod_user'); }catch(e){} $('si-id').focus();
+  if(u&&u.id){ USER=u; startApp(); } else { $('si-id').focus();
     $('si-pin').addEventListener('keydown',function(e){ if(e.key==='Enter') signIn(); }); }
 })();
 </script>

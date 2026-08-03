@@ -2113,6 +2113,29 @@ async function recordDay(){
     var r=await apiPost({ action:'src_record', by:firstName(USER.full_name||USER.employee_id) });
     if(r&&r.ok) toast('Recorded '+r.date+' — sourced today: '+r.sourced_today+', assigned: '+r.assigned+(r.sourcers?(' · '+r.sourcers+' employees snapshotted'):''));
     else toast('Could not record');
+    // 🗄 DATA CENTER BRIDGE — push each sourcer's target/sourced into the shared ALTR board
+    // (portal ProjectOutputs), so the Prod Hub Data Center shows ALTR progress automatically.
+    try{
+      var PORTAL='https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByOLL4TuRPKvtPh2rjY-b3rOJ5aBoIc8sOmO9kP/exec';
+      var today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date());
+      var claimed={}, pushes=[];
+      (STATE.sourcers||[]).forEach(function(srx){
+        if(String(srx.active||'').toUpperCase()==='FALSE') return;
+        var phones=String(srx.phones||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
+        var red=0, sourced=0;
+        phones.forEach(function(ph){ if(claimed[ph]) return; claimed[ph]=true; var st=phoneStats_(ph); red+=st.red; sourced+=st.sourced; });
+        var target=red+sourced; if(target<=0 && sourced<=0) return;
+        var empKey=String(srx.eid||srx.employee_id||srx.name||'').trim(); if(!empKey) return;
+        // volume = today's target, done = sourced → the Data Center bar mirrors the ALTR completion %
+        pushes.push(fetch(PORTAL+'?action=po_set&employee_id='+encodeURIComponent(empKey)+'&project=ALTR&task=Sourcing&volume='+encodeURIComponent(target)+'&date='+encodeURIComponent(today)+'&_='+Date.now())
+          .then(function(){ return fetch(PORTAL+'?action=po_my&employee_id='+encodeURIComponent(empKey)+'&date='+encodeURIComponent(today)+'&_='+Date.now()); })
+          .then(function(rr){ return rr.json(); })
+          .then(function(dd){ var row=((dd&&dd.rows)||[]).filter(function(x){ return String(x.project).toUpperCase()==='ALTR' && String(x.task).toLowerCase()==='sourcing'; })[0];
+            if(row) return fetch(PORTAL+'?action=po_tick&id='+encodeURIComponent(row.id)+'&employee_id='+encodeURIComponent(empKey)+'&done='+encodeURIComponent(sourced)+'&_='+Date.now()); })
+          .catch(function(){}));
+      });
+      if(pushes.length){ Promise.all(pushes).then(function(){ toast('🗄 Data Center updated ('+pushes.length+' sourcers)'); }); }
+    }catch(_dc){}
   }catch(e){ toast('Record failed'); }
 }
 
