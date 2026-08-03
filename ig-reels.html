@@ -28,7 +28,7 @@
   .hd{display:flex;align-items:center;gap:8px}
   .hd b{font-size:14.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .stb{font-size:10px;font-weight:900;color:#fff;border-radius:100px;padding:3px 9px}
-  .stb.active{background:var(--ok)} .stb.warmup{background:var(--warm)} .stb.flagged{background:var(--flag)} .stb.rest{background:#64748b} .stb.suspended{background:var(--susp)} .stb.onhold{background:#3b82f6}
+  .stb.active{background:var(--ok)} .stb.warmup{background:var(--warm)} .stb.flagged{background:var(--flag)} .stb.rest{background:#64748b} .stb.suspended{background:var(--susp)} .stb.onhold{background:#3b82f6} .stb.reserved{background:#8b5cf6}
   .kb{font-size:10px;font-weight:900;color:#6228d7;background:rgba(98,40,215,.1);border-radius:100px;padding:3px 8px}
   .plan{font-size:11.5px;color:var(--ink2);background:rgba(214,41,118,.05);border-radius:9px;padding:7px 10px;margin:9px 0;line-height:1.5}
   .ticks{display:flex;gap:6px;margin:9px 0}
@@ -41,6 +41,7 @@
   .btns button.bad{border-color:rgba(239,68,68,.4);color:#b91c1c;background:rgba(239,68,68,.06)}
   .btns button.flagb{border-color:rgba(249,115,22,.45);color:#c2410c;background:rgba(249,115,22,.07)}
   .btns button.holdb{border-color:rgba(59,130,246,.45);color:#1d4ed8;background:rgba(59,130,246,.07)}
+  .btns button.resb{border-color:rgba(139,92,246,.45);color:#6d28d9;background:rgba(139,92,246,.07)}
   .muted{color:var(--ink3);font-size:12px;padding:6px 2px}
   #signin{max-width:360px;margin:12vh auto;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px;text-align:center}
   #signin input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:14px;margin-top:9px}
@@ -250,22 +251,24 @@ function render(){
     '<div class="stat"><b style="color:#f59e0b">'+ROWS.filter(function(r){return r.status==='warmup';}).length+'</b><span>Warming up</span></div>'+
     '<div class="stat"><b style="color:#c2410c">'+ROWS.filter(function(r){return r.status==='flagged'||r.status==='rest';}).length+'</b><span>Flagged / resting</span></div>'+
     '<div class="stat"><b style="color:#1d4ed8">'+ROWS.filter(function(r){return r.status==='onhold';}).length+'</b><span>⏸ On hold</span></div>'+
+    '<div class="stat"><b style="color:#6d28d9">'+ROWS.filter(function(r){return r.status==='reserved';}).length+'</b><span>🔖 Reserved</span></div>'+
     '<div class="stat"><b style="color:#b91c1c">'+ROWS.filter(function(r){return r.status==='suspended';}).length+'</b><span>Suspended</span></div>';
   renderByVA([
     ['Active','#10b981',function(r){return r.status==='active';}],
     ['Warm-up','#f59e0b',function(r){return r.status==='warmup';}],
     ['Flagged/Rest','#f97316',function(r){return r.status==='flagged'||r.status==='rest';}],
     ['On Hold','#3b82f6',function(r){return r.status==='onhold';}],
+    ['Reserved','#8b5cf6',function(r){return r.status==='reserved';}],
     ['Suspended','#ef4444',function(r){return r.status==='suspended';}]
   ], function(r){ return r.status==='warmup' ? (r.meta&&r.meta.wl===today()) : fullDone(r); },
      function(r){ return r.status==='active'||r.status==='warmup'; });
   if(!ROWS.length){ $('grid').innerHTML='<div class="muted">No accounts yet — add your first above.</div>'; return; }
   renderTabs();
   var base=filterRows();
-  var order={warmup:1,active:0,flagged:2,rest:3,onhold:4,suspended:5};
+  var order={warmup:1,active:0,flagged:2,rest:3,onhold:4,reserved:5,suspended:6};
   var sorted=base.slice().sort(function(a,b){ return (order[a.status]||0)-(order[b.status]||0); });
   if(!sorted.length){ $('grid').innerHTML='<div class="muted">No accounts in this view.</div>'; return; }
-  function grpA(r){ return r.status==='warmup'?'🌱 Warm-up (14-day)':(r.status==='active'?'🟢 Active — daily Story · Feed · Reel':(r.status==='onhold'?'⏸ On Hold':(r.status==='suspended'?'⛔ Suspended':'⚑ Flagged / Resting'))); }
+  function grpA(r){ return r.status==='warmup'?'🌱 Warm-up (14-day)':(r.status==='active'?'🟢 Active — daily Story · Feed · Reel':(r.status==='onhold'?'⏸ On Hold':(r.status==='reserved'?'🔖 Reserved':(r.status==='suspended'?'⛔ Suspended':'⚑ Flagged / Resting')))); }
   var gcnt={}; sorted.forEach(function(r){ var g=grpA(r); gcnt[g]=(gcnt[g]||0)+1; });
   var out=[], lastG='';
   sorted.forEach(function(r){
@@ -274,9 +277,12 @@ function render(){
     var who='<div class="meta1">'+esc(vaName(r.assigned_to||r.created_by))+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+'</div>';
     var kchip=isK(r)?'<span class="kb">1K+ ✓ Reels</span>':'';
     if(r.status==='suspended'){ out.push('<div class="acct dim"><div class="hd"><b>'+esc(r.handle)+'</b>'+kchip+kmenu([['↩ Reinstate',"setStatus('"+r.id+"','active')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+'<div class="meta1">Report to the client for replacement (SOP).</div></div>'); return; }
-    if(r.status==='onhold'){ out.push('<div class="acct" style="border-color:rgba(59,130,246,.45);"><div class="hd"><b>'+esc(r.handle)+'</b>'+kchip+kmenu([['⚑ Flagged',"setStatus('"+r.id+"','flagged')"],['⛔ Suspended',"setStatus('"+r.id+"','suspended')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+
+    if(r.status==='onhold'){ out.push('<div class="acct" style="border-color:rgba(59,130,246,.45);"><div class="hd"><b>'+esc(r.handle)+'</b>'+kchip+kmenu([['⚑ Flagged',"setStatus('"+r.id+"','flagged')"],['🔖 Reserved',"setStatus('"+r.id+"','reserved')"],['⛔ Suspended',"setStatus('"+r.id+"','suspended')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+
       '<div class="meta1" style="color:#1d4ed8;font-weight:700;">⏸ Healthy — posting paused until the client approves. No penalty.</div>'+
       '<div class="btns"><button class="go" onclick="setStatus(\''+r.id+'\',\'active\')">▶ Client approved → resume</button></div></div>'); return; }
+    if(r.status==='reserved'){ out.push('<div class="acct" style="border-color:rgba(139,92,246,.45);"><div class="hd"><b>'+esc(r.handle)+'</b>'+kchip+kmenu([['⚑ Flagged',"setStatus('"+r.id+"','flagged')"],['⏸ On Hold',"setStatus('"+r.id+"','onhold')"],['⛔ Suspended',"setStatus('"+r.id+"','suspended')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+
+      '<div class="meta1" style="color:#6d28d9;font-weight:700;">🔖 Set aside for a specific purpose — not available for posting or assignment.</div>'+
+      '<div class="btns"><button class="go" onclick="setStatus(\''+r.id+'\',\'active\')">▶ Release → Active</button></div></div>'); return; }
     if(r.status==='flagged'||r.status==='rest'){ out.push('<div class="acct dim"><div class="hd"><b>'+esc(r.handle)+'</b>'+kchip+kmenu([['⛔ Suspended',"setStatus('"+r.id+"','suspended')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+
       '<div class="meta1">'+(r.status==='flagged'?'Remove flagged content, let it REST, then check.':'Resting — check status before resuming.')+'</div>'+
       '<div class="btns"><button class="go" onclick="setStatus(\''+r.id+'\',\'active\')">✓ Healthy → Active</button></div></div>'); return; }
@@ -286,6 +292,7 @@ function render(){
     var menu=[]; if(!isK(r)) menu.push(['🎉 Hit 1,000 followers',"mark1k('"+r.id+"')"]);
     menu.push(['⚑ Flagged',"setStatus('"+r.id+"','flagged')"]);
     menu.push(['⏸ On Hold',"setStatus('"+r.id+"','onhold')"]);
+    menu.push(['🔖 Reserved',"setStatus('"+r.id+"','reserved')"]);
     menu.push(['⛔ Suspended',"setStatus('"+r.id+"','suspended')"]);
     menu.push('---'); menu.push(['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']);
     out.push('<div class="acct'+(fullDone(r)?' done':'')+'"><div class="hd"><b>'+esc(r.handle)+'</b>'+kchip+kmenu(menu)+'</div>'+who+
@@ -345,6 +352,7 @@ async function wuDone(id, day){
 async function setStatus(id, st){
   if(st==='suspended' && !confirm('Mark SUSPENDED? Report it to the client for replacement (SOP). Outputs already earned are kept.')) return;
   if(st==='onhold' && !confirm('Put this account ON HOLD? The account is healthy — posting simply pauses until the client approves resuming. No penalty.')) return;
+  if(st==='reserved' && !confirm('Mark RESERVED? The account is set aside for a specific purpose — posting stops and it leaves the active pool until released.')) return;
   try{
     var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status='+encodeURIComponent(st)+'&_='+Date.now());
     var d=await r.json(); if(d&&d.ok){ toast('Updated.'); load(); } else toast('Could not update.');

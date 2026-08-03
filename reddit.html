@@ -300,7 +300,7 @@ function render(){
     if(r.status==='recovery') return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#0ea5e914;color:#0369a1;border:1px solid #0ea5e92e">🛟 Recovery</span>'+kmenu([['⛔ Banned',"setPhase('"+r.id+"','banned')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+
       '<div class="meta1">'+who+'</div>'+
       '<details class="planbox"><summary>📋 Recovery plan</summary><div>10 min ACTIVE browsing · upvote 2–4 posts · reply to 2–3 comments. No posting until clear.</div></details>'+
-      '<div class="btns"><button class="go" onclick="sessionDone(\''+r.id+'\',\'recovery\')">✓ Recovery session</button>'+
+      '<div class="btns">'+sessBtns(r,'recovery','+1 recovery')+
       '<button class="rec" onclick="recovered(\''+r.id+'\')">✅ Cleared → '+(phase((r.meta&&r.meta.prev)||'warming')||{n:'phase'}).n+'</button></div></div>';
     var p=phase(r.status)||PH[0]; var ix=phaseIx(r.status); var next=PH[ix+1];
     var din=daysIn(r), km=karmaOf(r);
@@ -318,9 +318,7 @@ function render(){
     return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:'+p.c+'14;color:'+p.c+';border:1px solid '+p.c+'2e">'+p.n+'</span>'+kmenu(menu)+'</div>'+
       '<div class="meta1">'+gate+who+'</div>'+
       '<details class="planbox"><summary>📋 Today\'s plan</summary><div>'+p.plan+'</div></details>'+
-      '<div class="btns">'+
-        (p.task?('<button class="go" onclick="sessionDone(\''+r.id+'\',\''+p.k+'\')">✓ Session done'+(p.task==='Posting'?' (+'+p.tn+' posts)':'')+'</button>')
-               :('<button class="go" onclick="workedOnly(\''+r.id+'\')">✓ Worked today</button>'))+
+      '<div class="btns">'+sessBtns(r, p.k, p.task?(p.task==='Posting'?('+'+p.tn+' posts'):'+1 warm'):null)+
         (p.dms?('<button class="dm" onclick="dmsDone(\''+r.id+'\','+p.dms+')">📨 DMs done (+'+p.dms+')</button>'):'')+
         (p.karma&&!canUp?('<button onclick="setKarma(\''+r.id+'\','+km+')">⭐ Update karma</button>'):'')+
         (next&&canUp?('<button class="up" onclick="promote(\''+r.id+'\',\''+next.k+'\')">'+upLabel+'</button>'):'')+
@@ -365,15 +363,32 @@ async function setKarma(id, cur){
     var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now());
     var d=await r.json(); if(d&&d.ok){ toast('Karma updated: '+n+(n>=50?' — 50 reached, NSFW unlocked! 🎉':'')); load(); } }catch(e){ toast('Connection error.'); }
 }
-async function sessionDone(id, phk){
+function sessBtns(r, phk, gainTxt){
+  var s1=(r.meta&&r.meta.s1===today()), s2=(r.meta&&r.meta.s2===today());
+  var g=gainTxt?(' ('+gainTxt+')'):'';
+  var b1=s1?'<button disabled style="opacity:.55">✓ Session 1 done</button>'
+           :'<button class="go" onclick="sessionDone(\''+r.id+'\',\''+phk+'\',1)">✓ Session 1'+g+'</button>';
+  var b2=s2?'<button disabled style="opacity:.55">✓ Session 2 done</button>'
+           :(s1?'<button class="go" onclick="sessionDone(\''+r.id+'\',\''+phk+'\',2)">✓ Session 2'+g+'</button>'
+               :'<button disabled style="opacity:.45;cursor:not-allowed" title="Finish Session 1 first">Session 2 🔒</button>');
+  return b1+b2;
+}
+async function stampSession(id, n){
+  try{ var r0=row(id);
+    var patch=(n===2)?{s2:today(), last:today()}:{s1:today()};   // 'last' = day complete (both sessions)
+    var m=Object.assign({}, (r0&&r0.meta)||{}, patch);
+    await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now()); }catch(e){}
+}
+async function sessionDone(id, phk, n){
+  n=(n===2)?2:1;
   var p=phase(phk);
-  if(phk==='recovery'){ await bump('Warm Session',1); await stampWorked(id); toast('+1 recovery session ✅'); load(); return; }
-  if(!p||!p.task){ await stampWorked(id); toast('Logged ✓'); load(); return; }
-  await bump(p.task, p.tn); await stampWorked(id);
-  toast(p.task==='Posting'?('+'+p.tn+' Posting ✅ — rotate subs, captions & photos!'):'+1 Warm Session ✅');
+  if(phk==='recovery'){ await bump('Warm Session',1); await stampSession(id,n); toast('+1 recovery session · '+n+'/2 ✅'+(n===2?' — day complete!':'')); load(); return; }
+  if(!p||!p.task){ await stampSession(id,n); toast('Session '+n+'/2 logged ✓'+(n===2?' — day complete!':'')); load(); return; }
+  await bump(p.task, p.tn); await stampSession(id,n);
+  toast((p.task==='Posting'?('+'+p.tn+' Posting'):'+1 Warm Session')+' · session '+n+'/2 ✅'+(n===2?' — day complete!':(p.task==='Posting'?' — rotate subs, captions & photos!':'')));
   load();
 }
-async function dmsDone(id, n){ await bump('DM Replies', n); await stampWorked(id); toast('+'+n+' DM Replies 📨'); load(); }
+async function dmsDone(id, n){ await bump('DM Replies', n); toast('+'+n+' DM Replies 📨'); load(); }
 async function promote(id, nextk){
   var p=phase(nextk);
   if(!confirm('Promote this account to '+p.n+'? Do this only when the profile assessment is clean.')) return;
