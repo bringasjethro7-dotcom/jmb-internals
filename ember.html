@@ -61,9 +61,11 @@
     <input id="em-user" placeholder="Account username (letters only, starts with model name)">
     <select id="em-model"><option value="Emma">Emma</option><option value="Madison">Madison</option></select>
     <select id="em-status"><option value="stock">📦 Stock</option><option value="setup">🛠 Setting up</option><option value="live">🟢 Live</option><option value="needsfix">🔧 Needs fix</option></select>
+    <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink2);font-weight:700;">created on <input type="date" id="em-cdate" style="padding:7px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:12px;"></label>
     <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink2);font-weight:700;"><input type="checkbox" id="em-new"> just created it (+1 Creation)</label>
     <button onclick="addAcct()">＋ Add account</button>
   </div>
+  <div id="byva" style="margin-bottom:14px;"></div>
   <div class="cols" id="cols"><div class="muted">Loading…</div></div>
 </div>
 <div class="toast" id="toast"></div>
@@ -72,6 +74,32 @@
 var API='https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByOLL4TuRPKvtPh2rjY-b3rOJ5aBoIc8sOmO9kP/exec';
 var PROJECT='Ember Management';
 var USER=null, ROWS=[];
+var NAMES={};
+async function loadNames(){ try{ var r=await fetch(API+'?action=get_all_employees&_='+Date.now()); var d=await r.json(); (d.employees||[]).forEach(function(e){ NAMES[String(e.employee_id).toLowerCase()]=e.full_name||e.employee_id; }); }catch(e){} }
+function vaName(id){ return NAMES[String(id||'').toLowerCase()]||id||'—'; }
+function today(){ try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){ return new Date().toISOString().slice(0,10); } }
+function cdateOf(r){ return (r.meta&&r.meta.cdate)||''; }
+function ageTxt(r){ var c=cdateOf(r); if(!c) return ''; var days=Math.max(0,Math.round((Date.now()-new Date(c+'T00:00:00').getTime())/86400000)); return c+' · '+days+'d old'; }
+function renderByVA(segs, doneFn, activeFn){
+  var host=document.getElementById('byva'); if(!host) return;
+  var by={}; ROWS.forEach(function(r){ var k=String(r.assigned_to||r.created_by||'—').toLowerCase(); (by[k]=by[k]||[]).push(r); });
+  var keys=Object.keys(by).sort(function(a,b){ return by[b].length-by[a].length; });
+  if(!keys.length){ host.innerHTML=''; return; }
+  host.innerHTML='<div style="font-size:12px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">👤 Daily progress per VA</div>'+keys.map(function(k){
+    var rows=by[k];
+    var act=activeFn?rows.filter(activeFn):rows;
+    var done=doneFn?act.filter(doneFn).length:0, tot=act.length;
+    var pct=tot?Math.round(done/tot*100):0;
+    var pc=pct>=100?'#10b981':(pct>=70?'#f59e0b':'#ef4444');
+    var parts=segs.map(function(sg){ var n=rows.filter(sg[2]).length; return {label:sg[0],color:sg[1],n:n}; }).filter(function(p){return p.n>0;});
+    var legend=parts.map(function(p){ return '<span style="font-size:10.5px;color:var(--ink2);font-weight:700;"><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+p.color+';margin-right:3px;"></i>'+p.label+' '+p.n+'</span>'; }).join(' ');
+    return '<div style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:9px 13px;margin-bottom:6px;">'+
+      '<div style="display:flex;align-items:center;gap:10px;"><b style="flex:1;font-size:12.5px;">'+esc(vaName(k))+'</b>'+
+        '<span style="font-size:12px;font-weight:800;color:'+pc+';">'+done+' / '+tot+' today · '+pct+'%'+(pct>=100&&tot?' ✓':'')+'</span></div>'+
+      '<div style="height:8px;border-radius:5px;overflow:hidden;background:rgba(15,23,42,.06);margin:6px 0 4px;"><i style="display:block;height:100%;width:'+Math.min(100,pct)+'%;background:'+pc+';"></i></div>'+
+      '<div style="display:flex;gap:9px;flex-wrap:wrap;">'+legend+'</div></div>';
+  }).join('');
+}
 function $(id){return document.getElementById(id);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('on'); setTimeout(function(){t.classList.remove('on');},2400); }
@@ -88,7 +116,7 @@ async function signIn(){
     start();
   }catch(e){ err.style.display='block'; err.textContent='Network error — try again.'; }
 }
-function start(){ $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name; load(); setInterval(load, 60000); }
+function start(){ $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name; try{ $('em-cdate').value=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){} loadNames(); load(); setInterval(load, 60000); }
 
 async function load(){
   try{
@@ -107,6 +135,13 @@ function render(){
     '<div class="stat fix"><b>'+count('needsfix')+'</b><span>🔧 Needs fix</span></div>'+
     '<div class="stat ban"><b>'+count('banned')+'</b><span>🔴 Banned</span></div>'+
     '<div class="balance">Model balance · Emma '+emma+' ⚖ Madison '+madison+(emma===madison?'':' → create '+(emma<madison?'Emma':'Madison')+' next')+'</div>';
+  renderByVA([
+    ['Stock','#6366f1',function(r){return r.status==='stock';}],
+    ['Setting up','#f59e0b',function(r){return r.status==='setup';}],
+    ['Live','#10b981',function(r){return r.status==='live';}],
+    ['Needs fix','#8b5cf6',function(r){return r.status==='needsfix';}],
+    ['Banned','#ef4444',function(r){return r.status==='banned';}]
+  ], function(r){ return r.meta && r.meta.last===today(); }, function(r){ return ['live','setup','needsfix'].indexOf(r.status)>=0; });
   var defs=[['stock','📦 Stock','stock'],['setup','🛠 Setting up','setup'],['live','🟢 Live','live'],['needsfix','🔧 Needs fix','fix'],['banned','🔴 Banned / Locked','ban']];
   $('cols').innerHTML=defs.map(function(df){
     var st=df[0], items=ROWS.filter(function(r){return r.status===st;});
@@ -114,9 +149,9 @@ function render(){
       var btns='';
       if(st==='stock') btns='<button class="warn" onclick="move(\''+r.id+'\',\'setup\')">🛠 Assign to VPS</button>';
       else if(st==='setup') btns='<button class="go" onclick="move(\''+r.id+'\',\'live\')">🟢 Setup done → Live</button><button class="fix" onclick="move(\''+r.id+'\',\'needsfix\')">🔧 Needs fix</button>';
-      else if(st==='live') btns='<button class="bad" onclick="move(\''+r.id+'\',\'banned\')">🔴 Banned / Locked</button><button class="fix" onclick="move(\''+r.id+'\',\'needsfix\')">🔧 Needs fix</button>';
+      else if(st==='live') btns=((r.meta&&r.meta.last===today())?'<button disabled style="opacity:.5">✓ Verified today</button>':'<button class="go" onclick="checkedToday(\''+r.id+'\')">✓ Verified running today</button>')+'<button class="bad" onclick="move(\''+r.id+'\',\'banned\')">🔴 Banned / Locked</button><button class="fix" onclick="move(\''+r.id+'\',\'needsfix\')">🔧 Needs fix</button>';
       else if(st==='needsfix') btns='<button class="go" onclick="move(\''+r.id+'\',\'live\')">✓ Fixed → Live</button><button class="bad" onclick="move(\''+r.id+'\',\'banned\')">🔴 Banned</button>';
-      return '<div class="acct"><b>'+esc(r.handle)+'</b><div class="who">'+esc(r.model||'')+(r.created_by?(' · by '+esc(r.created_by)):'')+'</div><div class="btns">'+btns+'</div></div>';
+      return '<div class="acct"><b>'+esc(r.handle)+'</b><div class="who">'+esc(r.model||'')+' · '+esc(vaName(r.assigned_to||r.created_by))+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+'</div><div class="btns">'+btns+'</div></div>';
     }).join('');
     return '<div class="col '+df[2]+'"><h3><i></i>'+df[1]+' · '+items.length+'</h3>'+(cards||'<div class="muted">None.</div>')+'</div>';
   }).join('');
@@ -126,8 +161,10 @@ async function addAcct(){
   var st=($('em-status')||{}).value||'stock', isNew=($('em-new')||{}).checked;
   if(!u){ toast('Type the account username.'); return; }
   if(!/^[a-z]+$/i.test(u)){ toast('Usernames are letters only (SOP).'); return; }
+  var cd=($('em-cdate')||{}).value||'';
   try{
-    var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(u)+'&model='+encodeURIComponent(m)+'&status='+encodeURIComponent(st)+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
+    var meta=encodeURIComponent(JSON.stringify({cdate:cd}));
+    var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(u)+'&model='+encodeURIComponent(m)+'&status='+encodeURIComponent(st)+'&meta='+meta+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
     var d=await r.json();
     if(d&&d.ok){ $('em-user').value=''; if($('em-new')) $('em-new').checked=false;
       if(isNew){ await bump('Account Creation',1); }
@@ -135,6 +172,11 @@ async function addAcct(){
     else if(d&&d.error==='DUPLICATE') toast('That username is already on the board — SOP: always search first!');
     else toast('Could not add.');
   }catch(e){ toast('Connection error.'); }
+}
+async function checkedToday(id){
+  try{ var r0=ROWS.filter(function(x){return x.id===id;})[0]; var m=Object.assign({}, (r0&&r0.meta)||{}, {last:today()});
+    var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now());
+    var d=await r.json(); if(d&&d.ok){ toast('Verified running ✓ (VPS check)'); load(); } }catch(e){ toast('Connection error.'); }
 }
 async function move(id, st){
   if(st==='banned' && !confirm('Mark BANNED/LOCKED? SOP: do not try to recover. Set Airtable to 🔴 Banned, remove the VPS link, keep the row + AdsPower profile, then fill the slot from Stock.')) return;

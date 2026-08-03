@@ -59,10 +59,12 @@
   <div class="addbox">
     <input id="ra-user" placeholder="Account username (u/…)">
     <select id="ra-phase" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px;background:#fff;min-width:170px;"></select>
+    <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink2);font-weight:700;">created on <input type="date" id="ra-cdate" style="padding:7px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:12px;"></label>
     <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink2);font-weight:700;"><input type="checkbox" id="ra-new"> just created it (+1 Creation)</label>
     <button onclick="addAcct()">＋ Add account</button>
   </div>
   <div class="reminder">🔎 <b>Every phase, every session:</b> check the profile for post/avatar removals (shadowban) & spam-filter flags, and the inbox for mod messages, warnings, or "unable to post". Spotted one? Hit <b>🛟 Spam filter</b> on the card.</div>
+  <div id="byva" style="margin-bottom:14px;"></div>
   <div class="grid" id="grid"><div class="muted">Loading…</div></div>
 </div>
 <div class="toast" id="toast"></div>
@@ -70,7 +72,32 @@
 <script>
 var API='https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByOLL4TuRPKvtPh2rjY-b3rOJ5aBoIc8sOmO9kP/exec';
 var PROJECT='Reddit';
-var USER=null, ROWS=[];
+var USER=null, ROWS=[], NAMES={};
+async function loadNames(){ try{ var r=await fetch(API+'?action=get_all_employees&_='+Date.now()); var d=await r.json(); (d.employees||[]).forEach(function(e){ NAMES[String(e.employee_id).toLowerCase()]=e.full_name||e.employee_id; }); }catch(e){} }
+function vaName(id){ return NAMES[String(id||'').toLowerCase()]||id||'—'; }
+function today(){ try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){ return new Date().toISOString().slice(0,10); } }
+function cdateOf(r){ return (r.meta&&r.meta.cdate)||''; }
+function ageTxt(r){ var c=cdateOf(r); if(!c) return ''; var days=Math.max(0,Math.round((Date.now()-new Date(c+'T00:00:00').getTime())/86400000)); return c+' · '+days+'d old'; }
+function renderByVA(segs, doneFn, activeFn){
+  var host=document.getElementById('byva'); if(!host) return;
+  var by={}; ROWS.forEach(function(r){ var k=String(r.assigned_to||r.created_by||'—').toLowerCase(); (by[k]=by[k]||[]).push(r); });
+  var keys=Object.keys(by).sort(function(a,b){ return by[b].length-by[a].length; });
+  if(!keys.length){ host.innerHTML=''; return; }
+  host.innerHTML='<div style="font-size:12px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">👤 Daily progress per VA</div>'+keys.map(function(k){
+    var rows=by[k];
+    var act=activeFn?rows.filter(activeFn):rows;
+    var done=doneFn?act.filter(doneFn).length:0, tot=act.length;
+    var pct=tot?Math.round(done/tot*100):0;
+    var pc=pct>=100?'#10b981':(pct>=70?'#f59e0b':'#ef4444');
+    var parts=segs.map(function(sg){ var n=rows.filter(sg[2]).length; return {label:sg[0],color:sg[1],n:n}; }).filter(function(p){return p.n>0;});
+    var legend=parts.map(function(p){ return '<span style="font-size:10.5px;color:var(--ink2);font-weight:700;"><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+p.color+';margin-right:3px;"></i>'+p.label+' '+p.n+'</span>'; }).join(' ');
+    return '<div style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:9px 13px;margin-bottom:6px;">'+
+      '<div style="display:flex;align-items:center;gap:10px;"><b style="flex:1;font-size:12.5px;">'+esc(vaName(k))+'</b>'+
+        '<span style="font-size:12px;font-weight:800;color:'+pc+';">'+done+' / '+tot+' today · '+pct+'%'+(pct>=100&&tot?' ✓':'')+'</span></div>'+
+      '<div style="height:8px;border-radius:5px;overflow:hidden;background:rgba(15,23,42,.06);margin:6px 0 4px;"><i style="display:block;height:100%;width:'+Math.min(100,pct)+'%;background:'+pc+';"></i></div>'+
+      '<div style="display:flex;gap:9px;flex-wrap:wrap;">'+legend+'</div></div>';
+  }).join('');
+}
 var PH=[
  {k:'warming',   n:'🌡 Warming',        c:'#f59e0b', plan:'5 min browsing · search 5 subreddits · upvote 2 · join 2', task:'Warm Session', tn:1},
  {k:'comment',   n:'💬 Comment Farm',   c:'#eab308', plan:'5 min browsing · search 5 · upvote 3 · join 2 · 2 SFW comments (approved subs)', task:'Warm Session', tn:1},
@@ -101,6 +128,8 @@ async function signIn(){
   }catch(e){ err.style.display='block'; err.textContent='Network error — try again.'; }
 }
 function start(){ $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name;
+  try{ $('ra-cdate').value=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){}
+  loadNames();
   var ps=$('ra-phase'); if(ps && !ps.options.length){ ps.innerHTML=PH.map(function(p){ return '<option value="'+p.k+'">'+p.n+'</option>'; }).join(''); }
   load(); setInterval(load, 60000); }
 
@@ -121,6 +150,13 @@ function render(){
     '<div class="stat"><b style="color:#0369a1">'+ROWS.filter(function(r){return r.status==='recovery';}).length+'</b><span>🛟 Recovery</span></div>'+
     '<div class="stat"><b style="color:#b91c1c">'+ROWS.filter(function(r){return r.status==='banned';}).length+'</b><span>Banned</span></div>'+
     '<div class="stat"><b>'+ROWS.filter(function(r){return r.status!=='banned';}).length+'</b><span>Active total</span></div>';
+  renderByVA([
+    ['Warming','#f59e0b',function(r){return ['warming','comment','nsfw'].indexOf(r.status)>=0;}],
+    ['Posting','#f43f5e',function(r){return ['day1','early','earlydm','medium'].indexOf(r.status)>=0;}],
+    ['Strong+','#6d28d9',function(r){return ['strong','superstrong'].indexOf(r.status)>=0;}],
+    ['Recovery','#0ea5e9',function(r){return r.status==='recovery';}],
+    ['Banned','#ef4444',function(r){return r.status==='banned';}]
+  ], function(r){ return r.meta && r.meta.last===today(); }, function(r){ return r.status!=='banned'; });
   if(!ROWS.length){ $('grid').innerHTML='<div class="muted">No accounts yet — create the first via the iPhone farm SOP and add it above.</div>'; return; }
   var ord=function(r){ if(r.status==='banned') return 99; if(r.status==='recovery') return 50; return phaseIx(r.status); };
   var sorted=ROWS.slice().sort(function(a,b){ return ord(a)-ord(b); });
@@ -135,6 +171,7 @@ function render(){
     }
     var p=phase(r.status)||PH[0]; var ix=phaseIx(r.status); var next=PH[ix+1];
     return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph" style="background:'+p.c+'">'+p.n+'</span></div>'+
+      '<div style="font-size:10px;color:var(--ink3);margin-top:3px;">'+esc(vaName(r.assigned_to||r.created_by))+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+'</div>'+
       '<div class="plan">'+p.plan+'</div>'+
       '<div class="btns">'+
         '<button class="go" onclick="sessionDone(\''+r.id+'\',\''+p.k+'\')">✓ Session done'+(p.task==='Posting'?' (+'+p.tn+' posts)':'')+'</button>'+
@@ -148,8 +185,10 @@ function render(){
 async function addAcct(){
   var u=$('ra-user').value.trim(); if(!u){ toast('Type the account username.'); return; }
   var phk=($('ra-phase')||{}).value||'warming'; var isNew=($('ra-new')||{}).checked;
+  var cd=($('ra-cdate')||{}).value||'';
   try{
-    var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(u)+'&status='+encodeURIComponent(phk)+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
+    var meta=encodeURIComponent(JSON.stringify({cdate:cd}));
+    var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(u)+'&status='+encodeURIComponent(phk)+'&meta='+meta+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
     var d=await r.json();
     if(d&&d.ok){
       $('ra-user').value=''; if($('ra-new')) $('ra-new').checked=false;
@@ -162,14 +201,19 @@ async function addAcct(){
   }catch(e){ toast('Connection error.'); }
 }
 function row(id){ return ROWS.filter(function(r){return r.id===id;})[0]; }
+async function stampWorked(id){
+  try{ var r0=row(id); var m=Object.assign({}, (r0&&r0.meta)||{}, {last:today()});
+    await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now()); }catch(e){}
+}
 async function sessionDone(id, phk){
   var p=phase(phk);
-  if(phk==='recovery'){ await bump('Warm Session',1); toast('+1 recovery session ✅'); return; }
+  if(phk==='recovery'){ await bump('Warm Session',1); await stampWorked(id); toast('+1 recovery session ✅'); load(); return; }
   if(!p) return;
-  await bump(p.task, p.tn);
+  await bump(p.task, p.tn); await stampWorked(id);
   toast(p.task==='Posting'?('+'+p.tn+' Posting ✅ — rotate subs, captions & photos!'):'+1 Warm Session ✅');
+  load();
 }
-async function dmsDone(id, n){ await bump('DM Replies', n); toast('+'+n+' DM Replies 📨'); }
+async function dmsDone(id, n){ await bump('DM Replies', n); await stampWorked(id); toast('+'+n+' DM Replies 📨'); load(); }
 async function promote(id, nextk){
   var p=phase(nextk);
   if(!confirm('Promote this account to '+p.n+'? Do this only when the profile assessment is clean.')) return;
@@ -181,7 +225,8 @@ async function promote(id, nextk){
 async function spamFilter(id, curk){
   if(!confirm('Move to 🛟 Spam Filter Recovery? (Posting pauses; recovery checklist starts.)')) return;
   try{
-    var meta=encodeURIComponent(JSON.stringify({prev:curk}));
+    var r0=row(id); var m0=Object.assign({}, (r0&&r0.meta)||{}, {prev:curk});
+    var meta=encodeURIComponent(JSON.stringify(m0));
     var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status=recovery&meta='+meta+'&_='+Date.now());
     var d=await r.json(); if(d&&d.ok){ toast('In recovery — 10 min browsing, upvotes, replies only.'); load(); } else toast('Could not update.');
   }catch(e){ toast('Connection error.'); }
