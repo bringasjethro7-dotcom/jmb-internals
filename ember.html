@@ -58,9 +58,11 @@
   <div class="sub">Snapchat account ops — keep every VPS full, every Live account running, and Airtable in sync. Creating an account counts <b>+1 Account Creation</b>; taking one Live counts <b>+1 Account Setup</b>. Banned/locked accounts leave the pool (your credit stays).</div>
   <div class="top" id="stats"></div>
   <div class="addbox">
-    <input id="em-user" placeholder="New account username (letters only, starts with model name)">
+    <input id="em-user" placeholder="Account username (letters only, starts with model name)">
     <select id="em-model"><option value="Emma">Emma</option><option value="Madison">Madison</option></select>
-    <button onclick="addAcct()">＋ I created this account → Stock</button>
+    <select id="em-status"><option value="stock">📦 Stock</option><option value="setup">🛠 Setting up</option><option value="live">🟢 Live</option><option value="needsfix">🔧 Needs fix</option></select>
+    <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink2);font-weight:700;"><input type="checkbox" id="em-new"> just created it (+1 Creation)</label>
+    <button onclick="addAcct()">＋ Add account</button>
   </div>
   <div class="cols" id="cols"><div class="muted">Loading…</div></div>
 </div>
@@ -121,12 +123,15 @@ function render(){
 }
 async function addAcct(){
   var u=$('em-user').value.trim(), m=$('em-model').value;
+  var st=($('em-status')||{}).value||'stock', isNew=($('em-new')||{}).checked;
   if(!u){ toast('Type the account username.'); return; }
   if(!/^[a-z]+$/i.test(u)){ toast('Usernames are letters only (SOP).'); return; }
   try{
-    var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(u)+'&model='+encodeURIComponent(m)+'&status=stock&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
+    var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(u)+'&model='+encodeURIComponent(m)+'&status='+encodeURIComponent(st)+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
     var d=await r.json();
-    if(d&&d.ok){ $('em-user').value=''; await bump('Account Creation',1); toast('Account created → Stock · +1 Account Creation 🎉'); load(); }
+    if(d&&d.ok){ $('em-user').value=''; if($('em-new')) $('em-new').checked=false;
+      if(isNew){ await bump('Account Creation',1); }
+      toast('Added → '+st+(isNew?' · +1 Account Creation 🎉':' (existing account seeded)')); load(); }
     else if(d&&d.error==='DUPLICATE') toast('That username is already on the board — SOP: always search first!');
     else toast('Could not add.');
   }catch(e){ toast('Connection error.'); }

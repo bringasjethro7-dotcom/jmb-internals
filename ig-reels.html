@@ -64,7 +64,8 @@
   <div class="addbox">
     <input type="text" id="ig-user" placeholder="Account handle (@…)">
     <label><input type="checkbox" id="ig-1k"> 1,000+ followers (Reel-eligible)</label>
-    <label><input type="checkbox" id="ig-warm"> New account (start 14-day warm-up)</label>
+    <label><input type="checkbox" id="ig-warm"> In warm-up — at day
+      <input id="ig-wday" type="number" min="1" max="14" value="1" style="width:58px;padding:6px 7px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:12.5px;"></label>
     <button onclick="addAcct()">＋ Add account</button>
   </div>
   <div class="grid" id="grid"><div class="muted">Loading…</div></div>
@@ -150,11 +151,12 @@ function render(){
 async function addAcct(){
   var u=$('ig-user').value.trim(); if(!u){ toast('Type the account handle.'); return; }
   var k=$('ig-1k').checked, warm=$('ig-warm').checked;
+  var wday=Math.max(1, Math.min(14, parseInt(($('ig-wday')||{}).value,10)||1));
   try{
     var meta=encodeURIComponent(JSON.stringify({k:k}));
-    var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(u)+'&status='+(warm?'warmup':'active')+'&day=1&meta='+meta+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
+    var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(u)+'&status='+(warm?'warmup':'active')+'&day='+(warm?wday:1)+'&meta='+meta+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
     var d=await r.json();
-    if(d&&d.ok){ $('ig-user').value=''; $('ig-1k').checked=false; $('ig-warm').checked=false; toast(warm?'Added — 14-day warm-up starts at Day 1.':'Account added.'); load(); }
+    if(d&&d.ok){ $('ig-user').value=''; $('ig-1k').checked=false; $('ig-warm').checked=false; if($('ig-wday')) $('ig-wday').value='1'; toast(warm?('Added — warm-up at Day '+wday+'.'):'Account added.'); load(); }
     else if(d&&d.error==='DUPLICATE') toast('That handle is already on the board.');
     else toast('Could not add.');
   }catch(e){ toast('Connection error.'); }

@@ -57,8 +57,10 @@
   <div class="sub">Accounts climb the strength ladder: <b>Warming → Comment Farming → NSFW → Day 1 → Early → +DMs → Medium → Strong → Super Strong</b>. Work each card's session checklist and tick — sessions, posts, and DMs are all <b>counted automatically</b>. Rotate subreddits, captions & photos — never repeat back-to-back.</div>
   <div class="top" id="stats"></div>
   <div class="addbox">
-    <input id="ra-user" placeholder="New account username (u/…) — created via the iPhone farm SOP">
-    <button onclick="addAcct()">＋ I created this account → Warming</button>
+    <input id="ra-user" placeholder="Account username (u/…)">
+    <select id="ra-phase" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px;background:#fff;min-width:170px;"></select>
+    <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink2);font-weight:700;"><input type="checkbox" id="ra-new"> just created it (+1 Creation)</label>
+    <button onclick="addAcct()">＋ Add account</button>
   </div>
   <div class="reminder">🔎 <b>Every phase, every session:</b> check the profile for post/avatar removals (shadowban) & spam-filter flags, and the inbox for mod messages, warnings, or "unable to post". Spotted one? Hit <b>🛟 Spam filter</b> on the card.</div>
   <div class="grid" id="grid"><div class="muted">Loading…</div></div>
@@ -98,7 +100,9 @@ async function signIn(){
     start();
   }catch(e){ err.style.display='block'; err.textContent='Network error — try again.'; }
 }
-function start(){ $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name; load(); setInterval(load, 60000); }
+function start(){ $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name;
+  var ps=$('ra-phase'); if(ps && !ps.options.length){ ps.innerHTML=PH.map(function(p){ return '<option value="'+p.k+'">'+p.n+'</option>'; }).join(''); }
+  load(); setInterval(load, 60000); }
 
 async function load(){
   try{
@@ -143,10 +147,16 @@ function render(){
 }
 async function addAcct(){
   var u=$('ra-user').value.trim(); if(!u){ toast('Type the account username.'); return; }
+  var phk=($('ra-phase')||{}).value||'warming'; var isNew=($('ra-new')||{}).checked;
   try{
-    var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(u)+'&status=warming&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
+    var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(u)+'&status='+encodeURIComponent(phk)+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
     var d=await r.json();
-    if(d&&d.ok){ $('ra-user').value=''; await bump('Account Creation',1); toast('Account added → Warming · +1 Account Creation 🎉'); load(); }
+    if(d&&d.ok){
+      $('ra-user').value=''; if($('ra-new')) $('ra-new').checked=false;
+      if(isNew){ await bump('Account Creation',1); }
+      toast('Added → '+(phase(phk)||{n:phk}).n+(isNew?' · +1 Account Creation 🎉':' (existing account seeded)'));
+      load();
+    }
     else if(d&&d.error==='DUPLICATE') toast('That username is already on the board.');
     else toast('Could not add.');
   }catch(e){ toast('Connection error.'); }
