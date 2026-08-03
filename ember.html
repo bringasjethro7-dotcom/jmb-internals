@@ -43,6 +43,39 @@
   #si-err{display:none;color:#b91c1c;font-size:12.5px;margin-top:9px}
   .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#171a21;color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;opacity:0;transition:.3s;pointer-events:none;z-index:50}
   .toast.on{opacity:1}
+
+  /* ── UI v2: calmer look, section headers, ⋯ menus, big progress panel ── */
+  .acct,.model{box-shadow:0 1px 2px rgba(15,23,42,.05);transition:box-shadow .15s}
+  .acct:hover,.model:hover{box-shadow:0 8px 22px rgba(15,23,42,.09)}
+  .sect{grid-column:1/-1;display:flex;align-items:center;gap:10px;margin:14px 0 2px}
+  .sect b{font-family:'Sora',sans-serif;font-size:13.5px;white-space:nowrap}
+  .sect span{font-size:11px;color:var(--ink3);font-weight:800}
+  .sect i{flex:1;height:1px;background:var(--line)}
+  .ph2{font-size:10px;font-weight:900;border-radius:100px;padding:3px 9px;white-space:nowrap}
+  .meta1{font-size:10.5px;color:var(--ink3);margin-top:4px}
+  .planbox{margin:8px 0 2px}
+  .planbox summary{list-style:none;cursor:pointer;font-size:11px;font-weight:800;color:var(--ink3)}
+  .planbox summary::-webkit-details-marker{display:none}
+  .planbox summary::after{content:' ▾'}
+  .planbox[open] summary::after{content:' ▴'}
+  .planbox>div{font-size:11.5px;color:var(--ink2);background:rgba(15,23,42,.035);border-radius:9px;padding:7px 10px;margin-top:5px;line-height:1.5}
+  .kmenu{position:relative}
+  .kmenu summary{list-style:none;cursor:pointer;width:27px;height:27px;border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--ink3);font-weight:900;background:#fff;font-size:14px}
+  .kmenu summary::-webkit-details-marker{display:none}
+  .kmenu[open] summary{background:var(--bg)}
+  .kmenu .dd{position:absolute;right:0;top:31px;z-index:30;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(15,23,42,.16);padding:6px;min-width:210px;display:flex;flex-direction:column;gap:2px}
+  .kmenu .dd button{border:none;background:none;text-align:left;padding:8px 10px;border-radius:8px;font:700 12px 'Manrope',sans-serif;color:var(--ink2);cursor:pointer;white-space:nowrap}
+  .kmenu .dd button:hover{background:var(--bg)}
+  .kmenu .dd button.danger{color:#b91c1c}
+  .kmenu .dd .sep{height:1px;background:var(--line);margin:4px 6px}
+  .acct .btns,.model .btns{margin-top:8px}
+  .pvwrap{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 18px 8px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .pvrow{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
+  .pvrow.first{border-top:none}
+  .pvav{width:36px;height:36px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font:800 12.5px 'Sora',sans-serif;color:#fff}
+  .pvbar{height:14px;border-radius:8px;background:rgba(15,23,42,.07);overflow:hidden}
+  .pvbar i{display:block;height:100%;border-radius:8px;transition:width .4s}
+  .pvpct{font-family:'Sora',sans-serif;font-weight:800;min-width:118px;text-align:right;line-height:1.25}
 </style>
 </head>
 <body>
@@ -66,6 +99,7 @@
     <button onclick="addAcct()">＋ Add account</button>
   </div>
   <div id="byva" style="margin-bottom:14px;"></div>
+  <div id="vatabs" style="margin-bottom:12px;"></div>
   <div class="cols" id="cols"><div class="muted">Loading…</div></div>
 </div>
 <div class="toast" id="toast"></div>
@@ -97,6 +131,21 @@ function smartPoll(){
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) load(); });
   window.addEventListener('focus', function(){ load(); });
 }
+/* ── VA view tabs: '👤 My accounts' (default) · '🌐 All' · one tab per VA ── */
+var FILTER=(function(){ try{ return sessionStorage.getItem('dc_va_'+PROJECT)||'mine'; }catch(e){ return 'mine'; } })();
+function ownerOf(r){ return String(r.assigned_to||r.created_by||'').toLowerCase(); }
+function filterRows(){ if(FILTER==='all') return ROWS; var t=(FILTER==='mine')?String((USER&&USER.id)||'').toLowerCase():FILTER; return ROWS.filter(function(r){ return ownerOf(r)===t; }); }
+function setFilter(f){ FILTER=f; try{ sessionStorage.setItem('dc_va_'+PROJECT,f); }catch(e){} render(); }
+function renderTabs(){
+  var host=document.getElementById('vatabs'); if(!host) return;
+  var mine=String((USER&&USER.id)||'').toLowerCase();
+  var by={}; ROWS.forEach(function(r){ var k=ownerOf(r)||'—'; by[k]=(by[k]||0)+1; });
+  function pill(val,label,n){ var on=(FILTER===val);
+    return '<button onclick="setFilter(\''+val+'\')" style="border:1px solid '+(on?'#0f766e':'var(--line)')+';background:'+(on?'rgba(16,185,129,.12)':'var(--card)')+';color:'+(on?'#0f766e':'var(--ink2)')+';border-radius:100px;padding:6px 13px;font:800 12px \'Manrope\',sans-serif;cursor:pointer;white-space:nowrap;">'+label+(n!=null?(' · '+n):'')+'</button>'; }
+  var html=[ pill('mine','👤 My accounts', by[mine]||0), pill('all','🌐 All', ROWS.length) ];
+  Object.keys(by).sort(function(a,b){ return by[b]-by[a]; }).forEach(function(k){ if(k===mine||k==='—') return; html.push(pill(k, esc(vaName(k)), by[k])); });
+  host.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap;">'+html.join('')+'</div>';
+}
 async function loadNames(){ try{ var d=await jFetch(API+'?action=get_all_employees&_='+Date.now()); (d.employees||[]).forEach(function(e){ NAMES[String(e.employee_id).toLowerCase()]=e.full_name||e.employee_id; }); try{ render(); }catch(_r){} }catch(e){} }
 function delBtn(id){ return '<button onclick="delAcct(\''+id+'\')" title="Delete (wrong entry)" style="border:1px solid rgba(239,68,68,.3);background:#fff;color:#b91c1c;border-radius:8px;padding:5px 8px;font-size:10.5px;font-weight:800;cursor:pointer;">🗑</button>'; }
 async function delAcct(id){
@@ -114,25 +163,44 @@ function vaName(id){ return NAMES[String(id||'').toLowerCase()]||id||'—'; }
 function today(){ try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){ return new Date().toISOString().slice(0,10); } }
 function cdateOf(r){ return (r.meta&&r.meta.cdate)||''; }
 function ageTxt(r){ var c=cdateOf(r); if(!c) return ''; var days=Math.max(0,Math.round((Date.now()-new Date(c+'T00:00:00').getTime())/86400000)); return c+' · '+days+'d old'; }
+var AVC=['#6366f1','#0ea5e9','#10b981','#f59e0b','#ec4899','#8b5cf6','#14b8a6','#f97316'];
+function kmenu(items){
+  return '<details class="kmenu" onclick="event.stopPropagation()"><summary>⋯</summary><div class="dd">'+items.map(function(it){
+    if(it==='---') return '<div class="sep"></div>';
+    return '<button class="'+(it[2]||'')+'" onclick="this.closest(\'details\').removeAttribute(\'open\');'+it[1]+'">'+it[0]+'</button>';
+  }).join('')+'</div></details>';
+}
+document.addEventListener('click', function(e){
+  document.querySelectorAll('details.kmenu[open]').forEach(function(d){ if(!d.contains(e.target)) d.removeAttribute('open'); });
+});
 function renderByVA(segs, doneFn, activeFn){
   var host=document.getElementById('byva'); if(!host) return;
   var by={}; ROWS.forEach(function(r){ var k=String(r.assigned_to||r.created_by||'—').toLowerCase(); (by[k]=by[k]||[]).push(r); });
-  var keys=Object.keys(by).sort(function(a,b){ return by[b].length-by[a].length; });
+  var keys=Object.keys(by);
   if(!keys.length){ host.innerHTML=''; return; }
-  host.innerHTML='<div style="font-size:12px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">👤 Daily progress per VA</div>'+keys.map(function(k){
+  var mine=String((USER&&USER.id)||'').toLowerCase();
+  var list=keys.map(function(k,i){
     var rows=by[k];
     var act=activeFn?rows.filter(activeFn):rows;
     var done=doneFn?act.filter(doneFn).length:0, tot=act.length;
-    var pct=tot?Math.round(done/tot*100):0;
-    var pc=pct>=100?'#10b981':(pct>=70?'#f59e0b':'#ef4444');
-    var parts=segs.map(function(sg){ var n=rows.filter(sg[2]).length; return {label:sg[0],color:sg[1],n:n}; }).filter(function(p){return p.n>0;});
-    var legend=parts.map(function(p){ return '<span style="font-size:10.5px;color:var(--ink2);font-weight:700;"><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+p.color+';margin-right:3px;"></i>'+p.label+' '+p.n+'</span>'; }).join(' ');
-    return '<div style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:9px 13px;margin-bottom:6px;">'+
-      '<div style="display:flex;align-items:center;gap:10px;"><b style="flex:1;font-size:12.5px;">'+esc(vaName(k))+'</b>'+
-        '<span style="font-size:12px;font-weight:800;color:'+pc+';">'+done+' / '+tot+' today · '+pct+'%'+(pct>=100&&tot?' ✓':'')+'</span></div>'+
-      '<div style="height:8px;border-radius:5px;overflow:hidden;background:rgba(15,23,42,.06);margin:6px 0 4px;"><i style="display:block;height:100%;width:'+Math.min(100,pct)+'%;background:'+pc+';"></i></div>'+
-      '<div style="display:flex;gap:9px;flex-wrap:wrap;">'+legend+'</div></div>';
-  }).join('');
+    return {k:k,i:i,done:done,tot:tot,pct:tot?Math.round(done/tot*100):0,n:rows.length};
+  }).sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
+  host.innerHTML='<div class="pvwrap">'+
+    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today\'s progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked today / active accounts</span></div>'+
+    list.map(function(o,ix){
+      var pc=o.pct>=100?'#10b981':(o.pct>=70?'#f59e0b':'#ef4444');
+      var name=vaName(o.k);
+      var init=String(name).split(/\s+/).slice(0,2).map(function(w){return w.charAt(0);}).join('').toUpperCase()||'?';
+      var me=(o.k===mine);
+      return '<div class="pvrow'+(ix===0?' first':'')+'"'+(me?' style="background:rgba(16,185,129,.05);border-radius:12px;padding-left:10px;padding-right:10px;"':'')+'>'+
+        '<div class="pvav" style="background:'+AVC[o.i%AVC.length]+'">'+esc(init)+'</div>'+
+        '<div style="flex:1;min-width:0;">'+
+          '<div style="display:flex;align-items:baseline;gap:8px;"><b style="font-size:13.5px;">'+esc(name)+'</b>'+(me?'<span style="font-size:10px;color:#0f766e;font-weight:800;">you</span>':'')+'<span style="font-size:11px;color:var(--ink3);font-weight:700;">'+o.n+' on board</span></div>'+
+          '<div class="pvbar" style="margin-top:7px;"><i style="width:'+Math.min(100,o.pct)+'%;background:'+pc+';"></i></div>'+
+        '</div>'+
+        '<div class="pvpct" style="color:'+pc+'"><span style="font-size:17px;">'+o.done+' / '+o.tot+'</span><br><span style="font-size:12.5px;">'+o.pct+'%'+(o.pct>=100&&o.tot?' ✅':'')+' today</span></div>'+
+      '</div>';
+    }).join('')+'</div>';
 }
 function $(id){return document.getElementById(id);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
@@ -176,16 +244,20 @@ function render(){
     ['Needs fix','#8b5cf6',function(r){return r.status==='needsfix';}],
     ['Banned','#ef4444',function(r){return r.status==='banned';}]
   ], function(r){ return r.meta && r.meta.last===today(); }, function(r){ return ['live','setup','needsfix'].indexOf(r.status)>=0; });
+  renderTabs();
+  var base=filterRows();
   var defs=[['stock','📦 Stock','stock'],['setup','🛠 Setting up','setup'],['live','🟢 Live','live'],['needsfix','🔧 Needs fix','fix'],['banned','🔴 Banned / Locked','ban']];
   $('cols').innerHTML=defs.map(function(df){
-    var st=df[0], items=ROWS.filter(function(r){return r.status===st;});
+    var st=df[0], items=base.filter(function(r){return r.status===st;});
     var cards=items.map(function(r){
-      var btns='';
-      if(st==='stock') btns='<button class="warn" onclick="move(\''+r.id+'\',\'setup\')">🛠 Assign to VPS</button>';
-      else if(st==='setup') btns='<button class="go" onclick="move(\''+r.id+'\',\'live\')">🟢 Setup done → Live</button><button class="fix" onclick="move(\''+r.id+'\',\'needsfix\')">🔧 Needs fix</button>';
-      else if(st==='live') btns=((r.meta&&r.meta.last===today())?'<button disabled style="opacity:.5">✓ Verified today</button>':'<button class="go" onclick="checkedToday(\''+r.id+'\')">✓ Verified running today</button>')+'<button class="bad" onclick="move(\''+r.id+'\',\'banned\')">🔴 Banned / Locked</button><button class="fix" onclick="move(\''+r.id+'\',\'needsfix\')">🔧 Needs fix</button>';
-      else if(st==='needsfix') btns='<button class="go" onclick="move(\''+r.id+'\',\'live\')">✓ Fixed → Live</button><button class="bad" onclick="move(\''+r.id+'\',\'banned\')">🔴 Banned</button>';
-      return '<div class="acct"><b>'+esc(r.handle)+'</b><div class="who">'+esc(r.model||'')+' · '+esc(vaName(r.assigned_to||r.created_by))+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+'</div><div class="btns">'+btns+delBtn(r.id)+'</div></div>';
+      var btns='', menu=[];
+      if(st==='stock'){ btns='<button class="warn" onclick="move(\''+r.id+'\',\'setup\')">🛠 Assign to VPS</button>'; }
+      else if(st==='setup'){ btns='<button class="go" onclick="move(\''+r.id+'\',\'live\')">🟢 Setup done → Live</button>'; menu.push(['🔧 Needs fix',"move('"+r.id+"','needsfix')"]); }
+      else if(st==='live'){ btns=((r.meta&&r.meta.last===today())?'<button disabled style="opacity:.5">✓ Verified today</button>':'<button class="go" onclick="checkedToday(\''+r.id+'\')">✓ Verified running today</button>'); menu.push(['🔧 Needs fix',"move('"+r.id+"','needsfix')"]); menu.push(['🔴 Banned / Locked',"move('"+r.id+"','banned')"]); }
+      else if(st==='needsfix'){ btns='<button class="go" onclick="move(\''+r.id+'\',\'live\')">✓ Fixed → Live</button>'; menu.push(['🔴 Banned',"move('"+r.id+"','banned')"]); }
+      if(menu.length) menu.push('---');
+      menu.push(['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']);
+      return '<div class="acct"><div style="display:flex;align-items:center;gap:6px;"><b style="flex:1;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(r.handle)+'</b>'+kmenu(menu)+'</div><div class="who">'+esc(r.model||'')+' · '+esc(vaName(r.assigned_to||r.created_by))+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+'</div><div class="btns">'+btns+'</div></div>';
     }).join('');
     return '<div class="col '+df[2]+'"><h3><i></i>'+df[1]+' · '+items.length+'</h3>'+(cards||'<div class="muted">None.</div>')+'</div>';
   }).join('');
