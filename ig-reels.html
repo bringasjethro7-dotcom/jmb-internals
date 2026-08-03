@@ -28,7 +28,7 @@
   .hd{display:flex;align-items:center;gap:8px}
   .hd b{font-size:14.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .stb{font-size:10px;font-weight:900;color:#fff;border-radius:100px;padding:3px 9px}
-  .stb.active{background:var(--ok)} .stb.warmup{background:var(--warm)} .stb.flagged{background:var(--flag)} .stb.rest{background:#64748b} .stb.suspended{background:var(--susp)}
+  .stb.active{background:var(--ok)} .stb.warmup{background:var(--warm)} .stb.flagged{background:var(--flag)} .stb.rest{background:#64748b} .stb.suspended{background:var(--susp)} .stb.onhold{background:#3b82f6}
   .kb{font-size:10px;font-weight:900;color:#6228d7;background:rgba(98,40,215,.1);border-radius:100px;padding:3px 8px}
   .plan{font-size:11.5px;color:var(--ink2);background:rgba(214,41,118,.05);border-radius:9px;padding:7px 10px;margin:9px 0;line-height:1.5}
   .ticks{display:flex;gap:6px;margin:9px 0}
@@ -40,6 +40,7 @@
   .btns button.go{border-color:rgba(16,185,129,.5);color:#0f766e;background:rgba(16,185,129,.08)}
   .btns button.bad{border-color:rgba(239,68,68,.4);color:#b91c1c;background:rgba(239,68,68,.06)}
   .btns button.flagb{border-color:rgba(249,115,22,.45);color:#c2410c;background:rgba(249,115,22,.07)}
+  .btns button.holdb{border-color:rgba(59,130,246,.45);color:#1d4ed8;background:rgba(59,130,246,.07)}
   .muted{color:var(--ink3);font-size:12px;padding:6px 2px}
   #signin{max-width:360px;margin:12vh auto;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px;text-align:center}
   #signin input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:14px;margin-top:9px}
@@ -79,7 +80,41 @@ var API='https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByO
 var PROJECT='Project Arlo';
 var USER=null, ROWS=[];
 var NAMES={};
-async function loadNames(){ try{ var r=await fetch(API+'?action=get_all_employees&_='+Date.now()); var d=await r.json(); (d.employees||[]).forEach(function(e){ NAMES[String(e.employee_id).toLowerCase()]=e.full_name||e.employee_id; }); }catch(e){} }
+/* ── fetching layer: timeout + retry on READS (never on writes), local cache for instant paint,
+   visibility-aware polling (pauses when the tab is hidden, refreshes on focus) ── */
+async function jFetch(url, tries){
+  tries=(tries==null)?2:tries;
+  for(var a=0;a<=tries;a++){
+    try{
+      var ctl=(typeof AbortController!=='undefined')?new AbortController():null;
+      var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },10000):null;
+      var r=await fetch(url, ctl?{signal:ctl.signal}:undefined);
+      if(tm) clearTimeout(tm);
+      return await r.json();
+    }catch(e){ if(a===tries) throw e; await new Promise(function(res){ setTimeout(res, 500*(a+1)); }); }
+  }
+}
+function cacheRows(){ try{ sessionStorage.setItem('dc_rows_'+PROJECT, JSON.stringify({t:Date.now(), rows:ROWS})); }catch(e){} }
+function paintCached(){ try{ var c=JSON.parse(sessionStorage.getItem('dc_rows_'+PROJECT)||'null');
+  if(c && c.rows && c.rows.length && (Date.now()-c.t)<10*60*1000){ ROWS=c.rows; render(); return true; } }catch(e){} return false; }
+function smartPoll(){
+  setInterval(function(){ if(!document.hidden) load(); }, 30000);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) load(); });
+  window.addEventListener('focus', function(){ load(); });
+}
+async function loadNames(){ try{ var d=await jFetch(API+'?action=get_all_employees&_='+Date.now()); (d.employees||[]).forEach(function(e){ NAMES[String(e.employee_id).toLowerCase()]=e.full_name||e.employee_id; }); try{ render(); }catch(_r){} }catch(e){} }
+function delBtn(id){ return '<button onclick="delAcct(\''+id+'\')" title="Delete (wrong entry)" style="border:1px solid rgba(239,68,68,.3);background:#fff;color:#b91c1c;border-radius:8px;padding:5px 8px;font-size:10.5px;font-weight:800;cursor:pointer;">🗑</button>'; }
+async function delAcct(id){
+  var r0=ROWS.filter(function(x){return x.id===id;})[0];
+  if(!confirm('DELETE '+((r0&&r0.handle)||'this entry')+' from the board?\n\nUse this only for wrong entries. Outputs already counted are not affected.')) return;
+  try{
+    var r=await fetch(API+'?action=pa_delete&id='+encodeURIComponent(id)+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
+    var d=await r.json();
+    if(d&&d.ok){ toast('Deleted.'); load(); }
+    else if(d&&d.error==='NOT_YOURS') toast('Only the VA who owns this entry (or admin) can delete it.');
+    else toast('Could not delete: '+((d&&d.error)||'error'));
+  }catch(e){ toast('Connection error.'); }
+}
 function vaName(id){ return NAMES[String(id||'').toLowerCase()]||id||'—'; }
 function cdateOf(r){ return (r.meta&&r.meta.cdate)||''; }
 function ageTxt(r){ var c=cdateOf(r); if(!c) return ''; var days=Math.max(0,Math.round((Date.now()-new Date(c+'T00:00:00').getTime())/86400000)); return c+' · '+days+'d old'; }
@@ -129,12 +164,12 @@ async function signIn(){
     start();
   }catch(e){ err.style.display='block'; err.textContent='Network error — try again.'; }
 }
-function start(){ $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name; try{ $('ig-cdate').value=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){} loadNames(); load(); setInterval(load, 60000); }
+function start(){ $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name; try{ $('ig-cdate').value=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){} loadNames(); paintCached(); load(); smartPoll(); }
 
 async function load(){
   try{
-    var r=await fetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now()); var d=await r.json();
-    if(!d||!d.ok) throw new Error(); ROWS=d.rows||[]; render();
+    var d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
+    if(!d||!d.ok) throw new Error((d&&d.error)||'load'); ROWS=d.rows||[]; cacheRows(); render();
   }catch(e){ $('grid').innerHTML='<div class="muted">Could not load — redeploy the Apps Script (pa_list).</div>'; }
 }
 function fullDone(r){ var t=T(r); return t.s && t.f && (!isK(r) || t.rl); }
@@ -146,26 +181,33 @@ function render(){
     '<div class="stat"><b style="color:#0f766e">'+done+' / '+act.length+'</b><span>Fully posted today</span></div>'+
     '<div class="stat"><b style="color:#f59e0b">'+ROWS.filter(function(r){return r.status==='warmup';}).length+'</b><span>Warming up</span></div>'+
     '<div class="stat"><b style="color:#c2410c">'+ROWS.filter(function(r){return r.status==='flagged'||r.status==='rest';}).length+'</b><span>Flagged / resting</span></div>'+
+    '<div class="stat"><b style="color:#1d4ed8">'+ROWS.filter(function(r){return r.status==='onhold';}).length+'</b><span>⏸ On hold</span></div>'+
     '<div class="stat"><b style="color:#b91c1c">'+ROWS.filter(function(r){return r.status==='suspended';}).length+'</b><span>Suspended</span></div>';
   renderByVA([
     ['Active','#10b981',function(r){return r.status==='active';}],
     ['Warm-up','#f59e0b',function(r){return r.status==='warmup';}],
     ['Flagged/Rest','#f97316',function(r){return r.status==='flagged'||r.status==='rest';}],
+    ['On Hold','#3b82f6',function(r){return r.status==='onhold';}],
     ['Suspended','#ef4444',function(r){return r.status==='suspended';}]
   ], function(r){ return r.status==='warmup' ? (r.meta&&r.meta.wl===today()) : fullDone(r); },
      function(r){ return r.status==='active'||r.status==='warmup'; });
   if(!ROWS.length){ $('grid').innerHTML='<div class="muted">No accounts yet — add your first above.</div>'; return; }
-  var order={warmup:1,active:0,flagged:2,rest:3,suspended:4};
+  var order={warmup:1,active:0,flagged:2,rest:3,onhold:4,suspended:5};
   var sorted=ROWS.slice().sort(function(a,b){ return (order[a.status]||0)-(order[b.status]||0); });
   $('grid').innerHTML=sorted.map(function(r){
     var t=T(r), dim=(r.status==='suspended'||r.status==='rest'||r.status==='flagged');
-    var head='<div class="hd"><b>'+esc(r.handle)+'</b>'+(isK(r)?'<span class="kb">1K+ ✓ Reels</span>':'')+'<span class="stb '+r.status+'">'+r.status.toUpperCase()+'</span></div>';
-    if(r.status==='suspended') return '<div class="acct dim">'+head+'<div class="plan">Report to the client for replacement (SOP).</div><div class="btns"><button onclick="setStatus(\''+r.id+'\',\'active\')">↩ Reinstate</button></div></div>';
-    if(r.status==='flagged'||r.status==='rest') return '<div class="acct dim">'+head+'<div class="plan">'+(r.status==='flagged'?'Remove flagged content, let the account REST, then check status.':'Resting — check status before resuming.')+'</div><div class="btns"><button class="go" onclick="setStatus(\''+r.id+'\',\'active\')">✓ Healthy → Active</button><button class="bad" onclick="setStatus(\''+r.id+'\',\'suspended\')">⛔ Suspended</button></div></div>';
+    var head='<div class="hd"><b>'+esc(r.handle)+'</b>'+(isK(r)?'<span class="kb">1K+ ✓ Reels</span>':'')+'<span class="stb '+r.status+'">'+(r.status==='onhold'?'⏸ ON HOLD':r.status.toUpperCase())+'</span></div>';
+    if(r.status==='suspended') return '<div class="acct dim">'+head+'<div class="plan">Report to the client for replacement (SOP).</div><div class="btns"><button onclick="setStatus(\''+r.id+'\',\'active\')">↩ Reinstate</button>'+delBtn(r.id)+'</div></div>';
+    if(r.status==='onhold') return '<div class="acct" style="border-color:rgba(59,130,246,.45);">'+head+
+      '<div class="plan" style="background:rgba(59,130,246,.06);">⏸ <b>Healthy — posting paused.</b> Waiting for the client\'s approval to resume. No penalty, no alerts.</div>'+
+      '<div class="btns"><button class="go" onclick="setStatus(\''+r.id+'\',\'active\')">▶ Client approved → resume posting</button>'+
+      '<button class="flagb" onclick="setStatus(\''+r.id+'\',\'flagged\')">⚑ Flagged</button>'+
+      '<button class="bad" onclick="setStatus(\''+r.id+'\',\'suspended\')">⛔ Suspended</button>'+delBtn(r.id)+'</div></div>';
+    if(r.status==='flagged'||r.status==='rest') return '<div class="acct dim">'+head+'<div class="plan">'+(r.status==='flagged'?'Remove flagged content, let the account REST, then check status.':'Resting — check status before resuming.')+'</div><div class="btns"><button class="go" onclick="setStatus(\''+r.id+'\',\'active\')">✓ Healthy → Active</button><button class="bad" onclick="setStatus(\''+r.id+'\',\'suspended\')">⛔ Suspended</button>'+delBtn(r.id)+'</div></div>';
     if(r.status==='warmup'){
       return '<div class="acct">'+head+'<div class="plan">'+wuPlan(r.day||1)+'</div>'+
         '<div class="btns"><button class="go" onclick="wuDone(\''+r.id+'\','+(r.day||1)+')">✓ Warm-up day '+(r.day||1)+' done</button>'+
-        '<button class="bad" onclick="setStatus(\''+r.id+'\',\'suspended\')">⛔ Suspended</button></div></div>';
+        '<button class="bad" onclick="setStatus(\''+r.id+'\',\'suspended\')">⛔ Suspended</button>'+delBtn(r.id)+'</div></div>';
     }
     // active — daily S/F/R ticks
     return '<div class="acct'+(fullDone(r)?' done':'')+'">'+head+
@@ -179,7 +221,8 @@ function render(){
       '<div class="btns">'+
         (isK(r)?'':'<button onclick="mark1k(\''+r.id+'\')">🎉 Hit 1,000 followers</button>')+
         '<button class="flagb" onclick="setStatus(\''+r.id+'\',\'flagged\')">⚑ Flagged</button>'+
-        '<button class="bad" onclick="setStatus(\''+r.id+'\',\'suspended\')">⛔ Suspended</button>'+
+        '<button class="holdb" onclick="setStatus(\''+r.id+'\',\'onhold\')">⏸ On Hold</button>'+
+        '<button class="bad" onclick="setStatus(\''+r.id+'\',\'suspended\')">⛔ Suspended</button>'+delBtn(r.id)+
       '</div></div>';
   }).join('');
 }
@@ -229,6 +272,7 @@ async function wuDone(id, day){
 }
 async function setStatus(id, st){
   if(st==='suspended' && !confirm('Mark SUSPENDED? Report it to the client for replacement (SOP). Outputs already earned are kept.')) return;
+  if(st==='onhold' && !confirm('Put this account ON HOLD? The account is healthy — posting simply pauses until the client approves resuming. No penalty.')) return;
   try{
     var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status='+encodeURIComponent(st)+'&_='+Date.now());
     var d=await r.json(); if(d&&d.ok){ toast('Updated.'); load(); } else toast('Could not update.');

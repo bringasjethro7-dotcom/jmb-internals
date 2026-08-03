@@ -77,7 +77,41 @@
 var API='https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByOLL4TuRPKvtPh2rjY-b3rOJ5aBoIc8sOmO9kP/exec';
 var PROJECT='Reddit';
 var USER=null, ROWS=[], NAMES={};
-async function loadNames(){ try{ var r=await fetch(API+'?action=get_all_employees&_='+Date.now()); var d=await r.json(); (d.employees||[]).forEach(function(e){ NAMES[String(e.employee_id).toLowerCase()]=e.full_name||e.employee_id; }); }catch(e){} }
+/* ── fetching layer: timeout + retry on READS (never on writes), local cache for instant paint,
+   visibility-aware polling (pauses when the tab is hidden, refreshes on focus) ── */
+async function jFetch(url, tries){
+  tries=(tries==null)?2:tries;
+  for(var a=0;a<=tries;a++){
+    try{
+      var ctl=(typeof AbortController!=='undefined')?new AbortController():null;
+      var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },10000):null;
+      var r=await fetch(url, ctl?{signal:ctl.signal}:undefined);
+      if(tm) clearTimeout(tm);
+      return await r.json();
+    }catch(e){ if(a===tries) throw e; await new Promise(function(res){ setTimeout(res, 500*(a+1)); }); }
+  }
+}
+function cacheRows(){ try{ sessionStorage.setItem('dc_rows_'+PROJECT, JSON.stringify({t:Date.now(), rows:ROWS})); }catch(e){} }
+function paintCached(){ try{ var c=JSON.parse(sessionStorage.getItem('dc_rows_'+PROJECT)||'null');
+  if(c && c.rows && c.rows.length && (Date.now()-c.t)<10*60*1000){ ROWS=c.rows; render(); return true; } }catch(e){} return false; }
+function smartPoll(){
+  setInterval(function(){ if(!document.hidden) load(); }, 30000);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) load(); });
+  window.addEventListener('focus', function(){ load(); });
+}
+async function loadNames(){ try{ var d=await jFetch(API+'?action=get_all_employees&_='+Date.now()); (d.employees||[]).forEach(function(e){ NAMES[String(e.employee_id).toLowerCase()]=e.full_name||e.employee_id; }); try{ render(); }catch(_r){} }catch(e){} }
+function delBtn(id){ return '<button onclick="delAcct(\''+id+'\')" title="Delete (wrong entry)" style="border:1px solid rgba(239,68,68,.3);background:#fff;color:#b91c1c;border-radius:8px;padding:5px 8px;font-size:10.5px;font-weight:800;cursor:pointer;">🗑</button>'; }
+async function delAcct(id){
+  var r0=ROWS.filter(function(x){return x.id===id;})[0];
+  if(!confirm('DELETE '+((r0&&r0.handle)||'this entry')+' from the board?\n\nUse this only for wrong entries. Outputs already counted are not affected.')) return;
+  try{
+    var r=await fetch(API+'?action=pa_delete&id='+encodeURIComponent(id)+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
+    var d=await r.json();
+    if(d&&d.ok){ toast('Deleted.'); load(); }
+    else if(d&&d.error==='NOT_YOURS') toast('Only the VA who owns this entry (or admin) can delete it.');
+    else toast('Could not delete: '+((d&&d.error)||'error'));
+  }catch(e){ toast('Connection error.'); }
+}
 function vaName(id){ return NAMES[String(id||'').toLowerCase()]||id||'—'; }
 function today(){ try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){ return new Date().toISOString().slice(0,10); } }
 function pstartOf(r){ return (r.meta&&r.meta.pstart)||cdateOf(r)||''; }
@@ -139,12 +173,12 @@ function start(){ $('signin').style.display='none'; $('app').style.display='bloc
   try{ $('ra-cdate').value=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){}
   loadNames();
   var ps=$('ra-phase'); if(ps && !ps.options.length){ ps.innerHTML=PH.map(function(p){ return '<option value="'+p.k+'">'+p.n+'</option>'; }).join(''); }
-  load(); setInterval(load, 60000); }
+  paintCached(); load(); smartPoll(); }
 
 async function load(){
   try{
-    var r=await fetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now()); var d=await r.json();
-    if(!d||!d.ok) throw new Error(); ROWS=d.rows||[]; render();
+    var d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
+    if(!d||!d.ok) throw new Error((d&&d.error)||'load'); ROWS=d.rows||[]; cacheRows(); render();
   }catch(e){ $('grid').innerHTML='<div class="muted">Could not load — redeploy the Apps Script (pa_list).</div>'; }
 }
 function renderMatrix(){
@@ -188,13 +222,13 @@ function render(){
   var ord=function(r){ if(r.status==='banned') return 99; if(r.status==='recovery') return 50; return phaseIx(r.status); };
   var sorted=ROWS.slice().sort(function(a,b){ return ord(a)-ord(b); });
   $('grid').innerHTML=sorted.map(function(r){
-    if(r.status==='banned') return '<div class="acct dim"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph" style="background:#ef4444">BANNED</span></div><div class="btns" style="margin-top:9px"><button onclick="setPhase(\''+r.id+'\',\'warming\')">↩ Reinstate (rare)</button></div></div>';
+    if(r.status==='banned') return '<div class="acct dim"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph" style="background:#ef4444">BANNED</span></div><div class="btns" style="margin-top:9px"><button onclick="setPhase(\''+r.id+'\',\'warming\')">↩ Reinstate (rare)</button>'+delBtn(r.id)+'</div></div>';
     if(r.status==='recovery'){
       return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph" style="background:#0ea5e9">🛟 SPAM RECOVERY</span></div>'+
         '<div class="plan">10 min ACTIVE browsing · upvote 2–4 posts · reply to 2–3 comments. No posting until clear.</div>'+
         '<div class="btns"><button class="go" onclick="sessionDone(\''+r.id+'\',\'recovery\')">✓ Recovery session</button>'+
         '<button class="rec" onclick="recovered(\''+r.id+'\')">✅ Cleared → back to '+(phase((r.meta&&r.meta.prev)||'warming')||{n:'phase'}).n+'</button>'+
-        '<button class="bad" onclick="setPhase(\''+r.id+'\',\'banned\')">⛔ Banned</button></div></div>';
+        '<button class="bad" onclick="setPhase(\''+r.id+'\',\'banned\')">⛔ Banned</button>'+delBtn(r.id)+'</div></div>';
     }
     var p=phase(r.status)||PH[0]; var ix=phaseIx(r.status); var next=PH[ix+1];
     var din=daysIn(r), km=karmaOf(r);
@@ -215,7 +249,7 @@ function render(){
         (p.karma?('<button onclick="setKarma(\''+r.id+'\','+km+')">⭐ Update karma</button>'):'')+
         (next?('<button class="up" '+(canUp?'':'disabled style="opacity:.45;cursor:not-allowed" ')+'onclick="'+(canUp?('promote(\''+r.id+'\',\''+next.k+'\')'):'void(0)')+'">'+upLabel+'</button>'):'')+
         '<button class="rec" onclick="spamFilter(\''+r.id+'\',\''+p.k+'\')">🛟 Spam filter</button>'+
-        '<button class="bad" onclick="setPhase(\''+r.id+'\',\'banned\')">⛔ Banned</button>'+
+        '<button class="bad" onclick="setPhase(\''+r.id+'\',\'banned\')">⛔ Banned</button>'+delBtn(r.id)+
       '</div></div>';
   }).join('');
 }
