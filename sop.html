@@ -31,7 +31,9 @@
   <h1>📚 <em>SOP</em> Library</h1>
   <div class="sub">The one home for every project's <b>latest</b> SOP. These documents are the source for the monthly assessment's project questions — read yours.</div>
   <div class="addbox" id="addbox">
-    <input id="s-proj" placeholder="Project / client">
+    <select id="s-proj" style="flex:1;min-width:150px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px;background:#fff;">
+      <option value="">Project… (from recorded projects)</option>
+    </select>
     <input id="s-title" placeholder="SOP title (e.g. Sourcing SOP v3)">
     <input id="s-link" placeholder="Link (OneDrive / Drive / doc URL)">
     <input id="s-ver" placeholder="Version" style="max-width:90px">
@@ -45,6 +47,20 @@ var API='https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByO
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function isAdmin(){ try{ var u=JSON.parse(sessionStorage.getItem('internals_user')||localStorage.getItem('internals_user')||'null'); return !!(u&&String(u.employee_id).toUpperCase()==='ADMIN'); }catch(e){ return false; } }
 if(isAdmin()||/[?&]admin=1/.test(location.search)) document.getElementById('addbox').classList.add('on');
+// Project dropdown = the RECORDED projects (tracker project list), so every SOP maps 1:1
+// to an existing project — same names the Data Center, assessments, and scorecard use.
+(async function fillProjects(){
+  var sel=document.getElementById('s-proj'); if(!sel) return;
+  var names=[];
+  try{
+    var r=await fetch(API+'?action=get_tracker_projects&_='+Date.now()); var d=await r.json();
+    var set={}; ((d&&d.projects)||[]).forEach(function(p){ var n=String(p.project||'').trim(); if(n) set[n.toLowerCase()]=n; });
+    names=Object.keys(set).map(function(k){return set[k];});
+  }catch(e){}
+  if(!names.length){ try{ var r2=await fetch(API+'?action=po_projects&_='+Date.now()); var d2=await r2.json(); names=(d2&&d2.projects)||[]; }catch(e){} }
+  names.sort(function(a,b){ return a.localeCompare(b); });
+  sel.innerHTML='<option value="">Project… (from recorded projects)</option>'+names.map(function(n){ return '<option>'+esc(n)+'</option>'; }).join('');
+})();
 async function load(){
   var g=document.getElementById('grid');
   try{
