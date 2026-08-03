@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JMB Internals — SOP Library</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#f6f7fb;--card:#fff;--ink:#171a21;--ink2:#5b6470;--ink3:#8a93a3;--line:#e5e8ef;--o1:#ff7a29;--o2:#e8590c;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Manrope',system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+  .wrap{max-width:880px;margin:0 auto;padding:28px 18px 60px}
+  h1{font-family:'Sora',sans-serif;font-size:26px}h1 em{font-style:normal;color:var(--o2)}
+  .sub{color:var(--ink2);font-size:13.5px;margin:6px 0 20px}
+  .addbox{display:none;gap:8px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:18px}
+  .addbox.on{display:flex}
+  .addbox input{flex:1;min-width:140px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px}
+  .addbox button{background:linear-gradient(135deg,var(--o1),var(--o2));color:#fff;border:none;border-radius:10px;padding:9px 16px;font-weight:800;cursor:pointer}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+  .sop{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+  .sop .pj{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--o2)}
+  .sop .tt{font-weight:800;font-size:15px}
+  .sop .mt{font-size:11.5px;color:var(--ink3)}
+  .sop a{margin-top:6px;align-self:flex-start;background:rgba(232,89,12,.09);color:var(--o2);border:1px solid rgba(232,89,12,.25);border-radius:9px;padding:7px 13px;font-weight:800;font-size:12.5px;text-decoration:none}
+  .empty{color:var(--ink3);padding:26px;text-align:center;background:var(--card);border:1px dashed var(--line);border-radius:14px}
+  .note{font-size:12px;color:var(--ink3);margin-top:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📚 <em>SOP</em> Library</h1>
+  <div class="sub">The one home for every project's <b>latest</b> SOP. These documents are the source for the monthly assessment's project questions — read yours.</div>
+  <div class="addbox" id="addbox">
+    <input id="s-proj" placeholder="Project / client">
+    <input id="s-title" placeholder="SOP title (e.g. Sourcing SOP v3)">
+    <input id="s-link" placeholder="Link (OneDrive / Drive / doc URL)">
+    <input id="s-ver" placeholder="Version" style="max-width:90px">
+    <button onclick="saveSop()">＋ Save</button>
+  </div>
+  <div class="grid" id="grid"><div class="empty">Loading…</div></div>
+  <div class="note">Re-saving a project + title updates the link — the library always points at the latest version.</div>
+</div>
+<script>
+var API='https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByOLL4TuRPKvtPh2rjY-b3rOJ5aBoIc8sOmO9kP/exec';
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function isAdmin(){ try{ var u=JSON.parse(sessionStorage.getItem('internals_user')||localStorage.getItem('internals_user')||'null'); return !!(u&&String(u.employee_id).toUpperCase()==='ADMIN'); }catch(e){ return false; } }
+if(isAdmin()||/[?&]admin=1/.test(location.search)) document.getElementById('addbox').classList.add('on');
+async function load(){
+  var g=document.getElementById('grid');
+  try{
+    var r=await fetch(API+'?action=sop_list&_='+Date.now()); var d=await r.json();
+    var rows=(d&&d.rows)||[];
+    if(!rows.length){ g.innerHTML='<div class="empty">No SOPs yet — admins add them above.</div>'; return; }
+    g.innerHTML=rows.map(function(s){ return '<div class="sop"><div class="pj">'+esc(s.project)+'</div><div class="tt">'+esc(s.title||'SOP')+'</div>'+
+      '<div class="mt">'+(s.version?('v'+esc(s.version)+' · '):'')+esc(s.updated_at||'')+'</div>'+
+      '<a href="'+esc(s.link)+'" target="_blank" rel="noopener">Open SOP →</a></div>'; }).join('');
+  }catch(e){ g.innerHTML='<div class="empty">Could not load — redeploy the Apps Script (sop_list).</div>'; }
+}
+async function saveSop(){
+  var p=document.getElementById('s-proj').value.trim(), t=document.getElementById('s-title').value.trim(),
+      l=document.getElementById('s-link').value.trim(), v=document.getElementById('s-ver').value.trim();
+  if(!p||!l){ alert('Project and link are required.'); return; }
+  try{
+    var r=await fetch(API+'?action=sop_save&project='+encodeURIComponent(p)+'&title='+encodeURIComponent(t)+'&link='+encodeURIComponent(l)+'&version='+encodeURIComponent(v)+'&_='+Date.now());
+    var d=await r.json();
+    if(d&&d.ok){ document.getElementById('s-link').value=''; load(); } else alert('Could not save: '+((d&&d.error)||'error'));
+  }catch(e){ alert('Connection error.'); }
+}
+load();
+</script>
+</body>
+</html>

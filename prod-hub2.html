@@ -254,8 +254,9 @@ async function signIn(){
     var d=await r.json();
     b.disabled=false; b.textContent='Sign in';
     if(!d || d.error){ err.style.display='block'; err.textContent=(d&&d.error==='WRONG_PIN')?'Incorrect PIN.':'Employee not found.'; return; }
-    var rank=clRank(d), isAdmin=String(d.employee_id||'').toUpperCase()==='ADMIN';
-    if(!(isAdmin || rank===7 || rank===8 || rank===9)){ err.style.display='block'; err.textContent='Access is limited to team leads (CL7–CL9).'; return; }
+    // ADMIN ONLY — the Productivity Hub is no longer open to leads or VAs.
+    var isAdmin=String(d.employee_id||'').toUpperCase()==='ADMIN';
+    if(!isAdmin){ err.style.display='block'; err.textContent='The Productivity Hub is admin-only. Sign in as ADMIN.'; return; }
     USER={ id:d.employee_id, name:d.full_name||d.employee_id };
     try{ sessionStorage.setItem('prod_user', JSON.stringify(USER)); }catch(e){}
     startApp();
@@ -639,7 +640,7 @@ async function revResetAllShown(){
 }
 /* ---- boot ---- */
 (function(){ var u=null; try{ u=JSON.parse(sessionStorage.getItem('prod_user')||'null'); }catch(e){}
-  if(u&&u.id){ USER=u; startApp(); } else { $('si-id').focus();
+  if(u&&u.id&&String(u.id).toUpperCase()==='ADMIN'){ USER=u; startApp(); } else { try{ sessionStorage.removeItem('prod_user'); }catch(e){} $('si-id').focus();
     $('si-pin').addEventListener('keydown',function(e){ if(e.key==='Enter') signIn(); }); }
 })();
 </script>
