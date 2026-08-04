@@ -490,10 +490,15 @@ function showTab(t){
 var CON_DATA={vas:[]};
 function loadCon(){
   var body=$('con-body'); if(body) body.innerHTML='<div class="muted">Loading…</div>';
-  fetch(PORTAL_URL+'?action=contract_signings_list&_='+Date.now()).then(function(r){return r.json();}).then(function(d){
-    if(!d||d.error){ if(body) body.innerHTML='<div class="muted">Could not load ('+esc((d&&d.error)||'error')+').</div>'; return; }
-    CON_DATA=d; renderCon();
-  }).catch(function(){ if(body) body.innerHTML='<div class="muted">Network error.</div>'; });
+  (function attempt(n){
+    fetch(PORTAL_URL+'?action=contract_signings_list&_='+Date.now()).then(function(r){return r.json();}).then(function(d){
+      if(!d||d.error){ if(body) body.innerHTML='<div class="muted">Could not load ('+esc((d&&d.error)||'error')+') — <a href="#" onclick="loadCon();return false;">retry</a>.</div>'; return; }
+      CON_DATA=d; renderCon();
+    }).catch(function(){
+      if(n<2){ if(body) body.innerHTML='<div class="muted">Slow response — retrying…</div>'; setTimeout(function(){ attempt(n+1); }, 1500*(n+1)); }
+      else if(body) body.innerHTML='<div class="muted">Network error — <a href="#" onclick="loadCon();return false;">retry</a>.</div>';
+    });
+  })(0);
 }
 function renderCon(){
   var body=$('con-body'); if(!body) return;
