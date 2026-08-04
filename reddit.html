@@ -173,13 +173,28 @@ function renderTabs(){
 (function(){ try{ var c=JSON.parse(sessionStorage.getItem('jmb_empdir')||'null');
   if(c && c.N && (Date.now()-(c.t||0))<24*3600*1000){ NAMES=c.N||{}; SHIFTOF=c.S||{}; PHOTOOF=c.P||{}; } }catch(e){} })();
 async function loadNames(){
+  function _dirFetch(url){ return new Promise(function(res,rej){
+    var ctl=(typeof AbortController!=='undefined')?new AbortController():null;
+    var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },25000):null;
+    fetch(url, ctl?{signal:ctl.signal}:undefined).then(function(r){ return r.json(); })
+      .then(function(j){ if(tm) clearTimeout(tm); res(j); })
+      .catch(function(e){ if(tm) clearTimeout(tm); rej(e); });
+  }); }
   try{
-    var d=await jFetch(API+'?action=get_all_employees&_='+Date.now(), 3);
+    var d=null;
+    try{ d=await _dirFetch(API+'?action=emp_dir&_='+Date.now()); }catch(_e1){}
+    if(!d || !d.employees || !d.employees.length){ d=await _dirFetch(API+'?action=get_all_employees&_='+Date.now()); }
     if(!d || !d.employees || !d.employees.length) throw new Error('empty');
-    (d.employees||[]).forEach(function(e){ var k=String(e.employee_id).toLowerCase(); NAMES[k]=e.full_name||e.employee_id; SHIFTOF[k]=String(e.shift||'').toLowerCase(); PHOTOOF[k]=drivePhoto(e.photo||''); });
+    (d.employees||[]).forEach(function(e){
+      var k=String(e.employee_id).toLowerCase();
+      NAMES[k]=e.full_name||e.employee_id;
+      var sh=String(e.shift||'').toLowerCase();
+      if(!sh && e.payslips && e.payslips.length) sh=String((e.payslips[0]||{}).shift||'').toLowerCase();
+      SHIFTOF[k]=sh; if(typeof PHOTOOF!=='undefined') PHOTOOF[k]=(typeof drivePhoto==='function')?drivePhoto(e.photo||''):String(e.photo||'');
+    });
     try{ sessionStorage.setItem('jmb_empdir', JSON.stringify({N:NAMES, S:SHIFTOF, P:PHOTOOF, t:Date.now()})); }catch(_p){}
     try{ render(); }catch(_r){}
-  }catch(e){ setTimeout(loadNames, 15000); }   // keep trying until the directory loads
+  }catch(e){ setTimeout(loadNames, 15000); }
 }
 function delBtn(id){ return '<button onclick="delAcct(\''+id+'\')" title="Delete (wrong entry)" style="border:1px solid rgba(239,68,68,.3);background:#fff;color:#b91c1c;border-radius:8px;padding:5px 8px;font-size:10.5px;font-weight:800;cursor:pointer;">'+IC.trash+'</button>'; }
 async function delAcct(id){
@@ -552,7 +567,18 @@ body{ background:
 .stat::before{ content:""; position:absolute; left:10px; right:10px; top:0; height:3px; border-radius:0 0 4px 4px;
   background:linear-gradient(90deg,#ff6b1a,#dc2626); }
 .sect i{ background:linear-gradient(90deg, rgba(234,88,12,.4), rgba(15,23,42,.06)) !important; height:2px !important; }
-.pvbar i{ background:linear-gradient(90deg,#ff6b1a,#dc2626) !important; }
+.pvbar{ height:18px !important; border-radius:10px !important; background:rgba(127,29,29,.08) !important;
+  box-shadow:inset 0 1px 3px rgba(127,29,29,.14); position:relative; overflow:hidden; }
+.pvbar i{ position:relative; border-radius:10px !important;
+  background:linear-gradient(90deg,#ffa25c 0%,#ff6b1a 45%,#dc2626 100%) !important;
+  box-shadow:0 0 16px rgba(255,107,26,.5), inset 0 1px 0 rgba(255,255,255,.4) !important;
+  transition:width .9s cubic-bezier(.22,1,.36,1) !important; }
+.pvbar i::after{ content:""; position:absolute; inset:0;
+  background:linear-gradient(105deg, transparent 30%, rgba(255,255,255,.55) 48%, transparent 62%);
+  animation:pvShine 2.6s ease-in-out infinite; }
+@keyframes pvShine{ 0%{ transform:translateX(-130%); } 55%,100%{ transform:translateX(130%); } }
+.pvrow{ padding:13px 0 !important; }
+@media(prefers-reduced-motion:reduce){ .pvbar i::after{ animation:none; } }
 .pvwrap{ border-top:3px solid transparent; border-image:linear-gradient(90deg,#ff6b1a,#dc2626) 1; }
 .acct{ box-shadow:0 1px 2px rgba(127,29,29,.05), 0 10px 30px rgba(127,29,29,.07) !important; }
 .acct:hover{ box-shadow:0 3px 6px rgba(127,29,29,.07), 0 18px 44px rgba(127,29,29,.12) !important; }
