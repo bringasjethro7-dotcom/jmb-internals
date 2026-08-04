@@ -99,6 +99,7 @@
   <div class="reminder">🔎 <b>Every phase, every session:</b> check the profile for post/avatar removals (shadowban) & spam-filter flags, and the inbox for mod messages, warnings, or "unable to post". Spotted one? Hit <b>🛟 Spam filter</b> on the card.</div>
   <div id="byva" style="margin-bottom:10px;"></div>
   <div id="vatabs" style="margin-bottom:12px;"></div>
+  <input id="ra-q" placeholder="🔎 Search account or VA…" oninput="render()" style="width:100%;max-width:340px;padding:9px 13px;border:1px solid var(--line);border-radius:100px;font:inherit;font-size:13px;background:var(--card);margin-bottom:12px;">
   <div style="margin-bottom:14px;">
     <button onclick="var m=document.getElementById('matrix'); m.style.display=(m.style.display==='none'?'block':'none');" style="border:1px solid var(--line);background:var(--card);border-radius:9px;padding:7px 13px;font:800 12px 'Manrope',sans-serif;color:var(--ink2);cursor:pointer;">📊 Accounts per VA × phase</button>
     <div id="matrix" style="display:none;margin-top:8px;overflow-x:auto;"></div>
@@ -267,10 +268,12 @@ function renderMatrix(){
   host.innerHTML='<table style="border-collapse:collapse;font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;min-width:100%;">'+head+body+totRow+'</table>';
 }
 function render(){
-  var warm=ROWS.filter(function(r){return ['creation','warming','comment','nsfw'].indexOf(r.status)>=0;}).length;
+  var creation=ROWS.filter(function(r){return r.status==='creation';}).length;
+  var warm=ROWS.filter(function(r){return ['warming','comment','nsfw'].indexOf(r.status)>=0;}).length;
   var posting=ROWS.filter(function(r){return ['day1','early','earlydm','medium'].indexOf(r.status)>=0;}).length;
   var strong=ROWS.filter(function(r){return ['strong','superstrong'].indexOf(r.status)>=0;}).length;
   $('stats').innerHTML=
+    '<div class="stat"><b style="color:#64748b">'+creation+'</b><span>🏗 Creation standby</span></div>'+
     '<div class="stat"><b style="color:#b45309">'+warm+'</b><span>Warming / farming</span></div>'+
     '<div class="stat"><b style="color:#e11d48">'+posting+'</b><span>Posting</span></div>'+
     '<div class="stat"><b style="color:#6d28d9">'+strong+'</b><span>Strong+</span></div>'+
@@ -284,14 +287,16 @@ function render(){
     ['Strong+','#6d28d9',function(r){return ['strong','superstrong'].indexOf(r.status)>=0;}],
     ['Recovery','#0ea5e9',function(r){return r.status==='recovery';}],
     ['Banned','#ef4444',function(r){return r.status==='banned';}]
-  ], function(r){ return r.meta && r.meta.last===today(); }, function(r){ return r.status!=='banned'; });
+  ], function(r){ return r.meta && r.meta.last===today(); }, function(r){ return r.status!=='banned' && r.status!=='creation'; });
   renderMatrix();
   if(!ROWS.length){ $('grid').innerHTML='<div class="muted">No accounts yet — create the first via the iPhone farm SOP and add it above.</div>'; return; }
   renderTabs();
   var base=filterRows();
   var ord=function(r){ if(r.status==='banned') return 99; if(r.status==='recovery') return 50; return phaseIx(r.status); };
   var sorted=base.slice().sort(function(a,b){ return ord(a)-ord(b) || daysIn(b)-daysIn(a); });
-  if(!sorted.length){ $('grid').innerHTML='<div class="muted">No accounts in this view.</div>'; return; }
+  var q=(($('ra-q')||{}).value||'').trim().toLowerCase();
+  if(q) sorted=sorted.filter(function(r){ return String(r.handle||'').toLowerCase().indexOf(q)>=0 || String(vaName(r.assigned_to||r.created_by)).toLowerCase().indexOf(q)>=0; });
+  if(!sorted.length){ $('grid').innerHTML='<div class="muted">'+(q?'No accounts match "'+esc(q)+'".':'No accounts in this view.')+'</div>'; return; }
   function grpR(r){ return (r.status==='banned')?'⛔ Banned':(r.status==='recovery')?'🛟 Spam Recovery':(phase(r.status)||{n:r.status}).n; }
   var gcnt={}; sorted.forEach(function(r){ var g=grpR(r); gcnt[g]=(gcnt[g]||0)+1; });
   function cardR(r){
@@ -315,6 +320,14 @@ function render(){
     menu.push(['🛟 Spam filter',"spamFilter('"+r.id+"','"+p.k+"')"]);
     menu.push(['⛔ Banned',"setPhase('"+r.id+"','banned')"]);
     menu.push('---'); menu.push(['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']);
+    if(p.k==='creation'){
+      var nBan=ROWS.filter(function(x){return x.status==='banned';}).length;
+      return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:'+p.c+'14;color:'+p.c+';border:1px solid '+p.c+'2e">'+p.n+'</span>'+kmenu(menu)+'</div>'+
+        '<div class="meta1">'+gate+who+'</div>'+
+        '<div class="meta1" style="font-weight:700;color:#475569;">🏗 Standby — no daily sessions, no effect on your progress %. '+(canUp?'Aged 4d+ — ready to replace a banned account.':'Ages to day 4, then waits as replacement stock.')+(nBan?(' <span style="color:#b91c1c">'+nBan+' banned waiting for replacement.</span>'):'')+'</div>'+
+        (canUp?('<div class="btns"><button class="up" onclick="promote(\''+r.id+'\',\'warming\')">🌡 Move to Warming — replace a banned account</button></div>'):'')+
+      '</div>';
+    }
     return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:'+p.c+'14;color:'+p.c+';border:1px solid '+p.c+'2e">'+p.n+'</span>'+kmenu(menu)+'</div>'+
       '<div class="meta1">'+gate+who+'</div>'+
       '<details class="planbox"><summary>📋 Today\'s plan</summary><div>'+p.plan+'</div></details>'+

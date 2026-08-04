@@ -95,6 +95,7 @@
 <div class="wrap" id="app" style="display:none">
   <h1>📸 Project <em>Arlo</em> — IG Reels <span style="font-size:12px;color:var(--ink3);font-weight:600" id="who"></span></h1>
   <div class="sub">Per account daily: <b>1 Story · 1 Feed Post · 1 Trial Reel</b> (Reel only at 1,000+ followers). Spoof every video, viral music, AI captions. New accounts follow the <b>14-day max-survival warm-up</b>. Every tick counts your output automatically.</div>
+  <div id="views" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;"></div>
   <div class="top" id="stats"></div>
   <div class="addbox">
     <input type="text" id="ig-user" placeholder="Account handle (@…)">
@@ -113,7 +114,7 @@
 <script>
 var API='https://script.google.com/macros/s/AKfycbxbOUn-0xO4r8H4bw4nA7YMfVb0yByOLL4TuRPKvtPh2rjY-b3rOJ5aBoIc8sOmO9kP/exec';
 var PROJECT='Project Arlo';
-var USER=null, ROWS=[];
+var USER=null, ROWS=[], CMROWS=[];
 var NAMES={};
 /* ── fetching layer: timeout + retry on READS (never on writes), local cache for instant paint,
    visibility-aware polling (pauses when the tab is hidden, refreshes on focus) ── */
@@ -238,11 +239,80 @@ function start(){ $('signin').style.display='none'; $('app').style.display='bloc
 async function load(){
   try{
     var d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
-    if(!d||!d.ok) throw new Error((d&&d.error)||'load'); ROWS=d.rows||[]; cacheRows(); render();
+    if(!d||!d.ok) throw new Error((d&&d.error)||'load'); var _all=d.rows||[]; CMROWS=_all.filter(function(r){return r.status==='cmodel';}); ROWS=_all.filter(function(r){return r.status!=='cmodel';}); cacheRows(); render();
   }catch(e){ $('grid').innerHTML='<div class="muted">Could not load — redeploy the Apps Script (pa_list).</div>'; }
+}
+/* ── views: Accounts · Instagram Auditing · Content Management ── */
+var VIEW=(function(){ try{ return sessionStorage.getItem('arlo_view')||'accounts'; }catch(e){ return 'accounts'; } })();
+function setView(v){ VIEW=v; try{ sessionStorage.setItem('arlo_view',v); }catch(e){} render(); }
+function renderViews(){
+  var host=$('views'); if(!host) return;
+  var defs=[['accounts','📸 Accounts'],['audit','🔍 Instagram Auditing'],['cm','🎬 Content Management']];
+  host.innerHTML=defs.map(function(d){ var on=(VIEW===d[0]);
+    return '<button onclick="setView(\''+d[0]+'\')" style="border:1px solid '+(on?'#962fbf':'var(--line)')+';background:'+(on?'rgba(150,47,191,.1)':'var(--card)')+';color:'+(on?'#962fbf':'var(--ink2)')+';border-radius:100px;padding:8px 15px;font:800 12.5px \'Manrope\',sans-serif;cursor:pointer;">'+d[1]+'</button>'; }).join('');
+}
+var AUD=[['strong','💪 Strong Account','#10b981'],['human','🤖 Human Verification','#f59e0b'],['lowperf','📉 Low Performing Account','#ef4444'],['needscontent','🎬 Needs New Contents','#d97706'],['posthold','⏸ Posting on hold','#3b82f6'],['banned','⛔ Banned','#b91c1c'],['waitskits','🎭 Waiting for skits','#8b5cf6'],['lowinsights','📊 Low insights','#ec4899'],['leftunposted','🕳 Left unposted','#64748b'],['done','✅ Done','#059669']];
+function renderAudit(){
+  var list=ROWS.slice();
+  function ix(r){ var a=(r.meta&&r.meta.audit)||''; for(var i=0;i<AUD.length;i++) if(AUD[i][0]===a) return i; return -1; }
+  list.sort(function(a,b){ return ix(a)-ix(b); });
+  var gc={}; list.forEach(function(r){ var k=ix(r); gc[k]=(gc[k]||0)+1; });
+  var out=[], lastK=null;
+  list.forEach(function(r){
+    var k=ix(r);
+    if(k!==lastK){ out.push('<div class="sect"><b>'+((k<0)?'📋 Not audited yet':AUD[k][1])+'</b><span>'+gc[k]+'</span><i></i></div>'); lastK=k; }
+    var a=(k<0)?null:AUD[k];
+    var menu=AUD.map(function(sd){ return [sd[1],"setAudit('"+r.id+"','"+sd[0]+"')"]; });
+    out.push('<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b>'+
+      (a?('<span class="ph2" style="background:'+a[2]+'14;color:'+a[2]+';border:1px solid '+a[2]+'2e">'+a[1]+'</span>')
+        :'<span class="ph2" style="background:#64748b14;color:#64748b;border:1px solid #64748b2e">no audit tag</span>')+kmenu(menu)+'</div>'+
+      '<div class="meta1">👤 Handled by <b>'+esc(vaName(r.assigned_to||r.created_by))+'</b>'+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+' · board: '+esc(r.status)+'</div>'+
+    '</div>');
+  });
+  $('grid').innerHTML=out.length?out.join(''):'<div class="muted">No accounts yet.</div>';
+}
+async function setAudit(id,k){
+  try{ var r0=row(id); if(!r0) return;
+    var d=await saveMeta(r0, Object.assign({}, r0.meta||{}, {audit:k}));
+    if(d&&d.ok){ toast('Audit tag updated.'); load(); } else toast('Could not save.');
+  }catch(e){ toast('Connection error.'); }
+}
+var MODELS=['Aja','Akira','Anya','Kitana','Ruby','Yuna','Maddie','Aurora','Camila','Gabi','Kivanna','Sakura','Ariel','Amber','Corey','Mila','Celine','Vale','Nicole','CJ','Scarlet','Skylar','Hatty'];
+var CMST=[['done','✅ Done','#10b981'],['waiting','🕐 Waiting for new Contents','#f59e0b'],['inprog','🎬 In-Progress','#3b82f6'],['onhold','⏸ Contents on hold','#64748b'],['provided','📦 Provided by the clients','#8b5cf6']];
+function cmRowOf(name){ for(var i=0;i<CMROWS.length;i++) if(String(CMROWS[i].handle).toLowerCase()===name.toLowerCase()) return CMROWS[i]; return null; }
+function renderCM(){
+  var out=['<div class="sect"><b>🎬 Models — content status</b><span>'+MODELS.length+' models</span><i></i></div>'];
+  MODELS.forEach(function(nm){
+    var r=cmRowOf(nm); var cur=(r&&r.meta&&r.meta.cm)||'';
+    var chip=null; for(var i=0;i<CMST.length;i++) if(CMST[i][0]===cur) chip=CMST[i];
+    var btns=CMST.map(function(sd){ var on=(sd[0]===cur);
+      return '<button onclick="cmSet(\''+nm+'\',\''+sd[0]+'\')" style="border:1px solid '+(on?sd[2]:'var(--line)')+';color:'+(on?'#fff':'var(--ink2)')+';background:'+(on?sd[2]:'#fff')+';border-radius:100px;padding:5px 10px;font:800 10.5px \'Manrope\',sans-serif;cursor:pointer;">'+sd[1]+'</button>';
+    }).join('');
+    out.push('<div class="acct"><div class="hd"><b>'+esc(nm)+'</b>'+(chip?('<span class="ph2" style="background:'+chip[2]+'14;color:'+chip[2]+';border:1px solid '+chip[2]+'2e">'+chip[1]+'</span>'):'<span class="ph2" style="background:#64748b14;color:#64748b;border:1px solid #64748b2e">no status yet</span>')+'</div>'+
+      (r?('<div class="meta1">updated by '+esc(vaName(r.assigned_to||r.created_by))+'</div>'):'')+
+      '<div class="btns" style="flex-wrap:wrap;">'+btns+'</div></div>');
+  });
+  $('grid').innerHTML=out.join('');
+}
+async function cmSet(nm, k){
+  try{
+    var r=cmRowOf(nm), d;
+    if(r){ d=await saveMeta(r, Object.assign({}, r.meta||{}, {cm:k})); }
+    else{
+      var rr=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(nm)+'&status=cmodel&meta='+encodeURIComponent(JSON.stringify({cm:k}))+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
+      d=await rr.json();
+    }
+    if(d&&d.ok){ toast(nm+' → updated ✓'); load(); } else toast('Could not save.');
+  }catch(e){ toast('Connection error.'); }
 }
 function fullDone(r){ var t=T(r); return t.s && t.f && (!isK(r) || t.rl); }
 function render(){
+  renderViews();
+  var showAcc=(VIEW==='accounts');
+  var ab=document.querySelector('.addbox'); if(ab) ab.style.display=showAcc?'':'none';
+  ['stats','byva','vatabs'].forEach(function(id){ var el=$(id); if(el) el.style.display=showAcc?'':'none'; });
+  if(VIEW==='audit'){ renderAudit(); return; }
+  if(VIEW==='cm'){ renderCM(); return; }
   var act=ROWS.filter(function(r){return ['active','warmup'].indexOf(r.status)>=0;});
   var done=act.filter(fullDone).length;
   $('stats').innerHTML=
