@@ -253,15 +253,15 @@ function renderByVA(segs, doneFn, activeFn, amFn){
 }
 var PH=[
  {k:'creation',  n:'🏗 Creation',       c:'#64748b', dur:4, plan:'Account creation process (iPhone farm SOP) — runs 4 days before Warming.', task:null},
- {k:'warming',   n:'🌡 Warming',        c:'#f59e0b', dur:1, plan:'5 min browsing · search 5 subreddits · upvote 2 · join 2 — 1 day.', task:'Warm Session', tn:1},
- {k:'comment',   n:'💬 Comment Farm',   c:'#eab308', maxDur:7, karma:50, plan:'5 min browsing · search 5 · upvote 3 · join 2 · 2 SFW comments (approved subs). Goal: 50 KARMA → NSFW. 7 days without 50 karma = stays here.', task:'Warm Session', tn:1},
- {k:'nsfw',      n:'🔥 NSFW Comments',  c:'#f97316', client:true, plan:'5 min browsing · search 5 · upvote 3 · 2 comments/replies (approved subs). CLIENT updates this status.', task:'Warm Session', tn:1},
- {k:'day1',      n:'📮 Day 1 Posting',  c:'#fb7185', dur:1, plan:'3 min browsing · set name/bio/avatar · upvote 2 · 2–3 comments · 1 post/session · ROTATE subs/captions/photos — 1 day.', task:'Posting', tn:1},
- {k:'early',     n:'📮 Early Posting',  c:'#f43f5e', plan:'3 min browsing · upvote 2 · 2–3 comments · 2 posts/session', task:'Posting', tn:2},
- {k:'earlydm',   n:'📨 Early + DMs',    c:'#ec4899', plan:'3 min browsing · 2–3 comments · 2 posts/session · 4 DMs AM + 4 DMs PM', task:'Posting', tn:2, dms:8},
- {k:'medium',    n:'📈 Medium + DMs',   c:'#d946ef', plan:'3 min browsing · 2–3 comments · 3 posts/session · 4 DMs AM + 4 DMs PM', task:'Posting', tn:3, dms:8},
- {k:'strong',    n:'💪 Strong',         c:'#8b5cf6', plan:'3 min browsing · 2–3 comments · 5 posts/session · 8 DMs per shift', task:'Posting', tn:5, dms:8},
- {k:'superstrong',n:'🚀 Super Strong',  c:'#6d28d9', plan:'3 min browsing · 2–3 comments · 7 posts/session · 8 DMs/shift · upvote 2', task:'Posting', tn:7, dms:8}
+ {k:'warming',   n:'🌡 Warming',        c:'#f59e0b', dur:1, plan:'5 min browsing · search 5 subreddits · upvote 2 · join 2 — 1 day.', task:'Reddit Warmup', tn:1},
+ {k:'comment',   n:'💬 Comment Farm',   c:'#eab308', maxDur:7, karma:50, plan:'5 min browsing · search 5 · upvote 3 · join 2 · 2 SFW comments (approved subs). Goal: 50 KARMA → NSFW. 7 days without 50 karma = stays here.', task:'Reddit Warmup', tn:1},
+ {k:'nsfw',      n:'🔥 NSFW Comments',  c:'#f97316', client:true, plan:'5 min browsing · search 5 · upvote 3 · 2 comments/replies (approved subs). CLIENT updates this status.', task:'Reddit Warmup', tn:1},
+ {k:'day1',      n:'📮 Day 1 Posting',  c:'#fb7185', dur:1, plan:'3 min browsing · set name/bio/avatar · upvote 2 · 2–3 comments · 1 post/session · ROTATE subs/captions/photos — 1 day.', task:'Reddit Posting', tn:1},
+ {k:'early',     n:'📮 Early Posting',  c:'#f43f5e', plan:'3 min browsing · upvote 2 · 2–3 comments · 2 posts/session', task:'Reddit Posting', tn:2},
+ {k:'earlydm',   n:'📨 Early + DMs',    c:'#ec4899', plan:'3 min browsing · 2–3 comments · 2 posts/session · 4 DMs AM + 4 DMs PM', task:'Reddit Posting', tn:2, dms:8},
+ {k:'medium',    n:'📈 Medium + DMs',   c:'#d946ef', plan:'3 min browsing · 2–3 comments · 3 posts/session · 4 DMs AM + 4 DMs PM', task:'Reddit Posting', tn:3, dms:8},
+ {k:'strong',    n:'💪 Strong',         c:'#8b5cf6', plan:'3 min browsing · 2–3 comments · 5 posts/session · 8 DMs per shift', task:'Reddit Posting', tn:5, dms:8},
+ {k:'superstrong',n:'🚀 Super Strong',  c:'#6d28d9', plan:'3 min browsing · 2–3 comments · 7 posts/session · 8 DMs/shift · upvote 2', task:'Reddit Posting', tn:7, dms:8}
 ];
 function phase(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return PH[i]; return null; }
 function phaseIx(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return i; return -1; }
@@ -381,7 +381,7 @@ function render(){
     return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:'+p.c+'14;color:'+p.c+';border:1px solid '+p.c+'2e">'+p.n+'</span>'+kmenu(menu)+'</div>'+
       '<div class="meta1">'+gate+who+'</div>'+
       '<details class="planbox"><summary>📋 Today\'s plan</summary><div>'+p.plan+'</div></details>'+
-      '<div class="btns">'+sessBtns(r, p.k, p.task?(p.task==='Posting'?('+'+p.tn+' posts'):'+1 warm'):null)+
+      '<div class="btns">'+sessBtns(r, p.k, p.task?(p.task==='Reddit Posting'?('+'+p.tn+' posts'):'+1 warm'):null)+
         (p.dms?('<button class="dm" onclick="dmsDone(\''+r.id+'\','+p.dms+')">📨 DMs done (+'+p.dms+')</button>'):'')+
         (p.karma&&!canUp?('<button onclick="setKarma(\''+r.id+'\','+km+')">⭐ Update karma</button>'):'')+
         (next&&canUp?('<button class="up" onclick="promote(\''+r.id+'\',\''+next.k+'\')">'+upLabel+'</button>'):'')+
@@ -405,8 +405,8 @@ async function addAcct(){
     var d=await r.json();
     if(d&&d.ok){
       $('ra-user').value=''; if($('ra-new')) $('ra-new').checked=false;
-      if(isNew){ await bump('Account Creation',1); }
-      toast('Added → '+(phase(phk)||{n:phk}).n+(isNew?' · +1 Account Creation 🎉':' (existing account seeded)'));
+      if(isNew){ await bump('Reddit Account Creation',1); }
+      toast('Added → '+(phase(phk)||{n:phk}).n+(isNew?' · +1 Reddit Account Creation 🎉':' (existing account seeded)'));
       load();
     }
     else if(d&&d.error==='DUPLICATE') toast('That username is already on the board.');
@@ -445,10 +445,10 @@ async function stampSession(id, n){
 async function sessionDone(id, phk, n){
   n=(n===2)?2:1;
   var p=phase(phk);
-  if(phk==='recovery'){ await bump('Warm Session',1); await stampSession(id,n); toast('+1 recovery session · '+n+'/2 ✅'+(n===2?' — day complete!':'')); load(); return; }
+  if(phk==='recovery'){ await bump('Reddit Warmup',1); await stampSession(id,n); toast('+1 recovery session · '+n+'/2 ✅'+(n===2?' — day complete!':'')); load(); return; }
   if(!p||!p.task){ await stampSession(id,n); toast('Session '+n+'/2 logged ✓'+(n===2?' — day complete!':'')); load(); return; }
   await bump(p.task, p.tn); await stampSession(id,n);
-  toast((p.task==='Posting'?('+'+p.tn+' Posting'):'+1 Warm Session')+' · session '+n+'/2 ✅'+(n===2?' — day complete!':(p.task==='Posting'?' — rotate subs, captions & photos!':'')));
+  toast((p.task==='Reddit Posting'?('+'+p.tn+' Reddit Posting'):'+1 Reddit Warmup')+' · session '+n+'/2 ✅'+(n===2?' — day complete!':(p.task==='Reddit Posting'?' — rotate subs, captions & photos!':'')));
   load();
 }
 async function dmsDone(id, n){ await bump('DM Replies', n); toast('+'+n+' DM Replies 📨'); load(); }
