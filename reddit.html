@@ -265,7 +265,7 @@ async function load(){
 }
 function renderMatrix(){
   var host=document.getElementById('matrix'); if(!host) return;
-  var cols=PH.map(function(p){ return {k:p.k,n:p.n,c:p.c}; }).concat([{k:'recovery',n:'🛟 Recovery',c:'#0ea5e9'},{k:'banned',n:'⛔ Banned',c:'#ef4444'}]);
+  var cols=PH.map(function(p){ return {k:p.k,n:p.n,c:p.c}; }).concat([{k:'recovery',n:'🛟 Recovery',c:'#0ea5e9'},{k:'tempban',n:'⏳ Temp ban',c:'#d97706'},{k:'banned',n:'⛔ Banned',c:'#ef4444'}]);
   var by={}; ROWS.forEach(function(r){ var k=String(r.assigned_to||r.created_by||'—').toLowerCase(); (by[k]=by[k]||[]).push(r); });
   var keys=Object.keys(by).sort(function(a,b){ return by[b].length-by[a].length; });
   if(!keys.length){ host.innerHTML='<div class="muted">No accounts yet.</div>'; return; }
@@ -291,6 +291,7 @@ function render(){
     '<div class="stat"><b style="color:#e11d48">'+posting+'</b><span>Posting</span></div>'+
     '<div class="stat"><b style="color:#6d28d9">'+strong+'</b><span>Strong+</span></div>'+
     '<div class="stat"><b style="color:#0369a1">'+ROWS.filter(function(r){return r.status==='recovery';}).length+'</b><span>🛟 Recovery</span></div>'+
+    '<div class="stat"><b style="color:#d97706">'+ROWS.filter(function(r){return r.status==='tempban';}).length+'</b><span>⏳ Temp banned</span></div>'+
     '<div class="stat"><b style="color:#b91c1c">'+ROWS.filter(function(r){return r.status==='banned';}).length+'</b><span>Banned</span></div>'+
     '<div class="stat"><b>'+ROWS.filter(function(r){return r.status!=='banned';}).length+'</b><span>Active total</span></div>';
   renderByVA([
@@ -299,21 +300,26 @@ function render(){
     ['Posting','#f43f5e',function(r){return ['day1','early','earlydm','medium'].indexOf(r.status)>=0;}],
     ['Strong+','#6d28d9',function(r){return ['strong','superstrong'].indexOf(r.status)>=0;}],
     ['Recovery','#0ea5e9',function(r){return r.status==='recovery';}],
+    ['Temp ban','#d97706',function(r){return r.status==='tempban';}],
     ['Banned','#ef4444',function(r){return r.status==='banned';}]
-  ], function(r){ return r.meta && r.meta.last===today(); }, function(r){ return r.status!=='banned' && r.status!=='creation'; });
+  ], function(r){ return r.meta && r.meta.last===today(); }, function(r){ return r.status!=='banned' && r.status!=='creation' && r.status!=='tempban'; });
   renderMatrix();
   if(!ROWS.length){ $('grid').innerHTML='<div class="muted">No accounts yet — create the first via the iPhone farm SOP and add it above.</div>'; return; }
   renderTabs();
   var base=filterRows();
-  var ord=function(r){ if(r.status==='banned') return 99; if(r.status==='recovery') return 50; return phaseIx(r.status); };
+  var ord=function(r){ if(r.status==='banned') return 99; if(r.status==='tempban') return 60; if(r.status==='recovery') return 50; return phaseIx(r.status); };
   var sorted=base.slice().sort(function(a,b){ return ord(a)-ord(b) || daysIn(b)-daysIn(a); });
   var q=(($('ra-q')||{}).value||'').trim().toLowerCase();
   if(q) sorted=sorted.filter(function(r){ return String(r.handle||'').toLowerCase().indexOf(q)>=0 || String(vaName(r.assigned_to||r.created_by)).toLowerCase().indexOf(q)>=0; });
   if(!sorted.length){ $('grid').innerHTML='<div class="muted">'+(q?'No accounts match "'+esc(q)+'".':'No accounts in this view.')+'</div>'; return; }
-  function grpR(r){ return (r.status==='banned')?'⛔ Banned':(r.status==='recovery')?'🛟 Spam Recovery':(phase(r.status)||{n:r.status}).n; }
+  function grpR(r){ return (r.status==='banned')?'⛔ Banned':(r.status==='tempban')?'⏳ Temporarily Banned':(r.status==='recovery')?'🛟 Spam Recovery':(phase(r.status)||{n:r.status}).n; }
   var gcnt={}; sorted.forEach(function(r){ var g=grpR(r); gcnt[g]=(gcnt[g]||0)+1; });
   function cardR(r){
     var who=esc(vaName(r.assigned_to||r.created_by))+(cdateOf(r)?(' · '+esc(ageTxt(r))):'');
+    if(r.status==='tempban') return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#d9770614;color:#b45309;border:1px solid #d977062e">⏳ Temp Banned</span>'+kmenu([['⛔ Permanent ban',"setPhase('"+r.id+"','banned')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+
+      '<div class="meta1">'+who+'</div>'+
+      '<div class="meta1" style="color:#b45309;font-weight:700;">⏳ Sitting out a temporary ban — no sessions until it lifts. Check it daily.</div>'+
+      '<div class="btns"><button class="go" onclick="tbLifted(\''+r.id+'\')">✅ Ban lifted → back to '+(phase((r.meta&&r.meta.prev)||'warming')||{n:'phase'}).n+'</button></div></div>';
     if(r.status==='banned') return '<div class="acct dim"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#ef444414;color:#b91c1c;border:1px solid #ef44442e">⛔ Banned</span>'+kmenu([['↩ Reinstate (rare)',"setPhase('"+r.id+"','warming')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div><div class="meta1">'+who+'</div></div>';
     if(r.status==='recovery') return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#0ea5e914;color:#0369a1;border:1px solid #0ea5e92e">🛟 Recovery</span>'+kmenu([['⛔ Banned',"setPhase('"+r.id+"','banned')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+
       '<div class="meta1">'+who+'</div>'+
@@ -331,6 +337,7 @@ function render(){
     var menu=[];
     if(p.karma) menu.push(['⭐ Update karma',"setKarma('"+r.id+"',"+km+")"]);
     menu.push(['🛟 Spam filter',"spamFilter('"+r.id+"','"+p.k+"')"]);
+    menu.push(['⏳ Temporary ban',"tempBan('"+r.id+"','"+p.k+"')"]);
     menu.push(['⛔ Banned',"setPhase('"+r.id+"','banned')"]);
     menu.push('---'); menu.push(['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']);
     if(p.k==='creation'){
@@ -422,6 +429,21 @@ async function promote(id, nextk){
     var r0=row(id); var m=Object.assign({}, (r0&&r0.meta)||{}, {pstart:today()});
     var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status='+encodeURIComponent(nextk)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now());
     var d=await r.json(); if(d&&d.ok){ toast('Promoted → '+p.n+' 🎉'); load(); } else toast('Could not update.');
+  }catch(e){ toast('Connection error.'); }
+}
+async function tempBan(id, curk){
+  if(!confirm('Mark TEMPORARILY BANNED? Work pauses (no effect on your progress %). When the ban lifts, it goes right back to its current phase.')) return;
+  try{
+    var r0=row(id); var m0=Object.assign({}, (r0&&r0.meta)||{}, {prev:curk});
+    var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status=tempban&meta='+encodeURIComponent(JSON.stringify(m0))+'&_='+Date.now());
+    var d=await r.json(); if(d&&d.ok){ toast('⏳ Temp banned — check it daily; hit “Ban lifted” when it clears.'); load(); } else toast('Could not update.');
+  }catch(e){ toast('Connection error.'); }
+}
+async function tbLifted(id){
+  var r0=row(id); var back=(r0&&r0.meta&&r0.meta.prev)||'warming';
+  try{
+    var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status='+encodeURIComponent(back)+'&_='+Date.now());
+    var d=await r.json(); if(d&&d.ok){ toast('✅ Ban lifted — back to '+(phase(back)||{n:back}).n); load(); } else toast('Could not update.');
   }catch(e){ toast('Connection error.'); }
 }
 async function spamFilter(id, curk){

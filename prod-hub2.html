@@ -663,10 +663,12 @@ async function revResetAllShown(){
 }
 /* ═══════════ 🗄 PROJECT DATA CENTER — shared boards ═══════════ */
 var _DCB={project:'',data:null};
-function _dcToday(){ try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){ return new Date().toISOString().slice(0,10); } }
+function _dcToday(){ // business day — resets 8:00 AM PHT (matches the tools & Data Center)
+  try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-8*3600*1000)); }
+  catch(e){ return new Date(Date.now()-8*3600*1000).toISOString().slice(0,10); } }
 async function dcInit(){
   var sel=$('dcp-project'); if(!sel) return;
-  $('dcp-date').textContent='· today '+_dcToday();
+  $('dcp-date').textContent='· today '+_dcToday()+' (resets 8 AM PHT)';
   $('dcp-admin').style.display='flex';
   var projects=[];
   try{ var r=await fetch(PORTAL_URL+'?action=po_projects&_='+Date.now()); var d=await r.json(); projects=(d&&d.projects)||[]; }catch(e){}
@@ -698,16 +700,19 @@ function dcRenderBoard(){
       '</div>';
     var bar=pr?('<div style="height:8px;background:rgba(15,23,42,.08);border-radius:5px;overflow:hidden;margin:7px 0 9px;"><i style="display:block;height:100%;width:'+Math.min(100,pr.pct)+'%;background:'+(pr.pct>=100?'linear-gradient(90deg,#22c55e,#15803d)':'linear-gradient(90deg,#22d3ee,#0e7490)')+';"></i></div>')
                :'<div style="height:9px;"></div>';
-    var hoursMap=(d&&d.hours)||{};
+    var hoursMap=(d&&d.hours)||{}, taskHours=(d&&d.hours_task)||{};
     var ppl=(t.people||[]).map(function(p){
       var pct=(p.vol>0)?Math.min(100,Math.round(p.done/p.vol*100)):0; var full=(p.vol>0&&p.done>=p.vol);
-      var h=hoursMap[String(p.employee_id||'').toLowerCase()];
+      var _ek=String(p.employee_id||'').toLowerCase();
+      var h=taskHours[_ek+'|'+String(t.task||'').trim().toLowerCase()];   // hours on THIS task (EOD hours-per-task)
+      var isTaskH=(h!=null);
+      if(h==null) h=hoursMap[_ek];   // fallback: total project hours today
       var oph=(h>0)?(Math.round(p.done/h*100)/100):null;
       return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px dashed rgba(15,23,42,.08);">'+
         '<span style="flex:1;font-size:12.5px;font-weight:600;">'+esc(p.name)+'</span>'+
         '<div style="width:100px;height:6px;background:rgba(15,23,42,.08);border-radius:4px;overflow:hidden;"><i style="display:block;height:100%;width:'+pct+'%;background:'+(full?'#22c55e':'#22d3ee')+';"></i></div>'+
         '<span style="font-size:12px;font-weight:800;color:'+(full?'#15803d':'#334155')+';min-width:56px;text-align:right;">'+p.done+(p.vol?(' / '+p.vol):'')+'</span>'+
-        '<span style="font-size:11px;color:#8a93a3;min-width:56px;text-align:right;">'+(h!=null?(h+'h'):'— h')+'</span>'+
+        '<span style="font-size:11px;color:#8a93a3;min-width:56px;text-align:right;" title="'+(isTaskH?'hours tracked on this task today':'total project hours today (no per-task match)')+'">'+(h!=null?(h+'h'+(isTaskH?'':'*')):'— h')+'</span>'+
         '<span style="font-size:11.5px;font-weight:800;color:#0e7490;min-width:64px;text-align:right;">'+(oph!=null?(oph+'/hr'):'')+'</span>'+
       '</div>';
     }).join('');
@@ -723,6 +728,8 @@ async function dcSetTarget(){
   }catch(e){ alert('Connection error.'); }
 }
 
+setInterval(function(){ if(!document.hidden && _DCB.project && _DCB.project!=='—') dcLoadBoard(); }, 60000);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden && _DCB.project && _DCB.project!=='—') dcLoadBoard(); });
 /* ---- boot ---- */
 (function(){ var u=null; try{ u=JSON.parse(sessionStorage.getItem('prod_user')||'null'); }catch(e){}
   if(u&&u.id&&String(u.id).toUpperCase()==='ADMIN'){ USER=u; startApp(); } else { try{ sessionStorage.removeItem('prod_user'); }catch(e){} $('si-id').focus();
