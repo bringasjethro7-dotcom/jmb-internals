@@ -147,7 +147,20 @@ function renderTabs(){
   Object.keys(by).sort(function(a,b){ return by[b]-by[a]; }).forEach(function(k){ if(k===mine||k==='—') return; html.push(pill(k, esc(vaName(k)), by[k])); });
   host.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap;">'+html.join('')+'</div>';
 }
-async function loadNames(){ try{ var d=await jFetch(API+'?action=get_all_employees&_='+Date.now()); (d.employees||[]).forEach(function(e){ var k=String(e.employee_id).toLowerCase(); NAMES[k]=e.full_name||e.employee_id; SHIFTOF[k]=String(e.shift||'').toLowerCase(); }); try{ render(); }catch(_r){} }catch(e){} }
+/* Names + shift assignments: hydrate instantly from the last good copy, then refresh from the
+   server and RETRY until it succeeds — one slow response can no longer leave IDs on screen
+   or night VAs running under morning rules. */
+(function(){ try{ var c=JSON.parse(sessionStorage.getItem('jmb_empdir')||'null');
+  if(c && c.N && (Date.now()-(c.t||0))<24*3600*1000){ NAMES=c.N||{}; SHIFTOF=c.S||{}; } }catch(e){} })();
+async function loadNames(){
+  try{
+    var d=await jFetch(API+'?action=get_all_employees&_='+Date.now(), 3);
+    if(!d || !d.employees || !d.employees.length) throw new Error('empty');
+    (d.employees||[]).forEach(function(e){ var k=String(e.employee_id).toLowerCase(); NAMES[k]=e.full_name||e.employee_id; SHIFTOF[k]=String(e.shift||'').toLowerCase(); });
+    try{ sessionStorage.setItem('jmb_empdir', JSON.stringify({N:NAMES, S:SHIFTOF, t:Date.now()})); }catch(_p){}
+    try{ render(); }catch(_r){}
+  }catch(e){ setTimeout(loadNames, 15000); }   // keep trying until the directory loads
+}
 function delBtn(id){ return '<button onclick="delAcct(\''+id+'\')" title="Delete (wrong entry)" style="border:1px solid rgba(239,68,68,.3);background:#fff;color:#b91c1c;border-radius:8px;padding:5px 8px;font-size:10.5px;font-weight:800;cursor:pointer;">🗑</button>'; }
 async function delAcct(id){
   var r0=ROWS.filter(function(x){return x.id===id;})[0];
@@ -346,5 +359,12 @@ async function move(id, st){
 (function(){ var u=null; try{ u=JSON.parse(sessionStorage.getItem('ember_user')||'null'); }catch(e){}
   if(u&&u.id){ USER=u; start(); } else { $('si-id').focus(); $('si-pin').addEventListener('keydown',function(e){ if(e.key==='Enter') signIn(); }); } })();
 </script>
+
+<style id="stat-grid-fix">
+/* Stat chips: equal sizes, stretched across the full row */
+.top{ display:grid !important; grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)) !important; gap:10px !important; align-items:stretch; }
+.top .stat{ width:auto !important; display:flex; flex-direction:column; justify-content:center; }
+.top .balance{ grid-column:1 / -1; margin-left:0 !important; text-align:center; }
+</style>
 </body>
 </html>
