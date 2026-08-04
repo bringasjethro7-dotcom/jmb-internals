@@ -276,12 +276,28 @@ function renderByVA(segs, doneFn, activeFn, amFn){
   var list=keys.map(function(k,i){
     var rows=by[k];
     var act=activeFn?rows.filter(activeFn):rows;
-    var done=doneFn?act.filter(doneFn).length:0, tot=act.length;
+    // SESSION-UNIT counting: every workable account = 2 sessions (Warming → Super Strong,
+    // incl. Recovery). An account banned/temp-banned MID-DAY keeps the sessions it finished —
+    // they count in done AND total, so honest partial days show truthfully.
+    var done=0, tot=0;
+    act.forEach(function(rr){
+      var m=rr.meta||{}; var ow=rr.assigned_to||rr.created_by;
+      tot+=2;
+      if(markOk(m.s1,ow)) done++;
+      if(markOk(m.s2,ow)) done++;
+    });
+    rows.forEach(function(rr){
+      if(activeFn && activeFn(rr)) return;              // already counted above
+      if(rr.status!=='banned' && rr.status!=='tempban') return;
+      var m=rr.meta||{}; var ow=rr.assigned_to||rr.created_by;
+      var earned=(markOk(m.s1,ow)?1:0)+(markOk(m.s2,ow)?1:0);
+      if(earned>0){ done+=earned; tot+=earned; }        // banned mid-day: earned sessions stand
+    });
     return {k:k,i:i,done:done,tot:tot,pct:tot?Math.round(done/tot*100):0,n:rows.length};
   }).sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
   try{ var _me=list.filter(function(o){ return o.k===mine; })[0]; if(_me) _maybeSnap(_me.done, _me.tot); }catch(_ms){}
   host.innerHTML='<div class="pvwrap">'+
-    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">'+IC.bars+' Today — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked this shift · resets per shift · 8 AM / 8 PM</span></div>'+
+    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">'+IC.bars+' Today — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">sessions done this shift · 2 per account · resets 8 AM / 8 PM</span></div>'+
     list.map(function(o,ix){
       var pc=o.pct>=100?'#10b981':(o.pct>=70?'#f59e0b':'#ef4444');
       var name=vaName(o.k);
