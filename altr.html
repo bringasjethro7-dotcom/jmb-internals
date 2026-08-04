@@ -584,7 +584,7 @@ body::after{ content:""; position:fixed; left:-120px; top:-120px; width:380px; h
         <select class="sel" id="acct-tagf" onchange="renderAccountsTab()"><option value="">All tags</option><option value="__any">⚑ Any flag</option><option value="__none">No flag</option></select>
         <select class="sel" id="acct-folf" onchange="renderAccountsTab()"><option value="">All followers</option><option value="0-999">&lt; 1K</option><option value="1000-9999">1K – 10K</option><option value="10000-99999">10K – 100K</option><option value="100000-">100K+</option></select>
         <input class="search" id="acct-search" placeholder="Search handle / phone…" oninput="renderAccountsTab()" />
-        <button class="ghost" onclick="openAcctReport()" title="Generate a suspended / logged-out report grouped by phone">📋 Report</button>
+        <button class="ghost" onclick="openAcctReport()" title="Generate an account report — status, followers range &amp; category, grouped by phone">📋 Report</button>
         <button class="ghost" onclick="refreshFollowersBulk()" title="Pull latest followers &amp; bio for the accounts shown">↻ Followers &amp; bio</button>
         <button class="ghost" onclick="refreshFollowersBulk(true)" title="Only pull accounts that have no bio yet — saves RapidAPI calls">↻ Missing bios</button>
         <button class="adminbtn" id="acct-add-btn" style="display:none" onclick="addAccountPrompt()">+ Add account</button>
@@ -674,12 +674,19 @@ body::after{ content:""; position:fixed; left:-120px; top:-120px; width:380px; h
 <div id="acct-report-modal" style="display:none;position:fixed;inset:0;z-index:9600;align-items:center;justify-content:center;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);padding:16px;">
   <div style="width:540px;max-width:100%;background:var(--bg2,#ffffff);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 30px 90px rgba(0,0,0,.6);">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-      <div style="font-size:16px;font-weight:800;color:var(--t1);">📋 Account status report</div>
+      <div style="font-size:16px;font-weight:800;color:var(--t1);">📋 Account report <span style="font-weight:600;font-size:12px;color:var(--t3);">status · followers · category</span></div>
       <button class="ghost" onclick="closeAcctReport()">✕ Close</button>
     </div>
     <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
       <label style="display:inline-flex;align-items:center;gap:6px;color:var(--t2);font-size:13px;cursor:pointer;"><input type="checkbox" id="rep-susp" checked onchange="genAcctReport()"> Suspended</label>
       <label style="display:inline-flex;align-items:center;gap:6px;color:var(--t2);font-size:13px;cursor:pointer;"><input type="checkbox" id="rep-lo" checked onchange="genAcctReport()"> Logged out</label>
+      <label style="display:inline-flex;align-items:center;gap:6px;color:var(--t2);font-size:13px;cursor:pointer;"><input type="checkbox" id="rep-act" onchange="genAcctReport()"> Active</label>
+      <select class="sel" id="rep-folf" onchange="genAcctReport()" style="font-size:12.5px;padding:6px 9px;" title="Followers range"><option value="">All followers</option><option value="0-999">&lt; 1K</option><option value="1000-9999">1K – 10K</option><option value="10000-99999">10K – 100K</option><option value="100000-">100K+</option></select>
+      <span style="display:inline-flex;align-items:center;gap:5px;color:var(--t3);font-size:12px;">custom
+        <input id="rep-fmin" inputmode="numeric" placeholder="min" oninput="genAcctReport()" style="width:76px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:12.5px;">–
+        <input id="rep-fmax" inputmode="numeric" placeholder="max" oninput="genAcctReport()" style="width:76px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:12.5px;">
+      </span>
+      <select class="sel" id="rep-tagf" onchange="genAcctReport()" style="font-size:12.5px;padding:6px 9px;" title="Category"><option value="">All categories</option><option value="__any">⚑ Any flag</option><option value="__none">No flag</option></select>
       <span style="flex:1"></span>
       <button class="adminbtn" onclick="copyAcctReport()">⧉ Copy report</button>
     </div>
@@ -1878,24 +1885,43 @@ async function setAcctStatusVal(phone,user,acct,handle,val){
 /* ---- Account status report (suspended / logged out, grouped by phone) ---- */
 function openAcctReport(){
   var m=$('acct-report-modal'); if(!m) return;
-  if(!$('rep-susp').checked && !$('rep-lo').checked){ $('rep-susp').checked=true; $('rep-lo').checked=true; }
+  var ts=$('rep-tagf'); if(ts && ts.options.length<=3){ ACCT_TAGS.forEach(function(t){ var o=document.createElement('option'); o.value=t; o.textContent='⚑ '+t; ts.appendChild(o); }); }
+  if(!$('rep-susp').checked && !$('rep-lo').checked && !($('rep-act')&&$('rep-act').checked)){ $('rep-susp').checked=true; $('rep-lo').checked=true; }
   genAcctReport();
   m.style.display='flex';
 }
 function closeAcctReport(){ var m=$('acct-report-modal'); if(m) m.style.display='none'; }
 function genAcctReport(){
-  var wantS=$('rep-susp')&&$('rep-susp').checked, wantL=$('rep-lo')&&$('rep-lo').checked;
+  var wantS=$('rep-susp')&&$('rep-susp').checked, wantL=$('rep-lo')&&$('rep-lo').checked, wantA=$('rep-act')&&$('rep-act').checked;
+  var ff=$('rep-folf')?$('rep-folf').value:'';
+  var fmin=parseInt(($('rep-fmin')||{}).value,10), fmax=parseInt(($('rep-fmax')||{}).value,10);
+  var lo=isNaN(fmin)?null:fmin, hi=isNaN(fmax)?null:fmax;
+  if(lo==null && hi==null && ff){ var pp=ff.split('-'); lo=Number(pp[0]||0); hi=(pp[1]===''||pp[1]===undefined)?null:Number(pp[1]); }
+  var tf=$('rep-tagf')?$('rep-tagf').value:'';
   var accts=(STATE&&STATE.accounts)||[];
-  var sel=accts.filter(function(a){ var s=String(a.status||'active'); return (wantS&&s==='suspended')||(wantL&&s==='logged_out'); });
+  var sel=accts.filter(function(a){
+    var s=String(a.status||'active');
+    if(!((wantS&&s==='suspended')||(wantL&&s==='logged_out')||(wantA&&s==='active'))) return false;
+    if(lo!=null || hi!=null){ var fol=fnum(a.followers)||0; if(lo!=null&&fol<lo) return false; if(hi!=null&&fol>hi) return false; }
+    if(tf){ var tag=String(a.tag||'').trim();
+      if(tf==='__any'){ if(!tag) return false; }
+      else if(tf==='__none'){ if(tag) return false; }
+      else if(tag!==tf) return false; }
+    return true;
+  });
   var byPhone={}; sel.forEach(function(a){ var p=String(a.phone||'?'); (byPhone[p]=byPhone[p]||[]).push(a); });
   var phones=Object.keys(byPhone).sort(function(a,b){ return (parseInt(a,10)||0)-(parseInt(b,10)||0); });
-  var titleParts=[]; if(wantS)titleParts.push('Suspended'); if(wantL)titleParts.push('Logged out');
+  var titleParts=[]; if(wantS)titleParts.push('Suspended'); if(wantL)titleParts.push('Logged out'); if(wantA)titleParts.push('Active');
+  var scope=[];
+  if(lo!=null || hi!=null) scope.push('Followers '+(lo!=null?lo.toLocaleString():'0')+' – '+(hi!=null?hi.toLocaleString():'∞'));
+  if(tf) scope.push('Category: '+(tf==='__any'?'any flag':(tf==='__none'?'no flag':tf)));
   var date=new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
   var L=[];
-  L.push('🚨 ALTR Account Status Report — '+date);
-  L.push(titleParts.join(' & ')||'(select at least one)');
+  L.push((wantA?'📋':'🚨')+' ALTR Account Report — '+date);
+  L.push(titleParts.join(' & ')||'(select at least one status)');
+  if(scope.length) L.push(scope.join(' · '));
   L.push('');
-  if(!sel.length){ L.push('✅ No '+(titleParts.join(' / ').toLowerCase()||'flagged')+' accounts right now. All good!'); }
+  if(!sel.length){ L.push('✅ No accounts match this filter.'); }
   else {
     phones.forEach(function(p){
       L.push('📱 Phone '+p);
@@ -1903,14 +1929,18 @@ function genAcctReport(){
       byPhone[p].forEach(function(a){
         var hh=String(a.handle||'').replace(/^@/,'');
         var who=hh?('@'+hh):('A'+a.acct);
-        var st=(String(a.status)==='logged_out')?'Logged out':'Suspended';
-        L.push('   • U'+a.user+' · '+who+' — '+st);
+        var s=String(a.status||'active');
+        var st=(s==='logged_out')?'Logged out':(s==='suspended')?'Suspended':'Active';
+        var fol=fnum(a.followers)||0;
+        var tag=String(a.tag||'').trim();
+        L.push('   • U'+a.user+' · '+who+' — '+st+(fol?(' · '+fol.toLocaleString()+' followers'):'')+(tag?(' · ⚑ '+tag):''));
       });
       L.push('');
     });
     var ns=sel.filter(function(a){return String(a.status)==='suspended';}).length;
     var nl=sel.filter(function(a){return String(a.status)==='logged_out';}).length;
-    var parts=[]; if(wantS)parts.push(ns+' suspended'); if(wantL)parts.push(nl+' logged out');
+    var na=sel.filter(function(a){return String(a.status||'active')==='active';}).length;
+    var parts=[]; if(wantS)parts.push(ns+' suspended'); if(wantL)parts.push(nl+' logged out'); if(wantA)parts.push(na+' active');
     L.push('Total: '+sel.length+' account'+(sel.length!==1?'s':'')+' ('+parts.join(', ')+') across '+phones.length+' phone'+(phones.length!==1?'s':'')+'.');
   }
   $('acct-report-text').value=L.join('\n');
