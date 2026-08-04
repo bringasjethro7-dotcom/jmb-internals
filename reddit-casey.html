@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JMB — Reddit Casey Tool</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#f6f7fb;--card:#fff;--ink:#171a21;--ink2:#5b6470;--ink3:#8a93a3;--line:#e5e8ef;--or:#ff4500;--or2:#c93400;--ok:#10b981;--warn:#f59e0b;--bad:#ef4444;--rec:#0ea5e9;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Manrope',system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 16px 60px}
+  h1{font-family:'Sora',sans-serif;font-size:24px}h1 em{font-style:normal;color:var(--or)}
+  .sub{color:var(--ink2);font-size:12.5px;margin:5px 0 14px;line-height:1.55}
+  .top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 15px;text-align:center}
+  .stat b{font-family:'Sora',sans-serif;font-size:20px;display:block}
+  .stat span{font-size:10.5px;color:var(--ink3);font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+  .addbox{display:flex;gap:8px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px;margin-bottom:8px}
+  .addbox input{flex:1;min-width:180px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px}
+  .addbox button{background:linear-gradient(135deg,var(--or),var(--or2));color:#fff;border:none;border-radius:10px;padding:9px 16px;font-weight:800;cursor:pointer}
+  .reminder{font-size:11px;color:var(--ink3);background:rgba(255,69,0,.05);border:1px solid rgba(255,69,0,.18);border-radius:10px;padding:8px 12px;margin-bottom:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(305px,1fr));gap:12px}
+  .acct{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 15px}
+  .acct.done{border-color:rgba(16,185,129,.5)}
+  .acct.dim{opacity:.55}
+  .hd{display:flex;align-items:center;gap:8px}
+  .hd b{font-size:14.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ph{font-size:10px;font-weight:900;color:#fff;border-radius:100px;padding:3px 9px;white-space:nowrap}
+  .plan{font-size:11.5px;color:var(--ink2);background:rgba(255,69,0,.045);border-radius:9px;padding:7px 10px;margin:9px 0;line-height:1.5}
+  .btns{display:flex;gap:5px;flex-wrap:wrap}
+  .btns button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 9px;font-size:10.5px;font-weight:800;cursor:pointer;color:var(--ink2)}
+  .btns button.go{border-color:rgba(16,185,129,.5);color:#0f766e;background:rgba(16,185,129,.08)}
+  .btns button.dm{border-color:rgba(59,130,246,.5);color:#1d4ed8;background:rgba(59,130,246,.08)}
+  .btns button.up{border-color:rgba(255,69,0,.4);color:var(--or2);background:rgba(255,69,0,.06)}
+  .btns button.rec{border-color:rgba(14,165,233,.45);color:#0369a1;background:rgba(14,165,233,.07)}
+  .btns button.bad{border-color:rgba(239,68,68,.4);color:#b91c1c;background:rgba(239,68,68,.06)}
+  .muted{color:var(--ink3);font-size:12px;padding:6px 2px}
+  #signin{max-width:360px;margin:12vh auto;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px;text-align:center}
+  #signin input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:14px;margin-top:9px}
+  #signin button{width:100%;margin-top:12px;background:linear-gradient(135deg,var(--or),var(--or2));color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;cursor:pointer;font-size:14px}
+  #si-err{display:none;color:#b91c1c;font-size:12.5px;margin-top:9px}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#171a21;color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;opacity:0;transition:.3s;pointer-events:none;z-index:50}
+  .toast.on{opacity:1}
+
+  /* ── UI v2: calmer look, section headers, ⋯ menus, big progress panel ── */
+  .acct,.model{box-shadow:0 1px 2px rgba(15,23,42,.05);transition:box-shadow .15s}
+  .acct:hover,.model:hover{box-shadow:0 8px 22px rgba(15,23,42,.09)}
+  .sect{grid-column:1/-1;display:flex;align-items:center;gap:10px;margin:14px 0 2px}
+  .sect b{font-family:'Sora',sans-serif;font-size:13.5px;white-space:nowrap}
+  .sect span{font-size:11px;color:var(--ink3);font-weight:800}
+  .sect i{flex:1;height:1px;background:var(--line)}
+  .ph2{font-size:10px;font-weight:900;border-radius:100px;padding:3px 9px;white-space:nowrap}
+  .meta1{font-size:10.5px;color:var(--ink3);margin-top:4px}
+  .planbox{margin:8px 0 2px}
+  .planbox summary{list-style:none;cursor:pointer;font-size:11px;font-weight:800;color:var(--ink3)}
+  .planbox summary::-webkit-details-marker{display:none}
+  .planbox summary::after{content:' ▾'}
+  .planbox[open] summary::after{content:' ▴'}
+  .planbox>div{font-size:11.5px;color:var(--ink2);background:rgba(15,23,42,.035);border-radius:9px;padding:7px 10px;margin-top:5px;line-height:1.5}
+  .kmenu{position:relative}
+  .kmenu summary{list-style:none;cursor:pointer;width:27px;height:27px;border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--ink3);font-weight:900;background:#fff;font-size:14px}
+  .kmenu summary::-webkit-details-marker{display:none}
+  .kmenu[open] summary{background:var(--bg)}
+  .kmenu .dd{position:absolute;right:0;top:31px;z-index:30;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(15,23,42,.16);padding:6px;min-width:210px;display:flex;flex-direction:column;gap:2px}
+  .kmenu .dd button{border:none;background:none;text-align:left;padding:8px 10px;border-radius:8px;font:700 12px 'Manrope',sans-serif;color:var(--ink2);cursor:pointer;white-space:nowrap}
+  .kmenu .dd button:hover{background:var(--bg)}
+  .kmenu .dd button.danger{color:#b91c1c}
+  .kmenu .dd .sep{height:1px;background:var(--line);margin:4px 6px}
+  .acct .btns,.model .btns{margin-top:8px}
+  .pvwrap{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 18px 8px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .pvrow{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
+  .pvrow.first{border-top:none}
+  .pvav{width:36px;height:36px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font:800 12.5px 'Sora',sans-serif;color:#fff}
+  .pvbar{height:14px;border-radius:8px;background:rgba(15,23,42,.07);overflow:hidden}
+  .pvbar i{display:block;height:100%;border-radius:8px;transition:width .4s}
+  .pvpct{font-family:'Sora',sans-serif;font-weight:800;min-width:118px;text-align:right;line-height:1.25}
+</style>
+</head>
+<body>
+<div id="signin">
+  <div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:800"><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:linear-gradient(135deg,#ff4500,#b91c1c);box-shadow:0 0 10px rgba(255,69,0,.5);"></span> JMB <em style="font-style:normal;color:var(--or)">Reddit Casey</em> Tool</div>
+  <div style="font-size:12.5px;color:var(--ink2);margin-top:6px">Sign in with your Employee ID + PIN</div>
+  <input id="si-id" placeholder="Employee ID"><input id="si-pin" type="password" placeholder="PIN">
+  <button onclick="signIn()">Sign in</button><div id="si-err"></div>
+</div>
+
+<div class="wrap" id="app" style="display:none">
+  <h1><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:linear-gradient(135deg,#ff4500,#b91c1c);box-shadow:0 0 12px rgba(255,69,0,.5);"></span> JMB <em>Reddit Casey</em> <span style="font-size:12px;color:var(--ink3);font-weight:600" id="who"></span></h1>
+  <div class="sub">Accounts climb the ladder: <b>Creation (4d) → Warming (1d) → Comment Farming (until 50 karma, max check at 7d) → NSFW (client updates) → Day 1 (1d) → Early → +DMs → Medium → Strong → Super Strong</b>. Work each card's session checklist and tick — sessions, posts, and DMs are all <b>counted automatically</b>. Rotate subreddits, captions & photos — never repeat back-to-back.</div>
+  <div class="top" id="stats"></div>
+  <div class="addbox">
+    <input id="ra-user" placeholder="Account username (u/…)">
+    <select id="ra-phase" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px;background:#fff;min-width:170px;"></select>
+    <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink2);font-weight:700;">created on <input type="date" id="ra-cdate" style="padding:7px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:12px;"></label>
+    <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink2);font-weight:700;"><input type="checkbox" id="ra-new"> just created it (+1 Creation)</label>
+    <button onclick="addAcct()">＋ Add account</button>
+  </div>
+  <div class="reminder"><b>Every phase, every session:</b> check the profile for post/avatar removals (shadowban) & spam-filter flags, and the inbox for mod messages, warnings, or "unable to post". Spotted one? Hit <b>Spam filter</b> on the card.</div>
+  <div id="byva" style="margin-bottom:10px;"></div>
+  <div id="vatabs" style="margin-bottom:12px;"></div>
+  <input id="ra-q" placeholder="Search account or VA…" oninput="render()" style="width:100%;max-width:340px;padding:9px 13px;border:1px solid var(--line);border-radius:100px;font:inherit;font-size:13px;background:var(--card);margin-bottom:12px;">
+  <div style="margin-bottom:14px;">
+    <button onclick="var m=document.getElementById('matrix'); m.style.display=(m.style.display==='none'?'block':'none');" style="border:1px solid var(--line);background:var(--card);border-radius:9px;padding:7px 13px;font:800 12px 'Manrope',sans-serif;color:var(--ink2);cursor:pointer;">Accounts per VA × phase</button>
+    <div id="matrix" style="display:none;margin-top:8px;overflow-x:auto;"></div>
+  </div>
+  <div class="grid" id="grid"><div class="muted">Loading…</div></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+var API='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
+var PROJECT='Reddit - Casey';
+var USER=null, ROWS=[], NAMES={}, SHIFTOF={}, PHOTOOF={};
+var SI=function(p,w){ return '<svg width="'+(w||14)+'" height="'+(w||14)+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">'+p+'</svg>'; };
+var IC={
+ check:SI('<polyline points="20 6 9 17 4 12"/>'),
+ star:SI('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>'),
+ mail:SI('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>'),
+ up:SI('<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>'),
+ buoy:SI('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/><line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/><line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/>'),
+ ban:SI('<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>'),
+ trash:SI('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>'),
+ undo:SI('<polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>'),
+ hour:SI('<path d="M5 22h14M5 2h14"/><path d="M17 22v-4.17a2 2 0 0 0-.59-1.42L12 12l-4.41 4.41A2 2 0 0 0 7 17.83V22"/><path d="M7 2v4.17a2 2 0 0 0 .59 1.42L12 12l4.41-4.41A2 2 0 0 0 17 6.17V2"/>'),
+ lock:SI('<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'),
+ sun:SI('<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2"/>',12),
+ moon:SI('<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',12),
+ bars:SI('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',16),
+ doc:SI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',12)
+};
+function drivePhoto(u){ u=String(u||''); if(!u) return ''; var m=u.match(/[-\w]{25,}/); return m?('https://drive.google.com/thumbnail?id='+m[0]+'&sz=w128'):u; }
+/* ── fetching layer: timeout + retry on READS (never on writes), local cache for instant paint,
+   visibility-aware polling (pauses when the tab is hidden, refreshes on focus) ── */
+async function jFetch(url, tries){
+  tries=(tries==null)?2:tries;
+  for(var a=0;a<=tries;a++){
+    try{
+      var ctl=(typeof AbortController!=='undefined')?new AbortController():null;
+      var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },10000):null;
+      var r=await fetch(url, ctl?{signal:ctl.signal}:undefined);
+      if(tm) clearTimeout(tm);
+      return await r.json();
+    }catch(e){ if(a===tries) throw e; await new Promise(function(res){ setTimeout(res, 500*(a+1)); }); }
+  }
+}
+function cacheRows(){ try{ sessionStorage.setItem('dc_rows_'+PROJECT, JSON.stringify({t:Date.now(), rows:ROWS})); }catch(e){} }
+function paintCached(){ try{ var c=JSON.parse(sessionStorage.getItem('dc_rows_'+PROJECT)||'null');
+  if(c && c.rows && c.rows.length && (Date.now()-c.t)<10*60*1000){ ROWS=c.rows; render(); return true; } }catch(e){} return false; }
+function smartPoll(){
+  setInterval(function(){ if(!document.hidden) load(); }, 60000);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) load(); });
+  window.addEventListener('focus', function(){ load(); });
+}
+/* ── VA view tabs: '👤 My accounts' (default) · '🌐 All' · one tab per VA ── */
+var FILTER=(function(){ try{ return sessionStorage.getItem('dc_va_'+PROJECT)||'mine'; }catch(e){ return 'mine'; } })();
+function ownerOf(r){ return String(r.assigned_to||r.created_by||'').toLowerCase(); }
+function filterRows(){ if(FILTER==='all') return ROWS; var t=(FILTER==='mine')?String((USER&&USER.id)||'').toLowerCase():FILTER; return ROWS.filter(function(r){ return ownerOf(r)===t; }); }
+function setFilter(f){ FILTER=f; try{ sessionStorage.setItem('dc_va_'+PROJECT,f); }catch(e){} render(); }
+function renderTabs(){
+  var host=document.getElementById('vatabs'); if(!host) return;
+  var mine=String((USER&&USER.id)||'').toLowerCase();
+  var by={}; ROWS.forEach(function(r){ var k=ownerOf(r)||'—'; by[k]=(by[k]||0)+1; });
+  function pill(val,label,n){ var on=(FILTER===val);
+    return '<button onclick="setFilter(\''+val+'\')" style="border:1px solid '+(on?'#0f766e':'var(--line)')+';background:'+(on?'rgba(16,185,129,.12)':'var(--card)')+';color:'+(on?'#0f766e':'var(--ink2)')+';border-radius:100px;padding:6px 13px;font:800 12px \'Manrope\',sans-serif;cursor:pointer;white-space:nowrap;">'+label+(n!=null?(' · '+n):'')+'</button>'; }
+  var html=[ pill('mine','My accounts', by[mine]||0), pill('all','All', ROWS.length) ];
+  Object.keys(by).sort(function(a,b){ return by[b]-by[a]; }).forEach(function(k){ if(k===mine||k==='—') return; html.push(pill(k, esc(vaName(k)), by[k])); });
+  host.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap;">'+html.join('')+'</div>';
+}
+/* Names + shift assignments: hydrate instantly from the last good copy, then refresh from the
+   server and RETRY until it succeeds — one slow response can no longer leave IDs on screen
+   or night VAs running under morning rules. */
+(function(){ try{ var c=JSON.parse(sessionStorage.getItem('jmb_empdir')||'null');
+  if(c && c.N && (Date.now()-(c.t||0))<24*3600*1000){ NAMES=c.N||{}; SHIFTOF=c.S||{}; PHOTOOF=c.P||{}; } }catch(e){} })();
+async function loadNames(){
+  function _dirFetch(url){ return new Promise(function(res,rej){
+    var ctl=(typeof AbortController!=='undefined')?new AbortController():null;
+    var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },25000):null;
+    fetch(url, ctl?{signal:ctl.signal}:undefined).then(function(r){ return r.json(); })
+      .then(function(j){ if(tm) clearTimeout(tm); res(j); })
+      .catch(function(e){ if(tm) clearTimeout(tm); rej(e); });
+  }); }
+  try{
+    var d=null;
+    try{ d=await _dirFetch(API+'?action=emp_dir&_='+Date.now()); }catch(_e1){}
+    if(!d || !d.employees || !d.employees.length){ d=await _dirFetch(API+'?action=get_all_employees&_='+Date.now()); }
+    if(!d || !d.employees || !d.employees.length) throw new Error('empty');
+    (d.employees||[]).forEach(function(e){
+      var k=String(e.employee_id).toLowerCase();
+      NAMES[k]=e.full_name||e.employee_id;
+      var sh=String(e.shift||'').toLowerCase();
+      if(!sh && e.payslips && e.payslips.length) sh=String((e.payslips[0]||{}).shift||'').toLowerCase();
+      SHIFTOF[k]=sh; if(typeof PHOTOOF!=='undefined') PHOTOOF[k]=(typeof drivePhoto==='function')?drivePhoto(e.photo||''):String(e.photo||'');
+    });
+    try{ sessionStorage.setItem('jmb_empdir', JSON.stringify({N:NAMES, S:SHIFTOF, P:PHOTOOF, t:Date.now()})); }catch(_p){}
+    try{ render(); }catch(_r){}
+  }catch(e){ setTimeout(loadNames, 15000); }
+}
+function delBtn(id){ return '<button onclick="delAcct(\''+id+'\')" title="Delete (wrong entry)" style="border:1px solid rgba(239,68,68,.3);background:#fff;color:#b91c1c;border-radius:8px;padding:5px 8px;font-size:10.5px;font-weight:800;cursor:pointer;">'+IC.trash+'</button>'; }
+async function delAcct(id){
+  var r0=ROWS.filter(function(x){return x.id===id;})[0];
+  if(!confirm('DELETE '+((r0&&r0.handle)||'this entry')+' from the board?\n\nUse this only for wrong entries. Outputs already counted are not affected.')) return;
+  try{
+    var r=await fetch(API+'?action=pa_delete&id='+encodeURIComponent(id)+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
+    var d=await r.json();
+    if(d&&d.ok){ toast('Deleted.'); load(); }
+    else if(d&&d.error==='NOT_YOURS') toast('Only the VA who owns this entry (or admin) can delete it.');
+    else toast('Could not delete: '+((d&&d.error)||'error'));
+  }catch(e){ toast('Connection error.'); }
+}
+function vaName(id){ return NAMES[String(id||'').toLowerCase()]||id||'—'; }
+function today(){ // JMB business day — resets 8:00 AM Philippine time (a night shift never splits across two days)
+  try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-8*3600*1000)); }
+  catch(e){ return new Date(Date.now()-8*3600*1000).toISOString().slice(0,10); } }
+function shiftKey(){ // per-SHIFT work key — morning 08:00–19:59 = date·AM · night 20:00–07:59 = start-date·PM
+  try{
+    var h=parseInt(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',hour12:false}).format(new Date()),10);
+    var base=(h<8)? new Date(Date.now()-24*3600*1000) : new Date();
+    var d=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(base);
+    return d+((h>=8&&h<20)?'·AM':'·PM');
+  }catch(e){ return today()+'·?' ; } }
+function isTodayMark(v){ // transition-tolerant: plain business date OR the short-lived ·AM/·PM formats
+  return v===today() || v===today()+'·AM' || v===today()+'·PM'; }
+// Per-VA shift window: ☀ morning VAs reset 8 AM · 🌙 night VAs reset 8 PM. A VA's bar lives
+// through their whole shift AND after it, until THEIR next shift starts. Keys: date·AM / date·PM.
+function vaKeyOf(empId){
+  var sh=SHIFTOF[String(empId||'').toLowerCase()];
+  if(sh==='night'){
+    var d=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-20*3600*1000));
+    return d+'·PM';   // night window: 8 PM → next 8 PM, keyed by its start date
+  }
+  return today()+'·AM';   // morning window: 8 AM → next 8 AM
+}
+function markOk(v, empId){
+  if(!v) return false;
+  if(v===vaKeyOf(empId)) return true;
+  // transition day: pre-shift-key plain marks still count for MORNING VAs only
+  var sh=SHIFTOF[String(empId||'').toLowerCase()];
+  return sh!=='night' && v===today();
+}
+
+
+
+function pstartOf(r){ return (r.meta&&r.meta.pstart)||cdateOf(r)||''; }
+function daysIn(r){ var p=pstartOf(r); if(!p) return 0; return Math.max(0,Math.floor((Date.now()-new Date(p+'T00:00:00').getTime())/86400000)); }
+function karmaOf(r){ return (r.meta&&r.meta.karma!=null)?(parseInt(r.meta.karma,10)||0):0; }
+function cdateOf(r){ return (r.meta&&r.meta.cdate)||''; }
+function ageTxt(r){ var c=cdateOf(r); if(!c) return ''; var days=Math.max(0,Math.round((Date.now()-new Date(c+'T00:00:00').getTime())/86400000)); return c+' · '+days+'d old'; }
+var AVC=['#fb923c','#f97316','#ea580c','#dc2626','#e11d48','#b91c1c','#c2410c','#9a3412'];
+function kmenu(items){
+  return '<details class="kmenu" onclick="event.stopPropagation()"><summary>⋯</summary><div class="dd">'+items.map(function(it){
+    if(it==='---') return '<div class="sep"></div>';
+    return '<button class="'+(it[2]||'')+'" onclick="this.closest(\'details\').removeAttribute(\'open\');'+it[1]+'">'+it[0]+'</button>';
+  }).join('')+'</div></details>';
+}
+document.addEventListener('click', function(e){
+  document.querySelectorAll('details.kmenu[open]').forEach(function(d){ if(!d.contains(e.target)) d.removeAttribute('open'); });
+});
+function _maybeSnap(done, tot){
+  // Record today's completion (like ALTR's Record Day) — once per change, fire-and-forget.
+  try{
+    if(!USER||!USER.id||!tot) return;
+    var k='snap_'+PROJECT+'_'+vaKeyOf(USER.id), v=done+'/'+tot;
+    if(sessionStorage.getItem(k)===v) return;
+    sessionStorage.setItem(k, v);
+    fetch(API+'?action=po_snap&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent('📋 Board Completion')+'&done='+done+'&total='+tot+'&date='+encodeURIComponent(today())+'&_='+Date.now()).catch(function(){});
+  }catch(e){}
+}
+function amKey(){ return today()+'·AM'; }
+function renderByVA(segs, doneFn, activeFn, amFn){
+  var host=document.getElementById('byva'); if(!host) return;
+  var by={}; ROWS.forEach(function(r){ var k=String(r.assigned_to||r.created_by||'—').toLowerCase(); (by[k]=by[k]||[]).push(r); });
+  var keys=Object.keys(by);
+  if(!keys.length){ host.innerHTML=''; return; }
+  var mine=String((USER&&USER.id)||'').toLowerCase();
+  var list=keys.map(function(k,i){
+    var rows=by[k];
+    var act=activeFn?rows.filter(activeFn):rows;
+    var done=doneFn?act.filter(doneFn).length:0, tot=act.length;
+    return {k:k,i:i,done:done,tot:tot,pct:tot?Math.round(done/tot*100):0,n:rows.length};
+  }).sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
+  try{ var _me=list.filter(function(o){ return o.k===mine; })[0]; if(_me) _maybeSnap(_me.done, _me.tot); }catch(_ms){}
+  host.innerHTML='<div class="pvwrap">'+
+    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">'+IC.bars+' Today — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked this shift · resets per shift · 8 AM / 8 PM</span></div>'+
+    list.map(function(o,ix){
+      var pc=o.pct>=100?'#10b981':(o.pct>=70?'#f59e0b':'#ef4444');
+      var name=vaName(o.k);
+      var init=String(name).split(/\s+/).slice(0,2).map(function(w){return w.charAt(0);}).join('').toUpperCase()||'?';
+      var me=(o.k===mine);
+      return '<div class="pvrow'+(ix===0?' first':'')+'"'+(me?' style="background:rgba(16,185,129,.05);border-radius:12px;padding-left:10px;padding-right:10px;"':'')+'>'+
+        (PHOTOOF[o.k]?('<img src="'+PHOTOOF[o.k]+'" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex:none;box-shadow:0 2px 8px rgba(15,23,42,.18);">')
+          :('<div class="pvav" style="background:'+AVC[o.i%AVC.length]+'">'+esc(init)+'</div>'))+
+        '<div style="flex:1;min-width:0;">'+
+          '<div style="display:flex;align-items:baseline;gap:8px;"><b style="font-size:13.5px;">'+(SHIFTOF[o.k]==='night'?IC.moon+' ':(SHIFTOF[o.k]?IC.sun+' ':''))+esc(name)+'</b>'+(me?'<span style="font-size:10px;color:#0f766e;font-weight:800;">you</span>':'')+'<span style="font-size:11px;color:var(--ink3);font-weight:700;">'+o.n+' on board</span></div>'+
+          '<div class="pvbar" style="margin-top:7px;"><i style="width:'+Math.min(100,o.pct)+'%;background:'+pc+';"></i></div>'+
+        '</div>'+
+        '<div class="pvpct" style="color:'+pc+'"><span style="font-size:17px;">'+o.done+' / '+o.tot+'</span><br><span style="font-size:12.5px;">'+o.pct+'%'+(o.pct>=100&&o.tot?' ✅':'')+' today</span></div>'+
+      '</div>';
+    }).join('')+'</div>';
+}
+var PH=[
+ {k:'creation',  n:'Creation',       c:'#fb923c', dur:4, plan:'Account creation process (iPhone farm SOP) — runs 4 days before Warming.', task:null},
+ {k:'warming',   n:'Warming',        c:'#f97316', dur:1, plan:'5 min browsing · search 5 subreddits · upvote 2 · join 2 — 1 day.', task:'Reddit Warmup', tn:1},
+ {k:'comment',   n:'Comment Farm',   c:'#ea580c', maxDur:7, karma:50, plan:'5 min browsing · search 5 · upvote 3 · join 2 · 2 SFW comments (approved subs). Goal: 50 KARMA → NSFW. 7 days without 50 karma = stays here.', task:'Reddit Warmup', tn:1},
+ {k:'nsfw',      n:'NSFW Comments',  c:'#dc2626', client:true, plan:'5 min browsing · search 5 · upvote 3 · 2 comments/replies (approved subs). CLIENT updates this status.', task:'Reddit Warmup', tn:1},
+ {k:'day1',      n:'Day 1 Posting',  c:'#e11d48', dur:1, plan:'3 min browsing · set name/bio/avatar · upvote 2 · 2–3 comments · 1 post/session · ROTATE subs/captions/photos — 1 day.', task:'Reddit Posting', tn:1},
+ {k:'early',     n:'Early Posting',  c:'#be123c', plan:'3 min browsing · upvote 2 · 2–3 comments · 2 posts/session', task:'Reddit Posting', tn:2},
+ {k:'earlydm',   n:'Early + DMs',    c:'#b91c1c', plan:'3 min browsing · 2–3 comments · 2 posts/session · 4 DMs AM + 4 DMs PM', task:'Reddit Posting', tn:2, dms:8},
+ {k:'medium',    n:'Medium + DMs',   c:'#a41c1c', plan:'3 min browsing · 2–3 comments · 3 posts/session · 4 DMs AM + 4 DMs PM', task:'Reddit Posting', tn:3, dms:8},
+ {k:'strong',    n:'Strong',         c:'#991b1b', plan:'3 min browsing · 2–3 comments · 5 posts/session · 8 DMs per shift', task:'Reddit Posting', tn:5, dms:8},
+ {k:'superstrong',n:'Super Strong',  c:'#7f1d1d', plan:'3 min browsing · 2–3 comments · 7 posts/session · 8 DMs/shift · upvote 2', task:'Reddit Posting', tn:7, dms:8}
+];
+function phase(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return PH[i]; return null; }
+function phaseIx(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return i; return -1; }
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('on'); setTimeout(function(){t.classList.remove('on');},2400); }
+function bump(task,n){ return fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now()).catch(function(){}); }
+
+async function signIn(){
+  var id=$('si-id').value.trim(), pin=$('si-pin').value.trim(); var err=$('si-err'); err.style.display='none';
+  if(!id||!pin){ err.style.display='block'; err.textContent='Enter your Employee ID and PIN.'; return; }
+  try{
+    var r=await fetch(API+'?id='+encodeURIComponent(id)+'&pin='+encodeURIComponent(pin)+'&_='+Date.now()); var d=await r.json();
+    if(!d||d.error){ err.style.display='block'; err.textContent=(d&&d.error==='WRONG_PIN')?'Incorrect PIN.':'Employee not found.'; return; }
+    USER={ id:d.employee_id, name:d.full_name||d.employee_id };
+    try{ sessionStorage.setItem('redditcasey_user', JSON.stringify(USER)); }catch(e){}
+    start();
+  }catch(e){ err.style.display='block'; err.textContent='Network error — try again.'; }
+}
+function start(){ $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name;
+  try{ $('ra-cdate').value=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){}
+  loadNames();
+  var ps=$('ra-phase'); if(ps && !ps.options.length){ ps.innerHTML=PH.map(function(p){ return '<option value="'+p.k+'">'+p.n+'</option>'; }).join(''); }
+  paintCached(); load(); smartPoll(); }
+
+async function load(){
+  try{
+    var d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
+    if(!d||!d.ok) throw new Error((d&&d.error)||'load'); ROWS=d.rows||[]; cacheRows(); render();
+  }catch(e){ $('grid').innerHTML='<div class="muted">Could not load — redeploy the Apps Script (pa_list).</div>'; }
+}
+function renderMatrix(){
+  var host=document.getElementById('matrix'); if(!host) return;
+  var cols=PH.map(function(p){ return {k:p.k,n:p.n,c:p.c}; }).concat([{k:'recovery',n:'Recovery',c:'#f97316'},{k:'tempban',n:'Temp ban',c:'#ea580c'},{k:'banned',n:'Banned',c:'#991b1b'}]);
+  var by={}; ROWS.forEach(function(r){ var k=String(r.assigned_to||r.created_by||'—').toLowerCase(); (by[k]=by[k]||[]).push(r); });
+  var keys=Object.keys(by).sort(function(a,b){ return by[b].length-by[a].length; });
+  if(!keys.length){ host.innerHTML='<div class="muted">No accounts yet.</div>'; return; }
+  var head='<tr><th style="text-align:left;padding:6px 9px;position:sticky;left:0;background:var(--card);">VA</th>'+cols.map(function(c){ return '<th style="padding:6px 7px;font-size:10px;white-space:nowrap;color:'+c.c+';">'+c.n+'</th>'; }).join('')+'<th style="padding:6px 9px;">Total</th></tr>';
+  var totals={}; cols.forEach(function(c){ totals[c.k]=0; }); var grand=0;
+  var body=keys.map(function(k){
+    var rows=by[k]; var cells=cols.map(function(c){ var n=rows.filter(function(r){return r.status===c.k;}).length; totals[c.k]+=n;
+      return '<td style="text-align:center;padding:5px 7px;'+(n?('font-weight:800;color:'+c.c):'color:#c8cdd6')+'">'+(n||'·')+'</td>'; }).join('');
+    grand+=rows.length;
+    return '<tr style="border-top:1px solid var(--line);"><td style="padding:5px 9px;font-weight:700;white-space:nowrap;position:sticky;left:0;background:var(--card);">'+esc(vaName(k))+'</td>'+cells+'<td style="text-align:center;font-weight:900;padding:5px 9px;">'+rows.length+'</td></tr>';
+  }).join('');
+  var totRow='<tr style="border-top:2px solid var(--ink2);"><td style="padding:6px 9px;font-weight:900;position:sticky;left:0;background:var(--card);">TOTAL</td>'+cols.map(function(c){ return '<td style="text-align:center;font-weight:900;padding:6px 7px;color:'+c.c+';">'+(totals[c.k]||'·')+'</td>'; }).join('')+'<td style="text-align:center;font-weight:900;padding:6px 9px;">'+grand+'</td></tr>';
+  host.innerHTML='<table style="border-collapse:collapse;font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;min-width:100%;">'+head+body+totRow+'</table>';
+}
+function render(){
+  var creation=ROWS.filter(function(r){return r.status==='creation';}).length;
+  var warm=ROWS.filter(function(r){return ['warming','comment','nsfw'].indexOf(r.status)>=0;}).length;
+  var posting=ROWS.filter(function(r){return ['day1','early','earlydm','medium'].indexOf(r.status)>=0;}).length;
+  var strong=ROWS.filter(function(r){return ['strong','superstrong'].indexOf(r.status)>=0;}).length;
+  $('stats').innerHTML=
+    '<div class="stat"><b style="color:#64748b">'+creation+'</b><span>Creation standby</span></div>'+
+    '<div class="stat"><b style="color:#b45309">'+warm+'</b><span>Warming / farming</span></div>'+
+    '<div class="stat"><b style="color:#e11d48">'+posting+'</b><span>Posting</span></div>'+
+    '<div class="stat"><b style="color:#6d28d9">'+strong+'</b><span>Strong+</span></div>'+
+    '<div class="stat"><b style="color:#0369a1">'+ROWS.filter(function(r){return r.status==='recovery';}).length+'</b><span>Recovery</span></div>'+
+    '<div class="stat"><b style="color:#d97706">'+ROWS.filter(function(r){return r.status==='tempban';}).length+'</b><span>Temp banned</span></div>'+
+    '<div class="stat"><b style="color:#b91c1c">'+ROWS.filter(function(r){return r.status==='banned';}).length+'</b><span>Banned</span></div>'+
+    '<div class="stat"><b>'+ROWS.filter(function(r){return r.status!=='banned';}).length+'</b><span>Active total</span></div>';
+  renderByVA([
+    ['Creation','#64748b',function(r){return r.status==='creation';}],
+    ['Warming','#f59e0b',function(r){return ['warming','comment','nsfw'].indexOf(r.status)>=0;}],
+    ['Posting','#f43f5e',function(r){return ['day1','early','earlydm','medium'].indexOf(r.status)>=0;}],
+    ['Strong+','#6d28d9',function(r){return ['strong','superstrong'].indexOf(r.status)>=0;}],
+    ['Recovery','#0ea5e9',function(r){return r.status==='recovery';}],
+    ['Temp ban','#d97706',function(r){return r.status==='tempban';}],
+    ['Banned','#ef4444',function(r){return r.status==='banned';}]
+  ], function(r){ return markOk(r.meta&&r.meta.last, r.assigned_to||r.created_by); }, function(r){ return r.status!=='banned' && r.status!=='creation' && r.status!=='tempban'; });
+  renderMatrix();
+  if(!ROWS.length){ $('grid').innerHTML='<div class="muted">No accounts yet — create the first via the iPhone farm SOP and add it above.</div>'; return; }
+  renderTabs();
+  var base=filterRows();
+  var ord=function(r){ if(r.status==='banned') return 99; if(r.status==='tempban') return 60; if(r.status==='recovery') return 50; return phaseIx(r.status); };
+  var sorted=base.slice().sort(function(a,b){ return ord(a)-ord(b) || daysIn(b)-daysIn(a); });
+  var q=(($('ra-q')||{}).value||'').trim().toLowerCase();
+  if(q) sorted=sorted.filter(function(r){ return String(r.handle||'').toLowerCase().indexOf(q)>=0 || String(vaName(r.assigned_to||r.created_by)).toLowerCase().indexOf(q)>=0; });
+  if(!sorted.length){ $('grid').innerHTML='<div class="muted">'+(q?'No accounts match "'+esc(q)+'".':'No accounts in this view.')+'</div>'; return; }
+  function grpR(r){ return (r.status==='banned')?'Banned':(r.status==='tempban')?'Temporarily Banned':(r.status==='recovery')?'Spam Recovery':(phase(r.status)||{n:r.status}).n; }
+  var gcnt={}; sorted.forEach(function(r){ var g=grpR(r); gcnt[g]=(gcnt[g]||0)+1; });
+  function cardR(r){
+    var who=esc(vaName(r.assigned_to||r.created_by))+(cdateOf(r)?(' · '+esc(ageTxt(r))):'');
+    if(r.status==='tempban') return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#d9770614;color:#b45309;border:1px solid #d977062e">Temp Banned</span>'+kmenu([[IC.ban+' Permanent ban',"setPhase('"+r.id+"','banned')"],'---',[IC.trash+' Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+
+      '<div class="meta1">'+who+'</div>'+
+      '<div class="meta1" style="color:#b45309;font-weight:700;">Sitting out a temporary ban — no sessions until it lifts. Check it daily.</div>'+
+      '<div class="btns"><button class="go" onclick="tbLifted(\''+r.id+'\')">'+IC.check+' Ban lifted → back to '+(phase((r.meta&&r.meta.prev)||'warming')||{n:'phase'}).n+'</button></div></div>';
+    if(r.status==='banned') return '<div class="acct dim"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#ef444414;color:#b91c1c;border:1px solid #ef44442e">Banned</span>'+kmenu([[IC.undo+' Reinstate (rare)',"setPhase('"+r.id+"','warming')"],'---',[IC.trash+' Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div><div class="meta1">'+who+'</div></div>';
+    if(r.status==='recovery') return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#0ea5e914;color:#0369a1;border:1px solid #0ea5e92e">Recovery</span>'+kmenu([[IC.ban+' Banned',"setPhase('"+r.id+"','banned')"],'---',[IC.trash+' Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+
+      '<div class="meta1">'+who+'</div>'+
+      '<details class="planbox"><summary>'+IC.doc+' Recovery plan</summary><div>10 min ACTIVE browsing · upvote 2–4 posts · reply to 2–3 comments. No posting until clear.</div></details>'+
+      '<div class="btns">'+sessBtns(r,'recovery','+1 recovery')+
+      '<button class="rec" onclick="recovered(\''+r.id+'\')">'+IC.check+' Cleared → '+(phase((r.meta&&r.meta.prev)||'warming')||{n:'phase'}).n+'</button></div></div>';
+    var p=phase(r.status)||PH[0]; var ix=phaseIx(r.status); var next=PH[ix+1];
+    var din=daysIn(r), km=karmaOf(r);
+    var gate='', canUp=true, upLabel=next?(IC.up+' '+next.n):'';
+    if(p.dur){ canUp=din>=p.dur; gate='<span style="font-weight:800;color:'+(canUp?'#0f766e':'var(--ink3)')+'">Day '+Math.min(din+1,p.dur)+'/'+p.dur+(canUp?' · READY ✓':'')+'</span> · '; }
+    if(p.karma){ var kOk=km>=p.karma; canUp=kOk;
+      gate='<span style="font-weight:800;color:'+(kOk?'#0f766e':(din>=p.maxDur?'#b91c1c':'var(--ink3)'))+'">'+IC.star+' '+km+'/'+p.karma+' karma · D'+Math.min(din+1,99)+(kOk?' · READY ✓':(din>=p.maxDur?' · 7d — stays here':''))+'</span> · ';
+      upLabel=next?(IC.up+' '+next.n+' (50 karma ✓)'):''; }
+    if(p.client){ upLabel=next?(IC.up+' '+next.n+' (client approved)'):''; }
+    var menu=[];
+    if(p.karma) menu.push([IC.star+' Update karma',"setKarma('"+r.id+"',"+km+")"]);
+    menu.push([IC.buoy+' Spam filter',"spamFilter('"+r.id+"','"+p.k+"')"]);
+    menu.push([IC.hour+' Temporary ban',"tempBan('"+r.id+"','"+p.k+"')"]);
+    menu.push([IC.ban+' Banned',"setPhase('"+r.id+"','banned')"]);
+    menu.push('---'); menu.push([IC.trash+' Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']);
+    if(p.k==='creation'){
+      var nBan=ROWS.filter(function(x){return x.status==='banned';}).length;
+      return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:'+p.c+'14;color:'+p.c+';border:1px solid '+p.c+'2e">'+p.n+'</span>'+kmenu(menu)+'</div>'+
+        '<div class="meta1">'+gate+who+'</div>'+
+        '<div class="meta1" style="font-weight:700;color:#475569;">Standby — no daily sessions, no effect on your progress %. '+(canUp?'Aged 4d+ — ready to replace a banned account.':'Ages to day 4, then waits as replacement stock.')+(nBan?(' <span style="color:#b91c1c">'+nBan+' banned waiting for replacement.</span>'):'')+'</div>'+
+        (canUp?('<div class="btns"><button class="up" onclick="promote(\''+r.id+'\',\'warming\')">'+IC.up+' Move to Warming — replace a banned account</button></div>'):'')+
+      '</div>';
+    }
+    return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:'+p.c+'14;color:'+p.c+';border:1px solid '+p.c+'2e">'+p.n+'</span>'+kmenu(menu)+'</div>'+
+      '<div class="meta1">'+gate+who+'</div>'+
+      '<details class="planbox"><summary>'+IC.doc+' Today\'s plan</summary><div>'+p.plan+'</div></details>'+
+      '<div class="btns">'+sessBtns(r, p.k, p.task?(p.task==='Reddit Posting'?('+'+p.tn+' posts'):'+1 warm'):null)+
+        (p.dms?('<button class="dm" onclick="dmsDone(\''+r.id+'\','+p.dms+')">'+IC.mail+' DMs done (+'+p.dms+')</button>'):'')+
+        (p.karma&&!canUp?('<button onclick="setKarma(\''+r.id+'\','+km+')">'+IC.star+' Update karma</button>'):'')+
+        (next&&canUp?('<button class="up" onclick="promote(\''+r.id+'\',\''+next.k+'\')">'+upLabel+'</button>'):'')+
+      '</div></div>';
+  }
+  var out=[], lastG='';
+  sorted.forEach(function(r){ var g=grpR(r);
+    if(g!==lastG){ out.push('<div class="sect"><b>'+g+'</b><span>'+gcnt[g]+' account'+(gcnt[g]>1?'s':'')+'</span><i></i></div>'); lastG=g; }
+    out.push(cardR(r)); });
+  $('grid').innerHTML=out.join('');
+}
+async function addAcct(){
+  var u=$('ra-user').value.trim(); if(!u){ toast('Type the account username.'); return; }
+  var phk=($('ra-phase')||{}).value||'creation'; var isNew=($('ra-new')||{}).checked;
+  var cd=($('ra-cdate')||{}).value||'';
+  try{
+    // phase clock starts from the CREATION DATE when seeding into Creation; otherwise from today
+    var ps=(phk==='creation'&&cd)?cd:(cd&&phk==='warming'?cd:today());
+    var meta=encodeURIComponent(JSON.stringify({cdate:cd, pstart:ps}));
+    var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(u)+'&status='+encodeURIComponent(phk)+'&meta='+meta+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
+    var d=await r.json();
+    if(d&&d.ok){
+      $('ra-user').value=''; if($('ra-new')) $('ra-new').checked=false;
+      if(isNew){ await bump('Reddit Account Creation',1); }
+      toast('Added → '+(phase(phk)||{n:phk}).n+(isNew?' · +1 Reddit Account Creation':' (existing account seeded)'));
+      load();
+    }
+    else if(d&&d.error==='DUPLICATE') toast('That username is already on the board.');
+    else toast('Could not add.');
+  }catch(e){ toast('Connection error.'); }
+}
+function row(id){ return ROWS.filter(function(r){return r.id===id;})[0]; }
+async function stampWorked(id){
+  try{ var r0=row(id); var m=Object.assign({}, (r0&&r0.meta)||{}, {last:vaKeyOf(USER.id)});
+    await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now()); }catch(e){}
+}
+async function workedOnly(id){ await stampWorked(id); toast('Logged — worked on it today ✓'); load(); }
+async function setKarma(id, cur){
+  var v=prompt('Current karma for this account:', cur||0); if(v===null) return;
+  var n=parseInt(v,10); if(isNaN(n)||n<0){ toast('Enter a number.'); return; }
+  try{ var r0=row(id); var m=Object.assign({}, (r0&&r0.meta)||{}, {karma:n});
+    var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now());
+    var d=await r.json(); if(d&&d.ok){ toast('Karma updated: '+n+(n>=50?' — 50 reached, NSFW unlocked!':'')); load(); } }catch(e){ toast('Connection error.'); }
+}
+function sessBtns(r, phk, gainTxt){
+  var _ow=r.assigned_to||r.created_by; var s1=markOk(r.meta&&r.meta.s1,_ow), s2=markOk(r.meta&&r.meta.s2,_ow);
+  var g=gainTxt?(' ('+gainTxt+')'):'';
+  var b1=s1?'<button disabled style="opacity:.55">'+IC.check+' Session 1 done</button>'
+           :'<button class="go" onclick="sessionDone(\''+r.id+'\',\''+phk+'\',1)">'+IC.check+' Session 1'+g+'</button>';
+  var b2=s2?'<button disabled style="opacity:.55">'+IC.check+' Session 2 done</button>'
+           :(s1?'<button class="go" onclick="sessionDone(\''+r.id+'\',\''+phk+'\',2)">'+IC.check+' Session 2'+g+'</button>'
+               :'<button disabled style="opacity:.45;cursor:not-allowed" title="Finish Session 1 first">Session 2 '+IC.lock+'</button>');
+  return b1+b2;
+}
+async function stampSession(id, n){
+  try{ var r0=row(id);
+    var patch=(n===2)?{s2:vaKeyOf(USER.id), last:vaKeyOf(USER.id)}:{s1:vaKeyOf(USER.id)};   // 'last' = day complete (both sessions)
+    var m=Object.assign({}, (r0&&r0.meta)||{}, patch);
+    await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now()); }catch(e){}
+}
+async function sessionDone(id, phk, n){
+  n=(n===2)?2:1;
+  var p=phase(phk);
+  if(phk==='recovery'){ await bump('Reddit Warmup',1); await stampSession(id,n); toast('+1 recovery session · '+n+'/2'+(n===2?' — day complete!':'')); load(); return; }
+  if(!p||!p.task){ await stampSession(id,n); toast('Session '+n+'/2 logged ✓'+(n===2?' — day complete!':'')); load(); return; }
+  await bump(p.task, p.tn); await stampSession(id,n);
+  toast((p.task==='Reddit Posting'?('+'+p.tn+' Reddit Posting'):'+1 Reddit Warmup')+' · session '+n+'/2'+(n===2?' — day complete!':(p.task==='Reddit Posting'?' — rotate subs, captions & photos!':'')));
+  load();
+}
+async function dmsDone(id, n){ await bump('DM Replies', n); toast('+'+n+' DM Replies'); load(); }
+async function promote(id, nextk){
+  var p=phase(nextk);
+  if(!confirm('Promote this account to '+p.n+'? Do this only when the profile assessment is clean.')) return;
+  try{
+    var r0=row(id); var m=Object.assign({}, (r0&&r0.meta)||{}, {pstart:today()});
+    var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status='+encodeURIComponent(nextk)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now());
+    var d=await r.json(); if(d&&d.ok){ toast('Promoted → '+p.n); load(); } else toast('Could not update.');
+  }catch(e){ toast('Connection error.'); }
+}
+async function tempBan(id, curk){
+  if(!confirm('Mark TEMPORARILY BANNED? Work pauses (no effect on your progress %). When the ban lifts, it goes right back to its current phase.')) return;
+  try{
+    var r0=row(id); var m0=Object.assign({}, (r0&&r0.meta)||{}, {prev:curk});
+    var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status=tempban&meta='+encodeURIComponent(JSON.stringify(m0))+'&_='+Date.now());
+    var d=await r.json(); if(d&&d.ok){ toast('⏳ Temp banned — check it daily; hit “Ban lifted” when it clears.'); load(); } else toast('Could not update.');
+  }catch(e){ toast('Connection error.'); }
+}
+async function tbLifted(id){
+  var r0=row(id); var back=(r0&&r0.meta&&r0.meta.prev)||'warming';
+  try{
+    var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status='+encodeURIComponent(back)+'&_='+Date.now());
+    var d=await r.json(); if(d&&d.ok){ toast('Ban lifted — back to '+(phase(back)||{n:back}).n); load(); } else toast('Could not update.');
+  }catch(e){ toast('Connection error.'); }
+}
+async function spamFilter(id, curk){
+  if(!confirm('Move to 🛟 Spam Filter Recovery? (Posting pauses; recovery checklist starts.)')) return;
+  try{
+    var r0=row(id); var m0=Object.assign({}, (r0&&r0.meta)||{}, {prev:curk});
+    var meta=encodeURIComponent(JSON.stringify(m0));
+    var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status=recovery&meta='+meta+'&_='+Date.now());
+    var d=await r.json(); if(d&&d.ok){ toast('In recovery — 10 min browsing, upvotes, replies only.'); load(); } else toast('Could not update.');
+  }catch(e){ toast('Connection error.'); }
+}
+async function recovered(id){
+  var r0=row(id); var back=(r0&&r0.meta&&r0.meta.prev)||'warming';
+  try{
+    var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status='+encodeURIComponent(back)+'&_='+Date.now());
+    var d=await r.json(); if(d&&d.ok){ toast('Cleared — back to '+(phase(back)||{n:back}).n); load(); } else toast('Could not update.');
+  }catch(e){ toast('Connection error.'); }
+}
+async function setPhase(id, st){
+  if(st==='banned' && !confirm('Mark BANNED? It leaves the active pool (outputs already earned are kept).')) return;
+  try{
+    var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status='+encodeURIComponent(st)+'&_='+Date.now());
+    var d=await r.json(); if(d&&d.ok){ toast('Updated.'); load(); } else toast('Could not update.');
+  }catch(e){ toast('Connection error.'); }
+}
+(function(){ var u=null; try{ u=JSON.parse(sessionStorage.getItem('redditcasey_user')||'null'); }catch(e){}
+  if(u&&u.id){ USER=u; start(); } else { $('si-id').focus(); $('si-pin').addEventListener('keydown',function(e){ if(e.key==='Enter') signIn(); }); } })();
+</script>
+
+<style id="stat-grid-fix">
+/* Stat chips: equal sizes, stretched across the full row */
+.top{ display:grid !important; grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)) !important; gap:10px !important; align-items:stretch; }
+.top .stat{ width:auto !important; display:flex; flex-direction:column; justify-content:center; }
+.top .balance{ grid-column:1 / -1; margin-left:0 !important; text-align:center; }
+</style>
+
+<style id="reddit-theme">
+/* Red ↔ Orange premium theme */
+body{ background:
+  radial-gradient(1000px 480px at 88% -10%, rgba(255,69,0,.12), transparent 55%),
+  radial-gradient(800px 460px at -6% 6%, rgba(185,28,28,.08), transparent 55%),
+  linear-gradient(180deg,#faf7f5 0%, #f6f2ef 100%) !important; background-attachment:fixed; }
+.stat{ position:relative; overflow:hidden; border-radius:14px !important; }
+.stat::before{ content:""; position:absolute; left:10px; right:10px; top:0; height:3px; border-radius:0 0 4px 4px;
+  background:linear-gradient(90deg,#ff6b1a,#dc2626); }
+.sect i{ background:linear-gradient(90deg, rgba(234,88,12,.4), rgba(15,23,42,.06)) !important; height:2px !important; }
+.pvbar{ height:18px !important; border-radius:10px !important; background:rgba(127,29,29,.08) !important;
+  box-shadow:inset 0 1px 3px rgba(127,29,29,.14); position:relative; overflow:hidden; }
+.pvbar i{ position:relative; border-radius:10px !important;
+  background:linear-gradient(90deg,#ffa25c 0%,#ff6b1a 45%,#dc2626 100%) !important;
+  box-shadow:0 0 16px rgba(255,107,26,.5), inset 0 1px 0 rgba(255,255,255,.4) !important;
+  transition:width .9s cubic-bezier(.22,1,.36,1) !important; }
+.pvbar i::after{ content:""; position:absolute; inset:0;
+  background:linear-gradient(105deg, transparent 30%, rgba(255,255,255,.55) 48%, transparent 62%);
+  animation:pvShine 2.6s ease-in-out infinite; }
+@keyframes pvShine{ 0%{ transform:translateX(-130%); } 55%,100%{ transform:translateX(130%); } }
+.pvrow{ padding:13px 0 !important; }
+@media(prefers-reduced-motion:reduce){ .pvbar i::after{ animation:none; } }
+.pvwrap{ border-top:3px solid transparent; border-image:linear-gradient(90deg,#ff6b1a,#dc2626) 1; }
+.acct{ box-shadow:0 1px 2px rgba(127,29,29,.05), 0 10px 30px rgba(127,29,29,.07) !important; }
+.acct:hover{ box-shadow:0 3px 6px rgba(127,29,29,.07), 0 18px 44px rgba(127,29,29,.12) !important; }
+.btns button.go{ border-color:rgba(234,88,12,.4) !important; color:#c2410c !important; background:rgba(255,107,26,.08) !important; }
+.btns button.up{ background:linear-gradient(135deg,#ff6b1a,#dc2626) !important; color:#fff !important; border:none !important; box-shadow:0 6px 16px rgba(220,38,38,.3); }
+</style>
+</body>
+</html>
