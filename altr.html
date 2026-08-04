@@ -1098,6 +1098,7 @@ function renderInvestigateModal(open){
 }
 
 /* ---- STATE ---- */
+setInterval(function(){ if(!document.hidden){ try{ dcAutoPush(true); }catch(e){} } }, 600000);   // safety net: every 10 min
 async function loadState(){
   var d = $('post-date').value || todayPST();
   try{
@@ -1109,6 +1110,7 @@ async function loadState(){
     buildPhoneFilter();
     renderDevice(); renderPosting(); renderSourcing(); renderInsights();
     maybePhoneReminder();
+    try{ dcAutoPush(true); }catch(_ap){}   // 🗄 auto-import today's progress into the Data Center
   }catch(e){ toast('Could not load data. Check the backend URL.'); }
 }
 function todayPST(){
@@ -2137,35 +2139,40 @@ async function addSourcer(){
   try{ await apiPost({ action:'sourcing_set', date:STATE.date, va:name, target:target, sourced:0 }); }catch(e){ toast('Save failed'); }
 }
 
+/* 🗄 AUTOMATIC DATA CENTER IMPORT — every board refresh pushes each sourcer's target/sourced
+   (as shown on the progress bars) into the portal ProjectOutputs. Absolute + idempotent, so it
+   can run all shift long; the last push of the shift IS the shift's final record. */
+var _dcLastSig='';
+function dcAutoPush(silent){
+  try{
+    var PORTAL='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
+    var today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-8*3600*1000));
+    var claimed={}, items=[];
+    (STATE.sourcers||[]).forEach(function(srx){
+      if(String(srx.active||'').toUpperCase()==='FALSE') return;
+      var phones=String(srx.phones||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
+      var red=0, sourced=0;
+      phones.forEach(function(ph){ if(claimed[ph]) return; claimed[ph]=true; var st=phoneStats_(ph); red+=st.red; sourced+=st.sourced; });
+      var target=red+sourced; if(target<=0 && sourced<=0) return;
+      var empKey=String(srx.eid||srx.employee_id||srx.name||'').trim(); if(!empKey) return;
+      items.push({ emp:empKey, target:target, done:sourced });
+    });
+    var sig=today+'|'+items.map(function(x){ return x.emp+':'+x.target+':'+x.done; }).join(',');
+    if(sig===_dcLastSig) return;   // nothing changed since the last push
+    _dcLastSig=sig;
+    var pushes=items.map(function(x){
+      return fetch(PORTAL+'?action=po_set&employee_id='+encodeURIComponent(x.emp)+'&project=ALTR&task=Content%20Sourcing&volume='+encodeURIComponent(x.target)+'&done='+encodeURIComponent(x.done)+'&date='+encodeURIComponent(today)+'&_='+Date.now()).catch(function(){});
+    });
+    if(pushes.length && !silent){ Promise.all(pushes).then(function(){ toast('🗄 Data Center updated ('+pushes.length+' sourcers)'); }); }
+  }catch(_dc){}
+}
 async function recordDay(){
   if(!confirm('Record today’s sourcing — totals AND each employee’s daily target/sourced — to history (kept for volume review)? The board stays as-is (nothing is cleared).')) return;
   try{
     var r=await apiPost({ action:'src_record', by:firstName(USER.full_name||USER.employee_id) });
     if(r&&r.ok) toast('Recorded '+r.date+' — sourced today: '+r.sourced_today+', assigned: '+r.assigned+(r.sourcers?(' · '+r.sourcers+' employees snapshotted'):''));
     else toast('Could not record');
-    // 🗄 DATA CENTER BRIDGE — push each sourcer's target/sourced into the shared ALTR board
-    // (portal ProjectOutputs), so the Prod Hub Data Center shows ALTR progress automatically.
-    try{
-      var PORTAL='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
-      var today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date());
-      var claimed={}, pushes=[];
-      (STATE.sourcers||[]).forEach(function(srx){
-        if(String(srx.active||'').toUpperCase()==='FALSE') return;
-        var phones=String(srx.phones||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
-        var red=0, sourced=0;
-        phones.forEach(function(ph){ if(claimed[ph]) return; claimed[ph]=true; var st=phoneStats_(ph); red+=st.red; sourced+=st.sourced; });
-        var target=red+sourced; if(target<=0 && sourced<=0) return;
-        var empKey=String(srx.eid||srx.employee_id||srx.name||'').trim(); if(!empKey) return;
-        // volume = today's target, done = sourced → the Data Center bar mirrors the ALTR completion %
-        pushes.push(fetch(PORTAL+'?action=po_set&employee_id='+encodeURIComponent(empKey)+'&project=ALTR&task=Sourcing&volume='+encodeURIComponent(target)+'&date='+encodeURIComponent(today)+'&_='+Date.now())
-          .then(function(){ return fetch(PORTAL+'?action=po_my&employee_id='+encodeURIComponent(empKey)+'&date='+encodeURIComponent(today)+'&_='+Date.now()); })
-          .then(function(rr){ return rr.json(); })
-          .then(function(dd){ var row=((dd&&dd.rows)||[]).filter(function(x){ return String(x.project).toUpperCase()==='ALTR' && String(x.task).toLowerCase()==='sourcing'; })[0];
-            if(row) return fetch(PORTAL+'?action=po_tick&id='+encodeURIComponent(row.id)+'&employee_id='+encodeURIComponent(empKey)+'&done='+encodeURIComponent(sourced)+'&_='+Date.now()); })
-          .catch(function(){}));
-      });
-      if(pushes.length){ Promise.all(pushes).then(function(){ toast('🗄 Data Center updated ('+pushes.length+' sourcers)'); }); }
-    }catch(_dc){}
+    _dcLastSig=''; dcAutoPush(false);
   }catch(e){ toast('Record failed'); }
 }
 

@@ -426,7 +426,7 @@ function render(d){
   if(!team.length){ $('results').innerHTML='<div class="empty">No output recorded in this range. QPH needs tasks that have both volume and hours.</div>'; return; }
   // per-task cards
   $('results').innerHTML=team.map(function(t){
-    var us=rows.filter(function(x){return x.task===t.task;}).slice().sort(function(a,b){return b.qph-a.qph;});
+    var us=rows.filter(function(x){return x.task===t.task && String(x.project||'')===String(t.project||'');}).slice().sort(function(a,b){return b.qph-a.qph;});
     var maxQ=Math.max.apply(null,[t.qph].concat(us.map(function(u){return u.qph;})));
     var benchPct=maxQ>0?(t.qph/maxQ*100):0;
     var list=us.map(function(u,i){
@@ -442,7 +442,7 @@ function render(d){
         '<div class="uqph">'+u.qph+'<span class="udelta '+dCls+'">'+dTxt+'</span></div>'+
       '</div>';
     }).join('');
-    return '<div class="tcard"><div class="th"><div class="tn">'+esc(t.task)+'</div>'+
+    return '<div class="tcard"><div class="th"><div class="tn">'+esc(t.task)+(t.project?(' <span style="font-size:11px;font-weight:700;color:var(--t3);background:rgba(15,23,42,.06);border-radius:20px;padding:2px 9px;vertical-align:2px;">'+esc(t.project)+'</span>'):'')+'</div>'+
       '<div class="tb">Team avg <b>'+t.qph+'</b> /hr · '+t.users+' people · '+Math.round(t.volume).toLocaleString()+' output / '+(Math.round(t.hours*10)/10)+'h</div></div>'+
       list+'</div>';
   }).join('');
