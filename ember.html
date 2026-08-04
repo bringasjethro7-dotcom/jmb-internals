@@ -164,6 +164,14 @@ function vaName(id){ return NAMES[String(id||'').toLowerCase()]||id||'—'; }
 function today(){ // JMB business day — resets 8:00 AM Philippine time (a night shift never splits across two days)
   try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-8*3600*1000)); }
   catch(e){ return new Date(Date.now()-8*3600*1000).toISOString().slice(0,10); } }
+function shiftKey(){ // per-SHIFT work key — morning 08:00–19:59 = date·AM · night 20:00–07:59 = start-date·PM
+  try{
+    var h=parseInt(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',hour12:false}).format(new Date()),10);
+    var base=(h<8)? new Date(Date.now()-24*3600*1000) : new Date();
+    var d=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(base);
+    return d+((h>=8&&h<20)?'·AM':'·PM');
+  }catch(e){ return today()+'·?' ; } }
+
 function cdateOf(r){ return (r.meta&&r.meta.cdate)||''; }
 function ageTxt(r){ var c=cdateOf(r); if(!c) return ''; var days=Math.max(0,Math.round((Date.now()-new Date(c+'T00:00:00').getTime())/86400000)); return c+' · '+days+'d old'; }
 var AVC=['#6366f1','#0ea5e9','#10b981','#f59e0b','#ec4899','#8b5cf6','#14b8a6','#f97316'];
@@ -180,7 +188,7 @@ function _maybeSnap(done, tot){
   // Record today's completion (like ALTR's Record Day) — once per change, fire-and-forget.
   try{
     if(!USER||!USER.id||!tot) return;
-    var k='snap_'+PROJECT+'_'+today(), v=done+'/'+tot;
+    var k='snap_'+PROJECT+'_'+shiftKey(), v=done+'/'+tot;
     if(sessionStorage.getItem(k)===v) return;
     sessionStorage.setItem(k, v);
     fetch(API+'?action=po_snap&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent('📋 Board Completion')+'&done='+done+'&total='+tot+'&date='+encodeURIComponent(today())+'&_='+Date.now()).catch(function(){});
@@ -200,7 +208,7 @@ function renderByVA(segs, doneFn, activeFn){
   }).sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
   try{ var _me=list.filter(function(o){ return o.k===mine; })[0]; if(_me) _maybeSnap(_me.done, _me.tot); }catch(_ms){}
   host.innerHTML='<div class="pvwrap">'+
-    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today\'s progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked today / active accounts · resets 8:00 AM PHT</span></div>'+
+    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 This shift — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked this shift / active accounts · resets 8 AM & 8 PM PHT</span></div>'+
     list.map(function(o,ix){
       var pc=o.pct>=100?'#10b981':(o.pct>=70?'#f59e0b':'#ef4444');
       var name=vaName(o.k);
@@ -257,7 +265,7 @@ function render(){
     ['Live','#10b981',function(r){return r.status==='live';}],
     ['Needs fix','#8b5cf6',function(r){return r.status==='needsfix';}],
     ['Banned','#ef4444',function(r){return r.status==='banned';}]
-  ], function(r){ return r.meta && r.meta.last===today(); }, function(r){ return ['live','setup','needsfix'].indexOf(r.status)>=0; });
+  ], function(r){ return r.meta && r.meta.last===shiftKey(); }, function(r){ return ['live','setup','needsfix'].indexOf(r.status)>=0; });
   renderTabs();
   var base=filterRows();
   var q=(($('em-q')||{}).value||'').trim().toLowerCase();
@@ -269,7 +277,7 @@ function render(){
       var btns='', menu=[];
       if(st==='stock'){ btns='<button class="warn" onclick="move(\''+r.id+'\',\'setup\')">🛠 Assign to VPS</button>'; }
       else if(st==='setup'){ btns='<button class="go" onclick="move(\''+r.id+'\',\'live\')">🟢 Setup done → Live</button>'; menu.push(['🔧 Needs fix',"move('"+r.id+"','needsfix')"]); }
-      else if(st==='live'){ btns=((r.meta&&r.meta.last===today())?'<button disabled style="opacity:.5">✓ Verified today</button>':'<button class="go" onclick="checkedToday(\''+r.id+'\')">✓ Verified running today</button>'); menu.push(['🔧 Needs fix',"move('"+r.id+"','needsfix')"]); menu.push(['🔴 Banned / Locked',"move('"+r.id+"','banned')"]); }
+      else if(st==='live'){ btns=((r.meta&&r.meta.last===shiftKey())?'<button disabled style="opacity:.5">✓ Verified today</button>':'<button class="go" onclick="checkedToday(\''+r.id+'\')">✓ Verified running today</button>'); menu.push(['🔧 Needs fix',"move('"+r.id+"','needsfix')"]); menu.push(['🔴 Banned / Locked',"move('"+r.id+"','banned')"]); }
       else if(st==='needsfix'){ btns='<button class="go" onclick="move(\''+r.id+'\',\'live\')">✓ Fixed → Live</button>'; menu.push(['🔴 Banned',"move('"+r.id+"','banned')"]); }
       if(menu.length) menu.push('---');
       menu.push(['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']);
@@ -296,7 +304,7 @@ async function addAcct(){
   }catch(e){ toast('Connection error.'); }
 }
 async function checkedToday(id){
-  try{ var r0=ROWS.filter(function(x){return x.id===id;})[0]; var m=Object.assign({}, (r0&&r0.meta)||{}, {last:today()});
+  try{ var r0=ROWS.filter(function(x){return x.id===id;})[0]; var m=Object.assign({}, (r0&&r0.meta)||{}, {last:shiftKey()});
     var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now());
     var d=await r.json(); if(d&&d.ok){ toast('Verified running ✓ (VPS check)'); load(); } }catch(e){ toast('Connection error.'); }
 }
