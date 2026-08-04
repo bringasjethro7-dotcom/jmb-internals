@@ -172,7 +172,7 @@ function _maybeSnap(done, tot){
   // Record today's completion (like ALTR's Record Day) — once per change, fire-and-forget.
   try{
     if(!USER||!USER.id||!tot) return;
-    var k='snap_'+PROJECT+'_'+today(), v=done+'/'+tot;
+    var k='snap_'+PROJECT+'_'+vaKeyOf(USER.id), v=done+'/'+tot;
     if(sessionStorage.getItem(k)===v) return;
     sessionStorage.setItem(k, v);
     fetch(API+'?action=po_snap&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent('📋 Board Completion')+'&done='+done+'&total='+tot+'&date='+encodeURIComponent(today())+'&_='+Date.now()).catch(function(){});
@@ -193,7 +193,7 @@ function renderByVA(segs, doneFn, activeFn, amFn){
   }).sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
   try{ var _me=list.filter(function(o){ return o.k===mine; })[0]; if(_me) _maybeSnap(_me.done, _me.tot); }catch(_ms){}
   host.innerHTML='<div class="pvwrap">'+
-    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked today / active accounts · resets 8:00 AM PHT</span></div>'+
+    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked this shift · resets per shift · ☀ 8 AM / 🌙 8 PM</span></div>'+
     list.map(function(o,ix){
       var pc=o.pct>=100?'#10b981':(o.pct>=70?'#f59e0b':'#ef4444');
       var name=vaName(o.k);
@@ -225,6 +225,24 @@ function shiftKey(){ // per-SHIFT work key — morning 08:00–19:59 = date·AM 
   }catch(e){ return today()+'·?' ; } }
 function isTodayMark(v){ // transition-tolerant: plain business date OR the short-lived ·AM/·PM formats
   return v===today() || v===today()+'·AM' || v===today()+'·PM'; }
+// Per-VA shift window: ☀ morning VAs reset 8 AM · 🌙 night VAs reset 8 PM. A VA's bar lives
+// through their whole shift AND after it, until THEIR next shift starts. Keys: date·AM / date·PM.
+function vaKeyOf(empId){
+  var sh=SHIFTOF[String(empId||'').toLowerCase()];
+  if(sh==='night'){
+    var d=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-20*3600*1000));
+    return d+'·PM';   // night window: 8 PM → next 8 PM, keyed by its start date
+  }
+  return today()+'·AM';   // morning window: 8 AM → next 8 AM
+}
+function markOk(v, empId){
+  if(!v) return false;
+  if(v===vaKeyOf(empId)) return true;
+  // transition day: pre-shift-key plain marks still count for MORNING VAs only
+  var sh=SHIFTOF[String(empId||'').toLowerCase()];
+  return sh!=='night' && v===today();
+}
+
 
 
 function M(r){ return { avail:(r.meta&&r.meta.avail)||0, sched:(r.meta&&r.meta.sched)||0, last:(r.meta&&r.meta.last)||'' }; }
@@ -259,7 +277,7 @@ function render(){
   renderByVA([
     ['Has content','#10b981',function(r){return M(r).avail>0;}],
     ['Out of content','#ef4444',function(r){return M(r).avail<=0;}]
-  ], function(r){ return isTodayMark(M(r).last); }, null);
+  ], function(r){ return markOk(M(r).last, r.assigned_to||r.created_by); }, null);
   if(!ROWS.length){ $('grid').innerHTML='<div class="muted">No models yet — add the first above.</div>'; return; }
   renderTabs();
   var base=filterRows();
@@ -304,7 +322,7 @@ function row(id){ return ROWS.filter(function(r){return r.id===id;})[0]; }
 async function contentIn(id){ var r=row(id); if(!r) return; var m=M(r); m.avail++;
   var d=await saveMeta(r,m); if(d&&d.ok){ toast('Content logged — prep it for posting right away (SOP).'); load(); } else toast('Could not save.'); }
 async function schedPost(id){ var r=row(id); if(!r) return; var m=M(r); if(m.avail<=0){ toast('No content left.'); return; }
-  m.avail--; m.sched++; m.last=today();
+  m.avail--; m.sched++; m.last=vaKeyOf(USER.id);
   var d=await saveMeta(r,m);
   if(d&&d.ok){ await bump('Wallpost Scheduled',1); toast('+1 Wallpost Scheduled ✅'+(m.avail<=2?(' · runway low — plan a client update'):'')); load(); } else toast('Could not save.'); }
 async function clientUpdated(id){ var r=row(id); if(!r) return;

@@ -171,7 +171,7 @@ function _maybeSnap(done, tot){
   // Record today's completion (like ALTR's Record Day) — once per change, fire-and-forget.
   try{
     if(!USER||!USER.id||!tot) return;
-    var k='snap_'+PROJECT+'_'+today(), v=done+'/'+tot;
+    var k='snap_'+PROJECT+'_'+vaKeyOf(USER.id), v=done+'/'+tot;
     if(sessionStorage.getItem(k)===v) return;
     sessionStorage.setItem(k, v);
     fetch(API+'?action=po_snap&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent('📋 Board Completion')+'&done='+done+'&total='+tot+'&date='+encodeURIComponent(today())+'&_='+Date.now()).catch(function(){});
@@ -192,7 +192,7 @@ function renderByVA(segs, doneFn, activeFn, amFn){
   }).sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
   try{ var _me=list.filter(function(o){ return o.k===mine; })[0]; if(_me) _maybeSnap(_me.done, _me.tot); }catch(_ms){}
   host.innerHTML='<div class="pvwrap">'+
-    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked today / active accounts · resets 8:00 AM PHT</span></div>'+
+    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked this shift · resets per shift · ☀ 8 AM / 🌙 8 PM</span></div>'+
     list.map(function(o,ix){
       var pc=o.pct>=100?'#10b981':(o.pct>=70?'#f59e0b':'#ef4444');
       var name=vaName(o.k);
@@ -233,6 +233,24 @@ function shiftKey(){ // per-SHIFT work key — morning 08:00–19:59 = date·AM 
   }catch(e){ return today()+'·?' ; } }
 function isTodayMark(v){ // transition-tolerant: plain business date OR the short-lived ·AM/·PM formats
   return v===today() || v===today()+'·AM' || v===today()+'·PM'; }
+// Per-VA shift window: ☀ morning VAs reset 8 AM · 🌙 night VAs reset 8 PM. A VA's bar lives
+// through their whole shift AND after it, until THEIR next shift starts. Keys: date·AM / date·PM.
+function vaKeyOf(empId){
+  var sh=SHIFTOF[String(empId||'').toLowerCase()];
+  if(sh==='night'){
+    var d=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-20*3600*1000));
+    return d+'·PM';   // night window: 8 PM → next 8 PM, keyed by its start date
+  }
+  return today()+'·AM';   // morning window: 8 AM → next 8 AM
+}
+function markOk(v, empId){
+  if(!v) return false;
+  if(v===vaKeyOf(empId)) return true;
+  // transition day: pre-shift-key plain marks still count for MORNING VAs only
+  var sh=SHIFTOF[String(empId||'').toLowerCase()];
+  return sh!=='night' && v===today();
+}
+
 
 
 
@@ -257,7 +275,7 @@ async function load(){
 }
 function render(){
   var act=ROWS.filter(function(r){return r.status!=='suspended';});
-  var doneToday=act.filter(function(r){return isTodayMark(r.meta&&r.meta.last);}).length;
+  var doneToday=act.filter(function(r){return markOk(r.meta&&r.meta.last, r.assigned_to||r.created_by);}).length;
   var inSetup=act.filter(function(r){return r.day<=3;}).length;
   $('stats').innerHTML=
     '<div class="stat"><b>'+act.length+'</b><span>Active accounts</span></div>'+
@@ -268,7 +286,7 @@ function render(){
     ['Setup D1–3','#0f1419',function(r){return r.status!=='suspended' && r.day<=3;}],
     ['Follows D4+','#10b981',function(r){return r.status!=='suspended' && r.day>3;}],
     ['Suspended','#ef4444',function(r){return r.status==='suspended';}]
-  ], function(r){ return isTodayMark(r.meta&&r.meta.last); }, function(r){ return r.status!=='suspended'; });
+  ], function(r){ return markOk(r.meta&&r.meta.last, r.assigned_to||r.created_by); }, function(r){ return r.status!=='suspended'; });
   if(!ROWS.length){ $('grid').innerHTML='<div class="muted">No accounts yet — add your first above.</div>'; return; }
   renderTabs();
   var base=filterRows();
@@ -279,7 +297,7 @@ function render(){
   var out=[], lastG='';
   sorted.forEach(function(r){
     var g=grpJ(r); if(g!==lastG){ out.push('<div class="sect"><b>'+g+'</b><span>'+gcnt[g]+'</span><i></i></div>'); lastG=g; }
-    var done=isTodayMark(r.meta&&r.meta.last);
+    var done=markOk(r.meta&&r.meta.last, r.assigned_to||r.created_by);
     var who='<div class="meta1">'+esc(vaName(r.assigned_to||r.created_by))+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+'</div>';
     if(r.status==='suspended'){ out.push('<div class="acct susp"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#ef444414;color:#b91c1c;border:1px solid #ef44442e">⛔ Suspended</span>'+kmenu([['↩ Reinstate',"setStatus('"+r.id+"','active')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+'</div>'); return; }
     out.push('<div class="acct'+(done?' done-today':'')+'"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#0f141910;color:#0f1419;border:1px solid #0f141926">Day '+r.day+'</span>'+kmenu([['⛔ Suspended',"setStatus('"+r.id+"','suspended')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+
@@ -304,7 +322,7 @@ async function addAcct(){
 async function dayDone(id, day){
   try{
     var r0=ROWS.filter(function(x){return x.id===id;})[0];
-    var meta=JSON.stringify(Object.assign({}, (r0&&r0.meta)||{}, {last:today()}));
+    var meta=JSON.stringify(Object.assign({}, (r0&&r0.meta)||{}, {last:vaKeyOf(USER.id)}));
     var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&day='+(day+1)+'&meta='+encodeURIComponent(meta)+'&_='+Date.now());
     var d=await r.json();
     if(d&&d.ok){ await bump(day<=3?'Setup Day':'Follow Day',1); toast('Day '+day+' complete · +1 '+(day<=3?'Setup Day':'Follow Day')+' ✅'); load(); }

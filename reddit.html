@@ -175,6 +175,24 @@ function shiftKey(){ // per-SHIFT work key — morning 08:00–19:59 = date·AM 
   }catch(e){ return today()+'·?' ; } }
 function isTodayMark(v){ // transition-tolerant: plain business date OR the short-lived ·AM/·PM formats
   return v===today() || v===today()+'·AM' || v===today()+'·PM'; }
+// Per-VA shift window: ☀ morning VAs reset 8 AM · 🌙 night VAs reset 8 PM. A VA's bar lives
+// through their whole shift AND after it, until THEIR next shift starts. Keys: date·AM / date·PM.
+function vaKeyOf(empId){
+  var sh=SHIFTOF[String(empId||'').toLowerCase()];
+  if(sh==='night'){
+    var d=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-20*3600*1000));
+    return d+'·PM';   // night window: 8 PM → next 8 PM, keyed by its start date
+  }
+  return today()+'·AM';   // morning window: 8 AM → next 8 AM
+}
+function markOk(v, empId){
+  if(!v) return false;
+  if(v===vaKeyOf(empId)) return true;
+  // transition day: pre-shift-key plain marks still count for MORNING VAs only
+  var sh=SHIFTOF[String(empId||'').toLowerCase()];
+  return sh!=='night' && v===today();
+}
+
 
 
 function pstartOf(r){ return (r.meta&&r.meta.pstart)||cdateOf(r)||''; }
@@ -196,7 +214,7 @@ function _maybeSnap(done, tot){
   // Record today's completion (like ALTR's Record Day) — once per change, fire-and-forget.
   try{
     if(!USER||!USER.id||!tot) return;
-    var k='snap_'+PROJECT+'_'+today(), v=done+'/'+tot;
+    var k='snap_'+PROJECT+'_'+vaKeyOf(USER.id), v=done+'/'+tot;
     if(sessionStorage.getItem(k)===v) return;
     sessionStorage.setItem(k, v);
     fetch(API+'?action=po_snap&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent('📋 Board Completion')+'&done='+done+'&total='+tot+'&date='+encodeURIComponent(today())+'&_='+Date.now()).catch(function(){});
@@ -217,7 +235,7 @@ function renderByVA(segs, doneFn, activeFn, amFn){
   }).sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
   try{ var _me=list.filter(function(o){ return o.k===mine; })[0]; if(_me) _maybeSnap(_me.done, _me.tot); }catch(_ms){}
   host.innerHTML='<div class="pvwrap">'+
-    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked today / active accounts · resets 8:00 AM PHT</span></div>'+
+    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked this shift · resets per shift · ☀ 8 AM / 🌙 8 PM</span></div>'+
     list.map(function(o,ix){
       var pc=o.pct>=100?'#10b981':(o.pct>=70?'#f59e0b':'#ef4444');
       var name=vaName(o.k);
@@ -314,7 +332,7 @@ function render(){
     ['Recovery','#0ea5e9',function(r){return r.status==='recovery';}],
     ['Temp ban','#d97706',function(r){return r.status==='tempban';}],
     ['Banned','#ef4444',function(r){return r.status==='banned';}]
-  ], function(r){ return isTodayMark(r.meta&&r.meta.last); }, function(r){ return r.status!=='banned' && r.status!=='creation' && r.status!=='tempban'; });
+  ], function(r){ return markOk(r.meta&&r.meta.last, r.assigned_to||r.created_by); }, function(r){ return r.status!=='banned' && r.status!=='creation' && r.status!=='tempban'; });
   renderMatrix();
   if(!ROWS.length){ $('grid').innerHTML='<div class="muted">No accounts yet — create the first via the iPhone farm SOP and add it above.</div>'; return; }
   renderTabs();
@@ -397,7 +415,7 @@ async function addAcct(){
 }
 function row(id){ return ROWS.filter(function(r){return r.id===id;})[0]; }
 async function stampWorked(id){
-  try{ var r0=row(id); var m=Object.assign({}, (r0&&r0.meta)||{}, {last:today()});
+  try{ var r0=row(id); var m=Object.assign({}, (r0&&r0.meta)||{}, {last:vaKeyOf(USER.id)});
     await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now()); }catch(e){}
 }
 async function workedOnly(id){ await stampWorked(id); toast('Logged — worked on it today ✓'); load(); }
@@ -409,7 +427,7 @@ async function setKarma(id, cur){
     var d=await r.json(); if(d&&d.ok){ toast('Karma updated: '+n+(n>=50?' — 50 reached, NSFW unlocked! 🎉':'')); load(); } }catch(e){ toast('Connection error.'); }
 }
 function sessBtns(r, phk, gainTxt){
-  var s1=isTodayMark(r.meta&&r.meta.s1), s2=isTodayMark(r.meta&&r.meta.s2);
+  var _ow=r.assigned_to||r.created_by; var s1=markOk(r.meta&&r.meta.s1,_ow), s2=markOk(r.meta&&r.meta.s2,_ow);
   var g=gainTxt?(' ('+gainTxt+')'):'';
   var b1=s1?'<button disabled style="opacity:.55">✓ Session 1 done</button>'
            :'<button class="go" onclick="sessionDone(\''+r.id+'\',\''+phk+'\',1)">✓ Session 1'+g+'</button>';
@@ -420,7 +438,7 @@ function sessBtns(r, phk, gainTxt){
 }
 async function stampSession(id, n){
   try{ var r0=row(id);
-    var patch=(n===2)?{s2:today(), last:today()}:{s1:today()};   // 'last' = day complete (both sessions)
+    var patch=(n===2)?{s2:vaKeyOf(USER.id), last:vaKeyOf(USER.id)}:{s1:vaKeyOf(USER.id)};   // 'last' = day complete (both sessions)
     var m=Object.assign({}, (r0&&r0.meta)||{}, patch);
     await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now()); }catch(e){}
 }
