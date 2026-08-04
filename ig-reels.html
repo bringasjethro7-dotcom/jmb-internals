@@ -115,7 +115,7 @@
 var API='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
 var PROJECT='Project Arlo';
 var USER=null, ROWS=[], CMROWS=[];
-var NAMES={};
+var NAMES={}, SHIFTOF={};
 /* ── fetching layer: timeout + retry on READS (never on writes), local cache for instant paint,
    visibility-aware polling (pauses when the tab is hidden, refreshes on focus) ── */
 async function jFetch(url, tries){
@@ -153,7 +153,7 @@ function renderTabs(){
   Object.keys(by).sort(function(a,b){ return by[b]-by[a]; }).forEach(function(k){ if(k===mine||k==='—') return; html.push(pill(k, esc(vaName(k)), by[k])); });
   host.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap;">'+html.join('')+'</div>';
 }
-async function loadNames(){ try{ var d=await jFetch(API+'?action=get_all_employees&_='+Date.now()); (d.employees||[]).forEach(function(e){ NAMES[String(e.employee_id).toLowerCase()]=e.full_name||e.employee_id; }); try{ render(); }catch(_r){} }catch(e){} }
+async function loadNames(){ try{ var d=await jFetch(API+'?action=get_all_employees&_='+Date.now()); (d.employees||[]).forEach(function(e){ var k=String(e.employee_id).toLowerCase(); NAMES[k]=e.full_name||e.employee_id; SHIFTOF[k]=String(e.shift||'').toLowerCase(); }); try{ render(); }catch(_r){} }catch(e){} }
 function delBtn(id){ return '<button onclick="delAcct(\''+id+'\')" title="Delete (wrong entry)" style="border:1px solid rgba(239,68,68,.3);background:#fff;color:#b91c1c;border-radius:8px;padding:5px 8px;font-size:10.5px;font-weight:800;cursor:pointer;">🗑</button>'; }
 async function delAcct(id){
   var r0=ROWS.filter(function(x){return x.id===id;})[0];
@@ -183,7 +183,7 @@ function _maybeSnap(done, tot){
   // Record today's completion (like ALTR's Record Day) — once per change, fire-and-forget.
   try{
     if(!USER||!USER.id||!tot) return;
-    var k='snap_'+PROJECT+'_'+shiftKey(), v=done+'/'+tot;
+    var k='snap_'+PROJECT+'_'+today(), v=done+'/'+tot;
     if(sessionStorage.getItem(k)===v) return;
     sessionStorage.setItem(k, v);
     fetch(API+'?action=po_snap&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent('📋 Board Completion')+'&done='+done+'&total='+tot+'&date='+encodeURIComponent(today())+'&_='+Date.now()).catch(function(){});
@@ -200,12 +200,11 @@ function renderByVA(segs, doneFn, activeFn, amFn){
     var rows=by[k];
     var act=activeFn?rows.filter(activeFn):rows;
     var done=doneFn?act.filter(doneFn).length:0, tot=act.length;
-    var am=(amFn && shiftKey().slice(-2)==='PM')?act.filter(amFn).length:null;
-    return {k:k,i:i,done:done,tot:tot,am:am,pct:tot?Math.round(done/tot*100):0,n:rows.length};
+    return {k:k,i:i,done:done,tot:tot,pct:tot?Math.round(done/tot*100):0,n:rows.length};
   }).sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
   try{ var _me=list.filter(function(o){ return o.k===mine; })[0]; if(_me) _maybeSnap(_me.done, _me.tot); }catch(_ms){}
   host.innerHTML='<div class="pvwrap">'+
-    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 This shift — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked this shift / active accounts · resets 8 AM & 8 PM PHT</span></div>'+
+    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked today / active accounts · resets 8:00 AM PHT</span></div>'+
     list.map(function(o,ix){
       var pc=o.pct>=100?'#10b981':(o.pct>=70?'#f59e0b':'#ef4444');
       var name=vaName(o.k);
@@ -214,7 +213,7 @@ function renderByVA(segs, doneFn, activeFn, amFn){
       return '<div class="pvrow'+(ix===0?' first':'')+'"'+(me?' style="background:rgba(16,185,129,.05);border-radius:12px;padding-left:10px;padding-right:10px;"':'')+'>'+
         '<div class="pvav" style="background:'+AVC[o.i%AVC.length]+'">'+esc(init)+'</div>'+
         '<div style="flex:1;min-width:0;">'+
-          '<div style="display:flex;align-items:baseline;gap:8px;"><b style="font-size:13.5px;">'+esc(name)+'</b>'+(me?'<span style="font-size:10px;color:#0f766e;font-weight:800;">you</span>':'')+'<span style="font-size:11px;color:var(--ink3);font-weight:700;">'+o.n+' on board</span>'+(o.am!=null?('<span style="font-size:10.5px;font-weight:800;color:#b45309;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.25);border-radius:100px;padding:2px 8px;">☀ morning '+o.am+' / '+o.tot+'</span>'):'')+'</div>'+
+          '<div style="display:flex;align-items:baseline;gap:8px;"><b style="font-size:13.5px;">'+(SHIFTOF[o.k]==='night'?'🌙 ':(SHIFTOF[o.k]?'☀ ':''))+esc(name)+'</b>'+(me?'<span style="font-size:10px;color:#0f766e;font-weight:800;">you</span>':'')+'<span style="font-size:11px;color:var(--ink3);font-weight:700;">'+o.n+' on board</span></div>'+
           '<div class="pvbar" style="margin-top:7px;"><i style="width:'+Math.min(100,o.pct)+'%;background:'+pc+';"></i></div>'+
         '</div>'+
         '<div class="pvpct" style="color:'+pc+'"><span style="font-size:17px;">'+o.done+' / '+o.tot+'</span><br><span style="font-size:12.5px;">'+o.pct+'%'+(o.pct>=100&&o.tot?' ✅':'')+' today</span></div>'+
@@ -242,8 +241,11 @@ function shiftKey(){ // per-SHIFT work key — morning 08:00–19:59 = date·AM 
     var d=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(base);
     return d+((h>=8&&h<20)?'·AM':'·PM');
   }catch(e){ return today()+'·?' ; } }
+function isTodayMark(v){ // transition-tolerant: plain business date OR the short-lived ·AM/·PM formats
+  return v===today() || v===today()+'·AM' || v===today()+'·PM'; }
 
-function T(r){ var t=(r.meta&&r.meta.t)||{}; if(t.d!==shiftKey()) return {d:shiftKey(),s:0,f:0,rl:0}; return t; }
+
+function T(r){ var t=(r.meta&&r.meta.t)||{}; if(!isTodayMark(t.d)) return {d:today(),s:0,f:0,rl:0}; return t; }
 function isK(r){ return !!(r.meta&&r.meta.k); }
 
 async function signIn(){
@@ -353,9 +355,8 @@ function render(){
     ['On Hold','#3b82f6',function(r){return r.status==='onhold';}],
     ['Reserved','#8b5cf6',function(r){return r.status==='reserved';}],
     ['Suspended','#ef4444',function(r){return r.status==='suspended';}]
-  ], function(r){ return r.status==='warmup' ? (r.meta&&r.meta.wl===shiftKey()) : fullDone(r); },
-     function(r){ return r.status==='active'||r.status==='warmup'; },
-     function(r){ var m=r.meta||{}; if(r.status==='warmup'){ return m.wl===amKey()||m.wl===today(); } var t=m.t||{}; return (t.d===amKey()||t.d===today()) && !!t.s && !!t.f && (!isK(r)||!!t.rl); });
+  ], function(r){ return r.status==='warmup' ? isTodayMark(r.meta&&r.meta.wl) : fullDone(r); },
+     function(r){ return r.status==='active'||r.status==='warmup'; });
   if(!ROWS.length){ $('grid').innerHTML='<div class="muted">No accounts yet — add your first above.</div>'; return; }
   renderTabs();
   var base=filterRows();
@@ -436,7 +437,7 @@ async function mark1k(id){
 async function wuDone(id, day){
   var r=row(id); if(!r) return;
   try{
-    var m=Object.assign({}, r.meta||{}, {wl:shiftKey()});
+    var m=Object.assign({}, r.meta||{}, {wl:today()});
     var url=API+'?action=pa_update&id='+encodeURIComponent(id)+'&day='+(day+1)+(day>=14?'&status=active':'')+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now();
     var rr=await fetch(url); var d=await rr.json();
     if(d&&d.ok){ await bump('Warm-up Day',1); toast(day>=14?'Warm-up COMPLETE — account is now Active 🎉 (+1 Warm-up Day)':'+1 Warm-up Day ✅'); load(); }
