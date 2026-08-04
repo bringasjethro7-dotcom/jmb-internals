@@ -179,6 +179,16 @@ function kmenu(items){
 document.addEventListener('click', function(e){
   document.querySelectorAll('details.kmenu[open]').forEach(function(d){ if(!d.contains(e.target)) d.removeAttribute('open'); });
 });
+function _maybeSnap(done, tot){
+  // Record today's completion (like ALTR's Record Day) — once per change, fire-and-forget.
+  try{
+    if(!USER||!USER.id||!tot) return;
+    var k='snap_'+PROJECT+'_'+today(), v=done+'/'+tot;
+    if(sessionStorage.getItem(k)===v) return;
+    sessionStorage.setItem(k, v);
+    fetch(API+'?action=po_snap&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent('📋 Board Completion')+'&done='+done+'&total='+tot+'&date='+encodeURIComponent(today())+'&_='+Date.now()).catch(function(){});
+  }catch(e){}
+}
 function renderByVA(segs, doneFn, activeFn){
   var host=document.getElementById('byva'); if(!host) return;
   var by={}; ROWS.forEach(function(r){ var k=String(r.assigned_to||r.created_by||'—').toLowerCase(); (by[k]=by[k]||[]).push(r); });
@@ -191,8 +201,9 @@ function renderByVA(segs, doneFn, activeFn){
     var done=doneFn?act.filter(doneFn).length:0, tot=act.length;
     return {k:k,i:i,done:done,tot:tot,pct:tot?Math.round(done/tot*100):0,n:rows.length};
   }).sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
+  try{ var _me=list.filter(function(o){ return o.k===mine; })[0]; if(_me) _maybeSnap(_me.done, _me.tot); }catch(_ms){}
   host.innerHTML='<div class="pvwrap">'+
-    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today\'s progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked today / active accounts</span></div>'+
+    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today\'s progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked today / active accounts · resets 8:00 AM PHT</span></div>'+
     list.map(function(o,ix){
       var pc=o.pct>=100?'#10b981':(o.pct>=70?'#f59e0b':'#ef4444');
       var name=vaName(o.k);
@@ -219,7 +230,9 @@ function $(id){return document.getElementById(id);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('on'); setTimeout(function(){t.classList.remove('on');},2400); }
 function bump(task,n){ return fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now()).catch(function(){}); }
-function today(){ try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){ return new Date().toISOString().slice(0,10); } }
+function today(){ // JMB business day — resets 8:00 AM Philippine time (a night shift never splits across two days)
+  try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-8*3600*1000)); }
+  catch(e){ return new Date(Date.now()-8*3600*1000).toISOString().slice(0,10); } }
 function T(r){ var t=(r.meta&&r.meta.t)||{}; if(t.d!==today()) return {d:today(),s:0,f:0,rl:0}; return t; }
 function isK(r){ return !!(r.meta&&r.meta.k); }
 
