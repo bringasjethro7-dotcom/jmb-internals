@@ -1111,6 +1111,7 @@ async function loadState(){
     renderDevice(); renderPosting(); renderSourcing(); renderInsights();
     maybePhoneReminder();
     try{ dcAutoPush(true); }catch(_ap){}   // 🗄 auto-import today's progress into the Data Center
+    try{ reportToolUse(); }catch(_tu){}
   }catch(e){ toast('Could not load data. Check the backend URL.'); }
 }
 function todayPST(){
@@ -2143,6 +2144,9 @@ async function addSourcer(){
    (as shown on the progress bars) into the portal ProjectOutputs. Absolute + idempotent, so it
    can run all shift long; the last push of the shift IS the shift's final record. */
 var _dcLastSig='';
+var _tuSent=false;
+function reportToolUse(){ if(_tuSent||!USER) return; _tuSent=true;
+  try{ fetch('https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec?action=tool_used&employee_id='+encodeURIComponent(USER.employee_id||USER.id||'')+'&tool=altr&_='+Date.now()); }catch(_e){} }
 function dcAutoPush(silent){
   try{
     var PORTAL='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
