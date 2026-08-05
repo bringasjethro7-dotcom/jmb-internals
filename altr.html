@@ -2161,11 +2161,25 @@ function dcAutoPush(silent){
       var empKey=String(srx.eid||srx.employee_id||srx.name||'').trim(); if(!empKey) return;
       items.push({ emp:empKey, target:target, done:sourced });
     });
-    var sig=today+'|'+items.map(function(x){ return x.emp+':'+x.target+':'+x.done; }).join(',');
+    // POSTING TEAM too — same auto-import: per poster, active accounts = target, posted = done.
+    try{
+      var pclaimed={}, pdisc={}; try{ pdisc=disconnectedPhones(); }catch(_d){ pdisc={}; }
+      (STATE.posters||[]).forEach(function(px){
+        if(String(px.active||'').toUpperCase()==='FALSE') return;
+        var pph=String(px.phones||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
+        var ptarget=0, pposted=0;
+        pph.forEach(function(ph){ if(pclaimed[ph]) return; pclaimed[ph]=true; if(pdisc[String(ph)]) return; var st=phonePostStats_(ph); ptarget+=st.active; pposted+=st.posted; });
+        if(ptarget<=0 && pposted<=0) return;
+        var pk=String(px.eid||px.employee_id||px.name||'').trim(); if(!pk) return;
+        items.push({ emp:pk, task:'Vysor IG Posting', target:ptarget, done:pposted });
+      });
+    }catch(_pt){}
+    items.forEach(function(x){ if(!x.task) x.task='Content Sourcing'; });
+    var sig=today+'|'+items.map(function(x){ return x.emp+':'+x.task+':'+x.target+':'+x.done; }).join(',');
     if(sig===_dcLastSig) return;   // nothing changed since the last push
     _dcLastSig=sig;
     var pushes=items.map(function(x){
-      return fetch(PORTAL+'?action=po_set&employee_id='+encodeURIComponent(x.emp)+'&project=ALTR&task=Content%20Sourcing&volume='+encodeURIComponent(x.target)+'&done='+encodeURIComponent(x.done)+'&date='+encodeURIComponent(today)+'&_='+Date.now()).catch(function(){});
+      return fetch(PORTAL+'?action=po_set&employee_id='+encodeURIComponent(x.emp)+'&project=ALTR&task='+encodeURIComponent(x.task)+'&volume='+encodeURIComponent(x.target)+'&done='+encodeURIComponent(x.done)+'&date='+encodeURIComponent(today)+'&_='+Date.now()).catch(function(){});
     });
     if(pushes.length && !silent){ Promise.all(pushes).then(function(){ toast('🗄 Data Center updated ('+pushes.length+' sourcers)'); }); }
   }catch(_dc){}

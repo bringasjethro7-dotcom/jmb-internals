@@ -106,6 +106,18 @@
   .ann .a-b{font-size:1.9vh;color:var(--ink2);line-height:1.55;margin-top:1.3vh;white-space:pre-wrap;font-weight:500}
   .ann .a-m{font-size:1.3vh;color:var(--ink3);margin-top:1.6vh;font-weight:700;letter-spacing:.04em}
 
+
+  /* Team progress slide */
+  .pgrid{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:1.2vh 1.2vw;align-content:start;overflow:hidden}
+  .prow{display:flex;align-items:center;gap:1vw;background:var(--card);border:1px solid var(--line);border-radius:1.6vh;padding:1.2vh 1.2vw;box-shadow:var(--shSoft)}
+  .prow img{width:5vh;height:5vh;border-radius:50%;object-fit:cover;flex-shrink:0;box-shadow:0 0 0 .3vh #fff,0 0 0 .6vh rgba(255,90,0,.35)}
+  .pmain{flex:1;min-width:0}
+  .pname{font-size:1.9vh;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+  .pproj{font-size:1.25vh;color:var(--ink2);font-weight:700;display:flex;justify-content:space-between;margin-top:.5vh}
+  .pbar2{height:1.15vh;border-radius:.8vh;background:rgba(20,26,36,.07);overflow:hidden}
+  .pbar2 i{display:block;height:100%;border-radius:.8vh;background:linear-gradient(90deg,#ffa25c,#ff5a00 45%,#dc2626);box-shadow:0 0 1.2vh rgba(255,90,0,.4)}
+  .ppct{font-size:3.2vh;font-weight:900;letter-spacing:-.02em;background:linear-gradient(135deg,#ff5a00,#dc2626);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;min-width:8.5vh;text-align:right}
+  .ppct.full{background:linear-gradient(135deg,#16a34a,#15803d);-webkit-background-clip:text;background-clip:text}
   .ticker{height:6vh;display:flex;align-items:center;gap:1.4vw;padding:0 1vw;border-top:1px solid var(--line);background:rgba(255,255,255,.6)}
   .ticker .tk-lbl{font-size:1.3vh;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--o1);flex-shrink:0}
   .ticker .tk-track{flex:1;overflow:hidden;white-space:nowrap}
@@ -362,6 +374,43 @@ function armAudioUnlock(){ ['pointerdown','keydown','touchstart','click'].forEac
 
 /* Announcements panel only appears when there's something to show. Video slides are
    appended, and each one dwells for its own length (secs) before the board advances. */
+
+/* ── TEAM PROGRESS SLIDE — every VA, every tool, one frame (15 min per loop) ── */
+var PROG={rows:[],dir:{}};
+async function loadProgressData(){
+  try{
+    var pv=await fetch(APPS_SCRIPT_URL+'?action=po_va_progress&_='+Date.now()).then(function(r){return r.json();}).catch(function(){return null;});
+    var ed=await fetch(APPS_SCRIPT_URL+'?action=emp_dir&_='+Date.now()).then(function(r){return r.json();}).catch(function(){return null;});
+    if(pv&&pv.ok) PROG.rows=pv.rows||[];
+    if(ed&&ed.employees){ var m={}; ed.employees.forEach(function(e){ var ph=''; var mm=String(e.photo||'').match(/[-\w]{25,}/); if(mm) ph='https://drive.google.com/thumbnail?id='+mm[0]+'&sz=w200';
+      m[String(e.employee_id).toLowerCase()]={n:e.full_name||e.employee_id,p:ph}; }); PROG.dir=m; }
+    var host=document.getElementById('progslide-grid'); if(host) host.innerHTML=progRows();
+  }catch(e){}
+}
+function progRows(){
+  var by={}; PROG.rows.forEach(function(r){ var k=String(r.employee_id).toLowerCase(); (by[k]=by[k]||[]).push(r); });
+  var cards=Object.keys(by).map(function(k){ var rows=by[k]; var avg=Math.round(rows.reduce(function(sm,x){return sm+x.pct;},0)/rows.length); return {k:k,rows:rows,avg:avg}; })
+    .sort(function(a,b){ return b.avg-a.avg; });
+  if(!cards.length) return '<div class="empty-note">No tool activity yet this shift.</div>';
+  return cards.map(function(c){
+    var d=PROG.dir[c.k]||{}; var nm=esc(d.n||c.k.toUpperCase());
+    var av=d.p?('<img src="'+d.p+'" alt="">'):('<img alt="" style="visibility:hidden">');
+    var bars=c.rows.map(function(r){ return '<div class="pproj"><span>'+esc(r.project)+'</span><span>'+r.done+' / '+r.total+'</span></div><div class="pbar2"><i style="width:'+Math.min(100,r.pct)+'%"></i></div>'; }).join('');
+    return '<div class="prow">'+av+'<div class="pmain"><div class="pname">'+nm+'</div>'+bars+'</div><div class="ppct'+(c.avg>=100?' full':'')+'">'+c.avg+'%</div></div>';
+  }).join('');
+}
+function pProgress(active){
+  return '<div class="panel'+(active?' active':'')+'">'+
+    '<div style="display:flex;align-items:baseline;gap:1.4vw;margin-bottom:2.2vh;">'+
+      '<div style="font-size:4.6vh;font-weight:800;letter-spacing:-.01em;">Team Progress <em style="font-style:normal;color:var(--o1)">— live from the tools</em></div>'+
+      '<div style="font-size:1.8vh;color:var(--ink2);font-weight:600;">sessions & outputs · resets 8 AM / 8 PM</div>'+
+    '</div>'+
+    '<div class="pgrid" id="progslide-grid">'+progRows()+'</div>'+
+  '</div>';
+}
+setInterval(function(){ loadProgressData(); }, 120000);
+loadProgressData();
+
 function panelList(){
   var info=[
     {build:pHero,       secs:15},
@@ -369,7 +418,8 @@ function panelList(){
     {build:pServices,   secs:15},
     {build:pNumbers,    secs:15},
     {build:pPrinciples, secs:15},
-    {build:pOnline,     secs:15}
+    {build:pOnline,     secs:15},
+    {build:pProgress,   secs:900}   // ← Team Progress dwells 15 minutes per loop
   ];
   if(ANNS.length) info.splice(5,0,{build:pAnns, secs:15});
   var vids=VIDEOS.map(function(v,i){ return { build:function(active){ return pVideo(i, active); }, secs:(parseFloat(v.secs)||60)+25, video:true }; });

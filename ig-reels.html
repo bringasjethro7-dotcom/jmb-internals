@@ -115,7 +115,8 @@
 var API='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
 var PROJECT='Project Arlo';
 var USER=null, ROWS=[], CMROWS=[];
-var NAMES={}, SHIFTOF={};
+var NAMES={}, SHIFTOF={}, PHOTOOF={};
+function drivePhoto(u){ u=String(u||''); if(!u) return ''; var m=u.match(/[-\w]{25,}/); return m?('https://drive.google.com/thumbnail?id='+m[0]+'&sz=w128'):u; }
 /* ── fetching layer: timeout + retry on READS (never on writes), local cache for instant paint,
    visibility-aware polling (pauses when the tab is hidden, refreshes on focus) ── */
 async function jFetch(url, tries){
@@ -157,7 +158,7 @@ function renderTabs(){
    server and RETRY until it succeeds — one slow response can no longer leave IDs on screen
    or night VAs running under morning rules. */
 (function(){ try{ var c=JSON.parse(sessionStorage.getItem('jmb_empdir')||'null');
-  if(c && c.N && (Date.now()-(c.t||0))<24*3600*1000){ NAMES=c.N||{}; SHIFTOF=c.S||{}; } }catch(e){} })();
+  if(c && c.N && (Date.now()-(c.t||0))<24*3600*1000){ NAMES=c.N||{}; SHIFTOF=c.S||{}; PHOTOOF=c.P||{}; } }catch(e){} })();
 async function loadNames(){
   function _dirFetch(url){ return new Promise(function(res,rej){
     var ctl=(typeof AbortController!=='undefined')?new AbortController():null;
@@ -177,8 +178,9 @@ async function loadNames(){
       var sh=String(e.shift||'').toLowerCase();
       if(!sh && e.payslips && e.payslips.length) sh=String((e.payslips[0]||{}).shift||'').toLowerCase();
       SHIFTOF[k]=sh;
+      PHOTOOF[k]=drivePhoto(e.photo||'');
     });
-    try{ sessionStorage.setItem('jmb_empdir', JSON.stringify({N:NAMES, S:SHIFTOF, t:Date.now()})); }catch(_p){}
+    try{ sessionStorage.setItem('jmb_empdir', JSON.stringify({N:NAMES, S:SHIFTOF, P:PHOTOOF, t:Date.now()})); }catch(_p){}
     try{ render(); }catch(_r){}
   }catch(e){ setTimeout(loadNames, 15000); }
 }
@@ -239,7 +241,8 @@ function renderByVA(segs, doneFn, activeFn, amFn){
       var init=String(name).split(/\s+/).slice(0,2).map(function(w){return w.charAt(0);}).join('').toUpperCase()||'?';
       var me=(o.k===mine);
       return '<div class="pvrow'+(ix===0?' first':'')+'"'+(me?' style="background:rgba(16,185,129,.05);border-radius:12px;padding-left:10px;padding-right:10px;"':'')+'>'+
-        '<div class="pvav" style="background:'+AVC[o.i%AVC.length]+'">'+esc(init)+'</div>'+
+        (PHOTOOF[o.k]?('<img src="'+PHOTOOF[o.k]+'" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex:none;box-shadow:0 2px 8px rgba(15,23,42,.18);">')
+          :('<div class="pvav" style="background:'+AVC[o.i%AVC.length]+'">'+esc(init)+'</div>'))+
         '<div style="flex:1;min-width:0;">'+
           '<div style="display:flex;align-items:baseline;gap:8px;"><b style="font-size:13.5px;">'+(SHIFTOF[o.k]==='night'?'🌙 ':(SHIFTOF[o.k]?'☀ ':''))+esc(name)+'</b>'+(me?'<span style="font-size:10px;color:#0f766e;font-weight:800;">you</span>':'')+'<span style="font-size:11px;color:var(--ink3);font-weight:700;">'+o.n+' on board</span></div>'+
           '<div class="pvbar" style="margin-top:7px;"><i style="width:'+Math.min(100,o.pct)+'%;background:'+pc+';"></i></div>'+
