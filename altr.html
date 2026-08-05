@@ -2176,12 +2176,16 @@ function dcAutoPush(silent){
     }catch(_pt){}
     items.forEach(function(x){ if(!x.task) x.task='Content Sourcing'; });
     var sig=today+'|'+items.map(function(x){ return x.emp+':'+x.task+':'+x.target+':'+x.done; }).join(',');
-    if(sig===_dcLastSig) return;   // nothing changed since the last push
-    _dcLastSig=sig;
-    var pushes=items.map(function(x){
-      return fetch(PORTAL+'?action=po_set&employee_id='+encodeURIComponent(x.emp)+'&project=ALTR&task='+encodeURIComponent(x.task)+'&volume='+encodeURIComponent(x.target)+'&done='+encodeURIComponent(x.done)+'&date='+encodeURIComponent(today)+'&_='+Date.now()).catch(function(){});
-    });
-    if(pushes.length && !silent){ Promise.all(pushes).then(function(){ toast('🗄 Data Center updated ('+pushes.length+' sourcers)'); }); }
+    if(sig===_dcLastSig) return;                                        // nothing changed
+    if(Date.now()-(window._dcLastAt||0) < 180000 && silent) return;     // min 3-min spacing for auto pushes
+    _dcLastSig=sig; window._dcLastAt=Date.now();
+    if(!items.length) return;
+    // ONE batched request for the whole team — the server upserts everything in a single execution.
+    var payload=encodeURIComponent(JSON.stringify(items.map(function(x){ return { emp:x.emp, task:x.task, target:x.target, done:x.done }; })));
+    fetch(PORTAL+'?action=po_batch&project=ALTR&date='+encodeURIComponent(today)+'&items='+payload+'&_='+Date.now())
+      .then(function(r){ return r.json(); })
+      .then(function(d){ if(!silent) toast('🗄 Data Center updated ('+((d&&d.written)||items.length)+' teammates)'); })
+      .catch(function(){});
   }catch(_dc){}
 }
 async function recordDay(){
