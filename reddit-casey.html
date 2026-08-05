@@ -82,7 +82,7 @@
   <div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:800"><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:linear-gradient(135deg,#ff4500,#b91c1c);box-shadow:0 0 10px rgba(255,69,0,.5);"></span> JMB <em style="font-style:normal;color:var(--or)">Reddit Casey</em> Tool</div>
   <div style="font-size:12.5px;color:var(--ink2);margin-top:6px">Sign in with your Employee ID + PIN</div>
   <input id="si-id" placeholder="Employee ID"><input id="si-pin" type="password" placeholder="PIN">
-  <button onclick="signIn()">Sign in</button><div id="si-err"></div>
+  <button onclick="signIn()" id="si-btn">Sign in</button><div id="si-err"></div>
 </div>
 
 <div class="wrap" id="app" style="display:none">
@@ -133,15 +133,15 @@ function drivePhoto(u){ u=String(u||''); if(!u) return ''; var m=u.match(/[-\w]{
 /* ── fetching layer: timeout + retry on READS (never on writes), local cache for instant paint,
    visibility-aware polling (pauses when the tab is hidden, refreshes on focus) ── */
 async function jFetch(url, tries){
-  tries=(tries==null)?2:tries;
+  tries=(tries==null)?3:tries;
   for(var a=0;a<=tries;a++){
     try{
       var ctl=(typeof AbortController!=='undefined')?new AbortController():null;
-      var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },10000):null;
+      var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },30000):null;   // patient: server can queue 10-20s under load
       var r=await fetch(url, ctl?{signal:ctl.signal}:undefined);
       if(tm) clearTimeout(tm);
       return await r.json();
-    }catch(e){ if(a===tries) throw e; await new Promise(function(res){ setTimeout(res, 500*(a+1)); }); }
+    }catch(e){ if(a===tries) throw e; await new Promise(function(res){ setTimeout(res, 1500*(a+1)); }); }
   }
 }
 function cacheRows(){ try{ sessionStorage.setItem('dc_rows_'+PROJECT, JSON.stringify({t:Date.now(), rows:ROWS})); }catch(e){} }
@@ -347,13 +347,25 @@ function bump(task,n){ return fetch(API+'?action=po_bump&employee_id='+encodeURI
 async function signIn(){
   var id=$('si-id').value.trim(), pin=$('si-pin').value.trim(); var err=$('si-err'); err.style.display='none';
   if(!id||!pin){ err.style.display='block'; err.textContent='Enter your Employee ID and PIN.'; return; }
+  var btn=$('si-btn'); if(btn && btn.disabled) return;   // already signing in — don't double-fire
+  if(btn){ btn.disabled=true; btn.textContent='Signing in…'; }
+  function _done(){ if(btn){ btn.disabled=false; btn.textContent='Sign in'; } }
+  function _siFetch(){ return new Promise(function(res,rej){
+    var ctl=(typeof AbortController!=='undefined')?new AbortController():null;
+    var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },45000):null;
+    fetch(API+'?id='+encodeURIComponent(id)+'&pin='+encodeURIComponent(pin)+'&_='+Date.now(), ctl?{signal:ctl.signal}:undefined)
+      .then(function(r){ return r.json(); }).then(function(j){ if(tm) clearTimeout(tm); res(j); })
+      .catch(function(e){ if(tm) clearTimeout(tm); rej(e); });
+  }); }
   try{
-    var r=await fetch(API+'?id='+encodeURIComponent(id)+'&pin='+encodeURIComponent(pin)+'&_='+Date.now()); var d=await r.json();
-    if(!d||d.error){ err.style.display='block'; err.textContent=(d&&d.error==='WRONG_PIN')?'Incorrect PIN.':'Employee not found.'; return; }
+    var d=null;
+    try{ d=await _siFetch(); }
+    catch(_e1){ if(btn) btn.textContent='Still signing in… (server is busy)'; await new Promise(function(r){setTimeout(r,2000);}); d=await _siFetch(); }
+    if(!d||d.error){ _done(); err.style.display='block'; err.textContent=(d&&d.error==='WRONG_PIN')?'Incorrect PIN.':'Employee not found.'; return; }
     USER={ id:d.employee_id, name:d.full_name||d.employee_id };
     try{ sessionStorage.setItem('redditcasey_user', JSON.stringify(USER)); }catch(e){}
-    start();
-  }catch(e){ err.style.display='block'; err.textContent='Network error — try again.'; }
+    _done(); start();
+  }catch(e){ _done(); err.style.display='block'; err.textContent='Server is busy right now — wait a minute and try again.'; }
 }
 function start(){ try{ fetch(API+'?action=tool_used&employee_id='+encodeURIComponent(USER.id)+'&tool=reddit-casey&_='+Date.now()); }catch(_tu){} $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name;
   try{ $('ra-cdate').value=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){}
@@ -361,11 +373,19 @@ function start(){ try{ fetch(API+'?action=tool_used&employee_id='+encodeURICompo
   var ps=$('ra-phase'); if(ps && !ps.options.length){ ps.innerHTML=PH.map(function(p){ return '<option value="'+p.k+'">'+p.n+'</option>'; }).join(''); }
   paintCached(); load(); smartPoll(); }
 
+var _ldRetryT=null;
 async function load(){
   try{
     var d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
     if(!d||!d.ok) throw new Error((d&&d.error)||'load'); ROWS=scopeRows(d.rows||[]); cacheRows(); render();
-  }catch(e){ $('grid').innerHTML='<div class="muted">Could not load — redeploy the Apps Script (pa_list).</div>'; }
+    if(_ldRetryT){ clearTimeout(_ldRetryT); _ldRetryT=null; }
+  }catch(e){
+    // NEVER wipe a working board over one failed refresh — keep the last good data and retry quietly.
+    if(ROWS && ROWS.length){ try{ toast('Refresh failed — showing your last saved board. Retrying…'); }catch(_t){} }
+    else $('grid').innerHTML='<div class="muted">Server is busy — retrying automatically… <a href="#" onclick="load();return false;" style="color:#ea580c;font-weight:800;">Retry now</a></div>';
+    if(_ldRetryT) clearTimeout(_ldRetryT);
+    _ldRetryT=setTimeout(load, 20000);
+  }
 }
 function renderMatrix(){
   var host=document.getElementById('matrix'); if(!host) return;
