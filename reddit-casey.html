@@ -146,19 +146,24 @@ async function jFetch(url, tries){
 }
 function cacheRows(){ try{ sessionStorage.setItem('dc_rows_'+PROJECT, JSON.stringify({t:Date.now(), rows:ROWS})); }catch(e){} }
 function paintCached(){ try{ var c=JSON.parse(sessionStorage.getItem('dc_rows_'+PROJECT)||'null');
-  if(c && c.rows && c.rows.length && (Date.now()-c.t)<10*60*1000){ ROWS=c.rows; render(); return true; } }catch(e){} return false; }
+  if(c && c.rows && c.rows.length && (Date.now()-c.t)<10*60*1000){ ROWS=scopeRows(c.rows); render(); return true; } }catch(e){} return false; }
 function smartPoll(){
   setInterval(function(){ if(!document.hidden) load(); }, 60000);
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) load(); });
   window.addEventListener('focus', function(){ load(); });
 }
-/* ── VA view tabs: '👤 My accounts' (default) · '🌐 All' · one tab per VA ── */
+/* ── PRIVACY: each VA sees ONLY their own accounts + their own totals. Admin sees everything. ── */
+var BOSS=['jmbeast'];
+function isBoss(){ return !!(USER && BOSS.indexOf(String(USER.id||'').toLowerCase())>=0); }
+function scopeRows(rs){ if(isBoss()) return rs; var me=String((USER&&USER.id)||'').toLowerCase(); return (rs||[]).filter(function(r){ return ownerOf(r)===me; }); }
+/* ── VA view tabs: '👤 My accounts' (default) · '🌐 All' · one tab per VA — ADMIN ONLY ── */
 var FILTER=(function(){ try{ return sessionStorage.getItem('dc_va_'+PROJECT)||'mine'; }catch(e){ return 'mine'; } })();
 function ownerOf(r){ return String(r.assigned_to||r.created_by||'').toLowerCase(); }
 function filterRows(){ if(FILTER==='all') return ROWS; var t=(FILTER==='mine')?String((USER&&USER.id)||'').toLowerCase():FILTER; return ROWS.filter(function(r){ return ownerOf(r)===t; }); }
 function setFilter(f){ FILTER=f; try{ sessionStorage.setItem('dc_va_'+PROJECT,f); }catch(e){} render(); }
 function renderTabs(){
   var host=document.getElementById('vatabs'); if(!host) return;
+  if(!isBoss()){ host.innerHTML=''; return; }
   var mine=String((USER&&USER.id)||'').toLowerCase();
   var by={}; ROWS.forEach(function(r){ var k=ownerOf(r)||'—'; by[k]=(by[k]||0)+1; });
   function pill(val,label,n){ var on=(FILTER===val);
@@ -358,7 +363,7 @@ function start(){ try{ fetch(API+'?action=tool_used&employee_id='+encodeURICompo
 async function load(){
   try{
     var d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
-    if(!d||!d.ok) throw new Error((d&&d.error)||'load'); ROWS=d.rows||[]; cacheRows(); render();
+    if(!d||!d.ok) throw new Error((d&&d.error)||'load'); ROWS=scopeRows(d.rows||[]); cacheRows(); render();
   }catch(e){ $('grid').innerHTML='<div class="muted">Could not load — redeploy the Apps Script (pa_list).</div>'; }
 }
 function renderMatrix(){
