@@ -384,7 +384,7 @@ async function loadProgressData(){
     if(pv&&pv.ok) PROG.rows=pv.rows||[];
     if(ed&&ed.employees){ var m={}; ed.employees.forEach(function(e){ var ph=''; var mm=String(e.photo||'').match(/[-\w]{25,}/); if(mm) ph='https://drive.google.com/thumbnail?id='+mm[0]+'&sz=w200';
       m[String(e.employee_id).toLowerCase()]={n:e.full_name||e.employee_id,p:ph}; }); PROG.dir=m; }
-    var host=document.getElementById('progslide-grid'); if(host) host.innerHTML=progRows();
+    document.querySelectorAll('.progslide-grid').forEach(function(host){ host.innerHTML=progRows(); });
   }catch(e){}
 }
 function progRows(){
@@ -392,8 +392,11 @@ function progRows(){
   var cards=Object.keys(by).map(function(k){ var rows=by[k]; var avg=Math.round(rows.reduce(function(sm,x){return sm+x.pct;},0)/rows.length); return {k:k,rows:rows,avg:avg}; })
     .sort(function(a,b){ return b.avg-a.avg; });
   if(!cards.length) return '<div class="empty-note">No tool activity yet this shift.</div>';
+  var nrm=function(x){ return String(x||'').toLowerCase().replace(/[^a-z0-9]/g,''); };
+  var byName={}; Object.keys(PROG.dir).forEach(function(k){ byName[nrm(PROG.dir[k].n)]=k; });
   return cards.map(function(c){
-    var d=PROG.dir[c.k]||{}; var nm=esc(d.n||c.k.toUpperCase());
+    var rk=PROG.dir[c.k]?c.k:(byName[nrm(c.k)]||c.k);
+    var d=PROG.dir[rk]||{}; var nm=esc(d.n||c.k.toUpperCase());
     var av=d.p?('<img src="'+d.p+'" alt="">'):('<img alt="" style="visibility:hidden">');
     var bars=c.rows.map(function(r){ return '<div class="pproj"><span>'+esc(r.project)+'</span><span>'+r.done+' / '+r.total+'</span></div><div class="pbar2"><i style="width:'+Math.min(100,r.pct)+'%"></i></div>'; }).join('');
     return '<div class="prow">'+av+'<div class="pmain"><div class="pname">'+nm+'</div>'+bars+'</div><div class="ppct'+(c.avg>=100?' full':'')+'">'+c.avg+'%</div></div>';
@@ -405,7 +408,7 @@ function pProgress(active){
       '<div style="font-size:4.6vh;font-weight:800;letter-spacing:-.01em;">Team Progress <em style="font-style:normal;color:var(--o1)">— live from the tools</em></div>'+
       '<div style="font-size:1.8vh;color:var(--ink2);font-weight:600;">sessions & outputs · resets 8 AM / 8 PM</div>'+
     '</div>'+
-    '<div class="pgrid" id="progslide-grid">'+progRows()+'</div>'+
+    '<div class="pgrid progslide-grid">'+progRows()+'</div>'+
   '</div>';
 }
 setInterval(function(){ loadProgressData(); }, 120000);
@@ -418,16 +421,16 @@ function panelList(){
     {build:pServices,   secs:15},
     {build:pNumbers,    secs:15},
     {build:pPrinciples, secs:15},
-    {build:pOnline,     secs:15},
-    {build:pProgress,   secs:900}   // ← Team Progress dwells 15 minutes per loop
+    {build:pOnline,     secs:15}
   ];
   if(ANNS.length) info.splice(5,0,{build:pAnns, secs:15});
   var vids=VIDEOS.map(function(v,i){ return { build:function(active){ return pVideo(i, active); }, secs:(parseFloat(v.secs)||60)+25, video:true }; });
   if(!vids.length) return info;
   // Weave the videos evenly BETWEEN the info slides (one clip every few slides).
   var out=[], gap=Math.max(1, Math.floor(info.length/vids.length)), vi=0;
-  for(var i=0;i<info.length;i++){ out.push(info[i]); if(vi<vids.length && (i+1)%gap===0) out.push(vids[vi++]); }
-  while(vi<vids.length) out.push(vids[vi++]);
+  var progSlide=function(){ return { build:pProgress, secs:600 }; };   // 10 min, live-updating
+  for(var i=0;i<info.length;i++){ out.push(info[i]); if(vi<vids.length && (i+1)%gap===0){ out.push(progSlide()); out.push(vids[vi++]); } }
+  while(vi<vids.length){ out.push(progSlide()); out.push(vids[vi++]); }
   return out;
 }
 var cur=0, _rotTimer=null;
