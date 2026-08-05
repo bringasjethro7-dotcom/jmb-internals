@@ -159,7 +159,8 @@ function scopeRows(rs){ if(isBoss()) return rs; var me=String((USER&&USER.id)||'
 /* ── VA view tabs: '👤 My accounts' (default) · '🌐 All' · one tab per VA — ADMIN ONLY ── */
 var FILTER=(function(){ try{ return sessionStorage.getItem('dc_va_'+PROJECT)||'mine'; }catch(e){ return 'mine'; } })();
 function ownerOf(r){ return String(r.assigned_to||r.created_by||'').toLowerCase(); }
-function filterRows(){ if(FILTER==='all') return ROWS; var t=(FILTER==='mine')?String((USER&&USER.id)||'').toLowerCase():FILTER; return ROWS.filter(function(r){ return ownerOf(r)===t; }); }
+function filterRows(){ if(!isBoss()) FILTER='mine';   // non-admin: stale saved filters (All / another VA) would show an empty board
+  if(FILTER==='all') return ROWS; var t=(FILTER==='mine')?String((USER&&USER.id)||'').toLowerCase():FILTER; return ROWS.filter(function(r){ return ownerOf(r)===t; }); }
 function setFilter(f){ FILTER=f; try{ sessionStorage.setItem('dc_va_'+PROJECT,f); }catch(e){} render(); }
 function renderTabs(){
   var host=document.getElementById('vatabs'); if(!host) return;
