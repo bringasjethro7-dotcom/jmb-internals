@@ -172,10 +172,11 @@ function renderTabs(){
    or night VAs running under morning rules. */
 (function(){ try{ var c=JSON.parse(sessionStorage.getItem('jmb_empdir')||'null');
   if(c && c.N && (Date.now()-(c.t||0))<24*3600*1000){ NAMES=c.N||{}; SHIFTOF=c.S||{}; PHOTOOF=c.P||{}; } }catch(e){} })();
+var _nmTry=0;
 async function loadNames(){
   function _dirFetch(url){ return new Promise(function(res,rej){
     var ctl=(typeof AbortController!=='undefined')?new AbortController():null;
-    var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },25000):null;
+    var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },45000):null;
     fetch(url, ctl?{signal:ctl.signal}:undefined).then(function(r){ return r.json(); })
       .then(function(j){ if(tm) clearTimeout(tm); res(j); })
       .catch(function(e){ if(tm) clearTimeout(tm); rej(e); });
@@ -194,7 +195,11 @@ async function loadNames(){
     });
     try{ sessionStorage.setItem('jmb_empdir', JSON.stringify({N:NAMES, S:SHIFTOF, P:PHOTOOF, t:Date.now()})); }catch(_p){}
     try{ render(); }catch(_r){}
-  }catch(e){ setTimeout(loadNames, 15000); }
+  }catch(e){
+    _nmTry=(typeof _nmTry==='number'?_nmTry:0)+1;
+    var wait=Math.min(300000, 30000*Math.pow(2,_nmTry-1)) + Math.random()*10000;   // 30s→60s→…→5min + jitter
+    setTimeout(loadNames, wait);
+  }
 }
 function delBtn(id){ return '<button onclick="delAcct(\''+id+'\')" title="Delete (wrong entry)" style="border:1px solid rgba(239,68,68,.3);background:#fff;color:#b91c1c;border-radius:8px;padding:5px 8px;font-size:10.5px;font-weight:800;cursor:pointer;">'+IC.trash+'</button>'; }
 async function delAcct(id){
