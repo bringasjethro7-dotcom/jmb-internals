@@ -358,7 +358,7 @@ async function load(){
 }
 function renderMatrix(){
   var host=document.getElementById('matrix'); if(!host) return;
-  var cols=PH.map(function(p){ return {k:p.k,n:p.n,c:p.c}; }).concat([{k:'recovery',n:'Recovery',c:'#f97316'},{k:'tempban',n:'Temp ban',c:'#ea580c'},{k:'banned',n:'Banned',c:'#991b1b'}]);
+  var cols=[{k:'new',n:'New',c:'#fb923c'}].concat(PH.map(function(p){ return {k:p.k,n:p.n,c:p.c}; })).concat([{k:'recovery',n:'Recovery',c:'#f97316'},{k:'tempban',n:'Temp ban',c:'#ea580c'},{k:'banned',n:'Banned',c:'#991b1b'}]);
   var by={}; ROWS.forEach(function(r){ var k=String(r.assigned_to||r.created_by||'—').toLowerCase(); (by[k]=by[k]||[]).push(r); });
   var keys=Object.keys(by).sort(function(a,b){ return by[b].length-by[a].length; });
   if(!keys.length){ host.innerHTML='<div class="muted">No accounts yet.</div>'; return; }
@@ -374,11 +374,13 @@ function renderMatrix(){
   host.innerHTML='<table style="border-collapse:collapse;font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;min-width:100%;">'+head+body+totRow+'</table>';
 }
 function render(){
+  try{ autoGraduateNew(); }catch(_g){}
   var creation=ROWS.filter(function(r){return r.status==='creation';}).length;
   var warm=ROWS.filter(function(r){return ['warming','comment','nsfw'].indexOf(r.status)>=0;}).length;
   var posting=ROWS.filter(function(r){return ['day1','early','earlydm','medium'].indexOf(r.status)>=0;}).length;
   var strong=ROWS.filter(function(r){return ['strong','superstrong'].indexOf(r.status)>=0;}).length;
   $('stats').innerHTML=
+    '<div class="stat"><b style="color:#fb923c">'+ROWS.filter(function(r){return r.status==='new';}).length+'</b><span>Newly created</span></div>'+
     '<div class="stat"><b style="color:#64748b">'+creation+'</b><span>Creation standby</span></div>'+
     '<div class="stat"><b style="color:#b45309">'+warm+'</b><span>Warming / farming</span></div>'+
     '<div class="stat"><b style="color:#e11d48">'+posting+'</b><span>Posting</span></div>'+
@@ -395,17 +397,17 @@ function render(){
     ['Recovery','#0ea5e9',function(r){return r.status==='recovery';}],
     ['Temp ban','#d97706',function(r){return r.status==='tempban';}],
     ['Banned','#ef4444',function(r){return r.status==='banned';}]
-  ], function(r){ return markOk(r.meta&&r.meta.last, r.assigned_to||r.created_by); }, function(r){ return r.status!=='banned' && r.status!=='creation' && r.status!=='tempban'; });
+  ], function(r){ return markOk(r.meta&&r.meta.last, r.assigned_to||r.created_by); }, function(r){ return r.status!=='banned' && r.status!=='creation' && r.status!=='tempban' && r.status!=='new'; });
   renderMatrix();
   if(!ROWS.length){ $('grid').innerHTML='<div class="muted">No accounts yet — create the first via the iPhone farm SOP and add it above.</div>'; return; }
   renderTabs();
   var base=filterRows();
-  var ord=function(r){ if(r.status==='banned') return 99; if(r.status==='tempban') return 60; if(r.status==='recovery') return 50; return phaseIx(r.status); };
+  var ord=function(r){ if(r.status==='new') return -1; if(r.status==='banned') return 99; if(r.status==='tempban') return 60; if(r.status==='recovery') return 50; return phaseIx(r.status); };
   var sorted=base.slice().sort(function(a,b){ return ord(a)-ord(b) || daysIn(b)-daysIn(a); });
   var q=(($('ra-q')||{}).value||'').trim().toLowerCase();
   if(q) sorted=sorted.filter(function(r){ return String(r.handle||'').toLowerCase().indexOf(q)>=0 || String(vaName(r.assigned_to||r.created_by)).toLowerCase().indexOf(q)>=0; });
   if(!sorted.length){ $('grid').innerHTML='<div class="muted">'+(q?'No accounts match "'+esc(q)+'".':'No accounts in this view.')+'</div>'; return; }
-  function grpR(r){ return (r.status==='banned')?'Banned':(r.status==='tempban')?'Temporarily Banned':(r.status==='recovery')?'Spam Recovery':(phase(r.status)||{n:r.status}).n; }
+  function grpR(r){ return (r.status==='new')?'Newly Created — counts on DONE':(r.status==='banned')?'Banned':(r.status==='tempban')?'Temporarily Banned':(r.status==='recovery')?'Spam Recovery':(phase(r.status)||{n:r.status}).n; }
   var gcnt={}; sorted.forEach(function(r){ var g=grpR(r); gcnt[g]=(gcnt[g]||0)+1; });
   function cardR(r){
     var who=esc(vaName(r.assigned_to||r.created_by))+(cdateOf(r)?(' · '+esc(ageTxt(r))):'');
@@ -433,6 +435,15 @@ function render(){
     menu.push([IC.hour+' Temporary ban',"tempBan('"+r.id+"','"+p.k+"')"]);
     menu.push([IC.ban+' Banned',"setPhase('"+r.id+"','banned')"]);
     menu.push('---'); menu.push([IC.trash+' Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']);
+    if(r.status==='new'){
+      var counted=!!(r.meta&&r.meta.cdone);
+      return '<div class="acct" style="border-color:rgba(251,146,60,.5);"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#fb923c14;color:#c2410c;border:1px solid #fb923c2e">Newly Created</span>'+kmenu([[IC.ban+' Banned',"setPhase('"+r.id+"','banned')"],'---',[IC.trash+' Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+
+        '<div class="meta1">'+who+'</div>'+
+        '<div class="meta1" style="font-weight:700;color:#c2410c;">Fresh account — hit DONE to count the creation output. Moves to Creation stock after 1 day.</div>'+
+        '<div class="btns">'+(counted
+          ?'<button disabled style="opacity:.55">'+IC.check+' Done — counted</button>'
+          :'<button class="up" onclick="newDone(\''+r.id+'\')">'+IC.check+' DONE (+1 Reddit Account Creation)</button>')+'</div></div>';
+    }
     if(p.k==='creation'){
       var nBan=ROWS.filter(function(x){return x.status==='banned';}).length;
       return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:'+p.c+'14;color:'+p.c+';border:1px solid '+p.c+'2e">'+p.n+'</span>'+kmenu(menu)+'</div>'+
@@ -462,14 +473,14 @@ async function addAcct(){
   var cd=($('ra-cdate')||{}).value||'';
   try{
     // phase clock starts from the CREATION DATE when seeding into Creation; otherwise from today
-    var ps=(phk==='creation'&&cd)?cd:(cd&&phk==='warming'?cd:today());
+    if(isNew){ phk='new'; }
+    var ps=(phk==='creation'&&cd)?cd:(cd&&(phk==='warming'||phk==='new')?cd:today());
     var meta=encodeURIComponent(JSON.stringify({cdate:cd, pstart:ps}));
     var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(u)+'&status='+encodeURIComponent(phk)+'&meta='+meta+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
     var d=await r.json();
     if(d&&d.ok){
       $('ra-user').value=''; if($('ra-new')) $('ra-new').checked=false;
-      if(isNew){ await bump('Reddit Account Creation',1); }
-      toast('Added → '+(phase(phk)||{n:phk}).n+(isNew?' · +1 Reddit Account Creation':' (existing account seeded)'));
+      toast(isNew?'Added to Newly Created — hit DONE on the card to count it':'Added → '+(phase(phk)||{n:phk}).n+' (existing account seeded)');
       load();
     }
     else if(d&&d.error==='DUPLICATE') toast('That username is already on the board.');
@@ -498,6 +509,23 @@ function sessBtns(r, phk, gainTxt){
            :(s1?'<button class="go" onclick="sessionDone(\''+r.id+'\',\''+phk+'\',2)">'+IC.check+' Session 2'+g+'</button>'
                :'<button disabled style="opacity:.45;cursor:not-allowed" title="Finish Session 1 first">Session 2 '+IC.lock+'</button>');
   return b1+b2;
+}
+async function newDone(id){
+  var r0=row(id); if(!r0) return;
+  if(r0.meta&&r0.meta.cdone){ toast('Already counted.'); return; }
+  await bump('Reddit Account Creation',1);
+  var m=Object.assign({}, r0.meta||{}, {cdone:1});
+  try{ await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now()); }catch(e){}
+  toast('+1 Reddit Account Creation — counted'); load();
+}
+var _migrated={};
+function autoGraduateNew(){
+  ROWS.forEach(function(r){
+    if(r.status!=='new' || _migrated[r.id]) return;
+    if(daysIn(r)<1) return;
+    _migrated[r.id]=1;
+    fetch(API+'?action=pa_update&id='+encodeURIComponent(r.id)+'&status=creation&_='+Date.now()).catch(function(){});
+  });
 }
 async function stampSession(id, n){
   try{ var r0=row(id);
