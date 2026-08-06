@@ -297,6 +297,15 @@ function renderByVA(segs, doneFn, activeFn, amFn){
       if(markOk(m.s1,ow)) done++;
       if(markOk(m.s2,ow)) done++;
     });
+    // NEWLY CREATED accounts: added to the TARGET the instant they're entered, and counted
+    // in OUTPUT the moment DONE is pressed — same shift, no waiting for graduation.
+    rows.forEach(function(rr){
+      if(rr.status!=='new') return;
+      var m=rr.meta||{}, ow=rr.assigned_to||rr.created_by;
+      if(!markOk(m.cstamp||m.pstart||m.cdate, ow) && !markOk(m.added, ow)) return;   // only this shift's creations
+      tot+=1;
+      if(m.cdone) done+=1;
+    });
     rows.forEach(function(rr){
       if(activeFn && activeFn(rr)) return;              // already counted above
       if(rr.status!=='banned' && rr.status!=='tempban') return;
@@ -506,7 +515,7 @@ async function addAcct(){
     // phase clock starts from the CREATION DATE when seeding into Creation; otherwise from today
     if(isNew){ phk='new'; }
     var ps=(phk==='creation'&&cd)?cd:(cd&&(phk==='warming'||phk==='new')?cd:today());
-    var meta=encodeURIComponent(JSON.stringify({cdate:cd, pstart:ps}));
+    var meta=encodeURIComponent(JSON.stringify({cdate:cd, pstart:ps, added:vaKeyOf(USER.id)}));
     var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(u)+'&status='+encodeURIComponent(phk)+'&meta='+meta+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
     var d=await r.json();
     if(d&&d.ok){
@@ -556,7 +565,8 @@ async function newDone(id){
   var r0=row(id); if(!r0) return;
   if(r0.meta&&r0.meta.cdone){ toast('Already counted.'); return; }
   await bump('Reddit Account Creation',1);
-  var m=Object.assign({}, r0.meta||{}, {cdone:1});
+  // cstamp/added keep this creation inside TODAY's target; cdone marks it as delivered output.
+  var m=Object.assign({}, r0.meta||{}, {cdone:1, cstamp:vaKeyOf(USER.id), added:(r0.meta&&r0.meta.added)||vaKeyOf(USER.id)});
   try{ await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now()); }catch(e){}
   toast('+1 Reddit Account Creation — counted'); load();
 }

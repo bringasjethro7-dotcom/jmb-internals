@@ -151,6 +151,7 @@ table tbody tr:hover td{background:rgba(255,107,26,.05)}
     <span class="logo"><b>JMB</b> PRODUCTIVITY HUB</span>
     <span class="spacer"></span>
     <span class="who">Hi, <b id="who-name">—</b></span>
+    <button class="btn ghost sm" onclick="openGaps()" style="border-color:rgba(220,38,38,.45);color:#dc2626;">⚠ Gaps to fix <span id="gap-badge" style="display:none;background:#dc2626;color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;margin-left:4px;"></span></button>
     <button class="btn ghost sm" onclick="openReview()" style="border-color:rgba(21,128,61,.45);color:#15803d;">✔ Review volumes</button>
     <button class="btn ghost sm" onclick="openCutoffs()" style="border-color:rgba(124,58,237,.45);color:#7c3aed;">📊 Cutoff scores</button>
     <button class="btn ghost sm" onclick="load()">↻ Refresh</button>
@@ -806,5 +807,91 @@ async function emLoad(){
     $('si-pin').addEventListener('keydown',function(e){ if(e.key==='Enter') signIn(); }); }
 })();
 </script>
+
+<div id="gaps-modal" style="display:none;position:fixed;inset:0;z-index:120;background:rgba(15,23,42,.55);padding:24px;overflow:auto;">
+  <div style="background:#fff;max-width:1040px;margin:0 auto;border-radius:16px;overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,.5);">
+    <div style="position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line,#e2e8f0);padding:15px 20px;display:flex;align-items:center;gap:10px;z-index:2;">
+      <div style="font-size:16px;font-weight:800;">⚠ Gaps to fix</div>
+      <span id="gaps-range" style="font-size:12px;color:#64748b;"></span>
+      <span style="flex:1"></span>
+      <button class="btn ghost sm" onclick="loadGaps(true)">↻ Rescan</button>
+      <button class="btn ghost sm" onclick="closeGaps()">✕</button>
+    </div>
+    <div id="gaps-body" style="padding:16px 20px 24px;font-size:13px;"></div>
+  </div>
+</div>
+<script>
+/* ══ GAPS TO FIX — everything an admin should act on, in one place ══ */
+var GAPS=null;
+function openGaps(){ document.getElementById('gaps-modal').style.display='block'; loadGaps(false); }
+function closeGaps(){ document.getElementById('gaps-modal').style.display='none'; }
+async function loadGaps(force){
+  var box=document.getElementById('gaps-body');
+  var from=($('d-from')||{}).value||'', to=($('d-to')||{}).value||'';
+  document.getElementById('gaps-range').textContent=from+' → '+to;
+  box.innerHTML='<div class="empty">Scanning every task-day in the range…</div>';
+  try{
+    var r=await fetch(PORTAL_URL+'?action=prod_gaps&from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to)+(force?'&_='+Date.now():''));
+    var d=await r.json();
+    if(!d||!d.ok) throw new Error((d&&d.error)||'error');
+    GAPS=d; renderGaps();
+  }catch(e){ box.innerHTML='<div class="empty" style="color:#dc2626">Could not scan: '+esc(String(e&&e.message||e))+'</div>'; }
+}
+function gapSection(title, why, rows, cols, tone){
+  if(!rows||!rows.length) return '';
+  var head=cols.map(function(c){ return '<th style="text-align:'+(c[2]||'left')+';padding:6px 8px;font-size:11px;color:#64748b;font-weight:800;">'+c[1]+'</th>'; }).join('');
+  var body=rows.map(function(r){
+    return '<tr style="border-top:1px solid #eef2f7;">'+cols.map(function(c){
+      var v=r[c[0]]; if(v==null) v='—';
+      return '<td style="padding:6px 8px;text-align:'+(c[2]||'left')+';">'+esc(String(v))+'</td>';
+    }).join('')+'</tr>';
+  }).join('');
+  var col=tone==='red'?'#dc2626':(tone==='amber'?'#b45309':'#0f766e');
+  return '<div style="margin-bottom:22px;">'+
+    '<div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;padding-bottom:6px;border-bottom:2px solid '+col+'33;margin-bottom:2px;">'+
+      '<span style="font-weight:800;color:'+col+';">'+title+'</span>'+
+      '<span style="background:'+col+';color:#fff;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:800;">'+rows.length+'</span>'+
+      '<span style="font-size:11.5px;color:#64748b;">'+why+'</span>'+
+    '</div>'+
+    '<table style="width:100%;border-collapse:collapse;"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table>'+
+  '</div>';
+}
+function renderGaps(){
+  var d=GAPS, box=document.getElementById('gaps-body'); if(!d) return;
+  var c=d.counts||{}, total=Object.keys(c).reduce(function(s,k){ return s+(c[k]||0); },0);
+  var badge=document.getElementById('gap-badge');
+  if(badge){ badge.style.display=total?'inline-block':'none'; badge.textContent=total; }
+  if(!total){ box.innerHTML='<div class="empty" style="color:#15803d;">✓ No gaps in this range — hours and outputs agree everywhere.</div>'; return; }
+  box.innerHTML=
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">'+
+      [['hours_no_output','Hours, no output','#dc2626'],['output_no_hours','Output, no hours','#b45309'],
+       ['zero_qph','Near-zero QPH','#b45309'],['no_eod','No EOD sent','#dc2626'],
+       ['orphan_tasks','Orphan task names','#7c3aed'],['unknown_employee','Unknown employee','#7c3aed']]
+      .map(function(x){ var n=c[x[0]]||0; return '<span style="border:1px solid '+x[2]+'55;color:'+x[2]+';border-radius:999px;padding:4px 11px;font-size:11.5px;font-weight:800;'+(n?'':'opacity:.35;')+'">'+x[1]+' · '+n+'</span>'; }).join('')+
+    '</div>'+
+    gapSection('Hours tracked, tool recorded nothing','the VA logged time on a tool-covered task but the tool has no output that day',
+      d.hours_no_output, [['name','Contractor'],['date','Date'],['project','Project'],['task','Task'],['hours','Hours','right']],'red')+
+    gapSection('Output with no tracked hours','the tool counted work but no hours were logged for it — QPH cannot be computed',
+      d.output_no_hours, [['name','Contractor'],['date','Date'],['project','Project'],['task','Task'],['units','Output','right']],'amber')+
+    gapSection('Near-zero productivity','hours and output both exist but the rate is under 0.5/hr — usually a mismatched task name',
+      d.zero_qph, [['name','Contractor'],['date','Date'],['project','Project'],['task','Task'],['units','Output','right'],['hours','Hours','right'],['qph','Per hour','right']],'amber')+
+    gapSection('Shift worked, no EOD sent','4+ hours tracked with no EOD on record for that day',
+      d.no_eod, [['name','Contractor'],['date','Date'],['hours','Hours','right']],'red')+
+    gapSection('Orphan task names','Data Center task names that no tracked task matches — retag these at the source',
+      d.orphan_tasks, [['label','Project · task'],['units','Units','right']],'purple')+
+    gapSection('Output under an unknown employee','recorded against a name or ID that is not in the directory',
+      d.unknown_employee, [['raw_id','Recorded as'],['date','Date'],['project','Project'],['task','Task'],['units','Units','right']],'purple');
+}
+/* Badge on load so gaps are visible without opening anything */
+setTimeout(function(){ try{
+  var from=($('d-from')||{}).value||'', to=($('d-to')||{}).value||'';
+  fetch(PORTAL_URL+'?action=prod_gaps&from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to))
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(d&&d.ok){ GAPS=d; var c=d.counts||{}, t=Object.keys(c).reduce(function(s,k){ return s+(c[k]||0); },0);
+      var b=document.getElementById('gap-badge'); if(b&&t){ b.style.display='inline-block'; b.textContent=t; } } })
+    .catch(function(){});
+}catch(e){} }, 2500);
+</script>
+
 </body>
 </html>
