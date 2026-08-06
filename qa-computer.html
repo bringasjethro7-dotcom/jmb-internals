@@ -275,6 +275,7 @@ header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
     </nav>
     <div class="spacer"></div>
     <div class="who">Signed in as <b id="who-name">—</b></div>
+  <script>/* peer-mode chrome: hide the Dashboard tab for non-leads once signed in */</script>
     <button class="btn ghost sm" onclick="signOut()">Sign out</button>
   </header>
 
@@ -421,6 +422,34 @@ var PROJECTS = {
       ] }
     ]
   },
+  // Per "Content Operations & Device Posting — Checklist SOP" (ALTR Posting VAs).
+  // One column per PHONE: pre-posting protocol, the 4-IP schedule ladder, and cleanup.
+  'ALTR Posting': {
+    label: 'ALTR Posting (Device Posting)',
+    tasks: [
+      { name: 'Pre-Posting Protocol', accounts: 5, criteria: [
+        'Devices Verified Active in BOTH Flooding App and ALTR Media Tracker',
+        'Auto-Assigned Phones Verified',
+        'Content History Audited Before Download (no duplicates per phone)',
+        'Content Downloaded 1-to-1 per Phone (no duplicate downloads)',
+        'Assigned Caption Copied and Updated for Active Promotion'
+      ] },
+      { name: 'IP & Schedule Workflow', accounts: 5, criteria: [
+        'New IP #1 — 1 Video Posted Directly',
+        'New IP #2 — Post Scheduled for 8:00 AM (PHT/US offset applied)',
+        'New IP #3 — Post Scheduled for 12:00 PM (PHT/US offset applied)',
+        'New IP #4 — Post Scheduled for 4:00 PM (PHT/US offset applied)',
+        'New IP Switched Before Each Post / Schedule',
+        'Airplane Mode Enabled Immediately After EVERY Post / Schedule'
+      ] },
+      { name: 'Verification & Cleanup', accounts: 5, criteria: [
+        'Scheduled Queue Verified (all posts live, correct timing)',
+        'Captions Correct and Rotated on Posted Content',
+        'Used Content Deleted from Local Phone Storage',
+        'Airplane Mode Enabled Before Switching User Profile'
+      ] }
+    ]
+  },
   'IG Reels - Stefan': {
     label: 'IG Reels - Stefan',
     tasks: [
@@ -495,24 +524,104 @@ async function signIn(){
     var d=await r.json();
     b.disabled=false; b.textContent='Sign in';
     if(!d || d.error){ err.style.display='block'; err.textContent=(d&&d.error==='WRONG_PIN')?'Incorrect PIN.':'Employee not found.'; return; }
+    // EVERY VA can sign in now: leads/admin get the full board, everyone else gets PEER MODE
+    // (they audit only the teammate the weekly shuffle assigned them).
     var rank=clRank(d), isAdmin=String(d.employee_id||'').toUpperCase()==='ADMIN';
-    if(!(isAdmin || rank>=7)){ err.style.display='block'; err.textContent='Access is limited to team leads (CL7–CL9) and admin.'; return; }
-    USER={ id:d.employee_id, name:d.full_name||d.employee_id };
+    USER={ id:d.employee_id, name:d.full_name||d.employee_id, rank:rank, lead:(isAdmin||rank>=7) };
     try{ sessionStorage.setItem('qa_user', JSON.stringify(USER)); }catch(e){}
     startApp();
   }catch(e){ b.disabled=false; b.textContent='Sign in'; err.style.display='block'; err.textContent='Network error — try again.'; }
 }
 function signOut(){ try{ sessionStorage.removeItem('qa_user'); }catch(e){} location.reload(); }
 
+var IS_PEER=false, IS_LEAD=false, MY_ASSIGNMENT=null;
+/* ── LEAD QUEUE — peer reviews waiting for the team lead's screen (stage 2 of the chain) ── */
+async function loadLeadQueue(){
+  var host=$('lead-queue');
+  if(!host){
+    host=document.createElement('div'); host.id='lead-queue';
+    host.style.cssText='margin:0 0 14px;padding:12px 15px;border-radius:12px;background:linear-gradient(135deg,rgba(21,128,61,.07),rgba(21,128,61,.02));border:1px solid rgba(21,128,61,.25);font-size:13px;';
+    var app=$('app'); if(app && app.firstElementChild) app.insertBefore(host, app.firstElementChild.nextSibling); else if(app) app.prepend(host);
+  }
+  host.innerHTML='<b>Team lead review</b> · loading the peer reviews waiting for you…';
+  try{
+    var r=await fetch(PORTAL_URL+'?action=qa_review_list&month='+encodeURIComponent($('c-month').value||curMonth())+'&_='+Date.now());
+    var t=await r.text(); var d=null; try{ d=JSON.parse(t); }catch(_p){ throw new Error('server busy'); }
+    if(!d||!d.ok) throw new Error((d&&d.error)||'error');
+    var waiting=(d.items||[]).filter(function(it){ return it.peer_score!=null && it.lead_score==null; });
+    if(!waiting.length){ host.innerHTML='<b>Team lead review</b> · nothing waiting — peer reviews appear here once submitted.'; return; }
+    host.innerHTML='<b>Team lead review</b> · <b style="color:#15803d;">'+waiting.length+'</b> peer review'+(waiting.length>1?'s':'')+' waiting for your screen'+
+      '<div style="font-size:11.5px;opacity:.75;margin:4px 0 7px;">Open the same board, audit it yourself, then save — your score becomes the lead stage and goes to the manager for approval.</div>'+
+      waiting.map(function(it){
+        return '<span style="display:inline-block;background:#fff;border:1px solid rgba(21,128,61,.3);border-radius:100px;padding:3px 11px;margin:3px 5px 0 0;font-size:11.5px;cursor:pointer;" onclick="leadPick(\''+esc(it.employee_id)+'\','+it.week+')">'+
+          esc(it.name||it.employee_id)+' · W'+it.week+' <b style="color:#15803d;">peer '+it.peer_score+'</b></span>';
+      }).join('');
+  }catch(e){
+    host.innerHTML='<b>Team lead review</b> · could not load the queue (server busy). <a href="#" onclick="loadLeadQueue();return false;" style="color:#15803d;font-weight:700;">Retry</a>';
+  }
+}
+function leadPick(empId, week){
+  try{ $('c-emp').value=empId; if($('c-week')) $('c-week').value=String(week); onContextChange(); window.scrollTo({top:0,behavior:'smooth'}); toast('Loaded — audit this VA, then Compute & save to record your lead review.'); }catch(e){}
+}
 function startApp(){
   $('signin').style.display='none'; $('app').style.display='block';
   $('who-name').textContent=USER.name;
   IS_ADMIN = !!(USER && String(USER.id).toUpperCase()==='ADMIN');
+  IS_PEER  = !(USER && (USER.lead || IS_ADMIN));   // regular VA → peer-review mode
+  IS_LEAD  = !!(USER && USER.lead) && !IS_ADMIN;   // CL7+ → lead stage of the chain
+  if(IS_PEER){ try{ document.querySelectorAll('.btn').forEach(function(b){ if(/dashboard/i.test(b.textContent||'')) b.style.display='none'; }); }catch(_h){} }   // dashboard = leads/admin only
+  if(IS_LEAD) loadLeadQueue();
+  // Chain banner + role-accurate button label — nobody has to guess which stage they're doing.
+  try{
+    var sb=$('save-btn');
+    if(sb) sb.textContent = IS_PEER ? 'Submit peer review (stage 1 of 3)'
+                          : IS_LEAD ? 'Submit lead review (stage 2 of 3)'
+                          : 'Compute & save weekly QA';
+    var chain=document.createElement('div');
+    chain.style.cssText='margin:0 0 12px;font-size:11.5px;color:#64748b;letter-spacing:.02em;';
+    function seg(n,lbl,on){ return '<span style="'+(on?'color:#0f172a;font-weight:800;':'')+'">'+n+' · '+lbl+'</span>'; }
+    chain.innerHTML='QA chain: '+seg(1,'Peer (30 min)',IS_PEER)+' <span style="opacity:.45;">→</span> '+seg(2,'Team Lead',IS_LEAD)+' <span style="opacity:.45;">→</span> '+seg(3,'Manager approval',IS_ADMIN);
+    var app=$('app'); if(app && app.firstElementChild) app.insertBefore(chain, app.firstElementChild.nextSibling); else if(app) app.prepend(chain);
+  }catch(_cb){}
   $('c-month').value = curMonth();
   $('d-month').value = curMonth();
   buildProjectDropdown();
   onProjectChange();
   loadEmployees();
+  if(IS_PEER) loadMyAssignment();
+}
+/* ── PEER MODE — this VA can only audit the teammate this week's shuffle gave them ── */
+async function loadMyAssignment(){
+  var wkSel=$('c-week'); var week=(wkSel&&wkSel.value)||'1';
+  var host=$('peer-banner');
+  if(!host){
+    host=document.createElement('div'); host.id='peer-banner';
+    host.style.cssText='margin:0 0 14px;padding:12px 15px;border-radius:12px;background:linear-gradient(135deg,rgba(37,99,235,.08),rgba(37,99,235,.03));border:1px solid rgba(37,99,235,.25);font-size:13px;';
+    var app=$('app'); if(app && app.firstElementChild) app.insertBefore(host, app.firstElementChild.nextSibling); else if(app) app.prepend(host);
+  }
+  host.innerHTML='<b>Peer review mode</b> · finding your assignment…';
+  try{
+    var r=await fetch(PORTAL_URL+'?action=qa_pairs&month='+encodeURIComponent($('c-month').value||curMonth())+'&week='+encodeURIComponent(week)+'&_='+Date.now());
+    var t=await r.text(); var d=null; try{ d=JSON.parse(t); }catch(_p){ throw new Error('server busy'); }
+    if(!d||!d.ok) throw new Error((d&&d.error)||'error');
+    var me=String(USER.id).toUpperCase(), found=null, team='';
+    (d.teams||[]).forEach(function(tm){ (tm.pairs||[]).forEach(function(p){ if(String(p.reviewer_id).toUpperCase()===me){ found=p; team=tm.team; } }); });
+    MY_ASSIGNMENT=found;
+    if(!found){
+      host.innerHTML='<b>Peer review mode</b> · No assignment for Week '+esc(week)+' yet — it appears once your tracked hours are logged for the month.';
+      $('c-emp').innerHTML='<option value="">No assignment</option>';
+      return;
+    }
+    host.innerHTML='<b>Peer review mode</b> · Week '+esc(week)+' · you are auditing <b style="color:#2563eb;">'+esc(found.reviewee_name)+'</b> <span style="opacity:.7;">('+esc(team)+')</span>'+
+      '<div style="font-size:11.5px;opacity:.75;margin-top:4px;">Spend at least <b>30 minutes</b> on this review. Your score goes to the team lead, then to the manager for approval.</div>';
+    // Lock the employee dropdown to the assigned teammate.
+    $('c-emp').innerHTML='<option value="'+esc(found.reviewee_id)+'">'+esc(found.reviewee_name)+' ('+esc(found.reviewee_id)+')</option>';
+    $('c-emp').value=found.reviewee_id;
+    $('c-emp').disabled=true;
+    try{ onContextChange(); }catch(_e){}
+  }catch(e){
+    host.innerHTML='<b>Peer review mode</b> · Could not load your assignment (server busy). <a href="#" onclick="loadMyAssignment();return false;" style="color:#2563eb;font-weight:700;">Retry</a>';
+  }
 }
 
 /* ---- view switch: Compute ↔ Dashboard ---- */
@@ -631,9 +740,68 @@ function recompute(){
 }
 
 /* ---- context: weekly scores + prior audits + prefill ---- */
+/* ══ ASSIGNED AUDIT SET — pulled from the Productivity Hub / Data Center ══
+   The reviewer does NOT choose what to check. This loads the accounts the VA actually worked
+   on that week (project boards) plus their recorded output volumes (Data Center), and fills
+   the audit columns with those exact items — same set for peer, lead and manager. */
+var SAMPLE=null;
+async function loadAssignedSet(){
+  var emp=$('c-emp').value, month=$('c-month').value, week=($('c-week')||{}).value||'1', proj=$('c-proj').value;
+  var host=$('sample-bar');
+  if(!host){
+    host=document.createElement('div'); host.id='sample-bar';
+    host.style.cssText='margin:8px 0 12px;padding:10px 13px;border-radius:11px;background:rgba(15,23,42,.035);border:1px solid rgba(15,23,42,.10);font-size:12px;';
+    var t=$('proj-title'); if(t&&t.parentNode) t.parentNode.insertBefore(host, t.nextSibling);
+  }
+  if(!emp||!month){ host.style.display='none'; return; }
+  host.style.display='block';
+  host.innerHTML='Loading this VA\'s recorded work for Week '+esc(week)+'…';
+  try{
+    var r=await fetch(PORTAL_URL+'?action=qa_sample&employee_id='+encodeURIComponent(emp)+'&project='+encodeURIComponent(proj)
+        +'&month='+encodeURIComponent(month)+'&week='+encodeURIComponent(week)+'&n=10&_='+Date.now());
+    var t2=await r.text(); var d=null; try{ d=JSON.parse(t2); }catch(_p){ throw new Error('server busy'); }
+    if(!d||!d.ok) throw new Error((d&&d.error)||'error');
+    SAMPLE=d;
+    var vol=Object.keys(d.volumes||{}).map(function(k){ return esc(k)+' <b>'+d.volumes[k]+'</b>'; }).join(' · ');
+    if(!(d.items||[]).length){
+      host.innerHTML='<b>No recorded work found</b> for '+esc(d.from)+' → '+esc(d.to)+
+        '. Audit columns stay generic — check with the VA whether their tool was updated.'+(vol?('<div style="margin-top:4px;opacity:.8;">Data Center volumes: '+vol+'</div>'):'');
+      return;
+    }
+    host.innerHTML='<b>Assigned audit set</b> · '+esc(d.from)+' → '+esc(d.to)+
+      ' · <b>'+d.items.length+'</b> of '+d.pool+' accounts ('+d.worked_in_week+' worked this week)'+
+      '<div style="font-size:11px;opacity:.75;margin-top:3px;">Selected automatically from the Productivity Hub — the same set is shown to the peer, the lead and the manager.</div>'+
+      (vol?('<div style="margin-top:5px;">Data Center output: '+vol+' <span style="opacity:.7;">(total '+d.total_volume+')</span></div>'):'');
+    applySampleToAudit();
+  }catch(e){
+    host.innerHTML='Could not load the assigned set (server busy). <a href="#" onclick="loadAssignedSet();return false;" style="color:#2563eb;font-weight:700;">Retry</a>';
+  }
+}
+/* Replace the generic "#1, #2…" columns with the real account handles. */
+function applySampleToAudit(){
+  if(!SAMPLE||!(SAMPLE.items||[]).length) return;
+  var p=curProject(); if(!p) return;
+  p.tasks.forEach(function(t){
+    var rows=AUDIT[t.name]||[];
+    var take=SAMPLE.items.slice(0, Math.min(t.accounts, SAMPLE.items.length));
+    AUDIT[t.name]=take.map(function(it,i){
+      var prev=rows[i];
+      return { name: it.name + (it.in_week?'':' (older)'), states: (prev&&prev.states)||t.criteria.map(function(){return true;}) };
+    });
+  });
+  renderCriteria(); recompute();
+}
+var _peerWk=null;
 async function onContextChange(){
   var emp=$('c-emp').value, month=$('c-month').value;
   $('ctx-month').textContent=month||'—';
+  try{ loadAssignedSet(); }catch(_ls){}
+  // Peer mode: changing the week re-fetches that week's assignment (pairs reshuffle weekly).
+  if(IS_PEER){
+    var _w=($('c-week')||{}).value;
+    if(_peerWk!==null && _w!==_peerWk){ _peerWk=_w; loadMyAssignment(); return; }
+    _peerWk=_w;
+  }
   if(!emp||!month){ $('wk-chips').innerHTML=''; $('wk-avg').textContent='—'; $('audit-list').innerHTML='<div class="empty">Pick an employee.</div>'; return; }
   try{
     var r=await fetch(PORTAL_URL+'?action=get_qa_weekly&employee_id='+encodeURIComponent(emp)+'&month='+encodeURIComponent(month)+'&_='+Date.now());
@@ -701,6 +869,58 @@ async function saveScore(){
   var empObj=EMPLOYEES.filter(function(e){ return String(e.employee_id)===String(emp); })[0];
   var full=(empObj&&empObj.full_name)||'';
   var b=$('save-btn'); b.disabled=true; b.textContent='Saving…';
+  // ── PEER MODE: the score does NOT go straight to the scorecard. It's submitted as the PEER
+  //    stage of the QA chain (peer → lead → manager); only the manager's approval scores it.
+  if(IS_PEER){
+    if(!MY_ASSIGNMENT || String(emp)!==String(MY_ASSIGNMENT.reviewee_id)){
+      b.disabled=false; b.textContent='Compute & save weekly QA';
+      toast('You can only review the teammate assigned to you this week.'); return;
+    }
+    try{
+      var pu=PORTAL_URL+'?action=qa_review_submit'
+        +'&employee_id='+encodeURIComponent(emp)
+        +'&full_name='+encodeURIComponent(MY_ASSIGNMENT.reviewee_name||full)
+        +'&month='+encodeURIComponent(month)
+        +'&week='+encodeURIComponent(week)
+        +'&stage=peer'
+        +'&reviewer_id='+encodeURIComponent(USER.id)
+        +'&reviewer_name='+encodeURIComponent(USER.name||USER.id)
+        +'&score='+encodeURIComponent(res.score)
+        +'&mins=30'
+        +'&notes='+encodeURIComponent(($('c-note').value||'')+' | failed checks: '+focus.length)
+        +'&_='+Date.now();
+      var pr=await fetch(pu); var pd=await pr.json();
+      b.disabled=false; b.textContent='Compute & save weekly QA';
+      if(pd&&pd.ok) toast('Peer review submitted · '+(MY_ASSIGNMENT.reviewee_name||'')+' W'+week+' = '+res.score+'% — sent to your team lead.');
+      else if(pd&&pd.error==='SELF_REVIEW') toast('You cannot review your own work.');
+      else if(pd&&pd.error==='MIN_30') toast('Peer reviews need a 30-minute session.');
+      else toast('Submit failed: '+((pd&&pd.error)||'unknown'));
+    }catch(e){ b.disabled=false; b.textContent='Compute & save weekly QA'; toast('Network error — try again.'); }
+    return;
+  }
+  // ── LEAD MODE: stage 2 of the chain. Saves as the lead review (rejected by the backend if
+  //    no peer review exists yet), then waits for manager approval before it counts.
+  if(IS_LEAD){
+    try{
+      var lu=PORTAL_URL+'?action=qa_review_submit'
+        +'&employee_id='+encodeURIComponent(emp)
+        +'&full_name='+encodeURIComponent(full)
+        +'&month='+encodeURIComponent(month)
+        +'&week='+encodeURIComponent(week)
+        +'&stage=lead'
+        +'&reviewer_id='+encodeURIComponent(USER.id)
+        +'&reviewer_name='+encodeURIComponent(USER.name||USER.id)
+        +'&score='+encodeURIComponent(res.score)
+        +'&notes='+encodeURIComponent(($('c-note').value||'')+' | failed checks: '+focus.length)
+        +'&_='+Date.now();
+      var lr=await fetch(lu); var ld=await lr.json();
+      b.disabled=false; b.textContent='Compute & save weekly QA';
+      if(ld&&ld.ok){ toast('Lead review saved · '+full+' W'+week+' = '+res.score+'% — sent for manager approval.'); loadLeadQueue(); }
+      else if(ld&&ld.error==='PEER_FIRST') toast('No peer review yet for this VA/week — the peer stage must come first.');
+      else toast('Save failed: '+((ld&&ld.error)||'unknown'));
+    }catch(e){ b.disabled=false; b.textContent='Compute & save weekly QA'; toast('Network error — try again.'); }
+    return;
+  }
   try{
     var url=PORTAL_URL+'?action=qa_compute_save'
       +'&employee_id='+encodeURIComponent(emp)
