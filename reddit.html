@@ -511,7 +511,18 @@ async function addAcct(){
     var d=await r.json();
     if(d&&d.ok){
       $('ra-user').value=''; if($('ra-new')) $('ra-new').checked=false;
-      toast(isNew?'Added to Newly Created — hit DONE on the card to count it':'Added → '+(phase(phk)||{n:phk}).n+' (existing account seeded)');
+      if(isNew){
+        // REAL-TIME CREATION CREDIT — the account is counted the moment it's added.
+        // (Previously it waited for a DONE click, so same-day creations were missing from output.)
+        await bump('Reddit Account Creation',1);
+        try{
+          var nm=Object.assign({}, {cdate:cd, pstart:ps}, {cdone:1, cstamp:vaKeyOf(USER.id)});
+          await fetch(API+'?action=pa_update&id='+encodeURIComponent(d.id)+'&meta='+encodeURIComponent(JSON.stringify(nm))+'&_='+Date.now());
+        }catch(_cm){}
+        toast('Added to Newly Created · +1 Reddit Account Creation counted now');
+      } else {
+        toast('Added → '+(phase(phk)||{n:phk}).n+' (existing account seeded)');
+      }
       load();
     }
     else if(d&&d.error==='DUPLICATE') toast('That username is already on the board.');

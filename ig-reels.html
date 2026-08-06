@@ -233,26 +233,43 @@ function renderByVA(segs, doneFn, activeFn, amFn){
   var mine=String((USER&&USER.id)||'').toLowerCase();
   var list=keys.map(function(k,i){
     var rows=by[k];
-    var act=activeFn?rows.filter(activeFn):rows;
-    var done=doneFn?act.filter(doneFn).length:0, tot=act.length;
-    return {k:k,i:i,done:done,tot:tot,pct:tot?Math.round(done/tot*100):0,n:rows.length};
-  }).sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
+    // "on board" is this VA's OWN assigned account count — never a shared or fixed total.
+    var onBoard=rows.length;
+    // tagged = accounts this VA completed in the CURRENT shift (resets 8 AM / 8 PM).
+    var tagged=doneFn?rows.filter(doneFn).length:0;
+    return { k:k, i:i, done:tagged, tot:onBoard, pct:onBoard?Math.round(tagged/onBoard*100):0, n:onBoard };
+  }).sort(function(a,b){
+    if(a.k===mine) return -1; if(b.k===mine) return 1;    // you first
+    return b.pct-a.pct || b.n-a.n;                        // then highest completion
+  });
   try{ var _me=list.filter(function(o){ return o.k===mine; })[0]; if(_me) _maybeSnap(_me.done, _me.tot); }catch(_ms){}
   host.innerHTML='<div class="pvwrap">'+
-    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked this shift · resets per shift · ☀ 8 AM / 🌙 8 PM</span></div>'+
+    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;flex-wrap:wrap;">'+
+      '<span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today — progress per VA</span>'+
+      '<span style="font-size:11px;color:var(--ink3);font-weight:700;">worked this shift · resets per shift · ☀️ 8 AM / 🌙 8 PM</span>'+
+    '</div>'+
     list.map(function(o,ix){
-      var pc=o.pct>=100?'#10b981':(o.pct>=70?'#f59e0b':'#ef4444');
       var name=vaName(o.k);
       var init=String(name).split(/\s+/).slice(0,2).map(function(w){return w.charAt(0);}).join('').toUpperCase()||'?';
       var me=(o.k===mine);
-      return '<div class="pvrow'+(ix===0?' first':'')+'"'+(me?' style="background:rgba(16,185,129,.05);border-radius:12px;padding-left:10px;padding-right:10px;"':'')+'>'+
+      var shiftIcon=(SHIFTOF[o.k]==='night')?'🌙 ':'☀️ ';
+      return '<div class="pvrow'+(ix===0?' first':'')+'"'+(me?' style="background:rgba(16,185,129,.06);border-radius:12px;padding-left:10px;padding-right:10px;"':'')+'>'+
         (PHOTOOF[o.k]?('<img src="'+PHOTOOF[o.k]+'" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex:none;box-shadow:0 2px 8px rgba(15,23,42,.18);">')
           :('<div class="pvav" style="background:'+AVC[o.i%AVC.length]+'">'+esc(init)+'</div>'))+
         '<div style="flex:1;min-width:0;">'+
-          '<div style="display:flex;align-items:baseline;gap:8px;"><b style="font-size:13.5px;">'+(SHIFTOF[o.k]==='night'?'🌙 ':(SHIFTOF[o.k]?'☀ ':''))+esc(name)+'</b>'+(me?'<span style="font-size:10px;color:#0f766e;font-weight:800;">you</span>':'')+'<span style="font-size:11px;color:var(--ink3);font-weight:700;">'+o.n+' on board</span></div>'+
-          '<div class="pvbar" style="margin-top:7px;"><i style="width:'+Math.min(100,o.pct)+'%;background:'+pc+';"></i></div>'+
+          '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">'+
+            '<b style="font-size:13.5px;">'+shiftIcon+esc(name)+'</b>'+
+            (me?'<span style="font-size:10px;color:#0f766e;font-weight:800;">you</span>':'')+
+            '<span style="font-size:11px;color:var(--ink3);font-weight:700;">'+o.n+' on board</span>'+
+          '</div>'+
+          '<div class="pvbar" style="margin-top:7px;background:#eef1f5;border-radius:999px;overflow:hidden;">'+
+            '<i style="width:'+Math.min(100,o.pct)+'%;background:linear-gradient(90deg,#fb7185,#e11d48);border-radius:999px;"></i>'+
+          '</div>'+
         '</div>'+
-        '<div class="pvpct" style="color:'+pc+'"><span style="font-size:17px;">'+o.done+' / '+o.tot+'</span><br><span style="font-size:12.5px;">'+o.pct+'%'+(o.pct>=100&&o.tot?' ✅':'')+' today</span></div>'+
+        '<div class="pvpct" style="color:#e11d48;">'+
+          '<span style="font-size:17px;font-weight:800;">'+o.done+' / '+o.tot+'</span><br>'+
+          '<span style="font-size:12.5px;">'+o.pct+'% today</span>'+
+        '</div>'+
       '</div>';
     }).join('')+'</div>';
 }
@@ -478,7 +495,10 @@ async function tick(id, kind){
   var d=await saveMeta(r, meta);
   if(d&&d.ok){
     var names={s:'Story',f:'Feed Post',rl:'Trial Reel'};
-    await bump(names[kind],1);
+    // Output rolls up to the TRACKER task name so hours and outputs land on the same row.
+    // (Story / Feed Post / Trial Reel were their own tasks, which is why "IG Reels Posting"
+    //  showed tracked hours with zero outputs.)
+    await bump('IG Reels Posting',1);
     var t2=t, doneAll=t2.s&&t2.f&&(!isK(r)||t2.rl);
     toast('+1 '+names[kind]+' ✅'+(doneAll?' · account fully posted today 🎉':''));
     load();
@@ -494,7 +514,7 @@ async function wuDone(id, day){
     var m=Object.assign({}, r.meta||{}, {wl:vaKeyOf(USER.id)});
     var url=API+'?action=pa_update&id='+encodeURIComponent(id)+'&day='+(day+1)+(day>=14?'&status=active':'')+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now();
     var rr=await fetch(url); var d=await rr.json();
-    if(d&&d.ok){ await bump('Warm-up Day',1); toast(day>=14?'Warm-up COMPLETE — account is now Active 🎉 (+1 Warm-up Day)':'+1 Warm-up Day ✅'); load(); }
+    if(d&&d.ok){ await bump('IG Reels Posting',1); toast(day>=14?'Warm-up COMPLETE — account is now Active 🎉 (+1 Warm-up Day)':'+1 Warm-up Day ✅'); load(); }
     else toast('Could not update.');
   }catch(e){ toast('Connection error.'); }
 }
