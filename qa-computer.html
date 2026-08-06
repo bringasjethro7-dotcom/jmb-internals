@@ -438,15 +438,12 @@ var PROJECTS = {
         'New IP #1 — 1 Video Posted Directly',
         'New IP #2 — Post Scheduled for 8:00 AM (PHT/US offset applied)',
         'New IP #3 — Post Scheduled for 12:00 PM (PHT/US offset applied)',
-        'New IP #4 — Post Scheduled for 4:00 PM (PHT/US offset applied)',
-        'New IP Switched Before Each Post / Schedule',
-        'Airplane Mode Enabled Immediately After EVERY Post / Schedule'
+        'New IP #4 — Post Scheduled for 4:00 PM (PHT/US offset applied)'
       ] },
       { name: 'Verification & Cleanup', accounts: 5, criteria: [
         'Scheduled Queue Verified (all posts live, correct timing)',
         'Captions Correct and Rotated on Posted Content',
-        'Used Content Deleted from Local Phone Storage',
-        'Airplane Mode Enabled Before Switching User Profile'
+        'Used Content Deleted from Local Phone Storage'
       ] }
     ]
   },
@@ -534,7 +531,34 @@ async function signIn(){
 }
 function signOut(){ try{ sessionStorage.removeItem('qa_user'); }catch(e){} location.reload(); }
 
-var IS_PEER=false, IS_LEAD=false, MY_ASSIGNMENT=null;
+var IS_PEER=false, IS_LEAD=false, MY_ASSIGNMENT=null, MODE='peer', PEER_DONE=false;
+/* Leads work in two modes: PEER first (their own assignment), then LEAD (reviewing others).
+   The switch only appears once their peer review for the week is submitted. */
+function setMode(m){
+  if(m==='lead' && !PEER_DONE){ toast('Finish your own peer review first — everyone starts as a peer.'); return; }
+  MODE=m;
+  var emp=$('c-emp');
+  if(m==='peer'){ loadMyAssignment(); }
+  else { if(emp){ emp.disabled=false; } loadLeadQueue(); }
+  renderModeBar();
+  var sb=$('save-btn'); if(sb) sb.textContent = (m==='peer') ? 'Submit peer review (stage 1 of 3)' : 'Submit lead review (stage 2 of 3)';
+}
+function renderModeBar(){
+  var host=$('mode-bar');
+  if(!host){
+    host=document.createElement('div'); host.id='mode-bar';
+    host.style.cssText='margin:0 0 10px;display:flex;gap:7px;align-items:center;flex-wrap:wrap;';
+    var app=$('app'); if(app && app.firstElementChild) app.insertBefore(host, app.firstElementChild.nextSibling); else if(app) app.prepend(host);
+  }
+  if(!IS_LEAD){ host.style.display='none'; return; }
+  host.style.display='flex';
+  function pill(v,lbl,on,dis){
+    return '<button onclick="setMode(\''+v+'\')" style="border:1px solid '+(on?'#0f766e':'rgba(15,23,42,.15)')+';background:'+(on?'rgba(16,185,129,.12)':'#fff')+';color:'+(dis?'#94a3b8':(on?'#0f766e':'#475569'))+';border-radius:100px;padding:6px 14px;font:800 12px Inter,system-ui,sans-serif;cursor:'+(dis?'not-allowed':'pointer')+';">'+lbl+'</button>';
+  }
+  host.innerHTML=pill('peer','1 · My peer review', MODE==='peer', false)+
+    pill('lead','2 · Lead reviews'+(PEER_DONE?'':' (locked)'), MODE==='lead', !PEER_DONE)+
+    '<span style="font-size:11px;color:#64748b;">'+(PEER_DONE?'Your peer review is in — you can now review your team.':'Team leads review a teammate first, like everyone else.')+'</span>';
+}
 /* ── LEAD QUEUE — peer reviews waiting for the team lead's screen (stage 2 of the chain) ── */
 async function loadLeadQueue(){
   var host=$('lead-queue');
@@ -548,6 +572,11 @@ async function loadLeadQueue(){
     var r=await fetch(PORTAL_URL+'?action=qa_review_list&month='+encodeURIComponent($('c-month').value||curMonth())+'&_='+Date.now());
     var t=await r.text(); var d=null; try{ d=JSON.parse(t); }catch(_p){ throw new Error('server busy'); }
     if(!d||!d.ok) throw new Error((d&&d.error)||'error');
+    // Did THIS lead already submit their own peer review this week? That gates their lead queue.
+    var myWk=parseInt((($('c-week')||{}).value||'1'),10);
+    PEER_DONE=(d.items||[]).some(function(it){ return String(it.peer_id||'').toUpperCase()===String(USER.id).toUpperCase() && it.week===myWk; });
+    renderModeBar();
+    if(!PEER_DONE){ host.innerHTML='<b>Team lead review</b> · locked — submit your own peer review for Week '+myWk+' first. Everyone starts as a peer.'; return; }
     var waiting=(d.items||[]).filter(function(it){ return it.peer_score!=null && it.lead_score==null; });
     if(!waiting.length){ host.innerHTML='<b>Team lead review</b> · nothing waiting — peer reviews appear here once submitted.'; return; }
     host.innerHTML='<b>Team lead review</b> · <b style="color:#15803d;">'+waiting.length+'</b> peer review'+(waiting.length>1?'s':'')+' waiting for your screen'+
@@ -567,16 +596,19 @@ function startApp(){
   $('signin').style.display='none'; $('app').style.display='block';
   $('who-name').textContent=USER.name;
   IS_ADMIN = !!(USER && String(USER.id).toUpperCase()==='ADMIN');
-  IS_PEER  = !(USER && (USER.lead || IS_ADMIN));   // regular VA → peer-review mode
-  IS_LEAD  = !!(USER && USER.lead) && !IS_ADMIN;   // CL7+ → lead stage of the chain
-  if(IS_PEER){ try{ document.querySelectorAll('.btn').forEach(function(b){ if(/dashboard/i.test(b.textContent||'')) b.style.display='none'; }); }catch(_h){} }   // dashboard = leads/admin only
+  // EVERYONE STARTS AS A PEER — team leads are teammates too: they get a peer assignment from
+  // the weekly shuffle and must complete it before their lead-stage queue unlocks.
+  IS_LEAD  = !!(USER && USER.lead) && !IS_ADMIN;   // CL7+ → also does the lead stage, AFTER their peer review
+  IS_PEER  = !IS_ADMIN;                            // admin = manager approval only
+  MODE     = IS_ADMIN ? 'admin' : 'peer';
+  if(!IS_ADMIN){ try{ document.querySelectorAll('.btn').forEach(function(b){ if(/dashboard/i.test(b.textContent||'')) b.style.display='none'; }); }catch(_h){} }   // dashboard = admin only
+  if(!IS_ADMIN) loadMyAssignment();
   if(IS_LEAD) loadLeadQueue();
   // Chain banner + role-accurate button label — nobody has to guess which stage they're doing.
   try{
     var sb=$('save-btn');
-    if(sb) sb.textContent = IS_PEER ? 'Submit peer review (stage 1 of 3)'
-                          : IS_LEAD ? 'Submit lead review (stage 2 of 3)'
-                          : 'Compute & save weekly QA';
+    if(sb) sb.textContent = IS_ADMIN ? 'Compute & save weekly QA' : 'Submit peer review (stage 1 of 3)';
+    renderModeBar();
     var chain=document.createElement('div');
     chain.style.cssText='margin:0 0 12px;font-size:11.5px;color:#64748b;letter-spacing:.02em;';
     function seg(n,lbl,on){ return '<span style="'+(on?'color:#0f172a;font-weight:800;':'')+'">'+n+' · '+lbl+'</span>'; }
@@ -588,7 +620,6 @@ function startApp(){
   buildProjectDropdown();
   onProjectChange();
   loadEmployees();
-  if(IS_PEER) loadMyAssignment();
 }
 /* ── PEER MODE — this VA can only audit the teammate this week's shuffle gave them ── */
 async function loadMyAssignment(){
@@ -805,7 +836,7 @@ async function onContextChange(){
   $('ctx-month').textContent=month||'—';
   try{ loadAssignedSet(); }catch(_ls){}
   // Peer mode: changing the week re-fetches that week's assignment (pairs reshuffle weekly).
-  if(IS_PEER){
+  if(!IS_ADMIN && MODE==='peer'){
     var _w=($('c-week')||{}).value;
     if(_peerWk!==null && _w!==_peerWk){ _peerWk=_w; loadMyAssignment(); return; }
     _peerWk=_w;
@@ -879,7 +910,7 @@ async function saveScore(){
   var b=$('save-btn'); b.disabled=true; b.textContent='Saving…';
   // ── PEER MODE: the score does NOT go straight to the scorecard. It's submitted as the PEER
   //    stage of the QA chain (peer → lead → manager); only the manager's approval scores it.
-  if(IS_PEER){
+  if(!IS_ADMIN && MODE==='peer'){
     if(!MY_ASSIGNMENT || String(emp)!==String(MY_ASSIGNMENT.reviewee_id)){
       b.disabled=false; b.textContent='Compute & save weekly QA';
       toast('You can only review the teammate assigned to you this week.'); return;
@@ -899,7 +930,8 @@ async function saveScore(){
         +'&_='+Date.now();
       var pr=await fetch(pu); var pd=await pr.json();
       b.disabled=false; b.textContent='Compute & save weekly QA';
-      if(pd&&pd.ok) toast('Peer review submitted · '+(MY_ASSIGNMENT.reviewee_name||'')+' W'+week+' = '+res.score+'% — sent to your team lead.');
+      if(pd&&pd.ok){ toast('Peer review submitted · '+(MY_ASSIGNMENT.reviewee_name||'')+' W'+week+' = '+res.score+'% — sent to your team lead.');
+        if(IS_LEAD){ PEER_DONE=true; renderModeBar(); loadLeadQueue(); } }
       else if(pd&&pd.error==='SELF_REVIEW') toast('You cannot review your own work.');
       else if(pd&&pd.error==='MIN_30') toast('Peer reviews need a 30-minute session.');
       else toast('Submit failed: '+((pd&&pd.error)||'unknown'));
@@ -908,7 +940,7 @@ async function saveScore(){
   }
   // ── LEAD MODE: stage 2 of the chain. Saves as the lead review (rejected by the backend if
   //    no peer review exists yet), then waits for manager approval before it counts.
-  if(IS_LEAD){
+  if(IS_LEAD && MODE==='lead'){
     try{
       var lu=PORTAL_URL+'?action=qa_review_submit'
         +'&employee_id='+encodeURIComponent(emp)
