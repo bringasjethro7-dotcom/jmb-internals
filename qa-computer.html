@@ -1041,6 +1041,13 @@ async function loadAssignedSet(){
       return;
     }
     var dayLbl='';
+    // No recorded work at all → say so immediately instead of sitting on "Loading…".
+    if(!d.audit_day && !(d.items||[]).length && !(d.projects_worked||[]).length){
+      host.style.cssText='margin:8px 0 12px;padding:11px 14px;border-radius:11px;background:rgba(180,83,9,.07);border:1px solid rgba(180,83,9,.35);font-size:12.5px;';
+      host.innerHTML='<b>No recorded work for '+esc(d.from)+' → '+esc(d.to)+'.</b> Nothing to audit for this week — either the VA logged no output, or their tool wasn\'t updated. '+
+        '<a href="#" onclick="qBust(/qa_sample/);loadAssignedSet();return false;" style="color:#b45309;font-weight:700;">Re-check</a>';
+      return;
+    }
     if(d.audit_day){
       try{ dayLbl=new Date(d.audit_day+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'}); }catch(_dl){ dayLbl=d.audit_day; }
     }
