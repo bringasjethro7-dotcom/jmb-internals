@@ -975,7 +975,28 @@ function recompute(){
    The reviewer does NOT choose what to check. This loads the accounts the VA actually worked
    on that week (project boards) plus their recorded output volumes (Data Center), and fills
    the audit columns with those exact items — same set for peer, lead and manager. */
-var SAMPLE=null;
+var SAMPLE=null, _projFixed=false;
+/* Recorded project names ("Reddit", "ALTR Media") → the QA project key that audits them. */
+function matchProjectKey(worked){
+  var fam=function(x){ x=String(x||'').toLowerCase();
+    if(/casey/.test(x)) return 'reddit - casey';
+    if(/reddit/.test(x)) return 'reddit - altz';
+    if(/altr/.test(x)) return 'altr media';
+    if(/arlo|ig ?reels/.test(x)) return 'ig reels - stefan';
+    if(/john|(^|\s)x(\s|$)/.test(x)) return 'x - john';
+    if(/ember|snapchat/.test(x)) return 'snapchat - ember';
+    if(/torchlight|shopify|design/.test(x)) return 'torchlight';
+    if(/newfans|wallpost/.test(x)) return 'newfans';
+    return x; };
+  for(var i=0;i<worked.length;i++){
+    var f=fam(worked[i]);
+    var hit=Object.keys(PROJECTS).filter(function(k){ return k.toLowerCase()===f; })[0];
+    if(hit) return hit;
+    // posting-side ALTR VAs audit against the posting checklist when that's what they did
+    if(f==='altr media' && /vysor|posting/i.test(worked.join(' ')) && PROJECTS['ALTR Posting']) return 'ALTR Posting';
+  }
+  return null;
+}
 async function loadAssignedSet(){
   var emp=$('c-emp').value, month=$('c-month').value, week=($('c-week')||{}).value||'1', proj=$('c-proj').value;
   var host=$('sample-bar');
@@ -990,8 +1011,27 @@ async function loadAssignedSet(){
   try{
     var _need=0; try{ (curProject().tasks||[]).forEach(function(t){ _need+=(t.accounts||0); }); }catch(_n){}
     _need=Math.max(10, _need);   // enough real accounts to fill every task column
-    var d=await qGet(PORTAL_URL+'?action=qa_sample&employee_id='+encodeURIComponent(emp)+'&project='+encodeURIComponent(proj)
+    var d=await qGet(PORTAL_URL+'?action=qa_sample&employee_id='+encodeURIComponent(emp)+'&project='+encodeURIComponent(_projFixed?proj:'')
         +'&month='+encodeURIComponent(month)+'&week='+encodeURIComponent(week)+'&n='+_need, {ttl:600000});
+    // SELF-CORRECTING PROJECT: the response says which projects this VA actually worked.
+    // If the dropdown is pointing somewhere else (e.g. the default), switch and reload once.
+    if(d && d.ok && (d.projects_worked||[]).length && !_projFixed){
+      var want=matchProjectKey(d.projects_worked);
+      if(want && want!==proj){
+        _projFixed=true;
+        var sel=$('c-proj');
+        if(sel){
+          if(!Array.prototype.some.call(sel.options,function(o){ return o.value===want; })){
+            sel.insertAdjacentHTML('beforeend','<option value="'+esc(want)+'">'+esc((PROJECTS[want]&&PROJECTS[want].label)||want)+'</option>');
+          }
+          sel.value=want;
+        }
+        AUDIT=defaultAudit();
+        try{ renderStaticContext(); }catch(_r){}
+        return loadAssignedSet();      // reload with the correct project
+      }
+    }
+    _projFixed=false;
     if(!d||!d.ok) throw new Error((d&&d.error)||'error');
     SAMPLE=d;
     var vol=Object.keys(d.volumes||{}).map(function(k){ return esc(k)+' <b>'+d.volumes[k]+'</b>'; }).join(' · ');
@@ -1178,8 +1218,7 @@ async function onContextChange(){
   // Scope the project FIRST, then load the assigned set — running both at once let the
   // project rebuild wipe the freshly-loaded usernames back to "#1, #2, #3".
   (async function(){
-    try{ await scopeProjectsToEmployee(); }catch(_sp){}
-    try{ await loadAssignedSet(); }catch(_ls){}
+    try{ await loadAssignedSet(); }catch(_ls){}   // one call: picks the right project AND the sample
   })();
   try{ qSaveDraft(); }catch(_sd){}
   // Peer mode: changing the week re-fetches that week's assignment (pairs reshuffle weekly).
