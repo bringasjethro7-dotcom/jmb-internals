@@ -62,6 +62,29 @@
   #prog{flex:1;height:.6vh;background:rgba(255,255,255,.12);border-radius:999px;overflow:hidden}
   #prog i{display:block;height:100%;background:linear-gradient(90deg,#5eead4,#0ea5a4);width:0%}
   #count{color:#94a3b8;font-size:1.5vh;font-weight:700;min-width:5vw;text-align:right}
+
+  /* ── TV-safe layer ── */
+  html,body{overflow:hidden}
+  #stage{padding:0}
+  /* overscan margin: TVs crop roughly 3-5% of every edge */
+  body.tv .scene{padding:7vh 8vw 12vh}
+  body.tv #bar{height:9vh}
+  body.tv h1{font-size:6.2vh}
+  body.tv h2{font-size:4vh}
+  body.tv .sub{font-size:2.4vh}
+  body.tv .step b{font-size:2.4vh}
+  body.tv .step span{font-size:1.9vh}
+  body.tv .body{font-size:1.9vh}
+  body.tv .peerbar,body.tv .dayplate .r{font-size:1.85vh}
+  body.tv table{font-size:1.7vh}
+  body.tv thead th{font-size:1.65vh}
+  body.tv .note{font-size:1.7vh;max-width:30vw}
+  body.tv #narr{font-size:2.1vh;bottom:3.4vh}
+  /* pins/notes are absolutely positioned — hide them on TV where they can land off-screen */
+  body.tv .pin,body.tv .note{display:none}
+  body.tv .shot{box-shadow:none}
+  /* animation off: many TV browsers stutter or leave ghost frames */
+  body.tv .scene.on{animation:none;opacity:1}
 </style>
 </head>
 <body>
@@ -253,10 +276,23 @@
   <div id="prog"><i></i></div>
   <div id="count">1 / 10</div>
   <button id="voice">🔊 Voice: on</button>
+  <button id="music">♪ Ambience: on</button>
   <button id="full">⛶ Full screen</button>
 </div>
 
 <script>
+/* TV mode: bigger type, overscan-safe padding, no absolute callouts, no animation.
+   Auto-detected for smart-TV browsers; force with ?tv=1, disable with ?tv=0. */
+(function(){
+  var q=(location.search.match(/[?&]tv=([01])/)||[])[1];
+  var ua=navigator.userAgent||'';
+  var isTV=/SMART-TV|SmartTV|Tizen|Web0S|WebOS|NetCast|BRAVIA|VIERA|AFT|GoogleTV|Android TV|HbbTV|Roku|PhilipsTV|Opera TV/i.test(ua)
+        || (window.innerWidth>=1900 && !('ontouchstart' in window) && /Linux|Android/i.test(ua));
+  if(q==='1') isTV=true; if(q==='0') isTV=false;
+  if(isTV) document.body.classList.add('tv');
+  window.__TV=isTV;
+})();
+
 var scenes=[].slice.call(document.querySelectorAll('.scene'));
 var i=0, playing=true, t0=0;
 var fill=document.querySelector('#prog i'), count=document.getElementById('count');
@@ -266,6 +302,7 @@ function show(n){
   scenes.forEach(function(s,k){ s.classList.toggle('on', k===i); });
   count.textContent=(i+1)+' / '+scenes.length;
   t0=Date.now(); fill.style.width='0%';
+  chime();
   speak(i);
 }
 function tick(){
@@ -303,8 +340,10 @@ function speak(n){
     var txt=narrationOf(n); if(!txt) return;
     var u=new SpeechSynthesisUtterance(txt);
     if(pickedVoice) u.voice=pickedVoice;
+    u.onstart=function(){ duck(true); };
     u.rate=0.96; u.pitch=1.0; u.volume=1;
     u.onend=function(){
+      duck(false);
       // The narration paces the session: advance a moment after the sentence lands.
       if(!VOICE||!playing) return;
       if(n!==i) return;
@@ -335,19 +374,70 @@ document.addEventListener('keydown',function(e){
   else if(e.key===' '){ e.preventDefault(); document.getElementById('play').click(); }
   else if(e.key==='f') document.getElementById('full').click();
 });
+/* Background sound: a quiet ambient pad synthesised in the browser, ducked while the
+   narration speaks so it never fights the voice. Toggle with the ♪ button. */
+var AUDIO=null, bedGain=null, bedOn=true, bedNodes=[];
+function startBed(){
+  try{
+    if(AUDIO) return;
+    var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    AUDIO=new AC();
+    bedGain=AUDIO.createGain(); bedGain.gain.value=0.0; bedGain.connect(AUDIO.destination);
+    var filt=AUDIO.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=620; filt.Q.value=.4;
+    filt.connect(bedGain);
+    [110,164.81,220].forEach(function(f,ix){
+      var o=AUDIO.createOscillator(); o.type='sine'; o.frequency.value=f;
+      var g=AUDIO.createGain(); g.gain.value=ix===2?0.05:0.11;
+      var lfo=AUDIO.createOscillator(); lfo.type='sine'; lfo.frequency.value=0.05+ix*0.017;
+      var lg=AUDIO.createGain(); lg.gain.value=0.035;
+      lfo.connect(lg); lg.connect(g.gain); lfo.start();
+      o.connect(g); g.connect(filt); o.start();
+      bedNodes.push(o,lfo);
+    });
+    bedGain.gain.linearRampToValueAtTime(bedOn?0.09:0, AUDIO.currentTime+2.5);
+  }catch(e){}
+}
+function duck(down){
+  try{ if(!bedGain||!AUDIO) return;
+    bedGain.gain.cancelScheduledValues(AUDIO.currentTime);
+    bedGain.gain.linearRampToValueAtTime(bedOn?(down?0.035:0.09):0, AUDIO.currentTime+0.6);
+  }catch(e){}
+}
+function chime(){
+  try{
+    if(!AUDIO||!bedOn) return;
+    var t=AUDIO.currentTime;
+    [880,1320].forEach(function(f,k){
+      var o=AUDIO.createOscillator(), g=AUDIO.createGain();
+      o.type='sine'; o.frequency.value=f;
+      g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(k?0.03:0.05,t+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+1.1);
+      o.connect(g); g.connect(AUDIO.destination); o.start(t); o.stop(t+1.2);
+    });
+  }catch(e){}
+}
 var _spoke=false;
+document.getElementById('music').onclick=function(){
+  bedOn=!bedOn; this.textContent=bedOn?'♪ Ambience: on':'♪ Ambience: off';
+  startBed(); duck(false);
+};
 function kickoff(){
+  startBed();
+  try{ if(AUDIO && AUDIO.state==='suspended') AUDIO.resume(); }catch(e){}
   if(_spoke) return; _spoke=true;
   var hint=document.getElementById('voicehint'); if(hint) hint.remove();
   speak(i);
 }
 ['click','keydown'].forEach(function(ev){ document.addEventListener(ev, kickoff, {once:false}); });
 show(0); tick();
-if(window.speechSynthesis){
+var _hasVoice = !!(window.speechSynthesis && typeof SpeechSynthesisUtterance!=='undefined') && !window.__TV;
+if(!_hasVoice){ VOICE=false; var vb=document.getElementById('voice'); if(vb){ vb.textContent='🔇 No voice on this device'; vb.disabled=true; vb.style.opacity=.5; } }
+if(_hasVoice){
   var h=document.createElement('div'); h.id='voicehint';
   h.style.cssText='position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#0b1220;border:1px solid #5eead4;color:#e2e8f0;border-radius:1.2vh;padding:2.4vh 3vw;font-size:2vh;text-align:center;z-index:40;box-shadow:0 20px 50px -18px rgba(0,0,0,.8)';
-  h.innerHTML='<div style="font-family:Sora,sans-serif;font-size:2.6vh;color:#fff;margin-bottom:1vh">Click anywhere to start</div><div style="color:#94a3b8;font-size:1.6vh">Narration plays through your speakers — share system audio if you\'re on a call.</div>';
+  h.innerHTML='<div style="font-family:Sora,sans-serif;font-size:2.6vh;color:#fff;margin-bottom:1vh">Click anywhere to start the narration</div><div style="color:#94a3b8;font-size:1.6vh">The slides run either way. Share system audio if you\'re on a call.</div>';
   document.getElementById('stage').appendChild(h);
+  setTimeout(function(){ var x=document.getElementById('voicehint'); if(x) x.remove(); }, 4000);
 }
 </script>
 </body>
