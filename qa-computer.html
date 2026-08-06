@@ -213,6 +213,9 @@ header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
 .cell.pass{background:#dcfce7;color:#15803d;border-color:#86efac}
 .cell.fail{background:#fee2e2;color:#dc2626;border-color:#fca5a5}
 .cell:not(.pass):not(.fail){background:#fffbeb;border-color:#fcd34d;border-style:dashed;color:#b45309}
+.cell:disabled{cursor:not-allowed;opacity:.75}
+@keyframes qanudge{0%,100%{transform:scale(1)}30%{transform:scale(1.07)}60%{transform:scale(.98)}}
+.nudge{animation:qanudge .5s ease}
 .critlbl:hover{color:var(--o3);text-decoration:underline;text-underline-offset:2px}
 
 /* Weekly boxes. */
@@ -852,7 +855,7 @@ function defaultAudit(){
     // UNMARKED by default (null). A board that opens pre-passed hands out a free 100 to any
     // reviewer who submits without reading, and the accuracy penalty only bites afterwards.
     // Every cell must be deliberately set to Pass or Fail before the review can be submitted.
-    for(var i=0;i<t.accounts;i++){ a[t.name].push({ name:t.name+' #'+(i+1), states:t.criteria.map(function(){return null;}) }); }
+    for(var i=0;i<t.accounts;i++){ a[t.name].push({ name:'Account '+(i+1), states:t.criteria.map(function(){return null;}) }); }
   });
   return a;
 }
@@ -862,7 +865,6 @@ function onProjectChange(){
   AUDIT=defaultAudit();
   clientQA=false; if($('c-clientqa')) $('c-clientqa').checked=false;
   renderCriteria(); recompute();
-  try{ if(SAMPLE && (SAMPLE.items||[]).length) applySampleToAudit(); }catch(_as){}   // keep real usernames
   onContextChange();
 }
 function taskByName(name){ return curProject().tasks.filter(function(t){return t.name===name;})[0]; }
@@ -910,21 +912,17 @@ function renderCriteria(){
     }
     $('crit-list').innerHTML='<div style="padding:26px 18px;text-align:center;color:#64748b;font-size:13px;">'+
       '<div style="font-weight:800;color:#0f172a;margin-bottom:4px;">Loading this VA\'s assigned work…</div>'+
-      'The project, the audit day and the accounts come from what they actually recorded. Nothing is pre-filled.</div>';
+      'Loading the project and this VA\'s most recent EOD output. You type the accounts yourself.</div>';
     return;
   }
   var html=p.tasks.map(function(t){
     var accts=AUDIT[t.name]||[];
-    var _locked=(typeof IS_ADMIN!=='undefined') && !IS_ADMIN;   // reviewers audit the ASSIGNED set
+    // MANUAL ENTRY. Columns are numbered placeholders and the reviewer types the real account
+    // in from the VA's most recent EOD output. Nothing is pulled from the tool boards, and the
+    // fields are editable for everyone — peers included, not just admins.
     var head='<tr><th class="crit">'+esc(t.name)+' criteria</th>'+accts.map(function(a,ai){
-      var _dn=sampleNameFor(t.name, ai);
-      if(!_dn){
-        // No handle from the tools for this project (ALTR keeps its accounts in its own sheet).
-        // Say so plainly rather than repeating the task name in every column.
-        _dn=(SAMPLE && SAMPLE.audit_day) ? ('Account '+(ai+1)) : a.name;
-      }
-      if(_locked) return '<th class="acctcol"><div class="acctname" style="font-weight:700;padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Assigned by the QA Computer — '+esc(_dn)+'">'+esc(_dn)+'</div></th>';
-      return '<th class="acctcol"><input class="acctname" value="'+esc(_dn)+'" onchange="setAcctName(\''+esc(t.name)+'\','+ai+',this.value)" title="Account name / handle">'+
+      return '<th class="acctcol"><input class="acctname" value="'+esc(a.name||('Account '+(ai+1)))+'" '+
+        'placeholder="Account '+(ai+1)+'" onchange="setAcctName(\''+esc(t.name)+'\','+ai+',this.value)" title="Type the account / handle from the EOD">'+
         (accts.length>1?'<button class="rmacct" title="Remove account" onclick="removeAcct(\''+esc(t.name)+'\','+ai+')">×</button>':'')+'</th>';
     }).join('')+'</tr>';
     var rows=t.criteria.map(function(lbl,ci){
@@ -940,22 +938,33 @@ function renderCriteria(){
       return '<td>'+pass+'/'+t.criteria.length+(open?('<div style="font-size:10px;font-weight:700;color:#b45309;">'+open+' unmarked</div>'):'')+'</td>';
     }).join('')+'</tr>';
     return '<div class="taskblk"><div class="taskhd"><span class="tn">'+esc(t.name)+'</span>'+
-      '<span class="tc">'+accts.length+' account'+(accts.length!==1?'s':'')+' · '+t.criteria.length+' criteria'+(_locked?' · assigned':'')+
-        ((_locked && SAMPLE && !(SAMPLE.items||[]).length && SAMPLE.audit_day)?' · <span style="color:#b45309;">handles not synced — audit the accounts this VA posted on the audit day</span>':'')+'</span>'+
-      (_locked?'':'<button class="btn ghost tiny" onclick="addAcct(\''+esc(t.name)+'\')">+ account</button>')+'</div>'+
+      '<span class="tc">'+accts.length+' account'+(accts.length!==1?'s':'')+' · '+t.criteria.length+' criteria · type the accounts from the EOD</span>'+
+      '<button class="btn ghost tiny" onclick="addAcct(\''+esc(t.name)+'\')">+ account</button></div>'+
       '<div class="gridwrap"><table class="qgrid"><thead>'+head+'</thead><tbody>'+rows+sub+'</tbody></table></div></div>';
   }).join('');
   $('crit-list').innerHTML=html;
-  try{ watchNames(); }catch(e){}
+  applyGridLock();
+}
+/* THE GRID IS SEALED UNTIL THE TIMER RUNS. The review is a timed session, so no verdict may
+   be recorded before ▶ Start review stamps the begin time — otherwise a reviewer could fill
+   the whole board and then start the clock to fake a compliant session length. */
+function reviewLive(){ return !!TIMER.start; }
+function requireTimer(){
+  if(reviewLive()) return true;
+  toast('Press ▶ Start review first — checks are recorded against the timed session.');
+  try{ var b=$('tm-start'); if(b){ b.classList.add('nudge'); setTimeout(function(){ b.classList.remove('nudge'); },900); } }catch(e){}
+  return false;
 }
 // unmarked → Pass → Fail → unmarked. The third state lets a reviewer undo a misclick instead
 // of being forced to leave a verdict they didn't mean.
 function toggleCell(task,ai,ci){
+  if(!requireTimer()) return;
   var a=AUDIT[task][ai], s=a.states[ci];
   a.states[ci]=(s===true)?false:((s===false)?null:true);
   renderCriteria(); recompute(); try{ qSaveDraft(); }catch(e){}
 }
 function flipRow(task,ci){
+  if(!requireTimer()) return;
   var accts=AUDIT[task]; var allPass=accts.every(function(a){return a.states[ci]===true;});
   accts.forEach(function(a){ a.states[ci]=allPass?false:true; });
   renderCriteria(); recompute(); try{ qSaveDraft(); }catch(e){}
@@ -969,7 +978,7 @@ function clearBoard(){
   renderCriteria(); recompute();
   toast('Board cleared to default.');
 }
-function addAcct(task){ var t=taskByName(task); AUDIT[task].push({ name:task+' #'+(AUDIT[task].length+1), states:t.criteria.map(function(){return null;}) }); renderCriteria(); recompute(); }
+function addAcct(task){ var t=taskByName(task); AUDIT[task].push({ name:'Account '+(AUDIT[task].length+1), states:t.criteria.map(function(){return null;}) }); renderCriteria(); recompute(); try{ qSaveDraft(); }catch(e){} }
 function removeAcct(task,ai){ if(AUDIT[task].length<=1) return; AUDIT[task].splice(ai,1); renderCriteria(); recompute(); }
 
 function computeAudit(){
@@ -1108,7 +1117,7 @@ async function loadAssignedSet(){
     _need=Math.max(10, _need);   // enough real accounts to fill every task column
     function _ask(who){
       return qGet(PORTAL_URL+'?action=qa_sample&employee_id='+encodeURIComponent(who)+'&project='+encodeURIComponent(_projFixed?proj:'')
-        +'&month='+encodeURIComponent(month)+'&week='+encodeURIComponent(week)+'&n='+_need, {ttl:600000});
+        +'&month='+encodeURIComponent(month)+'&week='+encodeURIComponent(week)+'&n='+_need+'&pick=recent', {ttl:600000});
     }
     var d=await _ask(emp);
     _qaStep(2,'server answered — checking what was found');
@@ -1183,16 +1192,15 @@ async function loadAssignedSet(){
       host.innerHTML=
         '<div style="display:flex;align-items:stretch;gap:0;border-radius:14px;overflow:hidden;box-shadow:0 6px 20px -8px rgba(225,29,72,.45);border:2px solid #e11d48;">'+
           '<div style="background:linear-gradient(135deg,#e11d48,#9f1239);color:#fff;padding:12px 18px;display:flex;flex-direction:column;justify-content:center;min-width:150px;">'+
-            '<div style="font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.9;">Audit this day</div>'+
+            '<div style="font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.9;">Check this EOD</div>'+
             '<div style="font-family:Sora,Inter,sans-serif;font-size:21px;font-weight:800;line-height:1.15;margin-top:2px;white-space:nowrap;">'+esc(dayLbl)+'</div>'+
             '<div style="font-size:10.5px;opacity:.85;margin-top:1px;">'+esc(d.audit_day)+'</div>'+
           '</div>'+
           '<div style="flex:1;background:#fff;padding:11px 16px;font-size:12px;">'+
-            '<div><b>Review only this day\'s work.</b> Auto-selected from '+d.worked_days+' day'+(d.worked_days!==1?'s':'')+' worked in '+esc(d.from)+' → '+esc(d.to)+'.</div>'+
-            '<div style="opacity:.75;margin-top:3px;">The same date and the same accounts are shown to the peer, the team lead and the manager — nobody picks their own sample.</div>'+
+            '<div><b>Review this VA\'s most recent EOD output.</b> Latest of '+d.worked_days+' day'+(d.worked_days!==1?'s':'')+' worked in '+esc(d.from)+' → '+esc(d.to)+'.</div>'+
+            '<div style="opacity:.75;margin-top:3px;">Open their EOD for this date and type the accounts into the grid yourself. The same date is shown to the peer, the team lead and the manager.</div>'+
             (vol?('<div style="margin-top:6px;">That day\'s recorded output: '+vol+' <span style="opacity:.7;">(total '+d.total_volume+')</span></div>'):'')+
-            ((d.items||[]).length?('<div style="margin-top:4px;opacity:.85;">Accounts to check: <b>'+d.items.length+'</b> · '+d.worked_in_week+' touched that day</div>')
-                                 :'<div style="margin-top:4px;opacity:.85;">No account-level rows for that day — audit against the recorded output above.</div>')+
+            '<div style="margin-top:4px;opacity:.85;">Enter the accounts from that EOD into the columns — use <b>+ account</b> if you need more.</div>'+
           '</div>'+
         '</div>';
       window._barOwned=true;
@@ -1226,7 +1234,6 @@ async function loadAssignedSet(){
     paintDayCard();                  // last write to the bar — locks it against the tracer
     try{ clearTimeout(window._ctxDeadline); }catch(_x){}
     CTX_READY=true; CTX_STATE='ready';
-    applySampleToAudit();
     renderCriteria(); recompute();   // unconditional — a project with no account rows still gets its grid
     renderStaticContext();           // repaint the header — Project sat on "Loading…" because
                                      // nothing re-rendered it once CTX_READY flipped true
@@ -1265,61 +1272,47 @@ async function probeOtherWeeks(emp, month, week){
 function switchWeek(w){
   try{ var s=$('c-week'); if(s){ s.value=String(w); onContextChange(); window.scrollTo({top:0,behavior:'smooth'}); } }catch(e){}
 }
-/* Replace the generic "#1, #2…" columns with the real account handles. */
-/* Watchdog: if the grid is still showing placeholders a moment after render (slow sample,
-   failed call, or any future regression), fetch again and repaint. Self-healing by design. */
-var _nameWatch=null;
-function watchNames(){
-  if(_nameWatch) clearTimeout(_nameWatch);
-  _nameWatch=setTimeout(function(){
-    try{
-      if(IS_ADMIN) return;
-      var placeholders=Array.prototype.slice.call(document.querySelectorAll('.acctname'))
-        .filter(function(el){ var t=(el.value||el.textContent||''); return /#\d+$/.test(t.trim()); }).length;
-      if(placeholders>0){
-        if(SAMPLE && (SAMPLE.items||[]).length){ renderCriteria(); }   // data is here — just repaint
-        else { loadAssignedSet(); }                                    // data missing — refetch
-      }
-    }catch(e){}
-  }, 2500);
-}
-function applySampleToAudit(){
-  if(!SAMPLE||!(SAMPLE.items||[]).length) return;
-  var p=curProject(); if(!p) return;
-  var pool=SAMPLE.items, cursor=0;
-  p.tasks.forEach(function(t){
-    var rows=AUDIT[t.name]||[];
-    var want=t.accounts||0, take=[];
-    // Each task gets its OWN slice of the shuffled pool (wrapping if the VA has few accounts),
-    // so Posting and Farming never audit the identical five names.
-    for(var i=0;i<want && pool.length;i++){ take.push(pool[(cursor+i)%pool.length]); }
-    cursor=(cursor+want)%Math.max(1,pool.length);
-    AUDIT[t.name]=take.map(function(it,i){
-      var prev=rows[i];
-      // name is display-only and re-derived at render time (sampleNameFor); keep ticks.
-      return { name: it.name, states: (prev&&prev.states)||t.criteria.map(function(){return true;}) };
-    });
-  });
-  // Restore an unfinished audit for this exact context (survives refresh / crash / dead link).
+/* Grey the grid out and disable every cell until ▶ Start review is pressed. Account-name
+   fields stay editable so the reviewer can line up the EOD before starting the clock. */
+function applyGridLock(){
   try{
-    var dr=qLoadDraft();
-    if(dr && dr.audit){
-      var same=Object.keys(dr.audit).every(function(k){ return AUDIT[k] && dr.audit[k].length===AUDIT[k].length; });
-      if(same){
-        // Restore the TICKS only — never the names. A draft saved before the sample loaded
-        // carries placeholder labels ("Posting #1") and would wipe the real usernames.
-        Object.keys(AUDIT).forEach(function(k){
-          if(!dr.audit[k]) return;
-          AUDIT[k].forEach(function(row,i){ if(dr.audit[k][i] && dr.audit[k][i].states) row.states=dr.audit[k][i].states; });
-        });
-        if($('c-note') && dr.note) $('c-note').value=dr.note;
-        if(!IS_ADMIN && MODE==='peer'){ clientQA=false; } else { clientQA=!!dr.clientQA; if($('c-clientqa')) $('c-clientqa').checked=clientQA; }
-        toast('Restored your unfinished audit.');
+    var live=reviewLive();
+    var host=$('crit-list'); if(!host) return;
+    host.querySelectorAll('.cell').forEach(function(b){ b.disabled=!live; });
+    host.querySelectorAll('.critlbl').forEach(function(td){ td.style.cursor=live?'pointer':'not-allowed'; });
+    host.style.opacity=live?'1':'.55';
+    var note=$('grid-lock-note');
+    if(!live){
+      if(!note){
+        note=document.createElement('div'); note.id='grid-lock-note';
+        note.style.cssText='margin:0 0 10px;padding:9px 13px;border-radius:10px;background:rgba(180,83,9,.08);border:1px solid rgba(180,83,9,.35);font-size:12.5px;font-weight:700;color:#7c2d12;';
+        note.textContent='Press ▶ Start review to unlock the checks — the session is timed.';
+        host.parentNode.insertBefore(note, host);
       }
-    }
+      note.style.display='';
+    } else if(note){ note.style.display='none'; }
+  }catch(e){}
+}
+/* DRAFT RESTORE — accounts are typed by hand now, so both the NAMES and the ticks are the
+   reviewer's own work and both are restored. (The old code rebuilt the columns from the tool
+   boards and deliberately dropped saved names; nothing pulls names automatically any more.) */
+function restoreDraftIfAny(){
+  try{
+    var dr=qLoadDraft(); if(!dr || !dr.audit) return;
+    var same=Object.keys(dr.audit).every(function(k){ return AUDIT[k] && dr.audit[k].length===AUDIT[k].length; });
+    if(!same) return;
+    Object.keys(AUDIT).forEach(function(k){
+      if(!dr.audit[k]) return;
+      AUDIT[k].forEach(function(row,i){
+        var src=dr.audit[k][i]; if(!src) return;
+        if(src.states) row.states=src.states;
+        if(src.name)   row.name=src.name;
+      });
+    });
+    if($('c-note') && dr.note) $('c-note').value=dr.note;
+    if(!IS_ADMIN && MODE==='peer'){ clientQA=false; } else { clientQA=!!dr.clientQA; if($('c-clientqa')) $('c-clientqa').checked=clientQA; }
+    toast('Restored your unfinished audit.');
   }catch(_dr){}
-  renderCriteria(); recompute();
-  lockAssignedColumns(); applyClientQAGate();
 }
 /* ── STATIC CONTEXT HEADER (non-admin) ──
    Reviewers don't choose anything: the person, project, month and week are fixed by the
@@ -1361,14 +1354,15 @@ function tmStart(){
   try{ localStorage.setItem(tmKey(), String(TIMER.start)); }catch(e){}
   tmRender(); if(TIMER.tick) clearInterval(TIMER.tick);
   TIMER.tick=setInterval(tmRender, 1000);
+  applyGridLock();   // unseal the checks
   toast('Review started — target '+tmTarget()+' minutes.');
 }
 function tmResume(){
   try{ var v=parseInt(localStorage.getItem(tmKey())||'',10);
     if(v && (Date.now()-v)<6*3600*1000){ TIMER.start=v; if(TIMER.tick) clearInterval(TIMER.tick); TIMER.tick=setInterval(tmRender,1000); } }catch(e){}
-  tmRender();
+  tmRender(); try{ applyGridLock(); }catch(e){}
 }
-function tmStop(){ if(TIMER.tick){ clearInterval(TIMER.tick); TIMER.tick=null; } var s=TIMER.start; TIMER.start=null; try{ localStorage.removeItem(tmKey()); }catch(e){} tmRender(); return s; }
+function tmStop(){ if(TIMER.tick){ clearInterval(TIMER.tick); TIMER.tick=null; } var s=TIMER.start; TIMER.start=null; try{ localStorage.removeItem(tmKey()); }catch(e){} tmRender(); try{ applyGridLock(); }catch(e){} return s; }
 function tmMins(){ return TIMER.start ? Math.max(1, Math.round((Date.now()-TIMER.start)/60000)) : 0; }
 function tmRender(){
   var host=$('tm-bar');
@@ -1379,7 +1373,7 @@ function tmRender(){
   }
   var tgt=tmTarget();
   if(!TIMER.start){
-    host.innerHTML='<button onclick="tmStart()" style="background:linear-gradient(135deg,#0ea5a4,#0f766e);color:#fff;border:none;border-radius:10px;padding:9px 20px;font:800 13px Inter,system-ui,sans-serif;cursor:pointer;">▶ Start review</button>'+
+    host.innerHTML='<button id="tm-start" onclick="tmStart()" style="background:linear-gradient(135deg,#0ea5a4,#0f766e);color:#fff;border:none;border-radius:10px;padding:9px 20px;font:800 13px Inter,system-ui,sans-serif;cursor:pointer;">▶ Start review</button>'+
       '<span style="font-size:12px;color:#64748b;">Target <b>'+tgt+' minutes</b> · your start and end time are recorded with the review.</span>';
     return;
   }
@@ -1390,19 +1384,10 @@ function tmRender(){
     '<div style="flex:1;min-width:160px;"><div style="height:8px;border-radius:5px;background:rgba(15,23,42,.08);overflow:hidden;"><div style="height:100%;width:'+pct.toFixed(0)+'%;background:'+col+';transition:width .5s;"></div></div>'+
       '<div style="font-size:11px;color:#64748b;margin-top:3px;">Started '+st.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})+' · target '+tgt+' min'+(mins>=tgt?' · target reached ✓':'')+'</div></div>';
 }
-/* Reviewers can't add, remove or rename the assigned accounts — the sample is the audit. */
-function lockAssignedColumns(){
-  if(IS_ADMIN) return;
-  try{
-    document.querySelectorAll('.acc-x, .rm-acc').forEach(function(x){ x.style.display='none'; });
-    document.querySelectorAll('button').forEach(function(b){ if(/\+\s*account/i.test(b.textContent||'')) b.style.display='none'; });
-    document.querySelectorAll('input').forEach(function(inp){
-      if(inp.id && /^(c-|si-|d-)/.test(inp.id)) return;
-      if(inp.type==='checkbox'||inp.type==='month'||inp.type==='number') return;
-      inp.readOnly=true; inp.style.cursor='default';
-    });
-  }catch(e){}
-}
+/* Accounts are entered by hand now, so nothing is locked. Kept as a no-op because several
+   call sites still reference it; it used to force every input readOnly for non-admins, which
+   is exactly what made manual entry impossible. */
+function lockAssignedColumns(){ /* intentionally does nothing */ }
 var _peerWk=null;
 async function onContextChange(){
   var emp=$('c-emp').value, month=$('c-month').value;
