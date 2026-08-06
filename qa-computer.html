@@ -860,14 +860,36 @@ function onProjectChange(){
 }
 function taskByName(name){ return curProject().tasks.filter(function(t){return t.name===name;})[0]; }
 
+/* ── SINGLE SOURCE OF TRUTH FOR COLUMN NAMES ──
+   The assigned account for a given task+column is computed from SAMPLE every time we render.
+   AUDIT only ever holds the tick marks. This is why the names can no longer be overwritten by
+   a draft restore, a project rebuild, or any ordering race — they are never stored at all. */
+function sampleNameFor(taskName, idx){
+  try{
+    if(!SAMPLE || !(SAMPLE.items||[]).length) return null;
+    var p=curProject(); if(!p) return null;
+    var cursor=0, found=null;
+    p.tasks.some(function(t){
+      if(t.name===taskName){
+        var it=SAMPLE.items[(cursor+idx)%SAMPLE.items.length];
+        found=it?(it.name+(it.in_week?'':' (older)')):null;
+        return true;
+      }
+      cursor=(cursor+(t.accounts||0))%Math.max(1,SAMPLE.items.length);
+      return false;
+    });
+    return found;
+  }catch(e){ return null; }
+}
 function renderCriteria(){
   var p=curProject(); if(!p) return;
   var html=p.tasks.map(function(t){
     var accts=AUDIT[t.name]||[];
     var _locked=(typeof IS_ADMIN!=='undefined') && !IS_ADMIN;   // reviewers audit the ASSIGNED set
     var head='<tr><th class="crit">'+esc(t.name)+' criteria</th>'+accts.map(function(a,ai){
-      if(_locked) return '<th class="acctcol"><div class="acctname" style="font-weight:700;padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Assigned by the QA Computer — '+esc(a.name)+'">'+esc(a.name)+'</div></th>';
-      return '<th class="acctcol"><input class="acctname" value="'+esc(a.name)+'" onchange="setAcctName(\''+esc(t.name)+'\','+ai+',this.value)" title="Account name / handle">'+
+      var _dn=sampleNameFor(t.name, ai) || a.name;
+      if(_locked) return '<th class="acctcol"><div class="acctname" style="font-weight:700;padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Assigned by the QA Computer — '+esc(_dn)+'">'+esc(_dn)+'</div></th>';
+      return '<th class="acctcol"><input class="acctname" value="'+esc(_dn)+'" onchange="setAcctName(\''+esc(t.name)+'\','+ai+',this.value)" title="Account name / handle">'+
         (accts.length>1?'<button class="rmacct" title="Remove account" onclick="removeAcct(\''+esc(t.name)+'\','+ai+')">×</button>':'')+'</th>';
     }).join('')+'</tr>';
     var rows=t.criteria.map(function(lbl,ci){
@@ -887,6 +909,7 @@ function renderCriteria(){
       '<div class="gridwrap"><table class="qgrid"><thead>'+head+'</thead><tbody>'+rows+sub+'</tbody></table></div></div>';
   }).join('');
   $('crit-list').innerHTML=html;
+  try{ watchNames(); }catch(e){}
 }
 function toggleCell(task,ai,ci){ var a=AUDIT[task][ai]; a.states[ci]=(a.states[ci]===true)?false:true; renderCriteria(); recompute(); try{ qSaveDraft(); }catch(e){} }
 function flipRow(task,ci){
@@ -1009,6 +1032,23 @@ async function loadAssignedSet(){
   }
 }
 /* Replace the generic "#1, #2…" columns with the real account handles. */
+/* Watchdog: if the grid is still showing placeholders a moment after render (slow sample,
+   failed call, or any future regression), fetch again and repaint. Self-healing by design. */
+var _nameWatch=null;
+function watchNames(){
+  if(_nameWatch) clearTimeout(_nameWatch);
+  _nameWatch=setTimeout(function(){
+    try{
+      if(IS_ADMIN) return;
+      var placeholders=Array.prototype.slice.call(document.querySelectorAll('.acctname'))
+        .filter(function(el){ var t=(el.value||el.textContent||''); return /#\d+$/.test(t.trim()); }).length;
+      if(placeholders>0){
+        if(SAMPLE && (SAMPLE.items||[]).length){ renderCriteria(); }   // data is here — just repaint
+        else { loadAssignedSet(); }                                    // data missing — refetch
+      }
+    }catch(e){}
+  }, 2500);
+}
 function applySampleToAudit(){
   if(!SAMPLE||!(SAMPLE.items||[]).length) return;
   var p=curProject(); if(!p) return;
@@ -1022,7 +1062,8 @@ function applySampleToAudit(){
     cursor=(cursor+want)%Math.max(1,pool.length);
     AUDIT[t.name]=take.map(function(it,i){
       var prev=rows[i];
-      return { name: it.name + (it.in_week?'':' (older)'), states: (prev&&prev.states)||t.criteria.map(function(){return true;}) };
+      // name is display-only and re-derived at render time (sampleNameFor); keep ticks.
+      return { name: it.name, states: (prev&&prev.states)||t.criteria.map(function(){return true;}) };
     });
   });
   // Restore an unfinished audit for this exact context (survives refresh / crash / dead link).
