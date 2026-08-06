@@ -763,15 +763,23 @@ async function loadAssignedSet(){
     if(!d||!d.ok) throw new Error((d&&d.error)||'error');
     SAMPLE=d;
     var vol=Object.keys(d.volumes||{}).map(function(k){ return esc(k)+' <b>'+d.volumes[k]+'</b>'; }).join(' · ');
-    if(!(d.items||[]).length){
+    if(!(d.items||[]).length && !d.audit_day){
       host.innerHTML='<b>No recorded work found</b> for '+esc(d.from)+' → '+esc(d.to)+
-        '. Audit columns stay generic — check with the VA whether their tool was updated.'+(vol?('<div style="margin-top:4px;opacity:.8;">Data Center volumes: '+vol+'</div>'):'');
+        '. Audit columns stay generic — check with the VA whether their tool was updated.';
       return;
     }
-    host.innerHTML='<b>Assigned audit set</b> · '+esc(d.from)+' → '+esc(d.to)+
-      ' · <b>'+d.items.length+'</b> of '+d.pool+' accounts ('+d.worked_in_week+' worked this week)'+
-      '<div style="font-size:11px;opacity:.75;margin-top:3px;">Selected automatically from the Productivity Hub — the same set is shown to the peer, the lead and the manager.</div>'+
-      (vol?('<div style="margin-top:5px;">Data Center output: '+vol+' <span style="opacity:.7;">(total '+d.total_volume+')</span></div>'):'');
+    var dayLbl='';
+    if(d.audit_day){
+      try{ dayLbl=new Date(d.audit_day+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'}); }catch(_dl){ dayLbl=d.audit_day; }
+    }
+    host.innerHTML=
+      (d.audit_day
+        ? '<div style="font-size:13px;"><b>Audit day: <span style="color:#e11d48;">'+esc(dayLbl)+'</span></b> <span style="opacity:.7;">· auto-selected from '+d.worked_days+' day'+(d.worked_days!==1?'s':'')+' worked in '+esc(d.from)+' → '+esc(d.to)+'</span></div>'
+        : '<div style="font-size:13px;"><b>No output recorded</b> in '+esc(d.from)+' → '+esc(d.to)+'</div>')+
+      '<div style="font-size:11px;opacity:.75;margin-top:3px;">Review only that day\'s work. The same day and the same accounts are shown to the peer, the lead and the manager — nobody picks their own sample.</div>'+
+      (vol?('<div style="margin-top:5px;">That day\'s output: '+vol+' <span style="opacity:.7;">(total '+d.total_volume+')</span></div>'):'')+
+      ((d.items||[]).length?('<div style="margin-top:4px;opacity:.85;">Accounts to check: <b>'+d.items.length+'</b> ('+d.worked_in_week+' touched that day, rest filled from their board)</div>')
+                           :'<div style="margin-top:4px;opacity:.85;">No account-level rows found for that day — audit against the day\'s recorded output above.</div>');
     applySampleToAudit();
   }catch(e){
     host.innerHTML='Could not load the assigned set (server busy). <a href="#" onclick="loadAssignedSet();return false;" style="color:#2563eb;font-weight:700;">Retry</a>';
