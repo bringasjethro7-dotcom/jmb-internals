@@ -881,8 +881,17 @@ function sampleNameFor(taskName, idx){
     return found;
   }catch(e){ return null; }
 }
+var CTX_READY=false;   // true only once the server has confirmed the VA's real project
 function renderCriteria(){
   var p=curProject(); if(!p) return;
+  // Never show a guessed checklist. Until the assigned set resolves, show a loading state —
+  // a wrong project with green ticks is worse than no grid at all.
+  if(!IS_ADMIN && !CTX_READY){
+    $('crit-list').innerHTML='<div style="padding:26px 18px;text-align:center;color:#64748b;font-size:13px;">'+
+      '<div style="font-weight:800;color:#0f172a;margin-bottom:4px;">Loading this VA\'s assigned work…</div>'+
+      'The project, the audit day and the accounts come from what they actually recorded. Nothing is pre-filled.</div>';
+    return;
+  }
   var html=p.tasks.map(function(t){
     var accts=AUDIT[t.name]||[];
     var _locked=(typeof IS_ADMIN!=='undefined') && !IS_ADMIN;   // reviewers audit the ASSIGNED set
@@ -958,6 +967,13 @@ function applyClientQAGate(){
   }
 }
 function recompute(){
+  if(!IS_ADMIN && !CTX_READY){
+    var sc=$('score-big'), sb=$('score-pf'), bar=$('score-bar');
+    if(sc) sc.textContent='—';
+    if(sb) sb.textContent='waiting for this VA\'s recorded work';
+    if(bar) bar.style.width='0%';
+    return { score:0, passed:0, total:0 };
+  }
   var res=computeAudit();
   var base=res.score;
   var score=clientQA?Math.max(0, base-CLIENT_QA_DEDUCT):base;
@@ -1043,6 +1059,7 @@ async function loadAssignedSet(){
     var dayLbl='';
     // No recorded work at all → say so immediately instead of sitting on "Loading…".
     if(!d.audit_day && !(d.items||[]).length && !(d.projects_worked||[]).length){
+      CTX_READY=false; try{ renderCriteria(); }catch(_rc){}
       host.style.cssText='margin:8px 0 12px;padding:11px 14px;border-radius:11px;background:rgba(180,83,9,.07);border:1px solid rgba(180,83,9,.35);font-size:12.5px;';
       host.innerHTML='<b>No recorded work for '+esc(d.from)+' → '+esc(d.to)+'.</b> Nothing to audit for this week — either the VA logged no output, or their tool wasn\'t updated. '+
         '<a href="#" onclick="qBust(/qa_sample/);loadAssignedSet();return false;" style="color:#b45309;font-weight:700;">Re-check</a>';
@@ -1073,6 +1090,7 @@ async function loadAssignedSet(){
       host.style.cssText='margin:8px 0 12px;padding:10px 13px;border-radius:11px;background:rgba(180,83,9,.06);border:1px solid rgba(180,83,9,.3);font-size:12px;';
       host.innerHTML='<b>No output recorded</b> in '+esc(d.from)+' → '+esc(d.to)+' — there is no work to audit for this week. Check whether the VA updated their tool.';
     }
+    CTX_READY=true;
     applySampleToAudit();
   }catch(e){
     host.innerHTML='Could not load the assigned set (server busy). <a href="#" onclick="loadAssignedSet();return false;" style="color:#2563eb;font-weight:700;">Retry</a>';
@@ -1156,7 +1174,7 @@ function renderStaticContext(){
     ? ((MY_ASSIGNMENT&&MY_ASSIGNMENT.reviewee_name)||'Loading your assignment…')
     : (function(){ var s=$('c-emp'); return (s&&s.selectedIndex>=0&&s.options[s.selectedIndex])?s.options[s.selectedIndex].text.replace(/\s*\([^)]*\)\s*$/,''):'Pick from your lead queue'; })();
   var projKey=($('c-proj')||{}).value||'';
-  var projLbl=(PROJECTS[projKey]&&PROJECTS[projKey].label)||projKey||'—';
+  var projLbl=CTX_READY ? ((PROJECTS[projKey]&&PROJECTS[projKey].label)||projKey||'—') : 'Loading…';
   var mv=($('c-month')||{}).value||'';
   var mLbl=mv?(function(){ try{ return new Date(mv+'-01T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'}); }catch(e){ return mv; } })():'—';
   host.innerHTML=fld('Reviewing', who, true)+fld('Project', projLbl)+fld('Month', mLbl)+fld('Week', 'Week '+((($('c-week')||{}).value)||'1'));
