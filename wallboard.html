@@ -286,7 +286,7 @@
   body.lite .liveHead .badgeN{background:#e35000;box-shadow:none}
 
   /* ── PENDING TILES — counts, not a roster ── */
-  .ptiles{flex:1;min-height:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(19vw,1fr));
+  .ptiles{flex:1;min-height:0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:1fr 1fr;
     grid-auto-rows:minmax(0,1fr);gap:1.6vh 1.6vw;align-content:start}
   .ptile{position:relative;overflow:hidden;border-radius:2.2vh;padding:2.6vh 2vw;
     display:flex;flex-direction:column;justify-content:center;
@@ -593,7 +593,7 @@ function pProgress(active){
     '<div class="pgrid progslide-grid">'+progRows()+'</div>'+
   '</div>';
 }
-setInterval(function(){ loadProgressData(); }, 90000);
+setInterval(function(){ loadProgressData(); }, 300000);   // 5 min
 loadProgressData();
 /* Shift changeover: the moment the clock crosses 8 AM / 8 PM, clear the outgoing team off the
    board and pull fresh data for the incoming one — no stale bars carried across the boundary. */
@@ -692,21 +692,19 @@ function pAttendance(active){
     '<div class="pgrid attslide-grid">'+attRows()+'</div>'+
   '</div>';
 }
-setInterval(function(){ loadAttendance(); }, 90000);
+setInterval(function(){ loadAttendance(); }, 300000);   // 5 min
 loadAttendance();
 /* ══ PENDING WITH ADMIN ══
    Everything a contractor has submitted that is still waiting on a decision. The wall answers
    "is mine still pending?" so nobody has to chase. Oldest first — age is the pressure. */
 var PEND={ items:[], total:0, by:{}, loaded:false };
 var PEND_META={
-  leave:  { label:'Leave',        color:'#2563eb' },
-  appeal: { label:'Hours appeal', color:'#d97706' },
-  demerit:{ label:'Demerit',      color:'#dc2626' },
-  qa:     { label:'QA dispute',   color:'#7c3aed' },
-  redeem: { label:'Redemption',   color:'#0891b2' },
-  coe:    { label:'Certificate',  color:'#0f766e' },
-  inno:   { label:'Innovation',   color:'#9333ea' },
-  volume: { label:'Volume',       color:'#b45309' }
+  demerit:{ label:'Demerit dispute',   color:'#dc2626' },
+  leave:  { label:'Leave request',     color:'#2563eb' },
+  appeal: { label:'Hours appeal',      color:'#d97706' },
+  inno:   { label:'Innovation idea',   color:'#9333ea' },
+  redeem: { label:'Redemption',        color:'#0891b2' },
+  payslip:{ label:'Payslip to pay',    color:'#0f766e' }
 };
 async function loadPending(){
   try{
@@ -716,17 +714,17 @@ async function loadPending(){
   }catch(e){}
 }
 function pendRows(){
-  var order=['demerit','appeal','leave','qa','redeem','coe','volume','inno'];
-  var tiles=order.filter(function(k){ return (PEND.by||{})[k]; }).map(function(k){
+  // Six fixed tiles — always shown, even at zero, so the wall reads the same every cycle.
+  var order=['demerit','leave','appeal','inno','redeem','payslip'];
+  var tiles=order.map(function(k){
     var m=PEND_META[k]||{label:k,color:'#57606f'};
-    var n=PEND.by[k];
+    var n=(PEND.by||{})[k]||0;
     // oldest item of this kind — the number that actually matters
     return '<div class="ptile" style="--c:'+m.color+'">'+
-      '<div class="pn">'+n+'</div>'+
+      '<div class="pn"'+(n?'':' style="opacity:.28"')+'>'+n+'</div>'+
       '<div class="pl">'+m.label+(n===1?'':'s')+'</div>'+
     '</div>';
   });
-  if(!tiles.length) return '<div class="empty-note">Nothing pending — every request has been actioned.</div>';
   return tiles.join('');
 }
 function pPending(active){
@@ -739,7 +737,7 @@ function pPending(active){
     '<div class="ptiles pendslide-grid">'+pendRows()+'</div>'+
   '</div>';
 }
-setInterval(function(){ loadPending(); }, 60000);
+setInterval(function(){ loadPending(); }, 600000);   // 10 min
 loadPending();
 function panelList(){
   var info=[

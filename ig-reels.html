@@ -234,9 +234,12 @@ function renderByVA(segs, doneFn, activeFn, amFn){
   var list=keys.map(function(k,i){
     var rows=by[k];
     // "on board" is this VA's OWN assigned account count — never a shared or fixed total.
-    var onBoard=rows.length;
-    // tagged = accounts this VA completed in the CURRENT shift (resets 8 AM / 8 PM).
-    var tagged=doneFn?rows.filter(doneFn).length:0;
+    var onBoard=rows.length;   // replaced below by the ACTIVE count
+    // Rule 1: an ACTIVE account counts ONCE when its unlock tagging is complete for the shift.
+    // Re-completing the same account never adds a second point; resets at the shift boundary.
+    var actRows=rows.filter(function(r){ return ['active','warmup'].indexOf(String(r.status||'').toLowerCase())>=0; });
+    onBoard=actRows.length;
+    var tagged=actRows.filter(function(r){ return fullDone(r); }).length;
     return { k:k, i:i, done:tagged, tot:onBoard, pct:onBoard?Math.round(tagged/onBoard*100):0, n:onBoard };
   }).sort(function(a,b){
     if(a.k===mine) return -1; if(b.k===mine) return 1;    // you first
@@ -370,7 +373,8 @@ function renderAudit(){
 }
 async function setAudit(id,k){
   try{ var r0=row(id); if(!r0) return;
-    var d=await saveMeta(r0, Object.assign({}, r0.meta||{}, {audit:k}));
+    // stamp WHEN it was audited so today's progress counts the account once, then resets
+    var d=await saveMeta(r0, Object.assign({}, r0.meta||{}, {audit:k, audited:vaKeyOf(USER.id)}));
     if(d&&d.ok){ toast('Audit tag updated.'); load(); } else toast('Could not save.');
   }catch(e){ toast('Connection error.'); }
 }
@@ -394,9 +398,9 @@ function renderCM(){
 async function cmSet(nm, k){
   try{
     var r=cmRowOf(nm), d;
-    if(r){ d=await saveMeta(r, Object.assign({}, r.meta||{}, {cm:k})); }
+    if(r){ d=await saveMeta(r, Object.assign({}, r.meta||{}, {cm:k, cmAt:vaKeyOf(USER.id)})); }
     else{
-      var rr=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(nm)+'&status=cmodel&meta='+encodeURIComponent(JSON.stringify({cm:k}))+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
+      var rr=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(nm)+'&status=cmodel&meta='+encodeURIComponent(JSON.stringify({cm:k, cmAt:vaKeyOf(USER.id)}))+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
       d=await rr.json();
     }
     if(d&&d.ok){ toast(nm+' → updated ✓'); load(); } else toast('Could not save.');
@@ -414,24 +418,44 @@ function tagActiveRows(){
 }
 function renderTagProgress(hostId){
   var host=document.getElementById(hostId); if(!host) return;
-  var act=tagActiveRows();
-  if(!act.length){ host.innerHTML=''; return; }
-  var done=0, tot=0;
-  act.forEach(function(r){
-    var t=T(r);
-    tot+=3;                                   // Story + Feed + Reel per active account
-    if(t.s) done++; if(t.f) done++; if(t.rl) done++;
-  });
+  var isCM=(hostId==='tagprog-cm');
+  var done=0, tot=0, title='', note='';
+  if(isCM){
+    // Rule 3: count UNIQUE MODELS updated this shift — not the number of status changes.
+    tot=MODELS.length;
+    var seenM={};
+    CMROWS.forEach(function(r){
+      var nm=String(r.handle||'').toLowerCase();
+      if(!nm || seenM[nm]) return;
+      if(markOk((r.meta||{}).cmAt, r.assigned_to||r.created_by)) { seenM[nm]=1; }
+    });
+    done=Object.keys(seenM).length;
+    title='Today — models updated';
+    note='unique models · repeat updates don\'t add · resets per shift';
+  } else {
+    // Rule 2: count UNIQUE ACCOUNTS audited this shift (tagged OR status-updated), once each.
+    var elig=tagActiveRows();
+    tot=elig.length;
+    var seenA={};
+    elig.forEach(function(r){
+      var m=r.meta||{}, ow=r.assigned_to||r.created_by;
+      if(markOk(m.audited, ow) || markOk(m.stat, ow)) seenA[r.id]=1;
+    });
+    done=Object.keys(seenA).length;
+    title='Today — accounts audited';
+    note='unique accounts · repeat actions don\'t add · resets per shift';
+  }
+  if(!tot){ host.innerHTML=''; return; }
   var pct=tot?Math.round(done/tot*100):0;
   host.innerHTML='<div class="pvwrap">'+
     '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;flex-wrap:wrap;">'+
-      '<span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today — tagging progress</span>'+
-      '<span style="font-size:11px;color:var(--ink3);font-weight:700;">active accounts only · resets per shift · ☀️ 8 AM / 🌙 8 PM</span>'+
+      '<span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 '+title+'</span>'+
+      '<span style="font-size:11px;color:var(--ink3);font-weight:700;">'+note+'</span>'+
     '</div>'+
     '<div class="pvrow first">'+
       '<div style="flex:1;min-width:0;">'+
-        '<div style="display:flex;align-items:baseline;gap:8px;"><b style="font-size:13.5px;">Story · Feed · Reel tags</b>'+
-          '<span style="font-size:11px;color:var(--ink3);font-weight:700;">'+act.length+' active account'+(act.length!==1?'s':'')+' × 3</span></div>'+
+        '<div style="display:flex;align-items:baseline;gap:8px;"><b style="font-size:13.5px;">'+(isCM?'Models':'Accounts')+'</b>'+
+          '<span style="font-size:11px;color:var(--ink3);font-weight:700;">'+tot+' eligible</span></div>'+
         '<div class="pvbar" style="margin-top:7px;background:#eef1f5;border-radius:999px;overflow:hidden;">'+
           '<i style="width:'+Math.min(100,pct)+'%;background:linear-gradient(90deg,#fb7185,#e11d48);border-radius:999px;"></i></div>'+
       '</div>'+
@@ -561,7 +585,10 @@ async function setStatus(id, st){
   if(st==='onhold' && !confirm('Put this account ON HOLD? The account is healthy — posting simply pauses until the client approves resuming. No penalty.')) return;
   if(st==='reserved' && !confirm('Mark RESERVED? The account is set aside for a specific purpose — posting stops and it leaves the active pool until released.')) return;
   try{
-    var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status='+encodeURIComponent(st)+'&_='+Date.now());
+    // Stamp the status change too — Rule 2 counts an account as audited if it was TAGGED
+    // *or* had its status updated this shift (still only once).
+    var _r0=row(id), _m=Object.assign({}, (_r0&&_r0.meta)||{}, {stat:vaKeyOf(USER.id)});
+    var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status='+encodeURIComponent(st)+'&meta='+encodeURIComponent(JSON.stringify(_m))+'&_='+Date.now());
     var d=await r.json(); if(d&&d.ok){ toast('Updated.'); load(); } else toast('Could not update.');
   }catch(e){ toast('Connection error.'); }
 }
