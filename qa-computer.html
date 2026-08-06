@@ -369,6 +369,7 @@ header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
 
 <script>
 var PORTAL_URL = "https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec";
+var ALTR_URL   = "https://script.google.com/macros/s/AKfycbxp7wcIf48urxm2DcPoNgdmQreYUGia-YNnXwIXfyMqOLkyWpaqI3hoMZa4VPmjZa9_Mg/exec";
 
 /* ══════════ QFX — QA fetch chain ══════════════════════════════════════════════════
    This tool decides people's scores, so a dropped request is unacceptable. Every call goes
@@ -1017,7 +1018,7 @@ function matchProjectKey(worked){
     var hit=Object.keys(PROJECTS).filter(function(k){ return k.toLowerCase()===f; })[0];
     if(hit) return hit;
     // posting-side ALTR VAs audit against the posting checklist when that's what they did
-    if(f==='altr media' && /vysor|posting/i.test(worked.join(' ')) && PROJECTS['ALTR Posting']) return 'ALTR Posting';
+    if(f==='altr media' && PROJECTS['ALTR Posting']) return 'ALTR Posting';
   }
   return null;
 }
@@ -1056,6 +1057,14 @@ async function loadAssignedSet(){
     // If the dropdown is pointing somewhere else (e.g. the default), switch and reload once.
     if(d && d.ok && (d.projects_worked||[]).length && !_projFixed){
       var want=matchProjectKey(d.projects_worked);
+      // ALTR splits into two very different jobs — pick the checklist that matches the work.
+      try{
+        var vk=Object.keys(d.volumes||{}).join(' ').toLowerCase();
+        if(/altr/i.test((d.projects_worked||[]).join(' '))){
+          if(/sourcing/.test(vk) && PROJECTS['ALTR Media']) want='ALTR Media';
+          else if(/vysor|posting/.test(vk) && PROJECTS['ALTR Posting']) want='ALTR Posting';
+        }
+      }catch(_pk){}
       if(want && want!==proj){
         _projFixed=true;
         var sel=$('c-proj');
@@ -1113,6 +1122,27 @@ async function loadAssignedSet(){
       host.style.cssText='margin:8px 0 12px;padding:10px 13px;border-radius:11px;background:rgba(180,83,9,.06);border:1px solid rgba(180,83,9,.3);font-size:12px;';
       host.innerHTML='<b>No output recorded</b> in '+esc(d.from)+' → '+esc(d.to)+' — there is no work to audit for this week. Check whether the VA updated their tool.';
     }
+    // ── ALTR BRIDGE — phone/account handles live in ALTR's own sheet, not the shared board.
+    //    If this is ALTR work with no account rows, fetch the real handles for the audit day.
+    try{
+      var _isAltr=(d.projects_worked||[]).some(function(x){ return /altr/i.test(String(x)); }) || /altr/i.test(proj);
+      if(_isAltr && !(d.items||[]).length && d.audit_day){
+        var _who='';
+        try{
+          if(MODE==='peer' && MY_ASSIGNMENT) _who=MY_ASSIGNMENT.reviewee_name||'';
+          if(!_who){ var _s2=$('c-emp'); if(_s2&&_s2.selectedIndex>=0&&_s2.options[_s2.selectedIndex]) _who=_s2.options[_s2.selectedIndex].text.replace(/\s*\([^)]*\)\s*$/,''); }
+        }catch(_w){}
+        if(_who){
+          var _ar=await fetch(ALTR_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+            body:JSON.stringify({ action:'qa_accounts_for', poster:_who, date:d.audit_day, n:_need }) })
+            .then(function(r){ return r.json(); }).catch(function(){ return null; });
+          if(_ar && _ar.ok && (_ar.items||[]).length){
+            d.items=_ar.items.map(function(x){ return { name:x.name+(x.phone?(' · '+x.phone):''), status:'', in_week:!!x.in_week }; });
+            SAMPLE=d;
+          }
+        }
+      }
+    }catch(_ab){}
     CTX_READY=true; CTX_STATE='ready';
     applySampleToAudit();
   }catch(e){
