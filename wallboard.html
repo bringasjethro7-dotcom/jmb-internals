@@ -167,6 +167,59 @@
   #codeOverlay .ccode{font-size:10vh;font-weight:800;letter-spacing:1.6vh;line-height:1;margin:1.2vh 0 .8vh;
     background:linear-gradient(180deg,#ff7a29,#e35000);-webkit-background-clip:text;background-clip:text;color:transparent;}
   #codeOverlay .cexp{font-size:1.5vh;color:var(--ink2);font-weight:600}
+
+  /* ══ PREMIUM LAYER — richer surfaces, cinematic fades ══ */
+  .panel{transition:opacity 1.05s cubic-bezier(.4,0,.2,1),transform 1.05s cubic-bezier(.4,0,.2,1),filter 1.05s ease;
+         transform:translateY(2.4vh) scale(.994);filter:blur(.35vh)}
+  .panel.active{transform:none;filter:blur(0)}
+  /* rows fade up in sequence as a slide arrives */
+  @keyframes rowIn{from{opacity:0;transform:translateY(1.6vh)}to{opacity:1;transform:none}}
+  .panel.active .prow{animation:rowIn .75s cubic-bezier(.2,.9,.25,1) both}
+  .panel.active .prow:nth-child(1){animation-delay:.05s}
+  .panel.active .prow:nth-child(2){animation-delay:.10s}
+  .panel.active .prow:nth-child(3){animation-delay:.15s}
+  .panel.active .prow:nth-child(4){animation-delay:.20s}
+  .panel.active .prow:nth-child(5){animation-delay:.25s}
+  .panel.active .prow:nth-child(6){animation-delay:.30s}
+  .panel.active .prow:nth-child(7){animation-delay:.35s}
+  .panel.active .prow:nth-child(8){animation-delay:.40s}
+  .panel.active .prow:nth-child(n+9){animation-delay:.45s}
+  /* premium card surface */
+  .prow{background:linear-gradient(180deg,#ffffff,#fdfbf9);
+        border:1px solid rgba(20,26,36,.07);
+        box-shadow:0 1px 2px rgba(20,26,36,.04),0 12px 30px -14px rgba(20,26,36,.22);
+        transition:box-shadow .5s ease}
+  .prow img{box-shadow:0 0 0 .3vh #fff,0 0 0 .62vh rgba(255,90,0,.28),0 6px 16px -6px rgba(20,26,36,.45)}
+  /* progress bar: soft track, gradient fill, slow sheen */
+  .pbar2{background:rgba(20,26,36,.06);box-shadow:inset 0 1px 2px rgba(20,26,36,.06);position:relative}
+  .pbar2 i{position:relative;overflow:hidden;transition:width 1.1s cubic-bezier(.3,.9,.25,1)}
+  .pbar2 i::after{content:'';position:absolute;top:0;bottom:0;left:-40%;width:40%;
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);
+    animation:sheen 3.4s ease-in-out infinite}
+  @keyframes sheen{0%{left:-40%}55%{left:120%}100%{left:120%}}
+  /* attendance status pills */
+  .attpill{display:inline-flex;align-items:center;gap:.5vw;font-size:1.5vh;font-weight:800;letter-spacing:.06em;
+    border-radius:99px;padding:.45vh 1vw;margin-top:.5vh}
+  .attpill.ok{background:rgba(22,163,74,.10);color:#15803d}
+  .attpill.late{background:rgba(220,38,38,.10);color:#dc2626}
+  .attpill i{width:.85vh;height:.85vh;border-radius:50%;background:currentColor;display:inline-block}
+  .atttime{font-variant-numeric:tabular-nums;font-weight:800;letter-spacing:-.02em;
+    background:linear-gradient(135deg,#141a24,#57606f);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .atttime.late{background:linear-gradient(135deg,#ef4444,#b91c1c);-webkit-background-clip:text;background-clip:text}
+  .atttime.ok{background:linear-gradient(135deg,#16a34a,#15803d);-webkit-background-clip:text;background-clip:text}
+  /* summary chips on the attendance slide */
+  .attsum{display:flex;gap:1vw;margin-bottom:1.8vh;flex-wrap:wrap}
+  .attchip{display:inline-flex;align-items:baseline;gap:.6vw;background:var(--card);border:1px solid var(--line);
+    border-radius:1.4vh;padding:1.1vh 1.4vw;box-shadow:var(--shSoft)}
+  .attchip b{font-size:3.4vh;font-weight:800;letter-spacing:-.02em;line-height:1}
+  .attchip span{font-size:1.5vh;color:var(--ink2);font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+  /* headline treatment shared by the live slides */
+  .liveHead{display:flex;align-items:baseline;gap:1.4vw;margin-bottom:2.2vh;flex-wrap:wrap}
+  .liveHead .h{font-size:4.8vh;font-weight:800;letter-spacing:-.02em}
+  .liveHead .h em{font-style:normal;background:linear-gradient(135deg,#ff5a00,#dc2626);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .liveHead .m{font-size:1.85vh;color:var(--ink2);font-weight:600}
+  .liveHead .m b{color:var(--ink)}
 </style>
 </head>
 <body>
@@ -434,9 +487,9 @@ function progRows(){
 }
 function pProgress(active){
   return '<div class="panel'+(active?' active':'')+'">'+
-    '<div style="display:flex;align-items:baseline;gap:1.4vw;margin-bottom:2.2vh;">'+
-      '<div style="font-size:4.6vh;font-weight:800;letter-spacing:-.01em;">Team Progress <em style="font-style:normal;color:var(--o1)">— '+shiftLabel()+'</em></div>'+
-      '<div style="font-size:1.8vh;color:var(--ink2);font-weight:600;">'+(curShift()==='night'?'8 PM → 8 AM':'8 AM → 8 PM')+' · resets in '+shiftResetIn()+'</div>'+
+    '<div class="liveHead">'+
+      '<div class="h">Team Progress <em>— '+shiftLabel()+'</em></div>'+
+      '<div class="m">'+(curShift()==='night'?'8 PM → 8 AM':'8 AM → 8 PM')+' · resets in <b>'+shiftResetIn()+'</b></div>'+
     '</div>'+
     '<div class="pgrid progslide-grid">'+progRows()+'</div>'+
   '</div>';
@@ -500,28 +553,27 @@ async function loadAttendance(){
 function attRows(){
   if(!ATT.rows.length) return '<div class="empty-note">No log-ins recorded yet for the '+shiftLabel().toLowerCase()+'.</div>';
   var onTime=ATT.rows.filter(function(r){ return !r.late; }).length;
-  return '<div style="display:flex;gap:1.6vw;margin-bottom:1.6vh;font-size:2vh;">'+
-      '<span style="color:#16a34a;font-weight:800;">'+onTime+' on time</span>'+
-      '<span style="color:#dc2626;font-weight:800;">'+(ATT.rows.length-onTime)+' late</span>'+
-      '<span style="color:var(--ink2);">'+ATT.rows.length+' logged in</span>'+
+  return '<div class="attsum">'+
+      '<div class="attchip"><b style="color:#15803d;">'+onTime+'</b><span>on time</span></div>'+
+      '<div class="attchip"><b style="color:#dc2626;">'+(ATT.rows.length-onTime)+'</b><span>late</span></div>'+
+      '<div class="attchip"><b style="color:var(--ink);">'+ATT.rows.length+'</b><span>logged in</span></div>'+
     '</div>'+
     ATT.rows.map(function(r){
-      var col=r.late?'#dc2626':'#16a34a';
-      var lbl=r.late?('LATE · '+(r.by>=60?(Math.floor(r.by/60)+'h '+(r.by%60)+'m'):(r.by+' min'))):'ON TIME';
+      var lbl=r.late?('Late · '+(r.by>=60?(Math.floor(r.by/60)+'h '+(r.by%60)+'m'):(r.by+' min'))):'On time';
       return '<div class="prow">'+
         (r.photo?('<img src="'+r.photo+'" alt="">'):'<img alt="" style="visibility:hidden">')+
         '<div class="pmain"><div class="pname">'+r.name+'</div>'+
-          '<div style="font-size:1.7vh;font-weight:800;color:'+col+';letter-spacing:.04em;">'+lbl+'</div>'+
+          '<span class="attpill '+(r.late?'late':'ok')+'"><i></i>'+lbl+'</span>'+
         '</div>'+
-        '<div class="ppct" style="color:'+col+';font-size:3vh;">'+r.time+'</div>'+
+        '<div class="ppct atttime '+(r.late?'late':'ok')+'" style="font-size:3.2vh;">'+r.time+'</div>'+
       '</div>';
     }).join('');
 }
 function pAttendance(active){
   return '<div class="panel'+(active?' active':'')+'">'+
-    '<div style="display:flex;align-items:baseline;gap:1.4vw;margin-bottom:2.2vh;flex-wrap:wrap;">'+
-      '<div style="font-size:4.6vh;font-weight:800;letter-spacing:-.01em;">Attendance <em style="font-style:normal;color:var(--o1)">— '+shiftLabel()+'</em></div>'+
-      '<div style="font-size:1.8vh;color:var(--ink2);font-weight:600;">log-in time · '+(curShift()==='night'?'shift starts 7:30 PM':'shift starts 7:30 AM')+' · resets in '+shiftResetIn()+'</div>'+
+    '<div class="liveHead">'+
+      '<div class="h">Attendance <em>— '+shiftLabel()+'</em></div>'+
+      '<div class="m">log-in time · shift starts <b>'+(curShift()==='night'?'7:30 PM':'7:30 AM')+'</b> · resets in <b>'+shiftResetIn()+'</b></div>'+
     '</div>'+
     '<div class="pgrid attslide-grid">'+attRows()+'</div>'+
   '</div>';
