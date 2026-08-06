@@ -1038,6 +1038,18 @@ async function loadAssignedSet(){
   }
   if(!emp||!month){ host.style.display='none'; return; }
   CTX_READY=false; CTX_STATE='loading';
+  // Nothing may sit on "loading" forever. If we haven't resolved in 25s, say so and offer a retry.
+  try{ clearTimeout(window._ctxDeadline); }catch(_cd){}
+  window._ctxDeadline=setTimeout(function(){
+    if(CTX_STATE==='loading'){
+      CTX_STATE='empty'; CTX_READY=false;
+      try{ renderCriteria(); }catch(_r){}
+      var hh=$('sample-bar');
+      if(hh){ hh.style.cssText='margin:8px 0 12px;padding:11px 14px;border-radius:11px;background:rgba(180,83,9,.07);border:1px solid rgba(180,83,9,.35);font-size:12.5px;';
+        hh.innerHTML='<b>The server didn\u2019t answer in time.</b> Nothing was loaded, so no checklist is shown. '+
+          '<a href="#" onclick="qBust(/qa_sample/);CTX_STATE=\'loading\';renderCriteria();loadAssignedSet();return false;" style="color:#b45309;font-weight:800;">Try again</a>'; }
+    }
+  }, 25000);
   host.style.display='block';
   host.innerHTML='Loading this VA\'s recorded work for Week '+esc(week)+'…';
   try{
@@ -1097,6 +1109,7 @@ async function loadAssignedSet(){
     var dayLbl='';
     // No recorded work at all → say so immediately instead of sitting on "Loading…".
     if(!d.audit_day && !(d.items||[]).length && !(d.projects_worked||[]).length){
+      try{ clearTimeout(window._ctxDeadline); }catch(_x){}
       CTX_READY=false; CTX_STATE='empty'; try{ renderCriteria(); }catch(_rc){}
       host.style.cssText='margin:8px 0 12px;padding:11px 14px;border-radius:11px;background:rgba(180,83,9,.07);border:1px solid rgba(180,83,9,.35);font-size:12.5px;';
       host.innerHTML='<b>No recorded work for '+esc(d.from)+' → '+esc(d.to)+'.</b> Nothing to audit for this week — either the VA logged no output, or their tool wasn\'t updated. '+
@@ -1139,9 +1152,12 @@ async function loadAssignedSet(){
           if(!_who){ var _s2=$('c-emp'); if(_s2&&_s2.selectedIndex>=0&&_s2.options[_s2.selectedIndex]) _who=_s2.options[_s2.selectedIndex].text.replace(/\s*\([^)]*\)\s*$/,''); }
         }catch(_w){}
         if(_who){
+          var _ac=(typeof AbortController!=='undefined')?new AbortController():null;
+          var _at=_ac?setTimeout(function(){ try{_ac.abort();}catch(_){} },12000):null;
           var _ar=await fetch(ALTR_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-            body:JSON.stringify({ action:'qa_accounts_for', poster:_who, date:d.audit_day, n:_need }) })
+            body:JSON.stringify({ action:'qa_accounts_for', poster:_who, date:d.audit_day, n:_need }), signal:(_ac?_ac.signal:undefined) })
             .then(function(r){ return r.json(); }).catch(function(){ return null; });
+          if(_at) clearTimeout(_at);
           if(_ar && _ar.ok && (_ar.items||[]).length){
             d.items=_ar.items.map(function(x){ return { name:x.name+(x.phone?(' · '+x.phone):''), status:'', in_week:!!x.in_week }; });
             SAMPLE=d;
@@ -1149,9 +1165,11 @@ async function loadAssignedSet(){
         }
       }
     }catch(_ab){}
+    try{ clearTimeout(window._ctxDeadline); }catch(_x){}
     CTX_READY=true; CTX_STATE='ready';
     applySampleToAudit();
   }catch(e){
+    try{ clearTimeout(window._ctxDeadline); }catch(_x){}
     CTX_READY=false; CTX_STATE='empty';
     host.innerHTML='Could not reach the server. <a href="#" onclick="CTX_STATE=\'loading\';renderCriteria();loadAssignedSet();return false;" style="color:#2563eb;font-weight:700;">Retry</a>';
     try{ renderCriteria(); }catch(_r){}
