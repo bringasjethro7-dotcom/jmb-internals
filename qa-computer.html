@@ -1051,7 +1051,8 @@ async function loadAssignedSet(){
     }
   }, 25000);
   host.style.display='block';
-  host.innerHTML='Loading this VA\'s recorded work for Week '+esc(week)+'…';
+  window._qaStep=function(n,msg){ try{ var h=$('sample-bar'); if(h) h.innerHTML='<span style="font-family:ui-monospace,monospace;font-size:11px;color:#64748b;">step '+n+'/6 · '+msg+'</span>'; }catch(e){} };
+  _qaStep(1,'asking the server for this VA\'s recorded work…');
   try{
     var _need=0; try{ (curProject().tasks||[]).forEach(function(t){ _need+=(t.accounts||0); }); }catch(_n){}
     _need=Math.max(10, _need);   // enough real accounts to fill every task column
@@ -1060,6 +1061,7 @@ async function loadAssignedSet(){
         +'&month='+encodeURIComponent(month)+'&week='+encodeURIComponent(week)+'&n='+_need, {ttl:600000});
     }
     var d=await _ask(emp);
+    _qaStep(2,'server answered — checking what was found');
     // NAME FALLBACK — some tools (ALTR) record output under the VA's full name, not their ID.
     // If the ID lookup finds nothing, ask again by name before concluding "no work".
     if(d && d.ok && !d.audit_day && !(d.projects_worked||[]).length){
@@ -1069,10 +1071,11 @@ async function loadAssignedSet(){
         if(!_nm){ var _o=$('c-emp'); if(_o&&_o.selectedIndex>=0&&_o.options[_o.selectedIndex]) _nm=_o.options[_o.selectedIndex].text.replace(/\s*\([^)]*\)\s*$/,''); }
         if(!_nm){ var _e=(EMPLOYEES||[]).filter(function(x){ return String(x.employee_id).toUpperCase()===String(emp).toUpperCase(); })[0]; if(_e) _nm=_e.full_name||''; }
       }catch(_n){}
-      if(_nm){ var d2=await _ask(_nm); if(d2 && d2.ok && (d2.audit_day || (d2.projects_worked||[]).length)) d=d2; }
+      if(_nm){ _qaStep(2,'retrying by name ('+_nm+')…'); var d2=await _ask(_nm); if(d2 && d2.ok && (d2.audit_day || (d2.projects_worked||[]).length)) d=d2; }
     }
     // SELF-CORRECTING PROJECT: the response says which projects this VA actually worked.
     // If the dropdown is pointing somewhere else (e.g. the default), switch and reload once.
+    _qaStep(3,'matching the right project checklist');
     if(d && d.ok && (d.projects_worked||[]).length && !_projFixed){
       var want=matchProjectKey(d.projects_worked);
       // ALTR splits into two very different jobs — pick the checklist that matches the work.
@@ -1144,6 +1147,7 @@ async function loadAssignedSet(){
     // ── ALTR BRIDGE — phone/account handles live in ALTR's own sheet, not the shared board.
     //    If this is ALTR work with no account rows, fetch the real handles for the audit day.
     try{
+      _qaStep(4,'loading account handles');
       var _isAltr=(d.projects_worked||[]).some(function(x){ return /altr/i.test(String(x)); }) || /altr/i.test(proj);
       if(_isAltr && !(d.items||[]).length && d.audit_day){
         var _who='';
@@ -1165,6 +1169,9 @@ async function loadAssignedSet(){
         }
       }
     }catch(_ab){}
+    _qaStep(5,'building the audit grid');
+    // From here on nothing may block readiness: paint the grid FIRST, decorate after.
+    setTimeout(function(){ try{ if(CTX_STATE!=='ready'){ CTX_READY=true; CTX_STATE='ready'; renderCriteria(); } }catch(e){} }, 50);
     try{ clearTimeout(window._ctxDeadline); }catch(_x){}
     CTX_READY=true; CTX_STATE='ready';
     applySampleToAudit();
