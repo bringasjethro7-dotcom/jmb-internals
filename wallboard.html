@@ -220,6 +220,24 @@
     -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
   .liveHead .m{font-size:1.85vh;color:var(--ink2);font-weight:600}
   .liveHead .m b{color:var(--ink)}
+
+  /* ══ TV-LITE — smart-TV GPUs choke on blur, gradient text, big shadows and looping
+     animations. On a TV we keep ONE cheap thing (an opacity cross-fade) and drop the rest.
+     Force with ?lite=1, disable with ?lite=0. ══ */
+  body.lite .panel{transition:opacity .8s linear;transform:none!important;filter:none!important}
+  body.lite .panel.active{transform:none!important}
+  body.lite .panel.active .prow{animation:none!important;opacity:1!important;transform:none!important}
+  body.lite .pbar2 i{transition:none!important}
+  body.lite .pbar2 i::after{display:none!important}          /* no sheen loop */
+  body.lite .prow{background:#fff;box-shadow:0 1px 2px rgba(20,26,36,.06)}
+  body.lite .prow img{box-shadow:0 0 0 .3vh #fff}
+  body.lite .ppct,body.lite .atttime,body.lite .liveHead .h em{
+    background:none!important;-webkit-text-fill-color:currentColor!important;color:#e35000!important}
+  body.lite .atttime.ok{color:#15803d!important}
+  body.lite .atttime.late{color:#dc2626!important}
+  body.lite .live i{animation:none}
+  body.lite .num .n,body.lite .onlinehead .big{text-shadow:none}
+  body.lite body{background:linear-gradient(180deg,#fdfcfa,#f5f3ef)}
 </style>
 </head>
 <body>
@@ -276,6 +294,18 @@ const COMPANY = {
    Leave the array empty ([]) to show no videos. */
 /* Videos are OFF for now — the board runs live operational slides instead.
    Put the entries back in this array whenever you want clips in the loop again. */
+/* TV-lite detection: smart TVs and low-power sticks get the cheap render path. */
+(function(){
+  try{
+    var q=(location.search.match(/[?&]lite=([01])/)||[])[1];
+    var ua=navigator.userAgent||'';
+    var isTV=/SMART-TV|SmartTV|Tizen|Web0S|WebOS|NetCast|BRAVIA|VIERA|AFT|GoogleTV|Android TV|HbbTV|Roku|PhilipsTV|Opera TV/i.test(ua)
+          || (navigator.hardwareConcurrency && navigator.hardwareConcurrency<=2);
+    if(q==='1') isTV=true; if(q==='0') isTV=false;
+    if(isTV){ document.documentElement.className+=' lite'; document.addEventListener('DOMContentLoaded',function(){ document.body.classList.add('lite'); }); }
+    window.__LITE=isTV;
+  }catch(e){}
+})();
 const VIDEOS = [
   // { yt:"WTyXNlJ_WW0", secs:329, title:"JMB Nights" },
   // { yt:"ta4fbYaqcgQ", secs:301 },
@@ -533,17 +563,31 @@ async function loadAttendance(){
       var sh=String(d.s||r.shift||'').toLowerCase();
       if(sh && ((sh==='night')!==(SH==='night'))) return;      // only the shift on duty
       var ti=r.time_in||r.timeIn||r.ti; if(!ti) return;
-      var t=new Date(ti); if(isNaN(t.getTime())) return;
-      var hh, mm;
-      try{
-        var parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',minute:'2-digit',hour12:false}).format(t).split(':');
-        hh=parseInt(parts[0],10); mm=parseInt(parts[1],10);
-      }catch(e){ hh=t.getHours(); mm=t.getMinutes(); }
+      // Attendance is stored as PHT wall-clock text ("yyyy-MM-dd HH:mm:ss"). new Date() returns
+      // Invalid Date for that on Safari and most TV browsers, so parse the digits directly.
+      var hh=null, mm=null, disp='';
+      var m1=String(ti).match(/(\d{1,2}):(\d{2})/);
+      if(String(ti).indexOf('T')>=0 || /(Z|[+\-]\d\d:?\d\d)$/.test(String(ti))){
+        var t0=new Date(ti);
+        if(!isNaN(t0.getTime())){
+          try{
+            var pp=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',minute:'2-digit',hour12:false}).format(t0).split(':');
+            hh=parseInt(pp[0],10); mm=parseInt(pp[1],10);
+          }catch(e){ hh=t0.getHours(); mm=t0.getMinutes(); }
+          disp=fmtHM(t0);
+        }
+      }
+      if(hh===null && m1){ hh=parseInt(m1[1],10); mm=parseInt(m1[2],10); }
+      if(hh===null) return;
+      if(!disp){
+        var ap=(hh<12?'AM':'PM'), h12=(hh%12)||12;
+        disp=h12+':'+(mm<10?'0':'')+mm+' '+ap;
+      }
       var mins=hh*60+mm, startMins=hm[0]*60+hm[1];
       if(SH==='night' && mins<12*60) mins+=24*60;              // after-midnight logins belong to the night shift
       var late=mins>startMins, by=Math.max(0, mins-startMins);
       var ph=d.p||''; if(!ph && r.photo){ var mm2=String(r.photo).match(/[-\w]{25,}/); if(mm2) ph='https://drive.google.com/thumbnail?id='+mm2[0]+'&sz=w200'; }
-      out.push({ id:id, name:d.n||r.full_name||id.toUpperCase(), photo:ph, time:fmtHM(t), late:late, by:by, mins:mins });
+      out.push({ id:id, name:d.n||r.full_name||id.toUpperCase(), photo:ph, time:disp, late:late, by:by, mins:mins });
     });
     out.sort(function(a,b){ return a.mins-b.mins; });
     ATT.rows=out; ATT.loaded=true;
@@ -580,6 +624,59 @@ function pAttendance(active){
 }
 setInterval(function(){ loadAttendance(); }, 90000);
 loadAttendance();
+/* ══ PENDING WITH ADMIN ══
+   Everything a contractor has submitted that is still waiting on a decision. The wall answers
+   "is mine still pending?" so nobody has to chase. Oldest first — age is the pressure. */
+var PEND={ items:[], total:0, by:{}, loaded:false };
+var PEND_META={
+  leave:  { label:'Leave',        color:'#2563eb' },
+  appeal: { label:'Hours appeal', color:'#d97706' },
+  demerit:{ label:'Demerit',      color:'#dc2626' },
+  qa:     { label:'QA dispute',   color:'#7c3aed' },
+  redeem: { label:'Redemption',   color:'#0891b2' },
+  coe:    { label:'Certificate',  color:'#0f766e' },
+  inno:   { label:'Innovation',   color:'#9333ea' },
+  volume: { label:'Volume',       color:'#b45309' }
+};
+async function loadPending(){
+  try{
+    var d=await fetch(APPS_SCRIPT_URL+'?action=pending_queue&_='+Date.now()).then(function(r){return r.json();}).catch(function(){return null;});
+    if(d&&d.ok){ PEND.items=d.items||[]; PEND.total=d.total||0; PEND.by=d.by_kind||{}; PEND.loaded=true;
+      document.querySelectorAll('.pendslide-grid').forEach(function(h){ h.innerHTML=pendRows(); }); }
+  }catch(e){}
+}
+function pendRows(){
+  if(!PEND.items.length) return '<div class="empty-note">Nothing pending — every request has been actioned.</div>';
+  return PEND.items.slice(0,14).map(function(r){
+    var m=PEND_META[r.kind]||{ label:r.label||'Request', color:'#57606f' };
+    var age=(r.age==null)?'':(r.age===0?'today':(r.age===1?'1 day':r.age+' days'));
+    var urgent=(r.age||0)>=3;
+    return '<div class="prow">'+
+      (r.photo?('<img src="'+r.photo+'" alt="">'):'<img alt="" style="visibility:hidden">')+
+      '<div class="pmain"><div class="pname">'+r.name+'</div>'+
+        '<span class="attpill" style="background:'+m.color+'1a;color:'+m.color+';"><i></i>'+m.label+
+          (r.extra?(' · '+String(r.extra).slice(0,28)):'')+'</span>'+
+      '</div>'+
+      '<div class="ppct atttime'+(urgent?' late':'')+'" style="font-size:2.6vh;">'+age+'</div>'+
+    '</div>';
+  }).join('');
+}
+function pPending(active){
+  var chips=Object.keys(PEND.by||{}).map(function(k){
+    var m=PEND_META[k]||{label:k,color:'#57606f'};
+    return '<div class="attchip"><b style="color:'+m.color+';">'+PEND.by[k]+'</b><span>'+m.label+'</span></div>';
+  }).join('');
+  return '<div class="panel'+(active?' active':'')+'">'+
+    '<div class="liveHead">'+
+      '<div class="h">Waiting on <em>admin</em></div>'+
+      '<div class="m">your requests that still need a decision · updated every minute</div>'+
+    '</div>'+
+    (chips?('<div class="attsum">'+chips+'</div>'):'')+
+    '<div class="pgrid pendslide-grid">'+pendRows()+'</div>'+
+  '</div>';
+}
+setInterval(function(){ loadPending(); }, 60000);
+loadPending();
 function panelList(){
   var info=[
     {build:pHero,       secs:15},
@@ -594,8 +691,9 @@ function panelList(){
   // Progress and attendance alternate at 10 seconds each for 10 minutes (30 pairs), then the
   // company slides play once, then the live block repeats. Both refresh their own data while
   // on screen, so what the room sees is never more than a couple of minutes old.
+  // 15 seconds per live slide · 3 slides per cycle = 45s · 14 cycles ≈ 10.5 minutes.
   var live=[];
-  for(var L=0;L<30;L++){ live.push({build:pProgress, secs:10}); live.push({build:pAttendance, secs:10}); }
+  for(var L=0;L<14;L++){ live.push({build:pProgress, secs:15}); live.push({build:pAttendance, secs:15}); live.push({build:pPending, secs:15}); }
   return live.concat(info);
   var vids=VIDEOS.map(function(v,i){ return { build:function(active){ return pVideo(i, active); }, secs:(parseFloat(v.secs)||60)+25, video:true }; });
   if(!vids.length) return info;
@@ -606,6 +704,20 @@ function panelList(){
   while(vi<vids.length){ out.push(progSlide()); out.push(vids[vi++]); }
   return out;
 }
+/* Self-defence: if the board is dropping frames (slow TV), switch to the lite path on its own. */
+(function(){
+  var last=performance.now(), slow=0, n=0;
+  function tick(t){
+    var dt=t-last; last=t; n++;
+    if(dt>90) slow++;                                  // ~<11fps frames
+    if(n===120){
+      if(slow>25 && !document.body.classList.contains('lite')){ document.body.classList.add('lite'); window.__LITE=true; }
+      n=0; slow=0;
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
 var cur=0, _rotTimer=null;
 function buildStage(){ var P=panelList(); var stage=document.getElementById('stage'); stage.innerHTML=P.map(function(p){ return p.build(false); }).join('');
   document.getElementById('dots').innerHTML=P.map(function(_,i){ return '<i'+(i===cur?' class="on"':'')+'></i>'; }).join('');
