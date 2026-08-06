@@ -266,13 +266,6 @@
   .ppct{font-size:3.5vh;font-weight:900;letter-spacing:-.03em;min-width:9.5vh}
   .ppct small{display:block;font-size:1.35vh;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
     color:var(--ink3);-webkit-text-fill-color:var(--ink3);margin-top:.3vh}
-  /* rank medallion on the progress slide */
-  .rank{width:3.4vh;height:3.4vh;border-radius:50%;display:flex;align-items:center;justify-content:center;
-    font-size:1.5vh;font-weight:900;color:#8a5a00;background:linear-gradient(160deg,#ffe9a8,#f5c04a);
-    box-shadow:0 2px 6px -2px rgba(160,110,0,.6);flex:none}
-  .rank.r2{color:#4b5563;background:linear-gradient(160deg,#f1f5f9,#cbd5e1);box-shadow:0 2px 6px -2px rgba(71,85,105,.5)}
-  .rank.r3{color:#7c3a12;background:linear-gradient(160deg,#f7d3ae,#d99a63);box-shadow:0 2px 6px -2px rgba(124,58,18,.45)}
-  .rank.rn{color:var(--ink3);background:rgba(20,26,36,.05);box-shadow:none;font-weight:800}
   /* status pills */
   .attpill{font-size:1.5vh;padding:.5vh 1.1vw;border-radius:99px;font-weight:800;letter-spacing:.03em}
   /* summary chips */
@@ -289,9 +282,22 @@
   body.lite .prow::before{background:#ff5a00}
   body.lite .prow.ok::before{background:#16a34a}
   body.lite .prow.bad::before{background:#dc2626}
-  body.lite .rank{background:#f5c04a;box-shadow:none}
   body.lite .attchip{background:#fff;box-shadow:none}
   body.lite .liveHead .badgeN{background:#e35000;box-shadow:none}
+
+  /* ── PENDING TILES — counts, not a roster ── */
+  .ptiles{flex:1;min-height:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(19vw,1fr));
+    grid-auto-rows:minmax(0,1fr);gap:1.6vh 1.6vw;align-content:start}
+  .ptile{position:relative;overflow:hidden;border-radius:2.2vh;padding:2.6vh 2vw;
+    display:flex;flex-direction:column;justify-content:center;
+    background:linear-gradient(180deg,#ffffff,#fdfaf7);
+    border:1px solid rgba(20,26,36,.06);
+    box-shadow:0 1px 1px rgba(20,26,36,.03),0 14px 32px -20px rgba(20,26,36,.35)}
+  .ptile::before{content:'';position:absolute;left:0;top:14%;bottom:14%;width:.5vh;
+    border-radius:0 .5vh .5vh 0;background:var(--c)}
+  .ptile .pn{font-size:9vh;font-weight:900;line-height:.85;letter-spacing:-.03em;color:var(--c)}
+  .ptile .pl{font-size:2.2vh;font-weight:800;color:var(--ink);margin-top:1.4vh;letter-spacing:-.01em}
+  body.lite .ptile{background:#fff;box-shadow:none}
 </style>
 </head>
 <body>
@@ -566,11 +572,9 @@ function progRows(){
     var d=PROG.dir[rk]||{}; var nm=esc(d.n||c.k.toUpperCase());
     var av=d.p?('<img src="'+d.p+'" alt="">'):('<img alt="" style="visibility:hidden">');
     var bars=c.rows.map(function(r){ return '<div class="pproj"><span>'+esc(r.project)+'</span><span>'+r.done+' / '+r.total+'</span></div><div class="pbar2"><i style="width:'+Math.min(100,r.pct)+'%"></i></div>'; }).join('');
-    var rk=(ix===0)?'':(ix===1)?' r2':(ix===2)?' r3':' rn';
     var totDone=c.rows.reduce(function(sm,x){ return sm+(x.done||0); },0);
     var totAll=c.rows.reduce(function(sm,x){ return sm+(x.total||0); },0);
     return '<div class="prow'+(c.avg>=100?' full':'')+'">'+
-      '<div class="rank'+rk+'">'+(ix+1)+'</div>'+
       av+
       '<div class="pmain"><div class="pname">'+nm+'</div>'+
         '<div class="psub">'+totDone+' of '+totAll+' this shift</div>'+
@@ -712,36 +716,27 @@ async function loadPending(){
   }catch(e){}
 }
 function pendRows(){
-  if(!PEND.items.length) return '<div class="empty-note">Nothing pending — every request has been actioned.</div>';
-  return PEND.items.slice(0,14).map(function(r){
-    var m=PEND_META[r.kind]||{ label:r.label||'Request', color:'#57606f' };
-    var age=(r.age==null)?'':(r.age===0?'today':(r.age===1?'1 day':r.age+' days'));
-    var urgent=(r.age||0)>=3;
-    var num=(r.age==null)?'—':String(r.age===0?'today':r.age);
-    var unit=(r.age==null)?'waiting':(r.age===0?'submitted':(r.age===1?'day waiting':'days waiting'));
-    return '<div class="prow'+(urgent?' bad':'')+'">'+
-      (r.photo?('<img src="'+r.photo+'" alt="">'):'<img alt="" style="visibility:hidden">')+
-      '<div class="pmain"><div class="pname">'+r.name+'</div>'+
-        '<span class="attpill" style="background:'+m.color+'1a;color:'+m.color+';"><i></i>'+m.label+'</span>'+
-        (r.extra?('<div class="psub">'+String(r.extra).slice(0,40)+'</div>'):'')+
-      '</div>'+
-      '<div class="ppct atttime'+(urgent?' late':'')+'">'+num+'<small>'+unit+'</small></div>'+
+  var order=['demerit','appeal','leave','qa','redeem','coe','volume','inno'];
+  var tiles=order.filter(function(k){ return (PEND.by||{})[k]; }).map(function(k){
+    var m=PEND_META[k]||{label:k,color:'#57606f'};
+    var n=PEND.by[k];
+    // oldest item of this kind — the number that actually matters
+    return '<div class="ptile" style="--c:'+m.color+'">'+
+      '<div class="pn">'+n+'</div>'+
+      '<div class="pl">'+m.label+(n===1?'':'s')+'</div>'+
     '</div>';
-  }).join('');
+  });
+  if(!tiles.length) return '<div class="empty-note">Nothing pending — every request has been actioned.</div>';
+  return tiles.join('');
 }
 function pPending(active){
-  var chips=Object.keys(PEND.by||{}).map(function(k){
-    var m=PEND_META[k]||{label:k,color:'#57606f'};
-    return '<div class="attchip"><b style="color:'+m.color+';">'+PEND.by[k]+'</b><span>'+m.label+'</span></div>';
-  }).join('');
   return '<div class="panel'+(active?' active':'')+'">'+
     '<div class="liveHead">'+
       '<div class="h">Waiting on <em>admin</em></div>'+
-      (PEND.total?('<div class="badgeN">'+PEND.total+'</div>'):'')+
-      '<div class="m">your requests that still need a decision · updated every minute</div>'+
+      (PEND.total?('<div class="badgeN">'+PEND.total+' total</div>'):'')+
+      '<div class="m">requests still queued for a decision</div>'+
     '</div>'+
-    (chips?('<div class="attsum">'+chips+'</div>'):'')+
-    '<div class="pgrid pendslide-grid">'+pendRows()+'</div>'+
+    '<div class="ptiles pendslide-grid">'+pendRows()+'</div>'+
   '</div>';
 }
 setInterval(function(){ loadPending(); }, 60000);
