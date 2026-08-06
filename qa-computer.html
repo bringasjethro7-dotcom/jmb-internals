@@ -792,7 +792,7 @@ async function scopeProjectsToEmployee(){
     var cur=sel.value;
     sel.innerHTML=keys.map(function(k){ return '<option value="'+esc(k)+'">'+esc(PROJECTS[k].label)+'</option>'; }).join('');
     sel.value=(keys.indexOf(cur)>=0)?cur:keys[0];
-    if(sel.value!==cur){ onProjectChange(); }
+    if(sel.value!==cur){ AUDIT=defaultAudit(); renderCriteria(); recompute(); }   // rebuild grid for the new project, sample re-applies right after
     var note=$('proj-scope-note');
     if(!note){ note=document.createElement('div'); note.id='proj-scope-note'; note.style.cssText='font-size:10.5px;color:#64748b;margin-top:3px;'; sel.parentNode.appendChild(note); }
     note.textContent=(keys.length===1)?'Only project worked this week':(keys.length+' projects worked this week');
@@ -820,6 +820,7 @@ function onProjectChange(){
   AUDIT=defaultAudit();
   clientQA=false; if($('c-clientqa')) $('c-clientqa').checked=false;
   renderCriteria(); recompute();
+  try{ if(SAMPLE && (SAMPLE.items||[]).length) applySampleToAudit(); }catch(_as){}   // keep real usernames
   onContextChange();
 }
 function taskByName(name){ return curProject().tasks.filter(function(t){return t.name===name;})[0]; }
@@ -1049,9 +1050,13 @@ var _peerWk=null;
 async function onContextChange(){
   var emp=$('c-emp').value, month=$('c-month').value;
   $('ctx-month').textContent=month||'—';
-  try{ scopeProjectsToEmployee(); }catch(_sp){}
   try{ renderStaticContext(); }catch(_rs){}
-  try{ loadAssignedSet(); }catch(_ls){}
+  // Scope the project FIRST, then load the assigned set — running both at once let the
+  // project rebuild wipe the freshly-loaded usernames back to "#1, #2, #3".
+  (async function(){
+    try{ await scopeProjectsToEmployee(); }catch(_sp){}
+    try{ await loadAssignedSet(); }catch(_ls){}
+  })();
   try{ qSaveDraft(); }catch(_sd){}
   // Peer mode: changing the week re-fetches that week's assignment (pairs reshuffle weekly).
   if(!IS_ADMIN && MODE==='peer'){

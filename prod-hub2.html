@@ -424,8 +424,32 @@ function render(d){
     ['Team QPH', totHrs>0?(Math.round(totVol/totHrs*100)/100):0]
   ].map(function(s){return '<div class="stat"><div class="v">'+s[1]+'</div><div class="l">'+s[0]+'</div></div>';}).join('');
   if(!team.length){ $('results').innerHTML='<div class="empty">No output recorded in this range. QPH needs tasks that have both volume and hours.</div>'; return; }
-  // per-task cards
-  $('results').innerHTML=team.map(function(t){
+  // ── GROUP BY PROJECT ──
+  // Project labels drift between tools ("Reddit" / "Reddit - Altz", "ALTR" / "ALTR Media"),
+  // so they're normalised into one family per client before grouping.
+  function projFamily(p){
+    var x=String(p||'').toLowerCase();
+    if(/altr/.test(x))            return 'ALTR Media';
+    if(/casey/.test(x))           return 'Reddit - Casey';
+    if(/reddit/.test(x))          return 'Reddit - Altz';
+    if(/arlo|ig ?reels/.test(x))  return 'Project Arlo — IG Reels';
+    if(/john|(^| )x( |$)/.test(x))return 'Project John — X';
+    if(/ember|snapchat/.test(x))  return 'Snapchat — Ember';
+    if(/newfans|wallpost/.test(x))return 'NewFans — Wallpost';
+    if(/shopify|design/.test(x))  return 'Design & Shopify';
+    return String(p||'Unassigned');
+  }
+  var groups={};
+  team.forEach(function(t){ var g=projFamily(t.project); (groups[g]=groups[g]||{name:g,tasks:[],volume:0,hours:0,people:{}}).tasks.push(t); });
+  Object.keys(groups).forEach(function(g){
+    var G=groups[g];
+    G.tasks.forEach(function(t){ G.volume+=(t.volume||0); G.hours+=(t.hours||0); });
+    rows.forEach(function(r){ if(projFamily(r.project)===g) G.people[String(r.employee_id||r.full_name||'').toLowerCase()]=1; });
+    G.qph=G.hours>0?Math.round(G.volume/G.hours*100)/100:0;
+    G.tasks.sort(function(a,b){ return (b.volume||0)-(a.volume||0); });
+  });
+  var order=Object.keys(groups).sort(function(a,b){ return groups[b].volume-groups[a].volume; });
+  function taskCard(t){
     var us=rows.filter(function(x){return x.task===t.task && String(x.project||'')===String(t.project||'');}).slice().sort(function(a,b){return b.qph-a.qph;});
     var maxQ=Math.max.apply(null,[t.qph].concat(us.map(function(u){return u.qph;})));
     var benchPct=maxQ>0?(t.qph/maxQ*100):0;
@@ -442,9 +466,20 @@ function render(d){
         '<div class="uqph">'+u.qph+'<span class="udelta '+dCls+'">'+dTxt+'</span></div>'+
       '</div>';
     }).join('');
-    return '<div class="tcard"><div class="th"><div class="tn">'+esc(t.task)+(t.project?(' <span style="font-size:11px;font-weight:700;color:var(--t3);background:rgba(15,23,42,.06);border-radius:20px;padding:2px 9px;vertical-align:2px;">'+esc(t.project)+'</span>'):'')+'</div>'+
+    return '<div class="tcard"><div class="th"><div class="tn">'+esc(t.task)+'</div>'+
       '<div class="tb">Team avg <b>'+t.qph+'</b> /hr · '+t.users+' people · '+Math.round(t.volume).toLocaleString()+' output / '+(Math.round(t.hours*10)/10)+'h</div></div>'+
       list+'</div>';
+  }
+  $('results').innerHTML=order.map(function(g){
+    var G=groups[g];
+    return '<div class="projgrp" style="margin:0 0 26px;">'+
+      '<div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:0 2px 9px;border-bottom:2px solid rgba(232,61,0,.25);margin-bottom:12px;">'+
+        '<div style="font-family:Sora,Inter,sans-serif;font-size:17px;font-weight:800;color:var(--t1);">'+esc(G.name)+'</div>'+
+        '<div style="font-size:11.5px;font-weight:700;color:var(--t3);">'+G.tasks.length+' task'+(G.tasks.length!==1?'s':'')+' · '+Object.keys(G.people).length+' people</div>'+
+        '<div style="margin-left:auto;font-size:12px;color:var(--t2);">'+Math.round(G.volume).toLocaleString()+' output · '+(Math.round(G.hours*10)/10)+'h · <b style="color:var(--o3,#e83d00);">'+G.qph+'</b> /hr</div>'+
+      '</div>'+
+      G.tasks.map(taskCard).join('')+
+    '</div>';
   }).join('');
 }
 
