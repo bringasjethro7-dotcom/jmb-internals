@@ -465,7 +465,12 @@ function qBust(re){ Object.keys(_qCache).forEach(function(k){ if(!re||re.test(k)
 /* DRAFT SAFETY — a half-finished audit must survive a refresh, a crash or a dead connection. */
 // v2 — drafts saved under the old all-Pass default would restore a fully-ticked board and
 // unlock submit instantly. Bumping the key retires every pre-existing draft.
-function qDraftKey(){ try{ return 'qa_draft_v2_'+(USER&&USER.id)+'_'+$('c-emp').value+'_'+$('c-proj').value+'_'+$('c-month').value+'_W'+(($('c-week')||{}).value||'1'); }catch(e){ return ''; } }
+function qDraftKey(){ try{
+  // Key off the ASSIGNMENT, not the dropdown. If the select ever blanks, the key would change
+  // and an in-progress audit would be saved somewhere it could never be restored from.
+  var who=(!IS_ADMIN && MY_ASSIGNMENT && MY_ASSIGNMENT.reviewee_id) ? MY_ASSIGNMENT.reviewee_id : $('c-emp').value;
+  return 'qa_draft_v2_'+(USER&&USER.id)+'_'+who+'_'+$('c-proj').value+'_'+$('c-month').value+'_W'+(($('c-week')||{}).value||'1');
+}catch(e){ return ''; } }
 function qSaveDraft(){ try{ var k=qDraftKey(); if(!k||!AUDIT) return; localStorage.setItem(k, JSON.stringify({ audit:AUDIT, note:(($('c-note')||{}).value||''), clientQA:clientQA, t:Date.now() })); }catch(e){} }
 function qLoadDraft(){ try{ var k=qDraftKey(); if(!k) return null; var d=JSON.parse(localStorage.getItem(k)||'null'); return (d && (Date.now()-d.t)<72*3600*1000)?d:null; }catch(e){ return null; } }
 function qClearDraft(){ try{ var k=qDraftKey(); if(k) localStorage.removeItem(k); }catch(e){} }
@@ -811,9 +816,24 @@ async function loadEmployees(){
     var d=await qGet(PORTAL_URL+'?action=get_all_employees', {ttl:300000});
     EMPLOYEES=((d&&d.employees)||[]).filter(function(e){ return e.employee_id && String(e.employee_id).toUpperCase()!=='ADMIN'; });
     EMPLOYEES.sort(function(a,b){ return String(a.full_name||a.employee_id).localeCompare(String(b.full_name||b.employee_id)); });
+    /* RACE FIX. loadMyAssignment() locks this select to the one teammate the shuffle assigned,
+       but it and loadEmployees() are fired together at boot and whichever RESOLVES LAST wins.
+       get_all_employees is cached for 5 min so it usually returns first — but not always. When
+       it came second it replaced the locked option with "Select employee…", blanking the value,
+       and the reviewer hit "Pick an employee first" AFTER completing a 30-minute audit.
+       A peer never picks from a list, so don't build one for them. */
+    if(MY_ASSIGNMENT && MY_ASSIGNMENT.reviewee_id && !IS_ADMIN){
+      $('c-emp').innerHTML='<option value="'+esc(MY_ASSIGNMENT.reviewee_id)+'">'+esc(MY_ASSIGNMENT.reviewee_name||MY_ASSIGNMENT.reviewee_id)+' ('+esc(MY_ASSIGNMENT.reviewee_id)+')</option>';
+      $('c-emp').value=MY_ASSIGNMENT.reviewee_id;
+      $('c-emp').disabled=true;
+      try{ renderStaticContext(); }catch(_r){}
+      return;
+    }
     $('c-emp').innerHTML='<option value="">Select employee…</option>'+EMPLOYEES.map(function(e){
       return '<option value="'+esc(e.employee_id)+'">'+esc(e.full_name||e.employee_id)+' ('+esc(e.employee_id)+')</option>';
     }).join('');
+    // assignment may have landed while this was in flight — re-apply it
+    if(MY_ASSIGNMENT && MY_ASSIGNMENT.reviewee_id && !IS_ADMIN){ $('c-emp').value=MY_ASSIGNMENT.reviewee_id; }
   }catch(e){ $('c-emp').innerHTML='<option value="">Server busy — retrying…</option>'; setTimeout(loadEmployees, 15000); }
 }
 /* ── PROJECT SCOPING — show only the project(s) the reviewed employee actually worked on ──
@@ -1457,6 +1477,12 @@ function normalizeAudit(loaded){
 /* ---- save ---- */
 async function saveScore(){
   var emp=$('c-emp').value, month=$('c-month').value, week=$('c-week').value, proj=$('c-proj').value;
+  // The assignment is the source of truth for a peer — the dropdown is only its display.
+  // Never lose a completed audit because a control got repainted underneath the reviewer.
+  if(!emp && !IS_ADMIN && MY_ASSIGNMENT && MY_ASSIGNMENT.reviewee_id){
+    emp=MY_ASSIGNMENT.reviewee_id;
+    try{ $('c-emp').innerHTML='<option value="'+esc(emp)+'">'+esc(MY_ASSIGNMENT.reviewee_name||emp)+'</option>'; $('c-emp').value=emp; }catch(_f){}
+  }
   if(!emp){ toast('Pick an employee first.'); return; }
   if(!month){ toast('Pick a month.'); return; }
   var res=recompute();
