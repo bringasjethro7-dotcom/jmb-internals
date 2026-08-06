@@ -581,6 +581,41 @@ var PROJECTS = {
       ] }
     ]
   },
+  // Per "Daily Workflow Guide — Photoshop → Google Drive → Shopify SOP" (Torchlight).
+  // One column per PRODUCT/design: editing, upload, listing, and the final QC checklist.
+  'Torchlight': {
+    label: 'Torchlight (Design → Drive → Shopify)',
+    tasks: [
+      { name: 'Design & Export', accounts: 5, criteria: [
+        'Correct Design Used (matches the assigned task)',
+        'PSD + All Assets Verified Before Starting (fonts, logos, images)',
+        'Text, Color and Layout Edits Applied per Brief',
+        'Alignment, Spelling and Image Clarity Reviewed',
+        'High-Resolution JPG/PNG Exported and Verified'
+      ] },
+      { name: 'Drive Upload', accounts: 5, criteria: [
+        'Uploaded to the Correct Designated Folder',
+        'File Naming Conventions Followed',
+        'No Duplicate Files Uploaded',
+        'All Required Assets Present (nothing missing)',
+        'Uploads Complete and Not Corrupted'
+      ] },
+      { name: 'Shopify Listing', accounts: 5, criteria: [
+        'Accurate Title and Description',
+        'Correct Pricing',
+        'Variants Entered Correctly',
+        'Images Uploaded and Matched to the Right Variants',
+        'Images Are High Quality on the Listing',
+        'Product Page Preview Checked and Correct',
+        'Product Saved',
+        'Task Status Updated (Drive / Website / Waiting for Files)'
+      ] },
+      { name: 'Workflow Discipline', accounts: 5, criteria: [
+        'Paused and Reported Instead of Proceeding With Missing Assets',
+        'Content History Checked — No Duplicate Work'
+      ] }
+    ]
+  },
   'Snapchat - Ember': {
     label: 'Snapchat - Ember',
     tasks: [
@@ -996,7 +1031,12 @@ function applySampleToAudit(){
     if(dr && dr.audit){
       var same=Object.keys(dr.audit).every(function(k){ return AUDIT[k] && dr.audit[k].length===AUDIT[k].length; });
       if(same){
-        AUDIT=dr.audit;
+        // Restore the TICKS only — never the names. A draft saved before the sample loaded
+        // carries placeholder labels ("Posting #1") and would wipe the real usernames.
+        Object.keys(AUDIT).forEach(function(k){
+          if(!dr.audit[k]) return;
+          AUDIT[k].forEach(function(row,i){ if(dr.audit[k][i] && dr.audit[k][i].states) row.states=dr.audit[k][i].states; });
+        });
         if($('c-note') && dr.note) $('c-note').value=dr.note;
         if(!IS_ADMIN && MODE==='peer'){ clientQA=false; } else { clientQA=!!dr.clientQA; if($('c-clientqa')) $('c-clientqa').checked=clientQA; }
         toast('Restored your unfinished audit.');
@@ -1033,6 +1073,48 @@ function renderStaticContext(){
   var mLbl=mv?(function(){ try{ return new Date(mv+'-01T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'}); }catch(e){ return mv; } })():'—';
   host.innerHTML=fld('Reviewing', who, true)+fld('Project', projLbl)+fld('Month', mLbl)+fld('Week', 'Week '+((($('c-week')||{}).value)||'1'));
 }
+/* ══ REVIEW TIMER — the review is a timed session, not a guess ══
+   Start stamps the real begin time; the clock runs live; submitting stamps the end.
+   Peer target 30 min · Lead target 20 min. Start/end/elapsed are sent with the review. */
+var TIMER={start:null, tick:null};
+function tmKey(){ try{ return 'qa_timer_'+(USER&&USER.id)+'_'+$('c-emp').value+'_'+$('c-month').value+'_W'+((($('c-week')||{}).value)||'1'); }catch(e){ return ''; } }
+function tmTarget(){ return (MODE==='lead')?20:30; }
+function tmFmt(ms){ var s=Math.max(0,Math.floor(ms/1000)); var m=Math.floor(s/60); return (m<10?'0':'')+m+':'+((s%60)<10?'0':'')+(s%60); }
+function tmStart(){
+  if(TIMER.start) return;
+  TIMER.start=Date.now();
+  try{ localStorage.setItem(tmKey(), String(TIMER.start)); }catch(e){}
+  tmRender(); if(TIMER.tick) clearInterval(TIMER.tick);
+  TIMER.tick=setInterval(tmRender, 1000);
+  toast('Review started — target '+tmTarget()+' minutes.');
+}
+function tmResume(){
+  try{ var v=parseInt(localStorage.getItem(tmKey())||'',10);
+    if(v && (Date.now()-v)<6*3600*1000){ TIMER.start=v; if(TIMER.tick) clearInterval(TIMER.tick); TIMER.tick=setInterval(tmRender,1000); } }catch(e){}
+  tmRender();
+}
+function tmStop(){ if(TIMER.tick){ clearInterval(TIMER.tick); TIMER.tick=null; } var s=TIMER.start; TIMER.start=null; try{ localStorage.removeItem(tmKey()); }catch(e){} tmRender(); return s; }
+function tmMins(){ return TIMER.start ? Math.max(1, Math.round((Date.now()-TIMER.start)/60000)) : 0; }
+function tmRender(){
+  var host=$('tm-bar');
+  if(!host){
+    host=document.createElement('div'); host.id='tm-bar';
+    host.style.cssText='display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px;padding:10px 14px;border-radius:12px;background:#fff;border:1px solid rgba(15,23,42,.12);';
+    var t=$('proj-title'); if(t&&t.parentNode) t.parentNode.insertBefore(host, t.nextSibling);
+  }
+  var tgt=tmTarget();
+  if(!TIMER.start){
+    host.innerHTML='<button onclick="tmStart()" style="background:linear-gradient(135deg,#0ea5a4,#0f766e);color:#fff;border:none;border-radius:10px;padding:9px 20px;font:800 13px Inter,system-ui,sans-serif;cursor:pointer;">▶ Start review</button>'+
+      '<span style="font-size:12px;color:#64748b;">Target <b>'+tgt+' minutes</b> · your start and end time are recorded with the review.</span>';
+    return;
+  }
+  var el=Date.now()-TIMER.start, mins=el/60000, pct=Math.min(100, mins/tgt*100);
+  var col=(mins>=tgt)?'#15803d':(mins>=tgt*0.5?'#d97706':'#0f766e');
+  var st=new Date(TIMER.start);
+  host.innerHTML='<div style="font-family:Sora,Inter,sans-serif;font-size:22px;font-weight:800;color:'+col+';min-width:76px;">'+tmFmt(el)+'</div>'+
+    '<div style="flex:1;min-width:160px;"><div style="height:8px;border-radius:5px;background:rgba(15,23,42,.08);overflow:hidden;"><div style="height:100%;width:'+pct.toFixed(0)+'%;background:'+col+';transition:width .5s;"></div></div>'+
+      '<div style="font-size:11px;color:#64748b;margin-top:3px;">Started '+st.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})+' · target '+tgt+' min'+(mins>=tgt?' · target reached ✓':'')+'</div></div>';
+}
 /* Reviewers can't add, remove or rename the assigned accounts — the sample is the audit. */
 function lockAssignedColumns(){
   if(IS_ADMIN) return;
@@ -1051,6 +1133,7 @@ async function onContextChange(){
   var emp=$('c-emp').value, month=$('c-month').value;
   $('ctx-month').textContent=month||'—';
   try{ renderStaticContext(); }catch(_rs){}
+  try{ tmResume(); }catch(_tm){}
   // Scope the project FIRST, then load the assigned set — running both at once let the
   // project rebuild wipe the freshly-loaded usernames back to "#1, #2, #3".
   (async function(){
@@ -1137,6 +1220,8 @@ async function saveScore(){
       b.disabled=false; b.textContent='Compute & save weekly QA';
       toast('You can only review the teammate assigned to you this week.'); return;
     }
+    if(!TIMER.start){ b.disabled=false; b.textContent='Submit peer review (stage 1 of 3)'; toast('Press ▶ Start review first — the session is timed.'); return; }
+    var _startedAt=new Date(TIMER.start).toISOString(), _mins=tmMins(), _endedAt=new Date().toISOString();
     try{
       var pu=PORTAL_URL+'?action=qa_review_submit'
         +'&employee_id='+encodeURIComponent(emp)
@@ -1147,7 +1232,7 @@ async function saveScore(){
         +'&reviewer_id='+encodeURIComponent(USER.id)
         +'&reviewer_name='+encodeURIComponent(USER.name||USER.id)
         +'&score='+encodeURIComponent(res.score)
-        +'&mins=30'
+        +'&mins='+encodeURIComponent(_mins)+'&started_at='+encodeURIComponent(_startedAt)+'&ended_at='+encodeURIComponent(_endedAt)
         +'&notes='+encodeURIComponent(($('c-note').value||'')+' | failed checks: '+focus.length)
         +'&_='+Date.now();
       var pd=await qPost(pu, async function(){
@@ -1158,7 +1243,7 @@ async function saveScore(){
       });
       qBust(/qa_review_list|qa_sample/);
       b.disabled=false; b.textContent='Compute & save weekly QA';
-      if(pd&&pd.ok){ try{ qClearDraft(); }catch(_c){} toast('Peer review submitted · '+(MY_ASSIGNMENT.reviewee_name||'')+' W'+week+' = '+res.score+'% — sent to your team lead.');
+      if(pd&&pd.ok){ try{ qClearDraft(); tmStop(); }catch(_c){} toast('Peer review submitted · '+(MY_ASSIGNMENT.reviewee_name||'')+' W'+week+' = '+res.score+'% — sent to your team lead.');
         if(IS_LEAD){ PEER_DONE=true; renderModeBar(); loadLeadQueue(); } }
       else if(pd&&pd.error==='SELF_REVIEW') toast('You cannot review your own work.');
       
@@ -1169,6 +1254,8 @@ async function saveScore(){
   // ── LEAD MODE: stage 2 of the chain. Saves as the lead review (rejected by the backend if
   //    no peer review exists yet), then waits for manager approval before it counts.
   if(IS_LEAD && MODE==='lead'){
+    if(!TIMER.start){ b.disabled=false; b.textContent='Submit lead review (stage 2 of 3)'; toast('Press ▶ Start review first — the session is timed.'); return; }
+    var _lStart=new Date(TIMER.start).toISOString(), _lMins=tmMins(), _lEnd=new Date().toISOString();
     try{
       var lu=PORTAL_URL+'?action=qa_review_submit'
         +'&employee_id='+encodeURIComponent(emp)
@@ -1176,7 +1263,7 @@ async function saveScore(){
         +'&month='+encodeURIComponent(month)
         +'&week='+encodeURIComponent(week)
         +'&stage=lead'
-        +'&mins=20'
+        +'&mins='+encodeURIComponent(_lMins)+'&started_at='+encodeURIComponent(_lStart)+'&ended_at='+encodeURIComponent(_lEnd)
         +'&reviewer_id='+encodeURIComponent(USER.id)
         +'&reviewer_name='+encodeURIComponent(USER.name||USER.id)
         +'&score='+encodeURIComponent(res.score)
@@ -1189,7 +1276,7 @@ async function saveScore(){
       });
       qBust(/qa_review_list/);
       b.disabled=false; b.textContent='Compute & save weekly QA';
-      if(ld&&ld.ok){ try{ qClearDraft(); }catch(_c){} toast('Lead review saved · '+full+' W'+week+' = '+res.score+'% — sent for manager approval.'); loadLeadQueue(); }
+      if(ld&&ld.ok){ try{ qClearDraft(); tmStop(); }catch(_c){} toast('Lead review saved · '+full+' W'+week+' = '+res.score+'% — sent for manager approval.'); loadLeadQueue(); }
       else if(ld&&ld.error==='PEER_FIRST') toast('No peer review yet for this VA/week — the peer stage must come first.');
       else if(ld&&ld.error==='NOT_ASSIGNED_LEAD') toast('Another team lead is assigned to this review.');
       else if(ld&&ld.error==='SELF_REVIEW') toast('You cannot lead-review your own work.');
