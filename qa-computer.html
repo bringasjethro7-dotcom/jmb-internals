@@ -911,7 +911,12 @@ function renderCriteria(){
     var accts=AUDIT[t.name]||[];
     var _locked=(typeof IS_ADMIN!=='undefined') && !IS_ADMIN;   // reviewers audit the ASSIGNED set
     var head='<tr><th class="crit">'+esc(t.name)+' criteria</th>'+accts.map(function(a,ai){
-      var _dn=sampleNameFor(t.name, ai) || a.name;
+      var _dn=sampleNameFor(t.name, ai);
+      if(!_dn){
+        // No handle from the tools for this project (ALTR keeps its accounts in its own sheet).
+        // Say so plainly rather than repeating the task name in every column.
+        _dn=(SAMPLE && SAMPLE.audit_day) ? ('Account '+(ai+1)) : a.name;
+      }
       if(_locked) return '<th class="acctcol"><div class="acctname" style="font-weight:700;padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Assigned by the QA Computer — '+esc(_dn)+'">'+esc(_dn)+'</div></th>';
       return '<th class="acctcol"><input class="acctname" value="'+esc(_dn)+'" onchange="setAcctName(\''+esc(t.name)+'\','+ai+',this.value)" title="Account name / handle">'+
         (accts.length>1?'<button class="rmacct" title="Remove account" onclick="removeAcct(\''+esc(t.name)+'\','+ai+')">×</button>':'')+'</th>';
@@ -928,7 +933,8 @@ function renderCriteria(){
       return '<td>'+pass+'/'+t.criteria.length+'</td>';
     }).join('')+'</tr>';
     return '<div class="taskblk"><div class="taskhd"><span class="tn">'+esc(t.name)+'</span>'+
-      '<span class="tc">'+accts.length+' account'+(accts.length!==1?'s':'')+' · '+t.criteria.length+' criteria'+(_locked?' · assigned':'')+'</span>'+
+      '<span class="tc">'+accts.length+' account'+(accts.length!==1?'s':'')+' · '+t.criteria.length+' criteria'+(_locked?' · assigned':'')+
+        ((_locked && SAMPLE && !(SAMPLE.items||[]).length && SAMPLE.audit_day)?' · <span style="color:#b45309;">handles not synced — audit the accounts this VA posted on the audit day</span>':'')+'</span>'+
       (_locked?'':'<button class="btn ghost tiny" onclick="addAcct(\''+esc(t.name)+'\')">+ account</button>')+'</div>'+
       '<div class="gridwrap"><table class="qgrid"><thead>'+head+'</thead><tbody>'+rows+sub+'</tbody></table></div></div>';
   }).join('');
@@ -1176,7 +1182,7 @@ async function loadAssignedSet(){
     try{ clearTimeout(window._ctxDeadline); }catch(_x){}
     CTX_READY=true; CTX_STATE='ready';
     applySampleToAudit();
-    renderCriteria();            // unconditional — a project with no account rows still gets its grid
+    renderCriteria(); recompute();   // unconditional — a project with no account rows still gets its grid
   }catch(e){
     try{ clearTimeout(window._ctxDeadline); }catch(_x){}
     CTX_READY=false; CTX_STATE='empty';
