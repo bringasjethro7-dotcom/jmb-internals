@@ -852,7 +852,7 @@ function defaultAudit(){
 }
 function onProjectChange(){
   var p=curProject(); if(!p) return;
-  $('proj-title').textContent=p.label;
+  $('proj-title').textContent=(IS_ADMIN||CTX_READY)?p.label:'Loading this VA\u2019s project…';
   AUDIT=defaultAudit();
   clientQA=false; if($('c-clientqa')) $('c-clientqa').checked=false;
   renderCriteria(); recompute();
@@ -883,7 +883,13 @@ function sampleNameFor(taskName, idx){
   }catch(e){ return null; }
 }
 var CTX_READY=false, CTX_STATE='loading';   // 'loading' | 'ready' | 'empty'
+function paintProjTitle(){
+  try{ var p=curProject(); var t=$('proj-title'); if(!t||!p) return;
+    t.textContent=(IS_ADMIN||CTX_READY)?p.label:(CTX_STATE==='empty'?'No work recorded this week':'Loading this VA\u2019s project…');
+  }catch(e){}
+}
 function renderCriteria(){
+  paintProjTitle();
   var p=curProject(); if(!p) return;
   // Never show a guessed checklist. Until the assigned set resolves, show a loading state —
   // a wrong project with green ticks is worse than no grid at all.
