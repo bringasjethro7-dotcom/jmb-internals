@@ -319,7 +319,14 @@ function tick(){
 /* ── NARRATION VOICE ──
    Reads each scene's script line aloud with the browser's speech engine. No files, no network.
    Chrome on the presenter's machine does the speaking, so it works on any screen share. */
-var VOICE=true, synth=window.speechSynthesis, pickedVoice=null;
+var VOICE=true, synth=window.speechSynthesis, pickedVoice=null, _voiceProven=false;
+function voiceFailed(why){
+  if(_voiceProven) return;
+  var vb=document.getElementById('voice');
+  if(vb){ vb.textContent='🔇 No voice — tap to retry'; vb.title=why||''; }
+  // Fall back to timed advance so the deck still runs the whole way through.
+  VOICE=false;
+}
 function chooseVoice(){
   if(!synth) return;
   var vs=synth.getVoices()||[];
@@ -340,7 +347,8 @@ function speak(n){
     var txt=narrationOf(n); if(!txt) return;
     var u=new SpeechSynthesisUtterance(txt);
     if(pickedVoice) u.voice=pickedVoice;
-    u.onstart=function(){ duck(true); };
+    u.onstart=function(){ duck(true); _voiceProven=true; var vb2=document.getElementById('voice'); if(vb2) vb2.textContent='🔊 Voice: on'; };
+    u.onerror=function(){ voiceFailed('the browser refused to speak'); };
     u.rate=0.96; u.pitch=1.0; u.volume=1;
     u.onend=function(){
       duck(false);
@@ -350,12 +358,17 @@ function speak(n){
       setTimeout(function(){ if(VOICE&&playing&&n===i){ if(i<scenes.length-1) show(i+1); else { playing=false; document.getElementById('play').textContent='↻ Replay'; } } }, 1200);
     };
     synth.speak(u);
+    setTimeout(function(){
+      if(!_voiceProven && VOICE && !synth.speaking && !synth.pending) voiceFailed('no speech engine on this device');
+    }, 2500);
   }catch(e){}
 }
 document.getElementById('voice').onclick=function(){
+  if(!synth){ this.textContent='🔇 Voice unsupported'; return; }
   VOICE=!VOICE;
   this.textContent=VOICE?'🔊 Voice: on':'🔇 Voice: off';
-  if(!VOICE){ try{ synth.cancel(); }catch(e){} } else speak(i);
+  if(!VOICE){ try{ synth.cancel(); }catch(e){} }
+  else { _voiceProven=false; try{ synth.resume(); }catch(e){} chooseVoice(); speak(i); }
 };
 document.getElementById('next').onclick=function(){ show(i+1); };
 document.getElementById('back').onclick=function(){ show(i-1); };
@@ -421,8 +434,20 @@ document.getElementById('music').onclick=function(){
   bedOn=!bedOn; this.textContent=bedOn?'♪ Ambience: on':'♪ Ambience: off';
   startBed(); duck(false);
 };
+function primeVoice(){
+  if(!synth) return;
+  try{
+    chooseVoice();
+    var w=new SpeechSynthesisUtterance(' ');
+    if(pickedVoice) w.voice=pickedVoice;
+    w.volume=0.01;
+    synth.speak(w);            // unlocks the engine on browsers that need a gesture
+    setTimeout(chooseVoice, 400);
+  }catch(e){}
+}
 function kickoff(){
   startBed();
+  primeVoice();
   try{ if(AUDIO && AUDIO.state==='suspended') AUDIO.resume(); }catch(e){}
   if(_spoke) return; _spoke=true;
   var hint=document.getElementById('voicehint'); if(hint) hint.remove();
@@ -430,8 +455,12 @@ function kickoff(){
 }
 ['click','keydown'].forEach(function(ev){ document.addEventListener(ev, kickoff, {once:false}); });
 show(0); tick();
-var _hasVoice = !!(window.speechSynthesis && typeof SpeechSynthesisUtterance!=='undefined') && !window.__TV;
-if(!_hasVoice){ VOICE=false; var vb=document.getElementById('voice'); if(vb){ vb.textContent='🔇 No voice on this device'; vb.disabled=true; vb.style.opacity=.5; } }
+var _hasVoice = !!(window.speechSynthesis && typeof SpeechSynthesisUtterance!=='undefined');
+if(!_hasVoice){
+  VOICE=false;
+  var vb=document.getElementById('voice');
+  if(vb){ vb.textContent='🔇 Voice unsupported'; vb.style.opacity=.6; }
+}
 if(_hasVoice){
   var h=document.createElement('div'); h.id='voicehint';
   h.style.cssText='position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#0b1220;border:1px solid #5eead4;color:#e2e8f0;border-radius:1.2vh;padding:2.4vh 3vw;font-size:2vh;text-align:center;z-index:40;box-shadow:0 20px 50px -18px rgba(0,0,0,.8)';
