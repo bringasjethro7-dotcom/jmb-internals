@@ -233,14 +233,26 @@ function renderByVA(segs, doneFn, activeFn, amFn){
   var mine=String((USER&&USER.id)||'').toLowerCase();
   var list=keys.map(function(k,i){
     var rows=by[k];
-    // "on board" is this VA's OWN assigned account count — never a shared or fixed total.
-    var onBoard=rows.length;   // replaced below by the ACTIVE count
+    // A VA is measured against the lane they actually work. Posting VAs own active/warm-up
+    // accounts; Content Management VAs own 'cmodel' rows only — counting them against the
+    // posting rule left them at 0/0 with an empty bar even on a full shift.
     // Rule 1: an ACTIVE account counts ONCE when its unlock tagging is complete for the shift.
-    // Re-completing the same account never adds a second point; resets at the shift boundary.
     var actRows=rows.filter(function(r){ return ['active','warmup'].indexOf(String(r.status||'').toLowerCase())>=0; });
-    onBoard=actRows.length;
     var tagged=actRows.filter(function(r){ return fullDone(r); }).length;
-    return { k:k, i:i, done:tagged, tot:onBoard, pct:onBoard?Math.round(tagged/onBoard*100):0, n:onBoard };
+    // Rule 3: UNIQUE models updated this shift — repeat updates on the same model don't add.
+    var cmRows=rows.filter(function(r){ return String(r.status||'').toLowerCase()==='cmodel'; });
+    var cmSeen={}, cmAll={};
+    cmRows.forEach(function(r){
+      var nm=String(r.handle||'').toLowerCase(); if(!nm) return;
+      cmAll[nm]=1;
+      if(markOk((r.meta||{}).cmAt, r.assigned_to||r.created_by)) cmSeen[nm]=1;
+    });
+    var cmTot=Object.keys(cmAll).length, cmDone=Object.keys(cmSeen).length;
+    var onBoard=actRows.length+cmTot;
+    var done=tagged+cmDone;
+    // Label the unit by whichever lane they're in, so the row reads honestly.
+    var unit=(actRows.length&&cmTot)?'on board':(cmTot?'models':'on board');
+    return { k:k, i:i, done:done, tot:onBoard, pct:onBoard?Math.round(done/onBoard*100):0, n:onBoard, unit:unit };
   }).sort(function(a,b){
     if(a.k===mine) return -1; if(b.k===mine) return 1;    // you first
     return b.pct-a.pct || b.n-a.n;                        // then highest completion
@@ -263,7 +275,7 @@ function renderByVA(segs, doneFn, activeFn, amFn){
           '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">'+
             '<b style="font-size:13.5px;">'+shiftIcon+esc(name)+'</b>'+
             (me?'<span style="font-size:10px;color:#0f766e;font-weight:800;">you</span>':'')+
-            '<span style="font-size:11px;color:var(--ink3);font-weight:700;">'+o.n+' on board</span>'+
+            '<span style="font-size:11px;color:var(--ink3);font-weight:700;">'+o.n+' '+(o.unit||'on board')+'</span>'+
           '</div>'+
           '<div class="pvbar" style="margin-top:7px;background:#eef1f5;border-radius:999px;overflow:hidden;">'+
             '<i style="width:'+Math.min(100,o.pct)+'%;background:linear-gradient(90deg,#fb7185,#e11d48);border-radius:999px;"></i>'+
@@ -398,12 +410,20 @@ function renderCM(){
 async function cmSet(nm, k){
   try{
     var r=cmRowOf(nm), d;
+    // Content Management produced NO tracked output before this — the model status was saved
+    // but nothing was ever bumped, so a CM VA's whole shift showed as zero on the Productivity
+    // Hub and the wallboard. Bump ONCE per model per shift (Rule 3: repeat updates don't add).
+    var firstThisShift = !(r && markOk((r.meta||{}).cmAt, r.assigned_to||r.created_by));
     if(r){ d=await saveMeta(r, Object.assign({}, r.meta||{}, {cm:k, cmAt:vaKeyOf(USER.id)})); }
     else{
       var rr=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(nm)+'&status=cmodel&meta='+encodeURIComponent(JSON.stringify({cm:k, cmAt:vaKeyOf(USER.id)}))+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
       d=await rr.json();
     }
-    if(d&&d.ok){ toast(nm+' → updated ✓'); load(); } else toast('Could not save.');
+    if(d&&d.ok){
+      if(firstThisShift) await bump('IG Reels Posting',1);
+      toast(nm+' → updated ✓'+(firstThisShift?' (+1 output)':''));
+      load();
+    } else toast('Could not save.');
   }catch(e){ toast('Connection error.'); }
 }
 function fullDone(r){ var t=T(r); return t.s && t.f && (!isK(r) || t.rl); }

@@ -297,6 +297,7 @@
     border-radius:0 .5vh .5vh 0;background:var(--c)}
   .ptile .pn{font-size:9vh;font-weight:900;line-height:.85;letter-spacing:-.03em;color:var(--c)}
   .ptile .pl{font-size:2.2vh;font-weight:800;color:var(--ink);margin-top:1.4vh;letter-spacing:-.01em}
+  .ptile .psub{font-size:1.5vh;font-weight:700;color:var(--mut);margin-top:.5vh;letter-spacing:.02em}
   body.lite .ptile{background:#fff;box-shadow:none}
 </style>
 </head>
@@ -697,7 +698,7 @@ loadAttendance();
 /* ══ PENDING WITH ADMIN ══
    Everything a contractor has submitted that is still waiting on a decision. The wall answers
    "is mine still pending?" so nobody has to chase. Oldest first — age is the pressure. */
-var PEND={ items:[], total:0, by:{}, loaded:false };
+var PEND={ items:[], total:0, by:{}, period:'', loaded:false };
 var PEND_META={
   demerit:{ label:'Demerit dispute',   color:'#dc2626' },
   leave:  { label:'Leave request',     color:'#2563eb' },
@@ -709,7 +710,8 @@ var PEND_META={
 async function loadPending(){
   try{
     var d=await fetch(APPS_SCRIPT_URL+'?action=pending_queue&_='+Date.now()).then(function(r){return r.json();}).catch(function(){return null;});
-    if(d&&d.ok){ PEND.items=d.items||[]; PEND.total=d.total||0; PEND.by=d.by_kind||{}; PEND.loaded=true;
+    if(d&&d.ok){ PEND.items=d.items||[]; PEND.total=d.total||0; PEND.by=d.by_kind||{};
+      PEND.period=d.payslip_period||''; PEND.loaded=true;
       document.querySelectorAll('.pendslide-grid').forEach(function(h){ h.innerHTML=pendRows(); }); }
   }catch(e){}
 }
@@ -719,10 +721,11 @@ function pendRows(){
   var tiles=order.map(function(k){
     var m=PEND_META[k]||{label:k,color:'#57606f'};
     var n=(PEND.by||{})[k]||0;
-    // oldest item of this kind — the number that actually matters
+    // payslips are scoped to the current cutoff — name it so the number is unambiguous
+    var sub=(k==='payslip'&&PEND.period)?('<div class="psub">'+PEND.period+'</div>'):'';
     return '<div class="ptile" style="--c:'+m.color+'">'+
       '<div class="pn"'+(n?'':' style="opacity:.28"')+'>'+n+'</div>'+
-      '<div class="pl">'+m.label+(n===1?'':'s')+'</div>'+
+      '<div class="pl">'+m.label+(n===1?'':'s')+'</div>'+sub+
     '</div>';
   });
   return tiles.join('');
