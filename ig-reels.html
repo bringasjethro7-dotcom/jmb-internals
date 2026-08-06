@@ -350,6 +350,7 @@ function renderViews(){
 var AUD=[['strong','💪 Strong Account','#10b981'],['human','🤖 Human Verification','#f59e0b'],['lowperf','📉 Low Performing Account','#ef4444'],['needscontent','🎬 Needs New Contents','#d97706'],['posthold','⏸ Posting on hold','#3b82f6'],['banned','⛔ Banned','#b91c1c'],['waitskits','🎭 Waiting for skits','#8b5cf6'],['lowinsights','📊 Low insights','#ec4899'],['leftunposted','🕳 Left unposted','#64748b'],['done','✅ Done','#059669']];
 function renderAudit(){
   var list=ROWS.slice();
+  var _pb='<div id="tagprog-audit" style="margin-bottom:14px;"></div>';
   function ix(r){ var a=(r.meta&&r.meta.audit)||''; for(var i=0;i<AUD.length;i++) if(AUD[i][0]===a) return i; return -1; }
   list.sort(function(a,b){ return ix(a)-ix(b); });
   var gc={}; list.forEach(function(r){ var k=ix(r); gc[k]=(gc[k]||0)+1; });
@@ -365,7 +366,7 @@ function renderAudit(){
       '<div class="meta1">👤 Handled by <b>'+esc(vaName(r.assigned_to||r.created_by))+'</b>'+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+' · board: '+esc(r.status)+'</div>'+
     '</div>');
   });
-  $('grid').innerHTML=out.length?out.join(''):'<div class="muted">No accounts yet.</div>';
+  $('grid').innerHTML=_pb+(out.length?out.join(''):'<div class="muted">No accounts yet.</div>');
 }
 async function setAudit(id,k){
   try{ var r0=row(id); if(!r0) return;
@@ -377,7 +378,7 @@ var MODELS=['Aja','Akira','Anya','Kitana','Ruby','Yuna','Maddie','Aurora','Camil
 var CMST=[['done','✅ Done','#10b981'],['waiting','🕐 Waiting for new Contents','#f59e0b'],['inprog','🎬 In-Progress','#3b82f6'],['onhold','⏸ Contents on hold','#64748b'],['provided','📦 Provided by the clients','#8b5cf6']];
 function cmRowOf(name){ for(var i=0;i<CMROWS.length;i++) if(String(CMROWS[i].handle).toLowerCase()===name.toLowerCase()) return CMROWS[i]; return null; }
 function renderCM(){
-  var out=['<div class="sect"><b>🎬 Models — content status</b><span>'+MODELS.length+' models</span><i></i></div>'];
+  var out=['<div id="tagprog-cm" style="margin-bottom:14px;"></div>','<div class="sect"><b>🎬 Models — content status</b><span>'+MODELS.length+' models</span><i></i></div>'];
   MODELS.forEach(function(nm){
     var r=cmRowOf(nm); var cur=(r&&r.meta&&r.meta.cm)||'';
     var chip=null; for(var i=0;i<CMST.length;i++) if(CMST[i][0]===cur) chip=CMST[i];
@@ -402,13 +403,50 @@ async function cmSet(nm, k){
   }catch(e){ toast('Connection error.'); }
 }
 function fullDone(r){ var t=T(r); return t.s && t.f && (!isK(r) || t.rl); }
+/* ══ TAG PROGRESS (Auditing + Content Management tabs) ══
+   Counts Story / Feed / Reel tags across ACTIVE accounts only. Suspended, on hold,
+   flagged/resting and reserved accounts are excluded from BOTH sides of the fraction, so the
+   denominator re-computes the moment a status changes. Recomputed on every render, which every
+   tag click triggers — no refresh needed. */
+function tagActiveRows(){
+  var OUT=['suspended','onhold','flagged','rest','reserved','banned','cmodel'];
+  return ROWS.filter(function(r){ return OUT.indexOf(String(r.status||'').toLowerCase())<0; });
+}
+function renderTagProgress(hostId){
+  var host=document.getElementById(hostId); if(!host) return;
+  var act=tagActiveRows();
+  if(!act.length){ host.innerHTML=''; return; }
+  var done=0, tot=0;
+  act.forEach(function(r){
+    var t=T(r);
+    tot+=3;                                   // Story + Feed + Reel per active account
+    if(t.s) done++; if(t.f) done++; if(t.rl) done++;
+  });
+  var pct=tot?Math.round(done/tot*100):0;
+  host.innerHTML='<div class="pvwrap">'+
+    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;flex-wrap:wrap;">'+
+      '<span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today — tagging progress</span>'+
+      '<span style="font-size:11px;color:var(--ink3);font-weight:700;">active accounts only · resets per shift · ☀️ 8 AM / 🌙 8 PM</span>'+
+    '</div>'+
+    '<div class="pvrow first">'+
+      '<div style="flex:1;min-width:0;">'+
+        '<div style="display:flex;align-items:baseline;gap:8px;"><b style="font-size:13.5px;">Story · Feed · Reel tags</b>'+
+          '<span style="font-size:11px;color:var(--ink3);font-weight:700;">'+act.length+' active account'+(act.length!==1?'s':'')+' × 3</span></div>'+
+        '<div class="pvbar" style="margin-top:7px;background:#eef1f5;border-radius:999px;overflow:hidden;">'+
+          '<i style="width:'+Math.min(100,pct)+'%;background:linear-gradient(90deg,#fb7185,#e11d48);border-radius:999px;"></i></div>'+
+      '</div>'+
+      '<div class="pvpct" style="color:#e11d48;"><span style="font-size:17px;font-weight:800;">'+done+' / '+tot+'</span><br>'+
+        '<span style="font-size:12.5px;">'+pct+'% today</span></div>'+
+    '</div>'+
+  '</div>';
+}
 function render(){
   renderViews();
   var showAcc=(VIEW==='accounts');
   var ab=document.querySelector('.addbox'); if(ab) ab.style.display=showAcc?'':'none';
   ['stats','byva','vatabs'].forEach(function(id){ var el=$(id); if(el) el.style.display=showAcc?'':'none'; });
-  if(VIEW==='audit'){ renderAudit(); return; }
-  if(VIEW==='cm'){ renderCM(); return; }
+  if(VIEW==='audit'){ renderAudit(); renderTagProgress('tagprog-audit'); return; }
+  if(VIEW==='cm'){ renderCM(); renderTagProgress('tagprog-cm'); return; }
   var act=ROWS.filter(function(r){return ['active','warmup'].indexOf(r.status)>=0;});
   var done=act.filter(fullDone).length;
   $('stats').innerHTML=

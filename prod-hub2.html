@@ -454,6 +454,7 @@ function render(d){
     var us=rows.filter(function(x){return x.task===t.task && String(x.project||'')===String(t.project||'');}).slice().sort(function(a,b){return b.qph-a.qph;});
     var maxQ=Math.max.apply(null,[t.qph].concat(us.map(function(u){return u.qph;})));
     var benchPct=maxQ>0?(t.qph/maxQ*100):0;
+    var _taskVol=us.reduce(function(sm,x){ return sm+(x.volume||0); },0)||1;
     var list=us.map(function(u,i){
       var pct=maxQ>0?(u.qph/maxQ*100):0;
       var delta=t.qph>0?Math.round((u.qph-t.qph)/t.qph*100):0;
@@ -461,15 +462,30 @@ function render(d){
       var dCls=above?'up':'down', dTxt=(delta>0?'+':'')+delta+'%';
       return '<div class="urow'+(i===0?' top':'')+'">'+
         '<div class="urank">'+(i+1)+'</div>'+
-        '<div><div class="uname">'+esc(u.full_name)+' <span class="usub">'+Math.round(u.volume).toLocaleString()+' / '+(Math.round(u.hours*10)/10)+'h</span></div>'+
+        '<div><div class="uname">'+esc(u.full_name)+
+            ' <span class="usub">'+Math.round(u.volume).toLocaleString()+' output · '+(Math.round(u.hours*10)/10)+'h tracked · '+
+            Math.round((u.volume/_taskVol)*100)+'% of task'+
+            (u.hours>0?'':' <b style="color:#dc2626;">· no hours</b>')+
+            ((u.hours>0&&u.volume<=0)?' <b style="color:#b45309;">· no output</b>':'')+'</span></div>'+
           '<div class="ubarwrap"><div class="ubar"><span style="width:'+pct.toFixed(0)+'%;background:'+(above?'linear-gradient(90deg,#22c55e,#15803d)':'linear-gradient(90deg,#fb923c,#e83d00)')+'"></span><div class="benchline" style="left:'+benchPct.toFixed(0)+'%"></div></div></div>'+
         '</div>'+
         '<div class="uqph">'+u.qph+'<span class="udelta '+dCls+'">'+dTxt+'</span></div>'+
       '</div>';
     }).join('');
-    return '<div class="tcard"><div class="th"><div class="tn">'+esc(t.task)+'</div>'+
-      '<div class="tb">Team avg <b>'+t.qph+'</b> /hr · '+t.users+' people · '+Math.round(t.volume).toLocaleString()+' output / '+(Math.round(t.hours*10)/10)+'h</div></div>'+
-      list+'</div>';
+    var _cid='tk'+String(t.project+'_'+t.task).replace(/\W/g,'_');
+    return '<div class="tcard">'+
+      '<div class="th" style="cursor:pointer;" onclick="tkToggle(\''+_cid+'\')" title="Show every VA\'s output against their tracked hours">'+
+        '<div class="tn"><span id="'+_cid+'-caret" style="display:inline-block;width:12px;color:var(--t3);">▸</span> '+esc(t.task)+'</div>'+
+        '<div class="tb">Team avg <b>'+t.qph+'</b> /hr · '+t.users+' people · '+Math.round(t.volume).toLocaleString()+' output / '+(Math.round(t.hours*10)/10)+'h</div>'+
+      '</div>'+
+      '<div id="'+_cid+'" style="display:none;">'+
+        '<div style="font-size:11px;color:var(--t3);padding:6px 2px 8px;border-bottom:1px solid var(--line,#e2e8f0);margin-bottom:4px;">'+
+          'How the score is built: <b>output ÷ tracked hours</b>. Output comes from the project tool, hours from the EOD-approved worklog. '+
+          'The bar compares each VA to the team average line.'+
+        '</div>'+
+        list+
+      '</div>'+
+    '</div>';
   }
   $('results').innerHTML=order.map(function(g){
     var G=groups[g];
@@ -893,5 +909,14 @@ setTimeout(function(){ try{
 }catch(e){} }, 2500);
 </script>
 
+<script>
+function tkToggle(id){
+  var el=document.getElementById(id), c=document.getElementById(id+'-caret');
+  if(!el) return;
+  var open=el.style.display!=='none';
+  el.style.display=open?'none':'block';
+  if(c) c.textContent=open?'▸':'▾';
+}
+</script>
 </body>
 </html>
