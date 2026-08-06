@@ -212,6 +212,7 @@ header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
 .cell:hover{transform:scale(1.08);box-shadow:0 2px 8px rgba(15,23,42,.12)}
 .cell.pass{background:#dcfce7;color:#15803d;border-color:#86efac}
 .cell.fail{background:#fee2e2;color:#dc2626;border-color:#fca5a5}
+.cell:not(.pass):not(.fail){background:#fffbeb;border-color:#fcd34d;border-style:dashed;color:#b45309}
 .critlbl:hover{color:var(--o3);text-decoration:underline;text-underline-offset:2px}
 
 /* Weekly boxes. */
@@ -310,7 +311,7 @@ header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
 
     <div class="card">
       <h2 id="proj-title">—</h2>
-      <div class="sub">Mark every criterion Pass (✓) or Fail (✕) for each account. Click a criterion label to flip that whole row. Score = passed ÷ total checks across all tasks &amp; accounts.</div>
+      <div class="sub">Every criterion starts <b>unmarked</b> — click each cell to cycle unmarked → Pass (✓) → Fail (✕). Click a criterion label to flip that whole row. Submit unlocks only when nothing is left unmarked. Score = passed ÷ total checks.</div>
       <label class="clientqa"><input type="checkbox" id="c-clientqa" onchange="onClientQAChange()"> With Client's QA <span class="ded">— auto deduct 10%</span></label>
       <div id="crit-list"></div>
       <textarea class="note" id="c-note" placeholder="Optional note for this week's audit (context, recurring issues, etc.)"></textarea>
@@ -459,7 +460,9 @@ function qBust(re){ Object.keys(_qCache).forEach(function(k){ if(!re||re.test(k)
   if(document.body) mount(); else document.addEventListener('DOMContentLoaded',mount);
 })();
 /* DRAFT SAFETY — a half-finished audit must survive a refresh, a crash or a dead connection. */
-function qDraftKey(){ try{ return 'qa_draft_'+(USER&&USER.id)+'_'+$('c-emp').value+'_'+$('c-proj').value+'_'+$('c-month').value+'_W'+(($('c-week')||{}).value||'1'); }catch(e){ return ''; } }
+// v2 — drafts saved under the old all-Pass default would restore a fully-ticked board and
+// unlock submit instantly. Bumping the key retires every pre-existing draft.
+function qDraftKey(){ try{ return 'qa_draft_v2_'+(USER&&USER.id)+'_'+$('c-emp').value+'_'+$('c-proj').value+'_'+$('c-month').value+'_W'+(($('c-week')||{}).value||'1'); }catch(e){ return ''; } }
 function qSaveDraft(){ try{ var k=qDraftKey(); if(!k||!AUDIT) return; localStorage.setItem(k, JSON.stringify({ audit:AUDIT, note:(($('c-note')||{}).value||''), clientQA:clientQA, t:Date.now() })); }catch(e){} }
 function qLoadDraft(){ try{ var k=qDraftKey(); if(!k) return null; var d=JSON.parse(localStorage.getItem(k)||'null'); return (d && (Date.now()-d.t)<72*3600*1000)?d:null; }catch(e){ return null; } }
 function qClearDraft(){ try{ var k=qDraftKey(); if(k) localStorage.removeItem(k); }catch(e){} }
@@ -846,13 +849,16 @@ function defaultAudit(){
   var p=curProject(); var a={};
   p.tasks.forEach(function(t){
     a[t.name]=[];
-    for(var i=0;i<t.accounts;i++){ a[t.name].push({ name:t.name+' #'+(i+1), states:t.criteria.map(function(){return true;}) }); }
+    // UNMARKED by default (null). A board that opens pre-passed hands out a free 100 to any
+    // reviewer who submits without reading, and the accuracy penalty only bites afterwards.
+    // Every cell must be deliberately set to Pass or Fail before the review can be submitted.
+    for(var i=0;i<t.accounts;i++){ a[t.name].push({ name:t.name+' #'+(i+1), states:t.criteria.map(function(){return null;}) }); }
   });
   return a;
 }
 function onProjectChange(){
   var p=curProject(); if(!p) return;
-  $('proj-title').textContent=(IS_ADMIN||CTX_READY)?p.label:'Loading this VA\u2019s project…';
+  paintProjTitle();   // single source of truth — was hard-coded to "Loading…" and could stick there
   AUDIT=defaultAudit();
   clientQA=false; if($('c-clientqa')) $('c-clientqa').checked=false;
   renderCriteria(); recompute();
@@ -930,7 +936,8 @@ function renderCriteria(){
     }).join('');
     var sub='<tr class="subtot"><td class="crit">Passed</td>'+accts.map(function(a){
       var pass=a.states.filter(function(s){return s===true;}).length;
-      return '<td>'+pass+'/'+t.criteria.length+'</td>';
+      var open=a.states.filter(function(s){return s!==true&&s!==false;}).length;
+      return '<td>'+pass+'/'+t.criteria.length+(open?('<div style="font-size:10px;font-weight:700;color:#b45309;">'+open+' unmarked</div>'):'')+'</td>';
     }).join('')+'</tr>';
     return '<div class="taskblk"><div class="taskhd"><span class="tn">'+esc(t.name)+'</span>'+
       '<span class="tc">'+accts.length+' account'+(accts.length!==1?'s':'')+' · '+t.criteria.length+' criteria'+(_locked?' · assigned':'')+
@@ -941,33 +948,46 @@ function renderCriteria(){
   $('crit-list').innerHTML=html;
   try{ watchNames(); }catch(e){}
 }
-function toggleCell(task,ai,ci){ var a=AUDIT[task][ai]; a.states[ci]=(a.states[ci]===true)?false:true; renderCriteria(); recompute(); try{ qSaveDraft(); }catch(e){} }
+// unmarked → Pass → Fail → unmarked. The third state lets a reviewer undo a misclick instead
+// of being forced to leave a verdict they didn't mean.
+function toggleCell(task,ai,ci){
+  var a=AUDIT[task][ai], s=a.states[ci];
+  a.states[ci]=(s===true)?false:((s===false)?null:true);
+  renderCriteria(); recompute(); try{ qSaveDraft(); }catch(e){}
+}
 function flipRow(task,ci){
   var accts=AUDIT[task]; var allPass=accts.every(function(a){return a.states[ci]===true;});
   accts.forEach(function(a){ a.states[ci]=allPass?false:true; });
-  renderCriteria(); recompute();
+  renderCriteria(); recompute(); try{ qSaveDraft(); }catch(e){}
 }
 function setAcctName(task,ai,val){ if(AUDIT[task][ai]) AUDIT[task][ai].name=String(val||'').slice(0,40); }
 function clearBoard(){
-  if(!confirm('Clear the board? This resets every check to Pass and account names to default for this project.')) return;
+  if(!confirm('Clear the board? This resets every check to UNMARKED and account names to default for this project.')) return;
   AUDIT=defaultAudit(); clientQA=false;
   if($('c-clientqa')) $('c-clientqa').checked=false;
   $('c-note').value='';
   renderCriteria(); recompute();
   toast('Board cleared to default.');
 }
-function addAcct(task){ var t=taskByName(task); AUDIT[task].push({ name:task+' #'+(AUDIT[task].length+1), states:t.criteria.map(function(){return true;}) }); renderCriteria(); recompute(); }
+function addAcct(task){ var t=taskByName(task); AUDIT[task].push({ name:task+' #'+(AUDIT[task].length+1), states:t.criteria.map(function(){return null;}) }); renderCriteria(); recompute(); }
 function removeAcct(task,ai){ if(AUDIT[task].length<=1) return; AUDIT[task].splice(ai,1); renderCriteria(); recompute(); }
 
 function computeAudit(){
-  var p=curProject(); var passed=0, total=0;
+  // The score is computed over MARKED cells only. Unmarked cells are counted separately and
+  // block submission — they are never silently treated as a pass.
+  var p=curProject(); var passed=0, marked=0, total=0;
   p.tasks.forEach(function(t){
     (AUDIT[t.name]||[]).forEach(function(a){
       total += t.criteria.length;
-      passed += a.states.filter(function(s){return s===true;}).length;
+      t.criteria.forEach(function(_l,ci){
+        var s=a.states[ci];
+        if(s===true){ marked++; passed++; }
+        else if(s===false){ marked++; }
+      });
     });
   });
-  return { passed:passed, total:total, score: total>0?Math.round(passed/total*100):0 };
+  return { passed:passed, marked:marked, total:total, unmarked:(total-marked),
+           score: marked>0?Math.round(passed/marked*100):0 };
 }
 function onClientQAChange(){
   // Client's QA (−10%) is a LEAD/ADMIN judgement — peers can't apply it.
@@ -998,13 +1018,33 @@ function recompute(){
   var res=computeAudit();
   var base=res.score;
   var score=clientQA?Math.max(0, base-CLIENT_QA_DEDUCT):base;
-  $('score-big').textContent=score;
-  $('score-pf').textContent=res.passed+' of '+res.total+' checks passed'
-    +(clientQA?' · client QA −'+CLIENT_QA_DEDUCT+' (base '+base+')':'');
-  $('score-bar').style.width=(res.total>0?score:0)+'%';
-  var col=score>=90?'var(--green)':(score>=75?'var(--amber)':'var(--red)');
-  $('score-big').style.color=col;
-  return { passed:res.passed, total:res.total, base:base, score:score };
+  // Until every cell has a verdict the headline stays a dash — a partial board has no score.
+  if(res.unmarked>0){
+    $('score-big').textContent='—';
+    $('score-big').style.color='var(--amber)';
+    $('score-pf').textContent=res.marked+' of '+res.total+' checked · '+res.unmarked+' still unmarked';
+    $('score-bar').style.width=(res.total>0?Math.round(res.marked/res.total*100):0)+'%';
+  } else {
+    $('score-big').textContent=score;
+    $('score-pf').textContent=res.passed+' of '+res.total+' checks passed'
+      +(clientQA?' · client QA −'+CLIENT_QA_DEDUCT+' (base '+base+')':'');
+    $('score-bar').style.width=(res.total>0?score:0)+'%';
+    $('score-big').style.color=score>=90?'var(--green)':(score>=75?'var(--amber)':'var(--red)');
+  }
+  try{ gateSubmit(res); }catch(_g){}
+  return { passed:res.passed, marked:res.marked, total:res.total, unmarked:res.unmarked, base:base, score:score };
+}
+/* Submit stays disabled until the board is complete, and says exactly what's missing. */
+function gateSubmit(res){
+  var b=$('save-btn'); if(!b) return;
+  if(!IS_ADMIN && !CTX_READY){ b.disabled=true; b.title='Waiting for this VA’s recorded work'; return; }
+  if(res.unmarked>0){
+    b.disabled=true;
+    b.title=res.unmarked+' check'+(res.unmarked===1?'':'s')+' still unmarked — mark every criterion Pass or Fail first.';
+  } else {
+    b.disabled=false;
+    b.title='';
+  }
 }
 
 /* ---- context: weekly scores + prior audits + prefill ---- */
@@ -1057,7 +1097,11 @@ async function loadAssignedSet(){
     }
   }, 25000);
   host.style.display='block';
-  window._qaStep=function(n,msg){ try{ var h=$('sample-bar'); if(h) h.innerHTML='<span style="font-family:ui-monospace,monospace;font-size:11px;color:#64748b;">step '+n+'/6 · '+msg+'</span>'; }catch(e){} };
+  // The step tracer and the final panel share this one element. Steps 4 and 5 run AFTER the
+  // audit-day card is painted, so they used to wipe it and leave "step 5/6 · building the audit
+  // grid" sitting where the card should be. Once the bar holds real content it is off-limits.
+  window._barOwned=false;
+  window._qaStep=function(n,msg){ try{ if(window._barOwned) return; var h=$('sample-bar'); if(h) h.innerHTML='<span style="font-family:ui-monospace,monospace;font-size:11px;color:#64748b;">step '+n+'/6 · '+msg+'</span>'; }catch(e){} };
   _qaStep(1,'asking the server for this VA\'s recorded work…');
   try{
     var _need=0; try{ (curProject().tasks||[]).forEach(function(t){ _need+=(t.accounts||0); }); }catch(_n){}
@@ -1110,27 +1154,31 @@ async function loadAssignedSet(){
     if(!d||!d.ok) throw new Error((d&&d.error)||'error');
     SAMPLE=d;
     var vol=Object.keys(d.volumes||{}).map(function(k){ return esc(k)+' <b>'+d.volumes[k]+'</b>'; }).join(' · ');
-    if(!(d.items||[]).length && !d.audit_day){
-      host.innerHTML='<b>No recorded work found</b> for '+esc(d.from)+' → '+esc(d.to)+
-        '. Audit columns stay generic — check with the VA whether their tool was updated.';
-      return;
-    }
     var dayLbl='';
-    // No recorded work at all → say so immediately instead of sitting on "Loading…".
-    if(!d.audit_day && !(d.items||[]).length && !(d.projects_worked||[]).length){
+    /* NO AUDIT DAY = nothing to audit. This is a FINAL answer from the server, not a slow one,
+       so the screen must resolve. The old code had a bare `return` here that left CTX_STATE on
+       'loading', which is why the header sat on "Loading this VA's project…" forever even though
+       the server had already replied. Everything below now runs through one exit that clears the
+       deadline, flips the state and repaints. */
+    if(!d.audit_day){
       try{ clearTimeout(window._ctxDeadline); }catch(_x){}
-      CTX_READY=false; CTX_STATE='empty'; try{ renderCriteria(); }catch(_rc){}
+      CTX_READY=false; CTX_STATE='empty';
       host.style.cssText='margin:8px 0 12px;padding:11px 14px;border-radius:11px;background:rgba(180,83,9,.07);border:1px solid rgba(180,83,9,.35);font-size:12.5px;';
-      host.innerHTML='<b>No recorded work for '+esc(d.from)+' → '+esc(d.to)+'.</b> Nothing to audit for this week — either the VA logged no output, or their tool wasn\'t updated. '+
-        '<a href="#" onclick="qBust(/qa_sample/);loadAssignedSet();return false;" style="color:#b45309;font-weight:700;">Re-check</a>';
+      host.innerHTML='<b>No recorded output for '+esc(d.from)+' → '+esc(d.to)+'.</b> '+
+        'Nothing to audit for this week — either the VA logged no output, or their tool doesn’t post output to the tracker. '+
+        '<a href="#" onclick="qBust(/qa_sample/);CTX_STATE=\'loading\';renderCriteria();loadAssignedSet();return false;" style="color:#b45309;font-weight:800;">Re-check</a>'+
+        '<span id="wkprobe" style="display:block;margin-top:6px;opacity:.8;">checking the other weeks…</span>';
+      window._barOwned=true;
+      try{ renderCriteria(); renderStaticContext(); }catch(_rc){}
+      probeOtherWeeks(emp, month, week);   // tell the reviewer where the work actually is
       return;
     }
-    if(d.audit_day){
-      try{ dayLbl=new Date(d.audit_day+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'}); }catch(_dl){ dayLbl=d.audit_day; }
-    }
+    try{ dayLbl=new Date(d.audit_day+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'}); }catch(_dl){ dayLbl=d.audit_day; }
     window._lastSample=d;
-    if(d.audit_day){
-      // The audit DATE is the single most important instruction on this screen — make it loud.
+    // The audit DATE is the single most important instruction on this screen — make it loud.
+    // Painted AFTER the ALTR bridge so the account count is the real one, and so the step
+    // tracer can never land on top of it.
+    function paintDayCard(){
       host.style.cssText='margin:8px 0 14px;padding:0;border:none;background:none;';
       host.innerHTML=
         '<div style="display:flex;align-items:stretch;gap:0;border-radius:14px;overflow:hidden;box-shadow:0 6px 20px -8px rgba(225,29,72,.45);border:2px solid #e11d48;">'+
@@ -1147,9 +1195,7 @@ async function loadAssignedSet(){
                                  :'<div style="margin-top:4px;opacity:.85;">No account-level rows for that day — audit against the recorded output above.</div>')+
           '</div>'+
         '</div>';
-    } else {
-      host.style.cssText='margin:8px 0 12px;padding:10px 13px;border-radius:11px;background:rgba(180,83,9,.06);border:1px solid rgba(180,83,9,.3);font-size:12px;';
-      host.innerHTML='<b>No output recorded</b> in '+esc(d.from)+' → '+esc(d.to)+' — there is no work to audit for this week. Check whether the VA updated their tool.';
+      window._barOwned=true;
     }
     // ── ALTR BRIDGE — phone/account handles live in ALTR's own sheet, not the shared board.
     //    If this is ALTR work with no account rows, fetch the real handles for the audit day.
@@ -1177,18 +1223,47 @@ async function loadAssignedSet(){
       }
     }catch(_ab){}
     _qaStep(5,'building the audit grid');
-    // From here on nothing may block readiness: paint the grid FIRST, decorate after.
-    setTimeout(function(){ try{ if(CTX_STATE!=='ready'){ CTX_READY=true; CTX_STATE='ready'; renderCriteria(); } }catch(e){} }, 50);
+    paintDayCard();                  // last write to the bar — locks it against the tracer
     try{ clearTimeout(window._ctxDeadline); }catch(_x){}
     CTX_READY=true; CTX_STATE='ready';
     applySampleToAudit();
     renderCriteria(); recompute();   // unconditional — a project with no account rows still gets its grid
+    renderStaticContext();           // repaint the header — Project sat on "Loading…" because
+                                     // nothing re-rendered it once CTX_READY flipped true
   }catch(e){
     try{ clearTimeout(window._ctxDeadline); }catch(_x){}
     CTX_READY=false; CTX_STATE='empty';
     host.innerHTML='Could not reach the server. <a href="#" onclick="CTX_STATE=\'loading\';renderCriteria();loadAssignedSet();return false;" style="color:#2563eb;font-weight:700;">Retry</a>';
     try{ renderCriteria(); }catch(_r){}
   }
+}
+/* An empty week is a dead end unless we say where the work IS. Scan the other three weeks of
+   the month (cheap scan=1 calls) and offer a one-click switch. If every week is empty, say that
+   plainly — that's a tracker problem for the admin, not something the reviewer can solve. */
+async function probeOtherWeeks(emp, month, week){
+  var el=$('wkprobe'); if(!el) return;
+  try{
+    var wks=[1,2,3,4].filter(function(w){ return String(w)!==String(week); });
+    var res=await Promise.all(wks.map(function(w){
+      return qGet(PORTAL_URL+'?action=qa_sample&employee_id='+encodeURIComponent(emp)
+        +'&month='+encodeURIComponent(month)+'&week='+w+'&scan=1', {ttl:600000})
+        .then(function(r){ return { w:w, n:((r&&r.projects_worked)||[]).length }; })
+        .catch(function(){ return { w:w, n:0 }; });
+    }));
+    if(!$('wkprobe')) return;
+    var hits=res.filter(function(r){ return r.n>0; }).map(function(r){ return r.w; });
+    if(!hits.length){
+      $('wkprobe').innerHTML='No output recorded in <b>any</b> week of this month for this VA — their tool isn’t posting to the tracker. Flag this to admin rather than scoring a blank week.';
+      return;
+    }
+    $('wkprobe').innerHTML='This VA does have recorded work in '+
+      hits.map(function(w){
+        return '<a href="#" onclick="switchWeek('+w+');return false;" style="color:#b45309;font-weight:800;">Week '+w+'</a>';
+      }).join(' · ')+' — switch if you were pointed at the wrong week.';
+  }catch(e){ if($('wkprobe')) $('wkprobe').textContent=''; }
+}
+function switchWeek(w){
+  try{ var s=$('c-week'); if(s){ s.value=String(w); onContextChange(); window.scrollTo({top:0,behavior:'smooth'}); } }catch(e){}
 }
 /* Replace the generic "#1, #2…" columns with the real account handles. */
 /* Watchdog: if the grid is still showing placeholders a moment after render (slow sample,
@@ -1400,6 +1475,11 @@ async function saveScore(){
   if(!emp){ toast('Pick an employee first.'); return; }
   if(!month){ toast('Pick a month.'); return; }
   var res=recompute();
+  // Hard stop — the button is disabled too, but never trust the button alone.
+  if(res.unmarked>0){
+    toast(res.unmarked+' check'+(res.unmarked===1?'':'s')+' still unmarked. Mark every criterion Pass or Fail before submitting.');
+    return;
+  }
   var criteria=JSON.stringify({ clientQA:clientQA, matrix:AUDIT });
   // Build the "where to focus" list = every FAILED check, with its account + criterion label.
   var focus=[]; var p=curProject();
