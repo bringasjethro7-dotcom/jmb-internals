@@ -445,13 +445,21 @@ function render(d){
   Object.keys(groups).forEach(function(g){
     var G=groups[g];
     G.tasks.forEach(function(t){ G.volume+=(t.volume||0); G.hours+=(t.hours||0); });
-    rows.forEach(function(r){ if(projFamily(r.project)===g) G.people[String(r.employee_id||r.full_name||'').toLowerCase()]=1; });
+    rows.forEach(function(r){
+      var belongs = r.project ? (projFamily(r.project)===g)
+                              : G.tasks.some(function(t){ return String(t.task)===String(r.task); });
+      if(belongs) G.people[String(r.employee_id||r.full_name||'').toLowerCase()]=1;
+    });
     G.qph=G.hours>0?Math.round(G.volume/G.hours*100)/100:0;
     G.tasks.sort(function(a,b){ return (b.volume||0)-(a.volume||0); });
   });
   var order=Object.keys(groups).sort(function(a,b){ return groups[b].volume-groups[a].volume; });
   function taskCard(t){
-    var us=rows.filter(function(x){return x.task===t.task && String(x.project||'')===String(t.project||'');}).slice().sort(function(a,b){return b.qph-a.qph;});
+    var us=rows.filter(function(x){
+      if(String(x.task||'')!==String(t.task||'')) return false;
+      var xp=projFamily(x.project||''), tp=projFamily(t.project||'');
+      return !x.project || xp===tp;          // tolerate rows that predate project tagging
+    }).slice().sort(function(a,b){return b.qph-a.qph;});
     var maxQ=Math.max.apply(null,[t.qph].concat(us.map(function(u){return u.qph;})));
     var benchPct=maxQ>0?(t.qph/maxQ*100):0;
     var _taskVol=us.reduce(function(sm,x){ return sm+(x.volume||0); },0)||1;

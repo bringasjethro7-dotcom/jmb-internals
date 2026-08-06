@@ -221,10 +221,12 @@ const COMPANY = {
      • secs = the clip length in seconds, used only as a safety fallback if the END
               event never fires (the real end is detected automatically).
    Leave the array empty ([]) to show no videos. */
+/* Videos are OFF for now — the board runs live operational slides instead.
+   Put the entries back in this array whenever you want clips in the loop again. */
 const VIDEOS = [
-  { yt:"WTyXNlJ_WW0", secs:329, title:"JMB Nights" },  // 5:29
-  { yt:"ta4fbYaqcgQ", secs:301 },                       // 5:01
-  { yt:"7ue8AYBnpIc", secs:330 },                       // 5:30
+  // { yt:"WTyXNlJ_WW0", secs:329, title:"JMB Nights" },
+  // { yt:"ta4fbYaqcgQ", secs:301 },
+  // { yt:"7ue8AYBnpIc", secs:330 },
 ];
 
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec";
@@ -439,7 +441,7 @@ function pProgress(active){
     '<div class="pgrid progslide-grid">'+progRows()+'</div>'+
   '</div>';
 }
-setInterval(function(){ loadProgressData(); }, 120000);
+setInterval(function(){ loadProgressData(); }, 90000);
 loadProgressData();
 /* Shift changeover: the moment the clock crosses 8 AM / 8 PM, clear the outgoing team off the
    board and pull fresh data for the incoming one — no stale bars carried across the boundary. */
@@ -448,12 +450,84 @@ setInterval(function(){
   var s=curShift();
   if(s!==_lastShift){
     _lastShift=s;
-    PROG.rows=[];                                                   // outgoing team leaves immediately
+    PROG.rows=[]; ATT.rows=[];                                      // outgoing team leaves immediately
     document.querySelectorAll('.progslide-grid').forEach(function(h){ h.innerHTML=progRows(); });
-    loadProgressData();                                             // incoming team starts from zero
+    document.querySelectorAll('.attslide-grid').forEach(function(h){ h.innerHTML=attRows(); });
+    loadProgressData(); loadAttendance();                            // incoming team starts from zero
   }
 }, 30000);
 
+/* ══ ATTENDANCE — this shift ══
+   Who logged in for the shift that is running now, at what exact time, and whether that was
+   on time or late. Morning shift starts 07:30, night 19:30 (15-min grace over the 07:15 rule),
+   and the board clears at each 8 AM / 8 PM boundary along with the progress slide. */
+var ATT={ rows:[], loaded:false };
+function shiftStartHM(){ return (curShift()==='night') ? [19,30] : [7,30]; }
+function fmtHM(d){
+  try{ return new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Manila',hour:'numeric',minute:'2-digit',hour12:true}).format(d); }
+  catch(e){ return '--:--'; }
+}
+async function loadAttendance(){
+  try{
+    var day=(function(){ try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-8*3600*1000)); }catch(e){ return ''; } })();
+    var at=await fetch(APPS_SCRIPT_URL+'?action=att_today&date='+encodeURIComponent(day)+'&_='+Date.now()).then(function(r){return r.json();}).catch(function(){return null;});
+    var list=(at&&at.records)||[];
+    var SH=curShift(), hm=shiftStartHM();
+    var out=[];
+    list.forEach(function(r){
+      var id=String(r.employee_id||'').toLowerCase();
+      var d=PROG.dir[id]||{};
+      var sh=String(d.s||r.shift||'').toLowerCase();
+      if(sh && ((sh==='night')!==(SH==='night'))) return;      // only the shift on duty
+      var ti=r.time_in||r.timeIn||r.ti; if(!ti) return;
+      var t=new Date(ti); if(isNaN(t.getTime())) return;
+      var hh, mm;
+      try{
+        var parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',minute:'2-digit',hour12:false}).format(t).split(':');
+        hh=parseInt(parts[0],10); mm=parseInt(parts[1],10);
+      }catch(e){ hh=t.getHours(); mm=t.getMinutes(); }
+      var mins=hh*60+mm, startMins=hm[0]*60+hm[1];
+      if(SH==='night' && mins<12*60) mins+=24*60;              // after-midnight logins belong to the night shift
+      var late=mins>startMins, by=Math.max(0, mins-startMins);
+      var ph=d.p||''; if(!ph && r.photo){ var mm2=String(r.photo).match(/[-\w]{25,}/); if(mm2) ph='https://drive.google.com/thumbnail?id='+mm2[0]+'&sz=w200'; }
+      out.push({ id:id, name:d.n||r.full_name||id.toUpperCase(), photo:ph, time:fmtHM(t), late:late, by:by, mins:mins });
+    });
+    out.sort(function(a,b){ return a.mins-b.mins; });
+    ATT.rows=out; ATT.loaded=true;
+    document.querySelectorAll('.attslide-grid').forEach(function(h){ h.innerHTML=attRows(); });
+  }catch(e){}
+}
+function attRows(){
+  if(!ATT.rows.length) return '<div class="empty-note">No log-ins recorded yet for the '+shiftLabel().toLowerCase()+'.</div>';
+  var onTime=ATT.rows.filter(function(r){ return !r.late; }).length;
+  return '<div style="display:flex;gap:1.6vw;margin-bottom:1.6vh;font-size:2vh;">'+
+      '<span style="color:#16a34a;font-weight:800;">'+onTime+' on time</span>'+
+      '<span style="color:#dc2626;font-weight:800;">'+(ATT.rows.length-onTime)+' late</span>'+
+      '<span style="color:var(--ink2);">'+ATT.rows.length+' logged in</span>'+
+    '</div>'+
+    ATT.rows.map(function(r){
+      var col=r.late?'#dc2626':'#16a34a';
+      var lbl=r.late?('LATE · '+(r.by>=60?(Math.floor(r.by/60)+'h '+(r.by%60)+'m'):(r.by+' min'))):'ON TIME';
+      return '<div class="prow">'+
+        (r.photo?('<img src="'+r.photo+'" alt="">'):'<img alt="" style="visibility:hidden">')+
+        '<div class="pmain"><div class="pname">'+r.name+'</div>'+
+          '<div style="font-size:1.7vh;font-weight:800;color:'+col+';letter-spacing:.04em;">'+lbl+'</div>'+
+        '</div>'+
+        '<div class="ppct" style="color:'+col+';font-size:3vh;">'+r.time+'</div>'+
+      '</div>';
+    }).join('');
+}
+function pAttendance(active){
+  return '<div class="panel'+(active?' active':'')+'">'+
+    '<div style="display:flex;align-items:baseline;gap:1.4vw;margin-bottom:2.2vh;flex-wrap:wrap;">'+
+      '<div style="font-size:4.6vh;font-weight:800;letter-spacing:-.01em;">Attendance <em style="font-style:normal;color:var(--o1)">— '+shiftLabel()+'</em></div>'+
+      '<div style="font-size:1.8vh;color:var(--ink2);font-weight:600;">log-in time · '+(curShift()==='night'?'shift starts 7:30 PM':'shift starts 7:30 AM')+' · resets in '+shiftResetIn()+'</div>'+
+    '</div>'+
+    '<div class="pgrid attslide-grid">'+attRows()+'</div>'+
+  '</div>';
+}
+setInterval(function(){ loadAttendance(); }, 90000);
+loadAttendance();
 function panelList(){
   var info=[
     {build:pHero,       secs:15},
@@ -464,6 +538,13 @@ function panelList(){
     {build:pOnline,     secs:15}
   ];
   if(ANNS.length) info.splice(5,0,{build:pAnns, secs:15});
+  // ── LIVE BLOCK ──
+  // Progress and attendance alternate at 10 seconds each for 10 minutes (30 pairs), then the
+  // company slides play once, then the live block repeats. Both refresh their own data while
+  // on screen, so what the room sees is never more than a couple of minutes old.
+  var live=[];
+  for(var L=0;L<30;L++){ live.push({build:pProgress, secs:10}); live.push({build:pAttendance, secs:10}); }
+  return live.concat(info);
   var vids=VIDEOS.map(function(v,i){ return { build:function(active){ return pVideo(i, active); }, secs:(parseFloat(v.secs)||60)+25, video:true }; });
   if(!vids.length) return info;
   // Weave the videos evenly BETWEEN the info slides (one clip every few slides).
