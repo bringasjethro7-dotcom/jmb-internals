@@ -633,7 +633,7 @@ function setMode(m){
   var emp=$('c-emp');
   if(m==='peer'){ loadMyAssignment(); }
   else { if(emp){ emp.disabled=false; } loadLeadQueue(); }
-  renderModeBar(); applyClientQAGate();
+  renderModeBar(); applyClientQAGate(); renderStaticContext();
   var sb=$('save-btn'); if(sb) sb.textContent = (m==='peer') ? 'Submit peer review (stage 1 of 3)' : 'Submit lead review (stage 2 of 3)';
 }
 function renderModeBar(){
@@ -710,7 +710,7 @@ function startApp(){
     var chain=document.createElement('div');
     chain.style.cssText='margin:0 0 12px;font-size:11.5px;color:#64748b;letter-spacing:.02em;';
     function seg(n,lbl,on){ return '<span style="'+(on?'color:#0f172a;font-weight:800;':'')+'">'+n+' · '+lbl+'</span>'; }
-    chain.innerHTML='QA chain: '+seg(1,'Peer (20 min max)',IS_PEER)+' <span style="opacity:.45;">→</span> '+seg(2,'Team Lead',IS_LEAD)+' <span style="opacity:.45;">→</span> '+seg(3,'Manager approval',IS_ADMIN);
+    chain.innerHTML='QA chain: '+seg(1,'Peer (30 min)',IS_PEER)+' <span style="opacity:.45;">→</span> '+seg(2,'Team Lead (20 min)',IS_LEAD)+' <span style="opacity:.45;">→</span> '+seg(3,'Manager approval',IS_ADMIN);
     var app=$('app'); if(app && app.firstElementChild) app.insertBefore(chain, app.firstElementChild.nextSibling); else if(app) app.prepend(chain);
   }catch(_cb){}
   $('c-month').value = curMonth();
@@ -741,11 +741,12 @@ async function loadMyAssignment(){
       return;
     }
     host.innerHTML='<b>Peer review mode</b> · Week '+esc(week)+' · you are auditing <b style="color:#2563eb;">'+esc(found.reviewee_name)+'</b> <span style="opacity:.7;">('+esc(team)+')</span>'+
-      '<div style="font-size:11.5px;opacity:.75;margin-top:4px;">Keep it to <b>20 minutes maximum</b> — one day\'s work, the assigned accounts. Your score goes to the team lead, then to the manager.</div>';
+      '<div style="font-size:11.5px;opacity:.75;margin-top:4px;">Spend <b>30 minutes</b> on this review — one day\'s work, the assigned accounts. Your score goes to the team lead, then to the manager.</div>';
     // Lock the employee dropdown to the assigned teammate.
     $('c-emp').innerHTML='<option value="'+esc(found.reviewee_id)+'">'+esc(found.reviewee_name)+' ('+esc(found.reviewee_id)+')</option>';
     $('c-emp').value=found.reviewee_id;
     $('c-emp').disabled=true;
+    renderStaticContext();
     try{ onContextChange(); }catch(_e){}
   }catch(e){
     host.innerHTML='<b>Peer review mode</b> · Could not load your assignment (server busy). <a href="#" onclick="loadMyAssignment();return false;" style="color:#2563eb;font-weight:700;">Retry</a>';
@@ -795,6 +796,7 @@ async function scopeProjectsToEmployee(){
     var note=$('proj-scope-note');
     if(!note){ note=document.createElement('div'); note.id='proj-scope-note'; note.style.cssText='font-size:10.5px;color:#64748b;margin-top:3px;'; sel.parentNode.appendChild(note); }
     note.textContent=(keys.length===1)?'Only project worked this week':(keys.length+' projects worked this week');
+    try{ renderStaticContext(); }catch(_r2){}
   }catch(e){}
 }
 
@@ -1003,6 +1005,33 @@ function applySampleToAudit(){
   renderCriteria(); recompute();
   lockAssignedColumns(); applyClientQAGate();
 }
+/* ── STATIC CONTEXT HEADER (non-admin) ──
+   Reviewers don't choose anything: the person, project, month and week are fixed by the
+   assignment. The selects stay in the DOM (the code reads them) but are hidden behind a
+   clean readout, so nobody can point the audit at the wrong target. */
+function renderStaticContext(){
+  if(IS_ADMIN) return;
+  var host=$('ctx-static');
+  if(!host){
+    host=document.createElement('div'); host.id='ctx-static';
+    host.style.cssText='display:flex;gap:26px;flex-wrap:wrap;align-items:flex-end;margin:0 0 6px;';
+    var row=($('c-emp')&&$('c-emp').closest)?$('c-emp').closest('.controls'):null;
+    if(row&&row.parentNode){ row.parentNode.insertBefore(host,row); row.style.display='none'; }
+    else { var app=$('app'); if(app&&app.firstElementChild) app.insertBefore(host, app.firstElementChild.nextSibling); }
+  }
+  function fld(lbl,val,big){
+    return '<div><div style="font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:2px;">'+lbl+'</div>'+
+           '<div style="font-family:Sora,Inter,sans-serif;font-size:'+(big?'17px':'13.5px')+';font-weight:'+(big?'800':'700')+';color:#0f172a;">'+esc(val||'—')+'</div></div>';
+  }
+  var who=(MODE==='peer')
+    ? ((MY_ASSIGNMENT&&MY_ASSIGNMENT.reviewee_name)||'Loading your assignment…')
+    : (function(){ var s=$('c-emp'); return (s&&s.selectedIndex>=0&&s.options[s.selectedIndex])?s.options[s.selectedIndex].text.replace(/\s*\([^)]*\)\s*$/,''):'Pick from your lead queue'; })();
+  var projKey=($('c-proj')||{}).value||'';
+  var projLbl=(PROJECTS[projKey]&&PROJECTS[projKey].label)||projKey||'—';
+  var mv=($('c-month')||{}).value||'';
+  var mLbl=mv?(function(){ try{ return new Date(mv+'-01T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'}); }catch(e){ return mv; } })():'—';
+  host.innerHTML=fld('Reviewing', who, true)+fld('Project', projLbl)+fld('Month', mLbl)+fld('Week', 'Week '+((($('c-week')||{}).value)||'1'));
+}
 /* Reviewers can't add, remove or rename the assigned accounts — the sample is the audit. */
 function lockAssignedColumns(){
   if(IS_ADMIN) return;
@@ -1021,6 +1050,7 @@ async function onContextChange(){
   var emp=$('c-emp').value, month=$('c-month').value;
   $('ctx-month').textContent=month||'—';
   try{ scopeProjectsToEmployee(); }catch(_sp){}
+  try{ renderStaticContext(); }catch(_rs){}
   try{ loadAssignedSet(); }catch(_ls){}
   try{ qSaveDraft(); }catch(_sd){}
   // Peer mode: changing the week re-fetches that week's assignment (pairs reshuffle weekly).
@@ -1112,7 +1142,7 @@ async function saveScore(){
         +'&reviewer_id='+encodeURIComponent(USER.id)
         +'&reviewer_name='+encodeURIComponent(USER.name||USER.id)
         +'&score='+encodeURIComponent(res.score)
-        +'&mins=20'
+        +'&mins=30'
         +'&notes='+encodeURIComponent(($('c-note').value||'')+' | failed checks: '+focus.length)
         +'&_='+Date.now();
       var pd=await qPost(pu, async function(){
@@ -1141,6 +1171,7 @@ async function saveScore(){
         +'&month='+encodeURIComponent(month)
         +'&week='+encodeURIComponent(week)
         +'&stage=lead'
+        +'&mins=20'
         +'&reviewer_id='+encodeURIComponent(USER.id)
         +'&reviewer_name='+encodeURIComponent(USER.name||USER.id)
         +'&score='+encodeURIComponent(res.score)

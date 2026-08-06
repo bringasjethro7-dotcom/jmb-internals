@@ -383,17 +383,45 @@ async function loadProgressData(){
     var ed=await fetch(APPS_SCRIPT_URL+'?action=emp_dir&_='+Date.now()).then(function(r){return r.json();}).catch(function(){return null;});
     if(pv&&pv.ok) PROG.rows=pv.rows||[];
     if(ed&&ed.employees){ var m={}; ed.employees.forEach(function(e){ var ph=''; var mm=String(e.photo||'').match(/[-\w]{25,}/); if(mm) ph='https://drive.google.com/thumbnail?id='+mm[0]+'&sz=w200';
-      m[String(e.employee_id).toLowerCase()]={n:e.full_name||e.employee_id,p:ph}; }); PROG.dir=m; }
+      m[String(e.employee_id).toLowerCase()]={n:e.full_name||e.employee_id,p:ph,s:String(e.shift||'').toLowerCase()}; }); PROG.dir=m; }
     document.querySelectorAll('.progslide-grid').forEach(function(host){ host.innerHTML=progRows(); });
   }catch(e){}
 }
+/* ── SHIFT WINDOW ──
+   The board shows the shift that is ON DUTY right now, and nobody else:
+     08:00–19:59 PHT → morning shift   ·   20:00–07:59 PHT → night shift
+   At 8 PM the morning team leaves the board and the night team starts from zero;
+   at 8 AM the reverse. Progress bars come from each tool's per-shift counters. */
+function phtHour(){
+  try{ return parseInt(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',hour12:false}).format(new Date()),10); }
+  catch(e){ return new Date().getHours(); }
+}
+function curShift(){ var h=phtHour(); return (h>=8 && h<20) ? 'morning' : 'night'; }
+function shiftLabel(){ return curShift()==='night' ? 'Night shift' : 'Morning shift'; }
+function shiftResetIn(){
+  var h=phtHour(), mins;
+  try{ mins=parseInt(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',minute:'2-digit'}).format(new Date()),10); }catch(e){ mins=new Date().getMinutes(); }
+  var target=(h>=8&&h<20)?20:(h<8?8:32);           // next boundary in PHT hours
+  var left=((target-h)*60)-mins;
+  if(left<0) left+=1440;
+  var hh=Math.floor(left/60), mm=left%60;
+  return hh+'h '+mm+'m';
+}
 function progRows(){
   var by={}; PROG.rows.forEach(function(r){ var k=String(r.employee_id).toLowerCase(); (by[k]=by[k]||[]).push(r); });
-  var cards=Object.keys(by).map(function(k){ var rows=by[k]; var avg=Math.round(rows.reduce(function(sm,x){return sm+x.pct;},0)/rows.length); return {k:k,rows:rows,avg:avg}; })
-    .sort(function(a,b){ return b.avg-a.avg; });
-  if(!cards.length) return '<div class="empty-note">No tool activity yet this shift.</div>';
   var nrm=function(x){ return String(x||'').toLowerCase().replace(/[^a-z0-9]/g,''); };
   var byName={}; Object.keys(PROG.dir).forEach(function(k){ byName[nrm(PROG.dir[k].n)]=k; });
+  var SH=curShift();
+  var cards=Object.keys(by).map(function(k){ var rows=by[k]; var avg=Math.round(rows.reduce(function(sm,x){return sm+x.pct;},0)/rows.length); return {k:k,rows:rows,avg:avg}; })
+    .filter(function(c){
+      // ON-DUTY ONLY. (ALTR pushes names, not IDs — resolve those through the name index.)
+      var rk=PROG.dir[c.k]?c.k:(byName[nrm(c.k)]||null);
+      var sh=rk?String((PROG.dir[rk]||{}).s||'').toLowerCase():'';
+      if(!sh) return true;                       // unknown shift → keep visible rather than blank the board
+      return (sh==='night') === (SH==='night');
+    })
+    .sort(function(a,b){ return b.avg-a.avg; });
+  if(!cards.length) return '<div class="empty-note">No tool activity yet this shift — the board fills as the '+shiftLabel().toLowerCase()+' works.</div>';
   return cards.map(function(c){
     var rk=PROG.dir[c.k]?c.k:(byName[nrm(c.k)]||c.k);
     var d=PROG.dir[rk]||{}; var nm=esc(d.n||c.k.toUpperCase());
@@ -405,14 +433,26 @@ function progRows(){
 function pProgress(active){
   return '<div class="panel'+(active?' active':'')+'">'+
     '<div style="display:flex;align-items:baseline;gap:1.4vw;margin-bottom:2.2vh;">'+
-      '<div style="font-size:4.6vh;font-weight:800;letter-spacing:-.01em;">Team Progress <em style="font-style:normal;color:var(--o1)">— live from the tools</em></div>'+
-      '<div style="font-size:1.8vh;color:var(--ink2);font-weight:600;">sessions & outputs · resets 8 AM / 8 PM</div>'+
+      '<div style="font-size:4.6vh;font-weight:800;letter-spacing:-.01em;">Team Progress <em style="font-style:normal;color:var(--o1)">— '+shiftLabel()+'</em></div>'+
+      '<div style="font-size:1.8vh;color:var(--ink2);font-weight:600;">'+(curShift()==='night'?'8 PM → 8 AM':'8 AM → 8 PM')+' · resets in '+shiftResetIn()+'</div>'+
     '</div>'+
     '<div class="pgrid progslide-grid">'+progRows()+'</div>'+
   '</div>';
 }
 setInterval(function(){ loadProgressData(); }, 120000);
 loadProgressData();
+/* Shift changeover: the moment the clock crosses 8 AM / 8 PM, clear the outgoing team off the
+   board and pull fresh data for the incoming one — no stale bars carried across the boundary. */
+var _lastShift=curShift();
+setInterval(function(){
+  var s=curShift();
+  if(s!==_lastShift){
+    _lastShift=s;
+    PROG.rows=[];                                                   // outgoing team leaves immediately
+    document.querySelectorAll('.progslide-grid').forEach(function(h){ h.innerHTML=progRows(); });
+    loadProgressData();                                             // incoming team starts from zero
+  }
+}, 30000);
 
 function panelList(){
   var info=[

@@ -2769,6 +2769,7 @@ function renderHistory(d){
 }
 
 /* ===================== QA — REELS COUNT (per day, by poster) ===================== */
+var _qaFailReason='', _qaHardStop=false;
 var _qaRunning=false;
 function _qaPad(n){ return String(n).padStart(2,'0'); }
 function _qaLocalDate(d){ return d.getFullYear()+'-'+_qaPad(d.getMonth()+1)+'-'+_qaPad(d.getDate()); }
@@ -2888,6 +2889,7 @@ async function runReelsQA(){
   var box=$('qa-progress'), fill=$('qa-progress-fill'), lab=$('qa-progress-label');
   if(box) box.style.display='block';
   var perPoster={}, perAccount=[], ok=0, fail=0, rl=0, consec=0, stopped=false, total=0, noTs=0;
+  _qaFailReason=''; _qaHardStop=false;
   for(var i=0;i<accts.length;i++){
     var a=accts[i];
     if(lab) lab.textContent='Scanning '+(i+1)+'/'+accts.length+' — @'+a.handle+(rl?(' · '+rl+' rate-limited'):'');
@@ -2904,8 +2906,15 @@ async function runReelsQA(){
           if(!x.ts){ noTs++; return; }
           if(x.ts>=win.start && x.ts<win.end) cnt++;
         });
-      } else { fail++; if(r && Number(r.code)===429){ rl++; consec++; } }
-    }catch(e){ fail++; }
+      } else {
+        fail++;
+        // Remember WHY it failed — a config problem must not masquerade as 200 silent failures.
+        if(r && r.error) _qaFailReason=String(r.error);
+        else if(r && r.code) _qaFailReason='HTTP '+r.code+(r.head?(' · '+String(r.head).slice(0,80)):'');
+        if(r && Number(r.code)===429){ rl++; consec++; }
+        else if(ok===0 && fail>=3){ stopped=true; _qaHardStop=true; break; }   // 3 straight failures with zero successes = broken config, stop wasting calls
+      }
+    }catch(e){ fail++; _qaFailReason=String(e&&e.message||e); if(ok===0 && fail>=3){ stopped=true; _qaHardStop=true; break; } }
     if(fetched){
       var _cap=qaPerDay(); if(cnt>_cap) cnt=_cap;   // cap each account at the per-day target (e.g. 4)
       total+=cnt;
@@ -2922,8 +2931,19 @@ async function runReelsQA(){
   if(fill) fill.style.width='100%';
   setTimeout(function(){ if(box) box.style.display='none'; }, 1400);
   _qaRunning=false;
-  _qaLast={ fromV:fromV, toV:toV, perPoster:perPoster, perAccount:perAccount, meta:{ ok:ok, fail:fail, rl:rl, total:total, stopped:stopped, noTs:noTs } };
+  _qaLast={ fromV:fromV, toV:toV, perPoster:perPoster, perAccount:perAccount, meta:{ ok:ok, fail:fail, rl:rl, total:total, stopped:stopped, noTs:noTs, reason:_qaFailReason, hardStop:_qaHardStop } };
   qaRenderResults();
+  // Config failure → say so plainly instead of reporting a fake "0 reels" day.
+  if(ok===0 && fail>0){
+    var box2=$('qa-results');
+    var why=/no_worker/i.test(_qaFailReason)
+      ? '<b>The Instagram worker isn\'t configured on this deployment.</b><br>Script Properties don\'t carry over when an Apps Script project is migrated. In the ALTR Apps Script project: <b>Project Settings → Script Properties</b> → add <code>IG_WORKER</code> (the worker URL) and <code>IG_COOKIE</code> if used, then run the count again.'
+      : ('Every account failed. Reason from the server: <code>'+esc(_qaFailReason||'unknown')+'</code>');
+    if(box2) box2.innerHTML='<div style="border:1px solid rgba(220,38,38,.35);background:rgba(220,38,38,.06);border-radius:12px;padding:14px 16px;font-size:13px;color:#7f1d1d;line-height:1.6;">'+
+      '<div style="font-weight:800;margin-bottom:5px;">⚠ Reels count could not run — no data was collected</div>'+why+
+      '<div style="margin-top:7px;opacity:.8;font-size:12px;">Stopped after '+fail+' failed call'+(fail>1?'s':'')+' to protect your API quota. No scorecard or investigation data was saved.</div></div>';
+    return;   // never save a bogus run
+  }
   if(!stopped) qaSaveRun();   // record completed runs for the poster scorecard (skip runs cut short by rate-limit)
   qaSyncInvestigations();     // update the persistent investigation list (adds ≤2, clears recovered >2)
 }
