@@ -369,6 +369,99 @@ header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
 
 <script>
 var PORTAL_URL = "https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec";
+
+/* ══════════ QFX — QA fetch chain ══════════════════════════════════════════════════
+   This tool decides people's scores, so a dropped request is unacceptable. Every call goes
+   through one hardened path:
+     · 4-slot priority gate (user actions first, background refreshes last) — no request storms
+     · patient 45s timeout, 4 attempts with jittered backoff, retries re-enter the queue
+     · Google's HTML error page is detected and treated as a retryable failure, NEVER as data
+     · reads are deduped + cached (stale-while-revalidate); writes never retry blindly
+     · WRITES are confirmed: a timed-out submit is verified against the server before it's
+       reported as failed, so nobody double-submits a review
+     · live health chip so trouble is visible before anyone reports it                       */
+var _qfx={ max:4, active:0, q:[[],[],[]], ok:0, fail:0, ms:0, n:0, lastErr:0, stale:0 };
+function _qfxPump(){ while(_qfx.active<_qfx.max){ var j=_qfx.q[0].shift()||_qfx.q[1].shift()||_qfx.q[2].shift(); if(!j) return; _qfx.active++; j(); } }
+function _qfxRun(fn,pri){ return new Promise(function(res,rej){
+  _qfx.q[Math.max(0,Math.min(2,pri==null?1:pri))].push(function(){ fn().then(function(v){ _qfx.active--; _qfxPump(); res(v); },function(e){ _qfx.active--; _qfxPump(); rej(e); }); });
+  _qfxPump();
+}); }
+function _isJson(t){ var c=String(t||'').trim().charAt(0); return c==='{'||c==='['; }
+function _qfxOnce(url,timeout,pri){
+  return _qfxRun(function(){ return new Promise(function(res,rej){
+    var t0=Date.now(), ctl=(typeof AbortController!=='undefined')?new AbortController():null;
+    var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },timeout||45000):null;
+    fetch(url, ctl?{signal:ctl.signal}:undefined).then(function(r){ return r.text(); })
+      .then(function(t){ if(tm)clearTimeout(tm);
+        if(!_isJson(t)){ _qfx.fail++; _qfx.lastErr=Date.now(); rej(new Error('SERVER_BUSY')); return; }
+        _qfx.ok++; _qfx.ms+=(Date.now()-t0); _qfx.n++; res(t); })
+      .catch(function(e){ if(tm)clearTimeout(tm); _qfx.fail++; _qfx.lastErr=Date.now(); rej(e); });
+  }); }, pri);
+}
+var _qCache={}, _qFlight={};
+/* READ — cached, deduped, retried. ttl 0 = always fresh. */
+function qGet(url, opt){
+  opt=opt||{}; var ttl=(opt.ttl==null?15000:opt.ttl), pri=(opt.pri==null?1:opt.pri), tries=(opt.tries||4);
+  var key=String(url).replace(/[?&]_=\d+/,''), now=Date.now(), c=_qCache[key];
+  if(ttl>0 && c && (now-c.t)<ttl){
+    if((now-c.t)>ttl/2 && !c.rev){ c.rev=true; _qfxOnce(url,45000,2).then(function(t){ _qCache[key]={t:Date.now(),txt:t}; },function(){ c.rev=false; }); }
+    return Promise.resolve(JSON.parse(c.txt));
+  }
+  if(ttl>0 && _qFlight[key]) return _qFlight[key];
+  var p=(function go(left,delay){
+    return _qfxOnce(url,45000,pri).catch(function(e){
+      if(left>1) return new Promise(function(r){ setTimeout(r, delay+Math.random()*500); }).then(function(){ return go(left-1, Math.min(delay*2,8000)); });
+      throw e;
+    });
+  })(tries,1200).then(function(t){
+    if(ttl>0) _qCache[key]={t:Date.now(),txt:t};
+    delete _qFlight[key]; return JSON.parse(t);
+  },function(e){
+    delete _qFlight[key];
+    if(c&&c.txt){ _qfx.stale=Date.now(); return JSON.parse(c.txt); }   // stale beats broken
+    throw e;
+  });
+  if(ttl>0) _qFlight[key]=p;
+  return p;
+}
+/* WRITE — one attempt, generous timeout, then VERIFY before reporting failure.
+   verify(): optional async fn returning true if the write actually landed.            */
+async function qPost(url, verify){
+  try{ return await _qfxOnce(url, 90000, 0).then(JSON.parse); }
+  catch(e){
+    if(typeof verify==='function'){
+      await new Promise(function(r){ setTimeout(r,2500); });
+      try{ if(await verify()) return { ok:true, verified:true }; }catch(_v){}
+    }
+    throw e;
+  }
+}
+function qBust(re){ Object.keys(_qCache).forEach(function(k){ if(!re||re.test(k)) delete _qCache[k]; }); }
+/* Health chip — bottom-right, same idea as the admin console. */
+(function(){
+  function mount(){
+    if(document.getElementById('qfx-hud')) return;
+    var el=document.createElement('div'); el.id='qfx-hud';
+    el.style.cssText='position:fixed;bottom:12px;right:12px;z-index:9999;font:700 10.5px Inter,system-ui,sans-serif;padding:5px 11px;border-radius:100px;background:rgba(15,23,42,.88);color:#fff;display:flex;gap:7px;align-items:center;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25);opacity:.85;';
+    el.innerHTML='<span id="qfx-dot" style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;"></span><span id="qfx-txt">QA link ok</span>';
+    el.onclick=function(){ var q=_qfx.q[0].length+_qfx.q[1].length+_qfx.q[2].length, avg=_qfx.n?Math.round(_qfx.ms/_qfx.n):0;
+      alert('QA fetch chain\n\nIn flight: '+_qfx.active+' / '+_qfx.max+'\nQueued: '+q+'\nAvg response: '+(avg/1000).toFixed(1)+'s\nOK: '+_qfx.ok+' · Failed: '+_qfx.fail+((Date.now()-_qfx.stale)<60000?'\n\n⚠ Showing cached data (server busy).':'')); };
+    document.body.appendChild(el);
+    setInterval(function(){
+      var dot=document.getElementById('qfx-dot'), txt=document.getElementById('qfx-txt'); if(!dot) return;
+      var q=_qfx.q[0].length+_qfx.q[1].length+_qfx.q[2].length, avg=_qfx.n?Math.round(_qfx.ms/_qfx.n):0;
+      var err=(Date.now()-_qfx.lastErr)<30000, st=(Date.now()-_qfx.stale)<60000;
+      dot.style.background=err?'#ef4444':(st||q>2||avg>9000)?'#f59e0b':'#22c55e';
+      txt.textContent=err?'QA link retrying':st?'cached mode':(q>0?(_qfx.active+'·'+q+' queued'):('QA link ok'+(avg?' · '+(avg/1000).toFixed(1)+'s':'')));
+    },2000);
+  }
+  if(document.body) mount(); else document.addEventListener('DOMContentLoaded',mount);
+})();
+/* DRAFT SAFETY — a half-finished audit must survive a refresh, a crash or a dead connection. */
+function qDraftKey(){ try{ return 'qa_draft_'+(USER&&USER.id)+'_'+$('c-emp').value+'_'+$('c-proj').value+'_'+$('c-month').value+'_W'+(($('c-week')||{}).value||'1'); }catch(e){ return ''; } }
+function qSaveDraft(){ try{ var k=qDraftKey(); if(!k||!AUDIT) return; localStorage.setItem(k, JSON.stringify({ audit:AUDIT, note:(($('c-note')||{}).value||''), clientQA:clientQA, t:Date.now() })); }catch(e){} }
+function qLoadDraft(){ try{ var k=qDraftKey(); if(!k) return null; var d=JSON.parse(localStorage.getItem(k)||'null'); return (d && (Date.now()-d.t)<72*3600*1000)?d:null; }catch(e){ return null; } }
+function qClearDraft(){ try{ var k=qDraftKey(); if(k) localStorage.removeItem(k); }catch(e){} }
 var ADMIN_PASS = "JMBeast_020298";
 var USER=null, EMPLOYEES=[], IS_ADMIN=false, VIEW='compute';
 var AUDIT={};   // { taskName: [ { name, states:[bool...] } ] }
@@ -540,7 +633,7 @@ function setMode(m){
   var emp=$('c-emp');
   if(m==='peer'){ loadMyAssignment(); }
   else { if(emp){ emp.disabled=false; } loadLeadQueue(); }
-  renderModeBar();
+  renderModeBar(); applyClientQAGate();
   var sb=$('save-btn'); if(sb) sb.textContent = (m==='peer') ? 'Submit peer review (stage 1 of 3)' : 'Submit lead review (stage 2 of 3)';
 }
 function renderModeBar(){
@@ -569,17 +662,22 @@ async function loadLeadQueue(){
   }
   host.innerHTML='<b>Team lead review</b> · loading the peer reviews waiting for you…';
   try{
-    var r=await fetch(PORTAL_URL+'?action=qa_review_list&month='+encodeURIComponent($('c-month').value||curMonth())+'&_='+Date.now());
-    var t=await r.text(); var d=null; try{ d=JSON.parse(t); }catch(_p){ throw new Error('server busy'); }
+    var d=await qGet(PORTAL_URL+'?action=qa_review_list&month='+encodeURIComponent($('c-month').value||curMonth()), {ttl:20000});
     if(!d||!d.ok) throw new Error((d&&d.error)||'error');
     // Did THIS lead already submit their own peer review this week? That gates their lead queue.
     var myWk=parseInt((($('c-week')||{}).value||'1'),10);
     PEER_DONE=(d.items||[]).some(function(it){ return String(it.peer_id||'').toUpperCase()===String(USER.id).toUpperCase() && it.week===myWk; });
     renderModeBar();
     if(!PEER_DONE){ host.innerHTML='<b>Team lead review</b> · locked — submit your own peer review for Week '+myWk+' first. Everyone starts as a peer.'; return; }
-    var waiting=(d.items||[]).filter(function(it){ return it.peer_score!=null && it.lead_score==null; });
-    if(!waiting.length){ host.innerHTML='<b>Team lead review</b> · nothing waiting — peer reviews appear here once submitted.'; return; }
-    host.innerHTML='<b>Team lead review</b> · <b style="color:#15803d;">'+waiting.length+'</b> peer review'+(waiting.length>1?'s':'')+' waiting for your screen'+
+    // Only the rows THIS lead was assigned by the shuffle (admin sees everything).
+    var meU=String(USER.id).toUpperCase();
+    var waiting=(d.items||[]).filter(function(it){
+      if(!(it.peer_score!=null && it.lead_score==null)) return false;
+      if(IS_ADMIN || meU==='JMBEAST') return true;
+      return String(it.lead_assigned_id||'').toUpperCase()===meU;
+    });
+    if(!waiting.length){ host.innerHTML='<b>Team lead review</b> · nothing assigned to you yet — you\'re notified the moment a peer review lands on your screen.'; return; }
+    host.innerHTML='<b>Team lead review</b> · <b style="color:#15803d;">'+waiting.length+'</b> review'+(waiting.length>1?'s':'')+' assigned to you'+
       '<div style="font-size:11.5px;opacity:.75;margin:4px 0 7px;">Open the same board, audit it yourself, then save — your score becomes the lead stage and goes to the manager for approval.</div>'+
       waiting.map(function(it){
         return '<span style="display:inline-block;background:#fff;border:1px solid rgba(21,128,61,.3);border-radius:100px;padding:3px 11px;margin:3px 5px 0 0;font-size:11.5px;cursor:pointer;" onclick="leadPick(\''+esc(it.employee_id)+'\','+it.week+')">'+
@@ -608,11 +706,11 @@ function startApp(){
   try{
     var sb=$('save-btn');
     if(sb) sb.textContent = IS_ADMIN ? 'Compute & save weekly QA' : 'Submit peer review (stage 1 of 3)';
-    renderModeBar();
+    renderModeBar(); applyClientQAGate();
     var chain=document.createElement('div');
     chain.style.cssText='margin:0 0 12px;font-size:11.5px;color:#64748b;letter-spacing:.02em;';
     function seg(n,lbl,on){ return '<span style="'+(on?'color:#0f172a;font-weight:800;':'')+'">'+n+' · '+lbl+'</span>'; }
-    chain.innerHTML='QA chain: '+seg(1,'Peer (30 min)',IS_PEER)+' <span style="opacity:.45;">→</span> '+seg(2,'Team Lead',IS_LEAD)+' <span style="opacity:.45;">→</span> '+seg(3,'Manager approval',IS_ADMIN);
+    chain.innerHTML='QA chain: '+seg(1,'Peer (20 min max)',IS_PEER)+' <span style="opacity:.45;">→</span> '+seg(2,'Team Lead',IS_LEAD)+' <span style="opacity:.45;">→</span> '+seg(3,'Manager approval',IS_ADMIN);
     var app=$('app'); if(app && app.firstElementChild) app.insertBefore(chain, app.firstElementChild.nextSibling); else if(app) app.prepend(chain);
   }catch(_cb){}
   $('c-month').value = curMonth();
@@ -632,8 +730,7 @@ async function loadMyAssignment(){
   }
   host.innerHTML='<b>Peer review mode</b> · finding your assignment…';
   try{
-    var r=await fetch(PORTAL_URL+'?action=qa_pairs&month='+encodeURIComponent($('c-month').value||curMonth())+'&week='+encodeURIComponent(week)+'&_='+Date.now());
-    var t=await r.text(); var d=null; try{ d=JSON.parse(t); }catch(_p){ throw new Error('server busy'); }
+    var d=await qGet(PORTAL_URL+'?action=qa_pairs&month='+encodeURIComponent($('c-month').value||curMonth())+'&week='+encodeURIComponent(week), {ttl:300000});
     if(!d||!d.ok) throw new Error((d&&d.error)||'error');
     var me=String(USER.id).toUpperCase(), found=null, team='';
     (d.teams||[]).forEach(function(tm){ (tm.pairs||[]).forEach(function(p){ if(String(p.reviewer_id).toUpperCase()===me){ found=p; team=tm.team; } }); });
@@ -644,7 +741,7 @@ async function loadMyAssignment(){
       return;
     }
     host.innerHTML='<b>Peer review mode</b> · Week '+esc(week)+' · you are auditing <b style="color:#2563eb;">'+esc(found.reviewee_name)+'</b> <span style="opacity:.7;">('+esc(team)+')</span>'+
-      '<div style="font-size:11.5px;opacity:.75;margin-top:4px;">Spend at least <b>30 minutes</b> on this review. Your score goes to the team lead, then to the manager for approval.</div>';
+      '<div style="font-size:11.5px;opacity:.75;margin-top:4px;">Keep it to <b>20 minutes maximum</b> — one day\'s work, the assigned accounts. Your score goes to the team lead, then to the manager.</div>';
     // Lock the employee dropdown to the assigned teammate.
     $('c-emp').innerHTML='<option value="'+esc(found.reviewee_id)+'">'+esc(found.reviewee_name)+' ('+esc(found.reviewee_id)+')</option>';
     $('c-emp').value=found.reviewee_id;
@@ -668,14 +765,37 @@ function showView(v){
 /* ---- employees ---- */
 async function loadEmployees(){
   try{
-    var r=await fetch(PORTAL_URL+'?action=get_all_employees&_='+Date.now());
-    var d=await r.json();
+    var d=await qGet(PORTAL_URL+'?action=get_all_employees', {ttl:300000});
     EMPLOYEES=((d&&d.employees)||[]).filter(function(e){ return e.employee_id && String(e.employee_id).toUpperCase()!=='ADMIN'; });
     EMPLOYEES.sort(function(a,b){ return String(a.full_name||a.employee_id).localeCompare(String(b.full_name||b.employee_id)); });
     $('c-emp').innerHTML='<option value="">Select employee…</option>'+EMPLOYEES.map(function(e){
       return '<option value="'+esc(e.employee_id)+'">'+esc(e.full_name||e.employee_id)+' ('+esc(e.employee_id)+')</option>';
     }).join('');
-  }catch(e){ $('c-emp').innerHTML='<option value="">Could not load employees</option>'; }
+  }catch(e){ $('c-emp').innerHTML='<option value="">Server busy — retrying…</option>'; setTimeout(loadEmployees, 15000); }
+}
+/* ── PROJECT SCOPING — show only the project(s) the reviewed employee actually worked on ──
+   The sampler already knows which project their week's output came from; the dropdown should
+   never offer a project this VA never touched (that's how mismatched audits happen). */
+async function scopeProjectsToEmployee(){
+  var emp=$('c-emp').value, month=$('c-month').value, week=(($('c-week')||{}).value||'1');
+  var sel=$('c-proj'); if(!sel||!emp||!month) return;
+  try{
+    var d=await qGet(PORTAL_URL+'?action=qa_sample&employee_id='+encodeURIComponent(emp)+'&month='+encodeURIComponent(month)+'&week='+encodeURIComponent(week)+'&scan=1', {ttl:600000});
+    var hits=(d&&d.projects_worked)||[];
+    if(!hits.length) return;                      // nothing recorded → leave the full list
+    var keys=Object.keys(PROJECTS).filter(function(k){
+      var lk=k.toLowerCase();
+      return hits.some(function(h){ h=String(h||'').toLowerCase(); return lk.indexOf(h)>=0 || h.indexOf(lk.split(' - ')[0])>=0 || h.indexOf(lk)>=0; });
+    });
+    if(!keys.length) return;
+    var cur=sel.value;
+    sel.innerHTML=keys.map(function(k){ return '<option value="'+esc(k)+'">'+esc(PROJECTS[k].label)+'</option>'; }).join('');
+    sel.value=(keys.indexOf(cur)>=0)?cur:keys[0];
+    if(sel.value!==cur){ onProjectChange(); }
+    var note=$('proj-scope-note');
+    if(!note){ note=document.createElement('div'); note.id='proj-scope-note'; note.style.cssText='font-size:10.5px;color:#64748b;margin-top:3px;'; sel.parentNode.appendChild(note); }
+    note.textContent=(keys.length===1)?'Only project worked this week':(keys.length+' projects worked this week');
+  }catch(e){}
 }
 
 /* ---- project + audit model ---- */
@@ -730,7 +850,7 @@ function renderCriteria(){
   }).join('');
   $('crit-list').innerHTML=html;
 }
-function toggleCell(task,ai,ci){ var a=AUDIT[task][ai]; a.states[ci]=(a.states[ci]===true)?false:true; renderCriteria(); recompute(); }
+function toggleCell(task,ai,ci){ var a=AUDIT[task][ai]; a.states[ci]=(a.states[ci]===true)?false:true; renderCriteria(); recompute(); try{ qSaveDraft(); }catch(e){} }
 function flipRow(task,ci){
   var accts=AUDIT[task]; var allPass=accts.every(function(a){return a.states[ci]===true;});
   accts.forEach(function(a){ a.states[ci]=allPass?false:true; });
@@ -758,7 +878,24 @@ function computeAudit(){
   });
   return { passed:passed, total:total, score: total>0?Math.round(passed/total*100):0 };
 }
-function onClientQAChange(){ clientQA=$('c-clientqa').checked; recompute(); }
+function onClientQAChange(){
+  // Client's QA (−10%) is a LEAD/ADMIN judgement — peers can't apply it.
+  if(MODE==='peer' && !IS_ADMIN){ $('c-clientqa').checked=false; clientQA=false; toast('Client\'s QA is applied by the team lead or admin, not at the peer stage.'); return; }
+  clientQA=$('c-clientqa').checked; recompute();
+}
+/* Show/lock the Client's QA control according to the current stage. */
+function applyClientQAGate(){
+  var box=$('c-clientqa'); if(!box) return;
+  var lab=box.closest?box.closest('label'):null;
+  var peerStage=(MODE==='peer' && !IS_ADMIN);
+  box.disabled=peerStage;
+  if(peerStage){ box.checked=false; clientQA=false; }
+  if(lab){
+    lab.style.opacity=peerStage?'.45':'1';
+    lab.style.cursor=peerStage?'not-allowed':'pointer';
+    lab.title=peerStage?'Only the team lead or admin can apply Client\'s QA':'Applies a 10% deduction';
+  }
+}
 function recompute(){
   var res=computeAudit();
   var base=res.score;
@@ -792,9 +929,8 @@ async function loadAssignedSet(){
   try{
     var _need=0; try{ (curProject().tasks||[]).forEach(function(t){ _need+=(t.accounts||0); }); }catch(_n){}
     _need=Math.max(10, _need);   // enough real accounts to fill every task column
-    var r=await fetch(PORTAL_URL+'?action=qa_sample&employee_id='+encodeURIComponent(emp)+'&project='+encodeURIComponent(proj)
-        +'&month='+encodeURIComponent(month)+'&week='+encodeURIComponent(week)+'&n='+_need+'&_='+Date.now());
-    var t2=await r.text(); var d=null; try{ d=JSON.parse(t2); }catch(_p){ throw new Error('server busy'); }
+    var d=await qGet(PORTAL_URL+'?action=qa_sample&employee_id='+encodeURIComponent(emp)+'&project='+encodeURIComponent(proj)
+        +'&month='+encodeURIComponent(month)+'&week='+encodeURIComponent(week)+'&n='+_need, {ttl:600000});
     if(!d||!d.ok) throw new Error((d&&d.error)||'error');
     SAMPLE=d;
     var vol=Object.keys(d.volumes||{}).map(function(k){ return esc(k)+' <b>'+d.volumes[k]+'</b>'; }).join(' · ');
@@ -807,14 +943,28 @@ async function loadAssignedSet(){
     if(d.audit_day){
       try{ dayLbl=new Date(d.audit_day+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'}); }catch(_dl){ dayLbl=d.audit_day; }
     }
-    host.innerHTML=
-      (d.audit_day
-        ? '<div style="font-size:13px;"><b>Audit day: <span style="color:#e11d48;">'+esc(dayLbl)+'</span></b> <span style="opacity:.7;">· auto-selected from '+d.worked_days+' day'+(d.worked_days!==1?'s':'')+' worked in '+esc(d.from)+' → '+esc(d.to)+'</span></div>'
-        : '<div style="font-size:13px;"><b>No output recorded</b> in '+esc(d.from)+' → '+esc(d.to)+'</div>')+
-      '<div style="font-size:11px;opacity:.75;margin-top:3px;">Review only that day\'s work. The same day and the same accounts are shown to the peer, the lead and the manager — nobody picks their own sample.</div>'+
-      (vol?('<div style="margin-top:5px;">That day\'s output: '+vol+' <span style="opacity:.7;">(total '+d.total_volume+')</span></div>'):'')+
-      ((d.items||[]).length?('<div style="margin-top:4px;opacity:.85;">Accounts to check: <b>'+d.items.length+'</b> ('+d.worked_in_week+' touched that day, rest filled from their board)</div>')
-                           :'<div style="margin-top:4px;opacity:.85;">No account-level rows found for that day — audit against the day\'s recorded output above.</div>');
+    if(d.audit_day){
+      // The audit DATE is the single most important instruction on this screen — make it loud.
+      host.style.cssText='margin:8px 0 14px;padding:0;border:none;background:none;';
+      host.innerHTML=
+        '<div style="display:flex;align-items:stretch;gap:0;border-radius:14px;overflow:hidden;box-shadow:0 6px 20px -8px rgba(225,29,72,.45);border:2px solid #e11d48;">'+
+          '<div style="background:linear-gradient(135deg,#e11d48,#9f1239);color:#fff;padding:12px 18px;display:flex;flex-direction:column;justify-content:center;min-width:150px;">'+
+            '<div style="font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.9;">Audit this day</div>'+
+            '<div style="font-family:Sora,Inter,sans-serif;font-size:21px;font-weight:800;line-height:1.15;margin-top:2px;white-space:nowrap;">'+esc(dayLbl)+'</div>'+
+            '<div style="font-size:10.5px;opacity:.85;margin-top:1px;">'+esc(d.audit_day)+'</div>'+
+          '</div>'+
+          '<div style="flex:1;background:#fff;padding:11px 16px;font-size:12px;">'+
+            '<div><b>Review only this day\'s work.</b> Auto-selected from '+d.worked_days+' day'+(d.worked_days!==1?'s':'')+' worked in '+esc(d.from)+' → '+esc(d.to)+'.</div>'+
+            '<div style="opacity:.75;margin-top:3px;">The same date and the same accounts are shown to the peer, the team lead and the manager — nobody picks their own sample.</div>'+
+            (vol?('<div style="margin-top:6px;">That day\'s recorded output: '+vol+' <span style="opacity:.7;">(total '+d.total_volume+')</span></div>'):'')+
+            ((d.items||[]).length?('<div style="margin-top:4px;opacity:.85;">Accounts to check: <b>'+d.items.length+'</b> · '+d.worked_in_week+' touched that day</div>')
+                                 :'<div style="margin-top:4px;opacity:.85;">No account-level rows for that day — audit against the recorded output above.</div>')+
+          '</div>'+
+        '</div>';
+    } else {
+      host.style.cssText='margin:8px 0 12px;padding:10px 13px;border-radius:11px;background:rgba(180,83,9,.06);border:1px solid rgba(180,83,9,.3);font-size:12px;';
+      host.innerHTML='<b>No output recorded</b> in '+esc(d.from)+' → '+esc(d.to)+' — there is no work to audit for this week. Check whether the VA updated their tool.';
+    }
     applySampleToAudit();
   }catch(e){
     host.innerHTML='Could not load the assigned set (server busy). <a href="#" onclick="loadAssignedSet();return false;" style="color:#2563eb;font-weight:700;">Retry</a>';
@@ -837,8 +987,21 @@ function applySampleToAudit(){
       return { name: it.name + (it.in_week?'':' (older)'), states: (prev&&prev.states)||t.criteria.map(function(){return true;}) };
     });
   });
+  // Restore an unfinished audit for this exact context (survives refresh / crash / dead link).
+  try{
+    var dr=qLoadDraft();
+    if(dr && dr.audit){
+      var same=Object.keys(dr.audit).every(function(k){ return AUDIT[k] && dr.audit[k].length===AUDIT[k].length; });
+      if(same){
+        AUDIT=dr.audit;
+        if($('c-note') && dr.note) $('c-note').value=dr.note;
+        if(!IS_ADMIN && MODE==='peer'){ clientQA=false; } else { clientQA=!!dr.clientQA; if($('c-clientqa')) $('c-clientqa').checked=clientQA; }
+        toast('Restored your unfinished audit.');
+      }
+    }
+  }catch(_dr){}
   renderCriteria(); recompute();
-  lockAssignedColumns();
+  lockAssignedColumns(); applyClientQAGate();
 }
 /* Reviewers can't add, remove or rename the assigned accounts — the sample is the audit. */
 function lockAssignedColumns(){
@@ -857,7 +1020,9 @@ var _peerWk=null;
 async function onContextChange(){
   var emp=$('c-emp').value, month=$('c-month').value;
   $('ctx-month').textContent=month||'—';
+  try{ scopeProjectsToEmployee(); }catch(_sp){}
   try{ loadAssignedSet(); }catch(_ls){}
+  try{ qSaveDraft(); }catch(_sd){}
   // Peer mode: changing the week re-fetches that week's assignment (pairs reshuffle weekly).
   if(!IS_ADMIN && MODE==='peer'){
     var _w=($('c-week')||{}).value;
@@ -866,8 +1031,7 @@ async function onContextChange(){
   }
   if(!emp||!month){ $('wk-chips').innerHTML=''; $('wk-avg').textContent='—'; $('audit-list').innerHTML='<div class="empty">Pick an employee.</div>'; return; }
   try{
-    var r=await fetch(PORTAL_URL+'?action=get_qa_weekly&employee_id='+encodeURIComponent(emp)+'&month='+encodeURIComponent(month)+'&_='+Date.now());
-    var d=await r.json(); var w=(d&&d.weeks)||{}; var selW=parseInt($('c-week').value,10);
+    var d=await qGet(PORTAL_URL+'?action=get_qa_weekly&employee_id='+encodeURIComponent(emp)+'&month='+encodeURIComponent(month), {ttl:15000}); var w=(d&&d.weeks)||{}; var selW=parseInt($('c-week').value,10);
     $('wk-avg').textContent=(d&&d.avg!=null)?d.avg:'—';
     var html=''; for(var k=1;k<=4;k++){ var v=(w[k]!==''&&w[k]!=null&&!isNaN(w[k]))?Number(w[k]):null;
       var col=v==null?'var(--t3)':(v>=90?'var(--green)':(v>=75?'var(--amber)':'var(--red)'));
@@ -948,15 +1112,21 @@ async function saveScore(){
         +'&reviewer_id='+encodeURIComponent(USER.id)
         +'&reviewer_name='+encodeURIComponent(USER.name||USER.id)
         +'&score='+encodeURIComponent(res.score)
-        +'&mins=30'
+        +'&mins=20'
         +'&notes='+encodeURIComponent(($('c-note').value||'')+' | failed checks: '+focus.length)
         +'&_='+Date.now();
-      var pr=await fetch(pu); var pd=await pr.json();
+      var pd=await qPost(pu, async function(){
+        // Verify: did the peer review actually land despite the timeout?
+        qBust(/qa_review_list/);
+        var chk=await qGet(PORTAL_URL+'?action=qa_review_list&month='+encodeURIComponent(month), {ttl:0, tries:2});
+        return (chk&&chk.items||[]).some(function(it){ return String(it.employee_id).toUpperCase()===String(emp).toUpperCase() && it.week===parseInt(week,10) && it.peer_score!=null; });
+      });
+      qBust(/qa_review_list|qa_sample/);
       b.disabled=false; b.textContent='Compute & save weekly QA';
-      if(pd&&pd.ok){ toast('Peer review submitted · '+(MY_ASSIGNMENT.reviewee_name||'')+' W'+week+' = '+res.score+'% — sent to your team lead.');
+      if(pd&&pd.ok){ try{ qClearDraft(); }catch(_c){} toast('Peer review submitted · '+(MY_ASSIGNMENT.reviewee_name||'')+' W'+week+' = '+res.score+'% — sent to your team lead.');
         if(IS_LEAD){ PEER_DONE=true; renderModeBar(); loadLeadQueue(); } }
       else if(pd&&pd.error==='SELF_REVIEW') toast('You cannot review your own work.');
-      else if(pd&&pd.error==='MIN_30') toast('Peer reviews need a 30-minute session.');
+      
       else toast('Submit failed: '+((pd&&pd.error)||'unknown'));
     }catch(e){ b.disabled=false; b.textContent='Compute & save weekly QA'; toast('Network error — try again.'); }
     return;
@@ -976,10 +1146,17 @@ async function saveScore(){
         +'&score='+encodeURIComponent(res.score)
         +'&notes='+encodeURIComponent(($('c-note').value||'')+' | failed checks: '+focus.length)
         +'&_='+Date.now();
-      var lr=await fetch(lu); var ld=await lr.json();
+      var ld=await qPost(lu, async function(){
+        qBust(/qa_review_list/);
+        var chk=await qGet(PORTAL_URL+'?action=qa_review_list&month='+encodeURIComponent(month), {ttl:0, tries:2});
+        return (chk&&chk.items||[]).some(function(it){ return String(it.employee_id).toUpperCase()===String(emp).toUpperCase() && it.week===parseInt(week,10) && it.lead_score!=null; });
+      });
+      qBust(/qa_review_list/);
       b.disabled=false; b.textContent='Compute & save weekly QA';
-      if(ld&&ld.ok){ toast('Lead review saved · '+full+' W'+week+' = '+res.score+'% — sent for manager approval.'); loadLeadQueue(); }
+      if(ld&&ld.ok){ try{ qClearDraft(); }catch(_c){} toast('Lead review saved · '+full+' W'+week+' = '+res.score+'% — sent for manager approval.'); loadLeadQueue(); }
       else if(ld&&ld.error==='PEER_FIRST') toast('No peer review yet for this VA/week — the peer stage must come first.');
+      else if(ld&&ld.error==='NOT_ASSIGNED_LEAD') toast('Another team lead is assigned to this review.');
+      else if(ld&&ld.error==='SELF_REVIEW') toast('You cannot lead-review your own work.');
       else toast('Save failed: '+((ld&&ld.error)||'unknown'));
     }catch(e){ b.disabled=false; b.textContent='Compute & save weekly QA'; toast('Network error — try again.'); }
     return;
@@ -1001,7 +1178,7 @@ async function saveScore(){
       +'&client_qa='+(clientQA?'1':'0')
       +'&focus='+encodeURIComponent(JSON.stringify(focus))
       +'&_='+Date.now();
-    var r=await fetch(url); var d=await r.json();
+    var d=await qPost(url);
     b.disabled=false; b.textContent='Compute & save weekly QA';
     if(d&&d.ok){
       var msg='Saved · '+full+' W'+week+' = '+res.score+'% ('+res.passed+'/'+res.total+')';
