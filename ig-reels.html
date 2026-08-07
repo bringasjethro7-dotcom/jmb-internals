@@ -459,11 +459,11 @@ async function proofSubmit(){
   btn.disabled=false; btn.textContent='Save proof & count it';
 }
 /* THE GATE. Every output routes through here, so proof cannot be bypassed by any button. */
-function bump(task,n){
+function bump(task,n,account){
   return new Promise(function(resolve,reject){
-    PROOF.imgs=[]; PROOF.ctx={task:task,n:(n||1)}; PROOF.resolve=null; PROOF.reject=reject;
+    PROOF.imgs=[]; PROOF.ctx={task:task,n:(n||1),account:(account||'')}; PROOF.resolve=null; PROOF.reject=reject;
     var ov=proofPanel(); ov.style.display='flex';
-    document.getElementById('proof-what').textContent=task+' · counts as '+(n||1)+(PROOF_BATCH_NOTE?(' · '+PROOF_BATCH_NOTE):'');
+    document.getElementById('proof-what').textContent=task+(account?(' · '+account):'')+' · counts as '+(n||1)+(PROOF_BATCH_NOTE?(' · '+PROOF_BATCH_NOTE):'');
     document.getElementById('proof-note').value='';
     document.getElementById('proof-thumbs').innerHTML='';
     PROOF.resolve=function(){
@@ -565,23 +565,15 @@ function renderAudit(){
 }
 async function setAudit(id,k){
   var r0=row(id); if(!r0) return;
-  /* PROOF BEFORE THE TAG. Auditing had no proof step at all because it counts no output —
-     which meant a VA whose whole shift is auditing produced no evidence for QA to check.
-     One screenshot covers AUDIT_PROOF_COVERS accounts; re-tagging an account already audited
-     this shift doesn't ask again. */
+  /* ONE SCREENSHOT PER ACCOUNT, AND THE AUDIT IS THE OUTPUT.
+     Auditing used to be evidence-only, with a single screenshot covering five accounts. It is
+     now the auditor's measured output: each account audited counts 1 and needs its OWN
+     screenshot showing that account — batching is gone, because a batch screenshot cannot
+     prove which of the five was actually looked at. Re-tagging an account already audited this
+     shift relabels it without counting or asking again. */
   var firstThisShift = !markOk((r0.meta||{}).audited, r0.assigned_to||r0.created_by);
   try{
-    if(firstThisShift){
-      if(auProofLeft()<=0){
-        PROOF_BATCH_NOTE='Covers up to '+AUDIT_PROOF_COVERS+' audited accounts';
-        await proofOnly('Instagram Auditing', r0.handle||'', 1);
-        PROOF_BATCH_NOTE='';
-        auProofSet(AUDIT_PROOF_COVERS-1);
-      } else {
-        auProofSet(auProofLeft()-1);
-        toast('Covered by the last screenshot · '+auProofLeft()+' more.');
-      }
-    }
+    if(firstThisShift) await bump('Instagram Auditing', 1, r0.handle||'');   // rejects on cancel
     var d=await saveMeta(r0, Object.assign({}, r0.meta||{}, {audit:k, audited:vaKeyOf(USER.id)}));
     if(d&&d.ok){ toast('Audit tag updated.'); load(); } else toast('Could not save.');
   }catch(e){
@@ -606,41 +598,10 @@ function renderCM(){
   });
   $('grid').innerHTML=out.join('');
 }
-/* How many models one screenshot may cover. Keep this honest: a screenshot should plausibly
-   evidence this many models at once. Five matches what fits on one screen. */
-var CM_PROOF_COVERS=5, PROOF_BATCH_NOTE='';
-function cmProofKey(){ return 'cmproof_'+(USER&&USER.id)+'_'+vaKeyOf(USER.id); }   // resets each shift
-function cmProofLeft(){ try{ return parseInt(sessionStorage.getItem(cmProofKey())||'0',10)||0; }catch(e){ return 0; } }
-function cmProofSet(n){ try{ sessionStorage.setItem(cmProofKey(), String(Math.max(0,n))); }catch(e){} }
-/* Counts the output without opening the proof panel — used only for models already covered by
-   a screenshot taken moments earlier in the same batch. */
-function bumpSilent(task,n){
-  return fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)
-    +'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now()).catch(function(){});
-}
-/* PROOF WITHOUT A COUNT.
-   Auditing is real work but there is no "Auditing" task in the productivity tracker, so
-   bumping one would create an orphan row and distort the numbers. This records the evidence
-   only — the screenshot lands in the proof store exactly as any other, so the QA Factory can
-   check the auditing work, while productivity stays honest about what it measures.
-   Rejects on cancel, so nothing is saved when the VA backs out. */
-function proofOnly(task, account, n){
-  return new Promise(function(resolve,reject){
-    PROOF.imgs=[]; PROOF.ctx={task:task, account:account||'', n:(n||1)};
-    PROOF.resolve=null; PROOF.reject=reject;
-    var ov=proofPanel(); ov.style.display='flex';
-    document.getElementById('proof-what').textContent=task+(account?(' · '+account):'')+' · evidence only, no output counted';
-    document.getElementById('proof-note').value='';
-    document.getElementById('proof-thumbs').innerHTML='';
-    PROOF.resolve=function(){ resolve(true); };
-  });
-}
-/* One screenshot covers this many audited accounts — the auditing screen legitimately shows
-   several at once, so demanding one each would be friction out of proportion to the risk. */
-var AUDIT_PROOF_COVERS=5;
-function auProofKey(){ return 'auproof_'+(USER&&USER.id)+'_'+vaKeyOf(USER.id); }
-function auProofLeft(){ try{ return parseInt(sessionStorage.getItem(auProofKey())||'0',10)||0; }catch(e){ return 0; } }
-function auProofSet(n){ try{ sessionStorage.setItem(auProofKey(), String(Math.max(0,n))); }catch(e){} }
+/* Retained only because the proof record still carries a note field. Batch proof itself is
+   gone from this tool: every counted item — audited account or content-managed model — now
+   carries its own screenshot, so nothing "covers" anything else. */
+var PROOF_BATCH_NOTE='';
 async function cmSet(nm, k){
   try{
     var r=cmRowOf(nm), d;
@@ -651,22 +612,11 @@ async function cmSet(nm, k){
        Proof is requested BEFORE the save: cancelling must leave nothing changed. */
     var firstThisShift = !(r && markOk((r.meta||{}).cmAt, r.assigned_to||r.created_by));
     if(firstThisShift){
-      /* BATCH PROOF. One screenshot per model meant 23 capture prompts a shift for the CM VA,
-         which is friction disproportionate to the risk — a single screen legitimately shows
-         several models at once. One proof now COVERS the next CM_PROOF_COVERS models: the
-         first counted model of a batch asks for it, the rest ride along, and the count still
-         increments per model so the output number is unchanged. */
-      if(cmProofLeft()<=0){
-        // the record should say this screenshot stands for a batch, not a single model
-        PROOF_BATCH_NOTE='Covers up to '+CM_PROOF_COVERS+' models in this batch';
-        await bump('Content Management',1);      // rejects on cancel → nothing below runs
-        PROOF_BATCH_NOTE='';
-        cmProofSet(CM_PROOF_COVERS-1);
-      } else {
-        cmProofSet(cmProofLeft()-1);
-        await bumpSilent('Content Management',1);   // covered by the proof just taken
-        toast('Counted under the last screenshot · '+cmProofLeft()+' more covered.');
-      }
+      /* ONE SCREENSHOT PER MODEL. Batching used to let a single capture cover five models,
+         which saved the VA clicks but left QA unable to tell which model the screenshot
+         actually evidenced. Each counted model now carries its own proof of the arranged
+         content, named to the model. */
+      await bump('Content Management', 1, nm);   // rejects on cancel → nothing below runs
     } else {
       toast(nm+' already counted this shift — updating the status only, no new output.');
     }
