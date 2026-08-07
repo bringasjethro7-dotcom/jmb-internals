@@ -146,6 +146,9 @@ textarea.note:focus{border-color:var(--o1)}
 .wc.prov{border-style:dashed !important;border-color:rgba(180,83,9,.55) !important;background:rgba(180,83,9,.05) !important;position:relative}
 .wc.prov .wprov{font-size:8.5px;font-weight:900;letter-spacing:.10em;text-transform:uppercase;color:#b45309;margin-top:1px}
 .wc.prov .wv{font-style:italic}
+.wkin.prov{border-style:dashed !important;border-color:rgba(180,83,9,.6) !important;background:rgba(180,83,9,.05) !important}
+.wkin.prov::placeholder{color:#b45309;opacity:.85;font-style:italic;font-weight:800}
+.wkcell.prov{border-style:dashed;border-color:rgba(180,83,9,.5);background:rgba(180,83,9,.06);color:#b45309}
 .subok.blurred-avg{filter:blur(5px);user-select:none}
 .schedrow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:6px 0 2px}
 @media(max-width:640px){.schedrow{grid-template-columns:repeat(2,1fr)}}
@@ -1672,12 +1675,24 @@ async function saveSchedule(week, val){
 /* Admins type the score straight into the box. Non-admins (and any month already submitted &
    locked) still see the read-only chip. Blank the box to clear that week back to pending. */
 function wkCell(c, rowIdx, week, locked){
+  var hasProv = (c.prov!=null && c.prov!=='');
+  var provTip = hasProv
+    ? ((c.prov_stage==='lead' ? 'Lead review' : 'Peer review')
+        + (c.prov_by ? (' by '+c.prov_by) : '')
+        + ' — ' + (c.prov_stage==='lead' ? 'awaiting your approval' : 'awaiting team lead')
+        + '. Provisional, not yet counted.')
+    : '';
   if(IS_ADMIN && !locked){
     var val = (c.state==='done' && c.score!=null && c.score!=='') ? esc(c.score) : '';
     var cls = 'wkin' + (c.state==='done' ? ' done' : (c.state==='overdue' ? ' overdue' : ''));
-    var tip = c.due ? ('Due '+esc(c.due)) : 'No schedule';
+    /* A week awaiting sign-off shows the chain's number as a PLACEHOLDER, not a value: the
+       box stays genuinely empty so "blank = pending" still holds and nothing is saved by
+       accident. Typing over it records the approved score as normal. */
+    if(!val && hasProv) cls += ' prov';
+    var tip = (c.due ? ('Due '+esc(c.due)) : 'No schedule');
+    var ph  = (!val && hasProv) ? esc(c.prov) : '–';
     return '<input class="'+cls+'" type="number" min="0" max="100" step="0.01" inputmode="decimal" '+
-           'value="'+val+'" placeholder="–" title="'+tip+' — type a score (0-100), blank to clear" '+
+           'value="'+val+'" placeholder="'+ph+'" title="'+esc(hasProv && !val ? provTip : (tip+' — type a score (0-100), blank to clear'))+'" '+
            'onchange="saveWeekScore('+rowIdx+','+week+',this)" '+
            'onkeydown="if(event.key===\'Enter\'){this.blur();}">';
   }
@@ -1685,6 +1700,7 @@ function wkCell(c, rowIdx, week, locked){
   // nobody should be able to read a colleague's QA score off a shared screen.
   if(c.state==='done') return '<span class="wkcell done blurred" title="Saved — score visible to admin only">'+esc(c.score)+'</span>';
   if(c.state==='overdue') return '<span class="wkcell overdue" title="Overdue — due '+esc(c.due)+'">!</span>';
+  if(hasProv) return '<span class="wkcell prov" title="Reviewed, awaiting approval">⋯</span>';
   return '<span class="wkcell" title="'+(c.due?('Due '+esc(c.due)):'No schedule')+'">–</span>';
 }
 /* Write a single week's score. The month average + Submit gate recompute from the server, so we
@@ -1724,7 +1740,7 @@ async function saveWeekScore(rowIdx, week, input){
 function renderDash(rows){
   var sub=$('dash-sub');
   if(sub) sub.innerHTML = IS_ADMIN
-    ? '<b>Type a score (0–100) straight into any week box</b> and press Enter or click away — it saves instantly. Leave it blank to clear that week. Green = saved · Red = overdue · Blank = pending. <b>Submit</b> enables once all 4 weeks are filled, locking the month average into the employee\'s scorecard.'
+    ? '<b>Type a score (0–100) straight into any week box</b> and press Enter or click away — it saves instantly. Leave it blank to clear that week. Green = saved · Red = overdue · <span style="color:#b45309;font-weight:700;">Amber dashed = peer/lead review waiting on your approval</span> (the faded number is theirs — type over it to approve) · Blank = pending. <b>Submit</b> enables once all 4 weeks are filled, locking the month average into the employee\'s scorecard.'
     : 'Green = QA saved · Red = overdue (past due date) · Blank = pending. <b>Scores are hidden</b> — only an admin can see or enter the numbers.';
   if(!rows.length){ $('dash-body').innerHTML='<tr><td colspan="6" class="empty">No employees.</td></tr>'; return; }
   $('dash-body').innerHTML=rows.map(function(r,i){
