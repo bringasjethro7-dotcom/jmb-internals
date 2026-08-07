@@ -407,7 +407,11 @@ function chime(){
   }catch(e){}
 }
 var _spoke=false;
-document.getElementById('music').onclick=function(){
+/* The ambience toggle lived in the control bar, which a film doesn't have. Calling
+   getElementById('music').onclick on a MISSING element threw, so everything below it —
+   including show(0) — never ran. That is what produced a black screen with no slides. */
+var _mbtn=document.getElementById('music');
+if(_mbtn) _mbtn.onclick=function(){
   bedOn=!bedOn; this.textContent=bedOn?'♪ Ambience: on':'♪ Ambience: off';
   startBed(); duck(false);
 };
@@ -431,7 +435,10 @@ function kickoff(){
   speak(i);
 }
 ['click','keydown'].forEach(function(ev){ document.addEventListener(ev, kickoff, {once:false}); });
-show(0); tick();
+/* Render FIRST. Narration, ambience and the safety net are nice-to-have; the slides
+   are not. Nothing after this may be able to stop them appearing. */
+try{ show(0); }catch(e){ try{ scenes[0].classList.add('on'); }catch(_){} }
+try{ tick(); }catch(e){}
 /* SAFETY NET. If the first scene has no measurable height a moment after load, the browser
    didn't apply the layout — almost always an unsupported CSS feature on a TV build. Force the
    TV stylesheet and pin explicit pixel sizing so something always renders rather than black. */
@@ -454,6 +461,23 @@ setTimeout(function(){
     }
   }catch(e){}
 }, 1200);
+/* Absolute last resort — whatever else fails, put a slide on the screen. */
+setTimeout(function(){
+  try{
+    var vis=scenes.some(function(x){ return x.classList.contains('on'); });
+    if(!vis && scenes.length){
+      scenes[0].classList.add('on');
+      scenes[0].style.display='flex'; scenes[0].style.opacity='1';
+      if(!playing){ playing=true; t0=Date.now(); }
+    }
+  }catch(e){}
+}, 2500);
+window.addEventListener('error', function(){
+  try{
+    var vis=scenes.some(function(x){ return x.classList.contains('on'); });
+    if(!vis && scenes.length){ scenes[0].classList.add('on'); scenes[0].style.display='flex'; scenes[0].style.opacity='1'; }
+  }catch(e){}
+});
 var _hasVoice = !!(window.speechSynthesis && typeof SpeechSynthesisUtterance!=='undefined');
 if(!_hasVoice){
   VOICE=false;
