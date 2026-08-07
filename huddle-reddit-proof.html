@@ -94,7 +94,10 @@
   body.tv .app{font-size:2vh} body.tv .acct{max-width:60vw}
   body.tv .btns button{font-size:1.8vh} body.tv .hd b{font-size:2.3vh}
   body.tv .shotbar{font-size:1.9vh}
-  body.tv #narr{font-size:2.2vh;bottom:4vh}
+  /* On TV the narration line IS the narration — if the set has no speech engine, this is
+     what the room reads. Bigger, brighter, and on its own band across the bottom. */
+  body.tv #narr{font-size:2.5vh;bottom:4vh;color:#bae6fd;background:rgba(2,10,22,.72);
+    border-left:3px solid #5eead4;padding:1.4vh 1.6vw;border-radius:.8vh;line-height:1.5}
   body.tv .scene.on{animation:none;opacity:1}
   body.tv .app{box-shadow:none}
 </style>
@@ -367,24 +370,31 @@ function speak(n){
 /* Background sound: a quiet ambient pad synthesised in the browser, ducked while the
    narration speaks so it never fights the voice. Toggle with the ♪ button. */
 var AUDIO=null, bedGain=null, bedOn=true, bedNodes=[];
+/* AMBIENCE — off on TVs, and pitched up everywhere else.
+   The original bed was three sines at 110, 165 and 220 Hz with slow amplitude modulation.
+   Through a laptop that reads as atmosphere; through TV speakers it is a rattling hum, and if
+   the set's speech engine also fails, that hum becomes the ONLY thing anyone hears — which is
+   worse than silence. So: no bed on TV at all, and on other devices it sits an octave higher
+   and quieter, where small speakers can actually reproduce it. */
 function startBed(){
   try{
+    if(window.__TV){ bedOn=false; return; }        // TV speakers: silence beats a buzz
     if(AUDIO) return;
     var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
     AUDIO=new AC();
     bedGain=AUDIO.createGain(); bedGain.gain.value=0.0; bedGain.connect(AUDIO.destination);
-    var filt=AUDIO.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=620; filt.Q.value=.4;
+    var filt=AUDIO.createBiquadFilter(); filt.type='lowpass'; filt.frequency.value=1400; filt.Q.value=.4;
     filt.connect(bedGain);
-    [110,164.81,220].forEach(function(f,ix){
+    [220,329.63,440].forEach(function(f,ix){        // an octave up — air, not rumble
       var o=AUDIO.createOscillator(); o.type='sine'; o.frequency.value=f;
-      var g=AUDIO.createGain(); g.gain.value=ix===2?0.05:0.11;
+      var g=AUDIO.createGain(); g.gain.value=ix===2?0.025:0.05;
       var lfo=AUDIO.createOscillator(); lfo.type='sine'; lfo.frequency.value=0.05+ix*0.017;
-      var lg=AUDIO.createGain(); lg.gain.value=0.035;
+      var lg=AUDIO.createGain(); lg.gain.value=0.012;
       lfo.connect(lg); lg.connect(g.gain); lfo.start();
       o.connect(g); g.connect(filt); o.start();
       bedNodes.push(o,lfo);
     });
-    bedGain.gain.linearRampToValueAtTime(bedOn?0.09:0, AUDIO.currentTime+2.5);
+    bedGain.gain.linearRampToValueAtTime(bedOn?0.045:0, AUDIO.currentTime+2.5);
   }catch(e){}
 }
 function duck(down){
@@ -395,6 +405,7 @@ function duck(down){
 }
 function chime(){
   try{
+    if(window.__TV) return;          // no scene ping on TV either
     if(!AUDIO||!bedOn) return;
     var t=AUDIO.currentTime;
     [880,1320].forEach(function(f,k){
@@ -427,7 +438,7 @@ function primeVoice(){
   }catch(e){}
 }
 function kickoff(){
-  startBed();
+  if(!window.__TV) startBed();     // no ambience on TV
   primeVoice();
   try{ if(AUDIO && AUDIO.state==='suspended') AUDIO.resume(); }catch(e){}
   if(_spoke) return; _spoke=true;
