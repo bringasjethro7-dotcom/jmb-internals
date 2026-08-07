@@ -564,11 +564,30 @@ function renderAudit(){
   $('grid').innerHTML=_pb+(out.length?out.join(''):'<div class="muted">No accounts yet.</div>');
 }
 async function setAudit(id,k){
-  try{ var r0=row(id); if(!r0) return;
-    // stamp WHEN it was audited so today's progress counts the account once, then resets
+  var r0=row(id); if(!r0) return;
+  /* PROOF BEFORE THE TAG. Auditing had no proof step at all because it counts no output —
+     which meant a VA whose whole shift is auditing produced no evidence for QA to check.
+     One screenshot covers AUDIT_PROOF_COVERS accounts; re-tagging an account already audited
+     this shift doesn't ask again. */
+  var firstThisShift = !markOk((r0.meta||{}).audited, r0.assigned_to||r0.created_by);
+  try{
+    if(firstThisShift){
+      if(auProofLeft()<=0){
+        PROOF_BATCH_NOTE='Covers up to '+AUDIT_PROOF_COVERS+' audited accounts';
+        await proofOnly('Instagram Auditing', r0.handle||'', 1);
+        PROOF_BATCH_NOTE='';
+        auProofSet(AUDIT_PROOF_COVERS-1);
+      } else {
+        auProofSet(auProofLeft()-1);
+        toast('Covered by the last screenshot · '+auProofLeft()+' more.');
+      }
+    }
     var d=await saveMeta(r0, Object.assign({}, r0.meta||{}, {audit:k, audited:vaKeyOf(USER.id)}));
     if(d&&d.ok){ toast('Audit tag updated.'); load(); } else toast('Could not save.');
-  }catch(e){ toast('Connection error.'); }
+  }catch(e){
+    if(e && e.proofCancelled) return;    // backed out of the screenshot — tag unchanged
+    toast('Connection error.');
+  }
 }
 var MODELS=['Aja','Akira','Anya','Kitana','Ruby','Yuna','Maddie','Aurora','Camila','Gabi','Kivanna','Sakura','Ariel','Amber','Corey','Mila','Celine','Vale','Nicole','CJ','Scarlet','Skylar','Hatty'];
 var CMST=[['done','✅ Done','#10b981'],['waiting','🕐 Waiting for new Contents','#f59e0b'],['inprog','🎬 In-Progress','#3b82f6'],['onhold','⏸ Contents on hold','#64748b'],['provided','📦 Provided by the clients','#8b5cf6']];
@@ -599,6 +618,29 @@ function bumpSilent(task,n){
   return fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)
     +'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now()).catch(function(){});
 }
+/* PROOF WITHOUT A COUNT.
+   Auditing is real work but there is no "Auditing" task in the productivity tracker, so
+   bumping one would create an orphan row and distort the numbers. This records the evidence
+   only — the screenshot lands in the proof store exactly as any other, so the QA Factory can
+   check the auditing work, while productivity stays honest about what it measures.
+   Rejects on cancel, so nothing is saved when the VA backs out. */
+function proofOnly(task, account, n){
+  return new Promise(function(resolve,reject){
+    PROOF.imgs=[]; PROOF.ctx={task:task, account:account||'', n:(n||1)};
+    PROOF.resolve=null; PROOF.reject=reject;
+    var ov=proofPanel(); ov.style.display='flex';
+    document.getElementById('proof-what').textContent=task+(account?(' · '+account):'')+' · evidence only, no output counted';
+    document.getElementById('proof-note').value='';
+    document.getElementById('proof-thumbs').innerHTML='';
+    PROOF.resolve=function(){ resolve(true); };
+  });
+}
+/* One screenshot covers this many audited accounts — the auditing screen legitimately shows
+   several at once, so demanding one each would be friction out of proportion to the risk. */
+var AUDIT_PROOF_COVERS=5;
+function auProofKey(){ return 'auproof_'+(USER&&USER.id)+'_'+vaKeyOf(USER.id); }
+function auProofLeft(){ try{ return parseInt(sessionStorage.getItem(auProofKey())||'0',10)||0; }catch(e){ return 0; } }
+function auProofSet(n){ try{ sessionStorage.setItem(auProofKey(), String(Math.max(0,n))); }catch(e){} }
 async function cmSet(nm, k){
   try{
     var r=cmRowOf(nm), d;
