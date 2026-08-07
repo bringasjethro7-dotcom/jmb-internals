@@ -731,7 +731,19 @@ async function loadLeadQueue(){
     var myWk=parseInt((($('c-week')||{}).value||'1'),10);
     PEER_DONE=(d.items||[]).some(function(it){ return String(it.peer_id||'').toUpperCase()===String(USER.id).toUpperCase() && it.week===myWk; });
     renderModeBar();
-    if(!PEER_DONE){ host.innerHTML='<b>Team lead review</b> · locked — submit your own peer review for Week '+myWk+' first. Everyone starts as a peer.'; return; }
+    /* The gate stays, but it must never be silent: a lead was seeing "nothing assigned" when in
+       fact reviews WERE waiting and the only thing missing was their own peer review. Tell them
+       exactly what's waiting and what unlocks it. */
+    if(!PEER_DONE){
+      var meU0=String(USER.id).toUpperCase();
+      var pend=(d.items||[]).filter(function(it){
+        return it.peer_score!=null && it.lead_score==null &&
+               String(it.lead_assigned_id||'').toUpperCase()===meU0; }).length;
+      host.innerHTML='<b>Team lead review</b> · '+
+        (pend? ('<b style="color:#b45309;">'+pend+' review'+(pend>1?'s':'')+' assigned to you and waiting</b> — ') : '')+
+        'locked until you submit your own peer review for Week '+myWk+'. Everyone starts as a peer.';
+      return;
+    }
     // Only the rows THIS lead was assigned by the shuffle (admin sees everything).
     var meU=String(USER.id).toUpperCase();
     var waiting=(d.items||[]).filter(function(it){
@@ -739,8 +751,18 @@ async function loadLeadQueue(){
       if(IS_ADMIN || meU==='JMBEAST') return true;
       return String(it.lead_assigned_id||'').toUpperCase()===meU;
     });
-    if(!waiting.length){ host.innerHTML='<b>Team lead review</b> · nothing assigned to you yet — an admin assigns lead reviews, and you\'re notified the moment one lands on your screen.'; return; }
+    if(!waiting.length){
+      // distinguish "none exist" from "none are yours" — they need different actions
+      var unassigned=(d.items||[]).filter(function(it){
+        return it.peer_score!=null && it.lead_score==null && !String(it.lead_assigned_id||'').trim(); }).length;
+      host.innerHTML='<b>Team lead review</b> · '+
+        (unassigned
+          ? ('nothing assigned to <em>you</em> yet — <b style="color:#b45309;">'+unassigned+' peer review'+(unassigned>1?'s are':' is')+' waiting for an admin to assign a lead.</b>')
+          : 'nothing waiting. You\'re notified the moment a review is assigned to you.');
+      return;
+    }
     host.innerHTML='<b>Team lead review</b> · <b style="color:#15803d;">'+waiting.length+'</b> review'+(waiting.length>1?'s':'')+' assigned to you'+
+      ' <span style="opacity:.7;">('+esc($('c-month').value||curMonth())+')</span>'+
       '<div style="font-size:11.5px;opacity:.75;margin:4px 0 7px;">Open the same board, audit it yourself, then save — your score becomes the lead stage and goes to the manager for approval.</div>'+
       waiting.map(function(it){
         return '<span style="display:inline-block;background:#fff;border:1px solid rgba(21,128,61,.3);border-radius:100px;padding:3px 11px;margin:3px 5px 0 0;font-size:11.5px;cursor:pointer;" onclick="leadPick(\''+esc(it.employee_id)+'\','+it.week+')">'+
@@ -750,8 +772,60 @@ async function loadLeadQueue(){
     host.innerHTML='<b>Team lead review</b> · could not load the queue (server busy). <a href="#" onclick="loadLeadQueue();return false;" style="color:#15803d;font-weight:700;">Retry</a>';
   }
 }
-function leadPick(empId, week){
-  try{ $('c-emp').value=empId; if($('c-week')) $('c-week').value=String(week); onContextChange(); window.scrollTo({top:0,behavior:'smooth'}); toast('Loaded — audit this VA, then Compute & save to record your lead review.'); }catch(e){}
+/* Rebuild the peer's board verbatim — same project, same accounts, same order — with every
+   check cleared. Auditing a different set was making the two stages incomparable, which also
+   made the accuracy penalty between peer and lead meaningless. */
+async function loadPeerBoard(empId, week){
+  try{
+    var month=$('c-month').value||curMonth();
+    var d=await qGet(PORTAL_URL+'?action=qa_review_list&month='+encodeURIComponent(month), {ttl:0, tries:2});
+    var it=((d&&d.items)||[]).filter(function(x){
+      return String(x.employee_id).toUpperCase()===String(empId).toUpperCase() && x.week===parseInt(week,10); })[0];
+    if(!it) return false;
+    if(it.peer_project){
+      var sel=$('c-proj');
+      if(sel){
+        if(!Array.prototype.some.call(sel.options,function(o){ return o.value===it.peer_project; })){
+          sel.insertAdjacentHTML('beforeend','<option value="'+esc(it.peer_project)+'">'+esc((PROJECTS[it.peer_project]&&PROJECTS[it.peer_project].label)||it.peer_project)+'</option>');
+        }
+        sel.value=it.peer_project;
+      }
+    }
+    AUDIT=defaultAudit();
+    var board=null; try{ board=JSON.parse(it.peer_board||'null'); }catch(_b){ board=null; }
+    if(board && board.accounts){
+      var p=curProject();
+      p.tasks.forEach(function(t){
+        var names=board.accounts[t.name];
+        if(!names || !names.length) return;
+        AUDIT[t.name]=names.map(function(nm){
+          return { name:String(nm||''), states:t.criteria.map(function(){ return null; }) };
+        });
+      });
+    }
+    CTX_READY=true; CTX_STATE='ready';
+    renderCriteria(); recompute(); try{ renderStaticContext(); }catch(_r){}
+    var bar=$('sample-bar');
+    if(bar){
+      window._barOwned=true;
+      bar.style.cssText='margin:8px 0 12px;padding:11px 14px;border-radius:11px;background:rgba(21,128,61,.07);border:1px solid rgba(21,128,61,.3);font-size:12.5px;';
+      bar.innerHTML='<b>Lead screen · the same board the peer used.</b> '+
+        esc(it.peer_name||'The peer')+' audited these exact accounts on <b>'+esc(it.peer_project||'—')+'</b> and scored <b>'+esc(it.peer_score)+'%</b>. '+
+        'Your checks start blank — mark what you actually find.';
+    }
+    return !!(board && board.accounts);
+  }catch(e){ return false; }
+}
+async function leadPick(empId, week){
+  try{
+    $('c-emp').value=empId;
+    if($('c-week')) $('c-week').value=String(week);
+    MODE='lead'; try{ renderModeBar(); }catch(_m){}
+    var ok=await loadPeerBoard(empId, week);
+    if(!ok){ onContextChange(); toast('Loaded — the peer\'s account list wasn\'t recorded for this one, so type them from their review.'); }
+    else { toast('Loaded the peer\'s exact board — same accounts, checks cleared.'); }
+    window.scrollTo({top:0,behavior:'smooth'});
+  }catch(e){}
 }
 function startApp(){
   $('signin').style.display='none'; $('app').style.display='block';
@@ -1530,6 +1604,17 @@ function normalizeAudit(loaded){
   return out;
 }
 
+/* The peer's board reduced to what the lead needs to reproduce it exactly: which project, and
+   the account name typed into each column of each task. Ticks are deliberately NOT included —
+   the lead must reach their own verdict, not inherit one. */
+function _boardAccounts(){
+  var out={};
+  try{
+    var p=curProject(); if(!p) return out;
+    p.tasks.forEach(function(t){ out[t.name]=(AUDIT[t.name]||[]).map(function(a){ return String(a.name||''); }); });
+  }catch(e){}
+  return out;
+}
 /* ---- save ---- */
 async function saveScore(){
   var emp=$('c-emp').value, month=$('c-month').value, week=$('c-week').value, proj=$('c-proj').value;
@@ -1580,6 +1665,9 @@ async function saveScore(){
         +'&score='+encodeURIComponent(res.score)
         +'&mins='+encodeURIComponent(_mins)+'&started_at='+encodeURIComponent(_startedAt)+'&ended_at='+encodeURIComponent(_endedAt)
         +'&notes='+encodeURIComponent(($('c-note').value||'')+' | failed checks: '+focus.length)
+        +'&project='+encodeURIComponent(proj)
+        // the exact board the peer audited: project + the account name in every column
+        +'&board='+encodeURIComponent(JSON.stringify({ project:proj, accounts:_boardAccounts() }))
         +'&_='+Date.now();
       var pd=await qPost(pu, async function(){
         // Verify: did the peer review actually land despite the timeout?
