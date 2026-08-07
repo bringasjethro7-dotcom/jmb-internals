@@ -588,11 +588,12 @@ async function qcPublish(){
   var id=QC_ID; if(!id) return;
   var r0=ROWS.filter(function(x){return x.id===id;})[0]; if(!r0) return;
   $('qc-pub').disabled=true;
+  await bump('Shopify Product Upload',1);   // proof BEFORE it's marked published
   var m=Object.assign({}, r0.meta||{}, {qc:true, pub:vaKeyOf(USER.id), last:vaKeyOf(USER.id)});
   try{
     var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status=website&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now());
     var d=await r.json();
-    if(d&&d.ok){ qcClose(); await bump('Shopify Product Upload',1); toast('Published! +1 Shopify Product Upload'); load(); }
+    if(d&&d.ok){ qcClose(); toast('Published! +1 Shopify Product Upload'); load(); }
     else { $('qc-pub').disabled=false; toast('Could not update.'); }
   }catch(e){ $('qc-pub').disabled=false; toast('Connection error.'); }
 }

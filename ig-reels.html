@@ -443,7 +443,7 @@ async function proofSubmit(){
     var body={ action:'proof_save', employee_id:USER.id, full_name:(USER.name||USER.id),
       project:PROJECT, task:PROOF.ctx.task||'', account:PROOF.ctx.account||'',
       date:(typeof today==='function'?today():''), outputs:PROOF.ctx.n||1,
-      note:(document.getElementById('proof-note').value||''), images:PROOF.imgs };
+      note:((document.getElementById('proof-note').value||'')+(PROOF_BATCH_NOTE?(' · '+PROOF_BATCH_NOTE):'')), images:PROOF.imgs };
     var r=await fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) });
     var d=await r.json();
     if(d && d.ok){
@@ -463,7 +463,7 @@ function bump(task,n){
   return new Promise(function(resolve,reject){
     PROOF.imgs=[]; PROOF.ctx={task:task,n:(n||1)}; PROOF.resolve=null; PROOF.reject=reject;
     var ov=proofPanel(); ov.style.display='flex';
-    document.getElementById('proof-what').textContent=task+' · counts as '+(n||1);
+    document.getElementById('proof-what').textContent=task+' · counts as '+(n||1)+(PROOF_BATCH_NOTE?(' · '+PROOF_BATCH_NOTE):'');
     document.getElementById('proof-note').value='';
     document.getElementById('proof-thumbs').innerHTML='';
     PROOF.resolve=function(){
@@ -587,24 +587,60 @@ function renderCM(){
   });
   $('grid').innerHTML=out.join('');
 }
+/* How many models one screenshot may cover. Keep this honest: a screenshot should plausibly
+   evidence this many models at once. Five matches what fits on one screen. */
+var CM_PROOF_COVERS=5, PROOF_BATCH_NOTE='';
+function cmProofKey(){ return 'cmproof_'+(USER&&USER.id)+'_'+vaKeyOf(USER.id); }   // resets each shift
+function cmProofLeft(){ try{ return parseInt(sessionStorage.getItem(cmProofKey())||'0',10)||0; }catch(e){ return 0; } }
+function cmProofSet(n){ try{ sessionStorage.setItem(cmProofKey(), String(Math.max(0,n))); }catch(e){} }
+/* Counts the output without opening the proof panel — used only for models already covered by
+   a screenshot taken moments earlier in the same batch. */
+function bumpSilent(task,n){
+  return fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)
+    +'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now()).catch(function(){});
+}
 async function cmSet(nm, k){
   try{
     var r=cmRowOf(nm), d;
-    // Content Management produced NO tracked output before this — the model status was saved
-    // but nothing was ever bumped, so a CM VA's whole shift showed as zero on the Productivity
-    // Hub and the wallboard. Bump ONCE per model per shift (Rule 3: repeat updates don't add).
+    /* Content Management counts ONCE per model per shift, so only the first update of a model
+       is an output — and only an output needs proof. Re-clicking a status later that shift
+       changes the label without counting anything, which is why this screen sometimes asked
+       for a screenshot and sometimes didn't. It now says which is happening.
+       Proof is requested BEFORE the save: cancelling must leave nothing changed. */
     var firstThisShift = !(r && markOk((r.meta||{}).cmAt, r.assigned_to||r.created_by));
+    if(firstThisShift){
+      /* BATCH PROOF. One screenshot per model meant 23 capture prompts a shift for the CM VA,
+         which is friction disproportionate to the risk — a single screen legitimately shows
+         several models at once. One proof now COVERS the next CM_PROOF_COVERS models: the
+         first counted model of a batch asks for it, the rest ride along, and the count still
+         increments per model so the output number is unchanged. */
+      if(cmProofLeft()<=0){
+        // the record should say this screenshot stands for a batch, not a single model
+        PROOF_BATCH_NOTE='Covers up to '+CM_PROOF_COVERS+' models in this batch';
+        await bump('Content Management',1);      // rejects on cancel → nothing below runs
+        PROOF_BATCH_NOTE='';
+        cmProofSet(CM_PROOF_COVERS-1);
+      } else {
+        cmProofSet(cmProofLeft()-1);
+        await bumpSilent('Content Management',1);   // covered by the proof just taken
+        toast('Counted under the last screenshot · '+cmProofLeft()+' more covered.');
+      }
+    } else {
+      toast(nm+' already counted this shift — updating the status only, no new output.');
+    }
     if(r){ d=await saveMeta(r, Object.assign({}, r.meta||{}, {cm:k, cmAt:vaKeyOf(USER.id)})); }
     else{
       var rr=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(nm)+'&status=cmodel&meta='+encodeURIComponent(JSON.stringify({cm:k, cmAt:vaKeyOf(USER.id)}))+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
       d=await rr.json();
     }
     if(d&&d.ok){
-      if(firstThisShift) await bump('Content Management',1);   // its own tracker task under Project Arlo
       toast(nm+' → updated ✓'+(firstThisShift?' (+1 output)':''));
       load();
     } else toast('Could not save.');
-  }catch(e){ toast('Connection error.'); }
+  }catch(e){
+    if(e && e.proofCancelled) return;             // cancelled the screenshot — nothing changed
+    toast('Connection error.');
+  }
 }
 function fullDone(r){ var t=T(r); return t.s && t.f && (!isK(r) || t.rl); }
 /* ══ TAG PROGRESS (Auditing + Content Management tabs) ══
@@ -753,14 +789,15 @@ async function saveMeta(r, meta){
   return (await rr.json());
 }
 async function tick(id, kind){
-  var r=row(id); if(!r) return; var meta=r.meta||{}; var t=T(r); t[kind]=1; meta.t=t;
+  var r=row(id); if(!r) return;
+  /* PROOF FIRST, THEN SAVE. This used to save the tick and only afterwards ask for the
+     screenshot — so cancelling the panel left the account marked as posted with no evidence
+     and no output counted. bump() rejects on cancel, which now stops the save too. */
+  await bump('IG Reels Posting',1);
+  var meta=r.meta||{}; var t=T(r); t[kind]=1; meta.t=t;
   var d=await saveMeta(r, meta);
   if(d&&d.ok){
     var names={s:'Story',f:'Feed Post',rl:'Trial Reel'};
-    // Output rolls up to the TRACKER task name so hours and outputs land on the same row.
-    // (Story / Feed Post / Trial Reel were their own tasks, which is why "IG Reels Posting"
-    //  showed tracked hours with zero outputs.)
-    await bump('IG Reels Posting',1);
     var t2=t, doneAll=t2.s&&t2.f&&(!isK(r)||t2.rl);
     toast('+1 '+names[kind]+' ✅'+(doneAll?' · account fully posted today 🎉':''));
     load();
@@ -772,11 +809,12 @@ async function mark1k(id){
 }
 async function wuDone(id, day){
   var r=row(id); if(!r) return;
+  await bump('IG Reels Posting',1);          // proof before the day advances
   try{
     var m=Object.assign({}, r.meta||{}, {wl:vaKeyOf(USER.id)});
     var url=API+'?action=pa_update&id='+encodeURIComponent(id)+'&day='+(day+1)+(day>=14?'&status=active':'')+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now();
     var rr=await fetch(url); var d=await rr.json();
-    if(d&&d.ok){ await bump('IG Reels Posting',1); toast(day>=14?'Warm-up COMPLETE — account is now Active 🎉 (+1 Warm-up Day)':'+1 Warm-up Day ✅'); load(); }
+    if(d&&d.ok){ toast(day>=14?'Warm-up COMPLETE — account is now Active 🎉 (+1 Warm-up Day)':'+1 Warm-up Day ✅'); load(); }
     else toast('Could not update.');
   }catch(e){ toast('Connection error.'); }
 }

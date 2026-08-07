@@ -287,6 +287,7 @@ header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
     <nav class="nav">
       <button class="navb active" id="nav-compute" onclick="showView('compute')">Compute</button>
       <button class="navb" id="nav-dash" onclick="showView('dash')">Dashboard</button>
+      <button class="navb" id="nav-factory" onclick="showView('factory')" style="display:none">QA Factory</button>
     </nav>
     <div class="spacer"></div>
     <div class="who">Signed in as <b id="who-name">—</b></div>
@@ -351,6 +352,24 @@ header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
     </div>
    </div><!-- /view-compute -->
 
+   <div id="view-factory" style="display:none">
+    <div class="card">
+      <h2>QA Factory</h2>
+      <div class="sub">Reads every screenshot a VA attached, scores the criteria a picture can actually settle, and queues the result for your approval. The criteria no image can prove — IP rotation, duplicate downloads, posting intervals — are excluded from the score, never guessed.</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:12px;">
+        <label style="font-size:11px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;">Month
+          <input type="month" id="f-month" onchange="factoryLoad()" style="display:block;margin-top:4px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;"></label>
+        <label style="font-size:11px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;">Week
+          <select id="f-week" onchange="factoryLoad()" style="display:block;margin-top:4px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;">
+            <option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+        <button class="btn" id="f-run" onclick="factoryRun()" style="background:#7c3aed;color:#fff;padding:9px 18px;">⚙ Process screenshots</button>
+        <button class="btn ghost sm" onclick="factoryLoad()">↻ Refresh</button>
+        <button class="btn" id="f-approve-all" onclick="factoryApproveAll()" style="background:#0f766e;color:#fff;padding:9px 16px;">✓ Approve all</button>
+      </div>
+      <div id="f-prog" style="margin-top:10px;font-size:12px;color:var(--t3);"></div>
+      <div id="f-list" style="margin-top:14px;"><div class="empty">Pick a month and week.</div></div>
+    </div>
+   </div>
    <div id="view-dash" style="display:none">
     <div class="controls">
       <label>Month
@@ -1022,6 +1041,8 @@ function startApp(){
   IS_PEER  = !IS_ADMIN;                            // admin = manager approval only
   MODE     = IS_ADMIN ? 'admin' : 'peer';
   if(!IS_ADMIN){ try{ document.querySelectorAll('.btn').forEach(function(b){ if(/dashboard/i.test(b.textContent||'')) b.style.display='none'; }); }catch(_h){} }   // dashboard = admin only
+  if(IS_ADMIN){ var nf=$('nav-factory'); if(nf) nf.style.display='';
+    var fm=$('f-month'); if(fm) fm.value=curMonth(); }
   /* STAGGERED BOOT. Apps Script runs one request per user at a time, so firing everything at
      once just makes each one wait behind the others until some time out. Order matters:
      the assignment and the audit board are what the reviewer is staring at, so they go first;
@@ -1081,13 +1102,134 @@ async function loadMyAssignment(){
 }
 
 /* ---- view switch: Compute ↔ Dashboard ---- */
+/* ══════════ QA FACTORY — admin approval screen ══════════
+   Processing is chunked because Apps Script stops at six minutes; the run button calls the
+   backend repeatedly until it reports done, showing progress as it goes. Approval is per VA,
+   never automatic: the roll-up score is what reaches their scorecard, and you can override it. */
+var FACTORY=null, FRUNNING=false;
+function fCrit(){
+  // the criteria list per task for the CURRENT project set, sent so the backend can score
+  var map={};
+  try{ Object.keys(PROJECTS).forEach(function(k){
+    (PROJECTS[k].tasks||[]).forEach(function(t){ map[t.name]=t.criteria; }); }); }catch(e){}
+  return map;
+}
+async function factoryRun(){
+  if(FRUNNING) return;
+  FRUNNING=true;
+  var btn=$('f-run'), prog=$('f-prog');
+  var month=$('f-month').value||curMonth(), week=$('f-week').value||'1';
+  if(btn){ btn.disabled=true; }
+  var pass=0, total=0, guard=0;
+  try{
+    while(guard++ < 30){
+      if(btn) btn.textContent='⚙ Processing… ('+pass+' done)';
+      var r=await fetch(PORTAL_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body:JSON.stringify({ action:'qa_factory_run', month:month, week:week, confirm:'RUN',
+                              limit:3, criteria_map:fCrit() }) });
+      var d=await r.json();
+      if(!d||!d.ok){ toast('Factory error: '+((d&&d.error)||'unknown')); break; }
+      pass+=(d.processed||[]).length;
+      if(prog) prog.innerHTML='Processed <b>'+pass+'</b> task result(s) · <b>'+d.remaining+'</b> VA(s) remaining'+
+        ((d.no_proof||[]).length? (' · <span style="color:#b45309;">'+d.no_proof.length+' with no screenshots this pass</span>'):'');
+      if(d.done || d.remaining===0) break;
+    }
+    toast('Processing complete.');
+    factoryLoad();
+  }catch(e){ toast('Factory run failed.'); }
+  if(btn){ btn.disabled=false; btn.textContent='⚙ Process screenshots'; }
+  FRUNNING=false;
+}
+async function factoryLoad(){
+  var host=$('f-list'); if(!host) return;
+  var month=$('f-month').value||curMonth(), week=$('f-week').value||'1';
+  host.innerHTML='<div class="empty">Loading…</div>';
+  try{
+    var d=await qGet(PORTAL_URL+'?action=qa_factory_list&month='+encodeURIComponent(month)+'&week='+encodeURIComponent(week), {ttl:5000});
+    if(!d||!d.ok) throw new Error((d&&d.error)||'error');
+    FACTORY=d;
+    var roll=d.rollup||[];
+    if(!roll.length){ host.innerHTML='<div class="empty">Nothing processed for this week yet — press <b>Process screenshots</b>.</div>'; return; }
+    host.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:13px;">'+
+      '<thead><tr style="background:var(--card2);">'+
+        '<th style="text-align:left;padding:9px;">VA</th>'+
+        '<th style="padding:9px;">Tasks</th>'+
+        '<th style="padding:9px;">Checks passed</th>'+
+        '<th style="padding:9px;">Score</th>'+
+        '<th style="padding:9px;">Status</th>'+
+        '<th style="padding:9px;"></th></tr></thead><tbody>'+
+      roll.map(function(r,ix){
+        var col=(r.score>=90?'var(--green)':(r.score>=75?'var(--amber)':'var(--red)'));
+        var pending=r.pending>0;
+        return '<tr style="border-top:1px solid var(--line);">'+
+          '<td style="padding:9px;"><b>'+esc(r.name)+'</b><div style="font-size:11px;color:var(--t3);">'+esc(r.employee_id)+'</div></td>'+
+          '<td style="padding:9px;text-align:center;">'+r.tasks+'</td>'+
+          '<td style="padding:9px;text-align:center;">'+r.passed+' / '+r.total+'</td>'+
+          '<td style="padding:9px;text-align:center;font-weight:800;color:'+col+';">'+(r.score===''?'—':r.score)+'</td>'+
+          '<td style="padding:9px;text-align:center;">'+(pending?'<span style="color:#b45309;font-weight:800;">pending</span>':'<span style="color:#15803d;font-weight:800;">approved</span>')+'</td>'+
+          '<td style="padding:9px;text-align:right;white-space:nowrap;">'+
+            '<button class="btn ghost sm" onclick="factoryDetail('+ix+')">Detail</button> '+
+            (pending?('<button class="btn" style="background:#0f766e;color:#fff;padding:5px 12px;" onclick="factoryApprove(\''+esc(r.employee_id)+'\')">Approve</button>'):'')+
+          '</td></tr>'+
+          '<tr id="fdet-'+ix+'" style="display:none;"><td colspan="6" style="padding:0 9px 12px;"></td></tr>';
+      }).join('')+'</tbody></table>';
+  }catch(e){ host.innerHTML='<div class="empty">Could not load the queue.</div>'; }
+}
+function factoryDetail(ix){
+  var r=(FACTORY&&FACTORY.rollup||[])[ix]; if(!r) return;
+  var tr=$('fdet-'+ix); if(!tr) return;
+  if(tr.style.display!=='none'){ tr.style.display='none'; return; }
+  var rows=(FACTORY.rows||[]).filter(function(x){ return String(x.employee_id).toLowerCase()===String(r.employee_id).toLowerCase(); });
+  var html=rows.map(function(x){
+    var v={}; try{ v=JSON.parse(x.verdicts||'{}'); }catch(e){}
+    var lines=Object.keys(v).map(function(c){
+      var vd=v[c].verdict, ic=(vd==='pass'?'<span style="color:#15803d;font-weight:800;">✓</span>'
+                 :(vd==='fail'?'<span style="color:#dc2626;font-weight:800;">✕</span>'
+                 :'<span style="color:#b45309;font-weight:800;">?</span>'));
+      return '<div style="padding:4px 0;border-bottom:1px dashed var(--line);">'+ic+' '+esc(c)+
+             '<div style="font-size:11px;color:var(--t3);margin-left:16px;">'+esc(v[c].why||'')+'</div></div>';
+    }).join('');
+    return '<div style="background:var(--card2);border-radius:10px;padding:10px 12px;margin-top:8px;">'+
+      '<b>'+esc(x.task)+'</b> · '+esc(x.project)+' · '+x.passed+'/'+x.total+' checks · '+
+      x.screenshots+' screenshot(s) · <span style="color:#b45309;">'+x.skipped_manual+' not checkable from an image</span>'+
+      '<div style="margin-top:6px;">'+(lines||'<i style="color:var(--t3);">no verdicts recorded</i>')+'</div></div>';
+  }).join('');
+  tr.style.display='';
+  tr.querySelector('td').innerHTML=html||'<div class="empty">No detail.</div>';
+}
+async function factoryApprove(empId, silent){
+  var month=$('f-month').value||curMonth(), week=$('f-week').value||'1';
+  try{
+    var r=await fetch(PORTAL_URL+'?action=qa_factory_approve&employee_id='+encodeURIComponent(empId)
+      +'&month='+encodeURIComponent(month)+'&week='+encodeURIComponent(week)
+      +'&by='+encodeURIComponent(USER.name||USER.id)+'&_='+Date.now());
+    var d=await r.json();
+    if(d&&d.ok){ if(!silent) toast(empId+' approved at '+d.score+'%.'); return true; }
+    if(!silent) toast('Could not approve: '+((d&&d.error)||'unknown'));
+  }catch(e){ if(!silent) toast('Network error.'); }
+  return false;
+}
+async function factoryApproveAll(){
+  var roll=(FACTORY&&FACTORY.rollup||[]).filter(function(r){ return r.pending>0 && r.total>0; });
+  if(!roll.length){ toast('Nothing pending.'); return; }
+  if(!confirm('Approve '+roll.length+' VA(s)? Each score goes straight to their scorecard.')) return;
+  var btn=$('f-approve-all'); if(btn){ btn.disabled=true; btn.textContent='Approving…'; }
+  var n=0;
+  for(var i=0;i<roll.length;i++){ if(await factoryApprove(roll[i].employee_id, true)) n++; }
+  if(btn){ btn.disabled=false; btn.textContent='✓ Approve all'; }
+  toast(n+' approved.');
+  qBust(/qa_factory_list/); factoryLoad();
+}
 function showView(v){
   VIEW=v;
   $('view-compute').style.display = (v==='compute')?'block':'none';
   $('view-dash').style.display    = (v==='dash')?'block':'none';
+  var vf=$('view-factory'); if(vf) vf.style.display = (v==='factory')?'block':'none';
   $('nav-compute').classList.toggle('active', v==='compute');
   $('nav-dash').classList.toggle('active', v==='dash');
+  var nf=$('nav-factory'); if(nf) nf.classList.toggle('active', v==='factory');
   if(v==='dash'){ loadDashboard(); try{ loadAssignQueue(); }catch(_a){} }
+  if(v==='factory'){ try{ factoryLoad(); }catch(_f){} }
 }
 
 /* ---- employees ---- */

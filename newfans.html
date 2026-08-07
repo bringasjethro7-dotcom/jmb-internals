@@ -538,9 +538,10 @@ function row(id){ return ROWS.filter(function(r){return r.id===id;})[0]; }
 async function contentIn(id){ var r=row(id); if(!r) return; var m=M(r); m.avail++;
   var d=await saveMeta(r,m); if(d&&d.ok){ toast('Content logged — prep it for posting right away (SOP).'); load(); } else toast('Could not save.'); }
 async function schedPost(id){ var r=row(id); if(!r) return; var m=M(r); if(m.avail<=0){ toast('No content left.'); return; }
+  await bump('Wallpost Scheduled',1);   // proof BEFORE the counter moves — cancelling changes nothing
   m.avail--; m.sched++; m.last=vaKeyOf(USER.id);
   var d=await saveMeta(r,m);
-  if(d&&d.ok){ await bump('Wallpost Scheduled',1); toast('+1 Wallpost Scheduled ✅'+(m.avail<=2?(' · runway low — plan a client update'):'')); load(); } else toast('Could not save.'); }
+  if(d&&d.ok){ toast('+1 Wallpost Scheduled ✅'+(m.avail<=2?(' · runway low — plan a client update'):'')); load(); } else toast('Could not save.'); }
 async function clientUpdated(id){ var r=row(id); if(!r) return;
   await bump('Client Update',1); toast('+1 Client Update 📣 — noted.'); }
 (function(){ var u=null; try{ u=JSON.parse(sessionStorage.getItem('newfans_user')||'null'); }catch(e){}

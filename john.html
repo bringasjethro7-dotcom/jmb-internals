@@ -536,12 +536,14 @@ async function addAcct(){
   }catch(e){ toast('Connection error.'); }
 }
 async function dayDone(id, day){
+  await bump(day<=3?'Setup Day':'Follow Day',1);   // proof before the day advances
+
   try{
     var r0=ROWS.filter(function(x){return x.id===id;})[0];
     var meta=JSON.stringify(Object.assign({}, (r0&&r0.meta)||{}, {last:vaKeyOf(USER.id)}));
     var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&day='+(day+1)+'&meta='+encodeURIComponent(meta)+'&_='+Date.now());
     var d=await r.json();
-    if(d&&d.ok){ await bump(day<=3?'Setup Day':'Follow Day',1); toast('Day '+day+' complete · +1 '+(day<=3?'Setup Day':'Follow Day')+' ✅'); load(); }
+    if(d&&d.ok){ toast('Day '+day+' complete · +1 '+(day<=3?'Setup Day':'Follow Day')+' ✅'); load(); }
     else toast('Could not update.');
   }catch(e){ toast('Connection error.'); }
 }
