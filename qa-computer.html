@@ -221,6 +221,8 @@ header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
 .cell:not(.pass):not(.fail){background:#fffbeb;border-color:#fcd34d;border-style:dashed;color:#b45309}
 /* a cell the lead moved away from the peer's verdict — the disagreement the chain exists to surface */
 .cell.changed{box-shadow:0 0 0 2px #6366f1;position:relative}
+.cell.autoq{box-shadow:0 0 0 2px #b45309}
+.cell.autoq::before{content:'⚡';position:absolute;top:-7px;left:-5px;font-size:9px}
 .cell.changed::after{content:'';position:absolute;top:-3px;right:-3px;width:7px;height:7px;border-radius:50%;background:#6366f1}
 .cell:disabled{cursor:not-allowed;opacity:.75}
 @keyframes qanudge{0%,100%{transform:scale(1)}30%{transform:scale(1.07)}60%{transform:scale(.98)}}
@@ -1150,6 +1152,7 @@ function buildProjectDropdown(){
 function curProject(){ return PROJECTS[$('c-proj').value]; }
 
 function defaultAudit(){
+  AUTO_FILLED=null;   // a rebuilt board is not an auto-checked one
   var p=curProject(); var a={};
   p.tasks.forEach(function(t){
     a[t.name]=[];
@@ -1197,6 +1200,64 @@ function paintProjTitle(){
     t.textContent=(IS_ADMIN||CTX_READY)?p.label:(CTX_STATE==='empty'?'No work recorded this week':'Loading this VA\u2019s project…');
   }catch(e){}
 }
+/* ══════════ AUTO-CHECK FROM SCREENSHOTS ══════════
+   Pre-fills only the criteria a screenshot can actually settle. Anything about sequence or
+   device state — IP rotation, airplane mode, "no duplicates across phones" — is left for the
+   reviewer with a stated reason, because no image can decide it and a fabricated tick here
+   would land on someone's scorecard.
+
+   Auto-filled cells are ringed amber and carry the model's reasoning on hover. The reviewer
+   remains the author of the score: nothing submits itself. */
+var AUTO_FILLED=null;
+async function qaAutoCheck(){
+  var emp=($('c-emp')||{}).value, proj=($('c-proj')||{}).value;
+  if(!emp){ toast('Pick the review first.'); return; }
+  var day=(SAMPLE&&SAMPLE.audit_day)||'';
+  if(!day){ toast('No audit day loaded yet.'); return; }
+  var btn=$('auto-btn'); if(btn){ btn.disabled=true; btn.textContent='Reading screenshots…'; }
+  var p=curProject(); var total=0, filled=0, unclear=0, manual=0;
+  AUTO_FILLED={};
+  try{
+    for(var ti=0; ti<p.tasks.length; ti++){
+      var t=p.tasks[ti];
+      var r=await fetch(PORTAL_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body:JSON.stringify({ action:'qa_auto_check', employee_id:emp, date:day, project:proj,
+                              task:t.name, criteria:t.criteria }) });
+      var d=await r.json();
+      if(!d||!d.ok){ toast('Auto-check failed: '+((d&&d.error)||'unknown')); break; }
+      if(!d.screenshots){ toast('No screenshots attached for '+day+' — nothing to check.'); break; }
+      manual+=((d.manual_criteria||[]).length);
+      t.criteria.forEach(function(c,ci){
+        var v=(d.verdicts||{})[c]; if(!v) return;
+        total++;
+        if(v.verdict==='unclear'){ unclear++; return; }
+        var mark=(v.verdict==='pass');
+        (AUTO_FILLED[t.name]=AUTO_FILLED[t.name]||{})[ci]={ mark:mark, why:v.why||'' };
+        (AUDIT[t.name]||[]).forEach(function(a){ a.states[ci]=mark; });
+        filled++;
+      });
+    }
+    renderCriteria(); recompute();
+    toast(filled+' criteria auto-filled · '+unclear+' unclear · '+manual+' need a human.');
+    var bar=$('auto-note');
+    if(!bar){ bar=document.createElement('div'); bar.id='auto-note';
+      bar.style.cssText='margin:10px 0;padding:10px 13px;border-radius:10px;background:rgba(180,83,9,.06);border:1px solid rgba(180,83,9,.3);font-size:12px;color:#7c2d12;';
+      var cl=$('crit-list'); if(cl&&cl.parentNode) cl.parentNode.insertBefore(bar, cl); }
+    bar.innerHTML='<b>Auto-filled '+filled+' criteria from the screenshots</b> (ringed amber — hover for the reason). '+
+      unclear+' were unclear and '+manual+' can\'t be judged from an image at all. '+
+      '<b>Check every one before you submit — the score is still yours.</b>';
+  }catch(e){ toast('Auto-check error.'); }
+  if(btn){ btn.disabled=false; btn.textContent='⚡ Auto-check from screenshots'; }
+}
+function renderAutoBtn(){
+  if($('auto-btn')) return;
+  var host=$('crit-list'); if(!host||!host.parentNode) return;
+  var b=document.createElement('button'); b.id='auto-btn';
+  b.style.cssText='margin:0 0 10px;background:#7c3aed;color:#fff;border:none;border-radius:9px;padding:9px 16px;font-weight:800;font-size:13px;cursor:pointer;';
+  b.textContent='⚡ Auto-check from screenshots';
+  b.onclick=qaAutoCheck;
+  host.parentNode.insertBefore(b, host);
+}
 function renderCriteria(){
   paintProjTitle();
   var p=curProject(); if(!p) return;
@@ -1233,7 +1294,11 @@ function renderCriteria(){
           var was=(PEER_STATES && PEER_STATES[t.name] && PEER_STATES[t.name][ai]) ? PEER_STATES[t.name][ai][ci] : undefined;
           var changed=(PEER_STATES && was!==undefined && was!==st);
           if(changed) cls+=' changed';
-          return '<td><button class="cell '+cls+'" title="'+(changed?('Peer marked '+(was===true?'Pass':(was===false?'Fail':'—'))+' — you changed it'):'')+'" onclick="toggleCell(\''+esc(t.name)+'\','+ai+','+ci+')">'+(st===true?'✓':(st===false?'✕':'–'))+'</button></td>';
+          var af=(AUTO_FILLED && AUTO_FILLED[t.name]) ? AUTO_FILLED[t.name][ci] : null;
+          if(af && af.mark===st) cls+=' autoq';
+          var tip = changed ? ('Peer marked '+(was===true?'Pass':(was===false?'Fail':'—'))+' — you changed it')
+                   : (af ? ('Auto-filled from the screenshot: '+af.why) : '');
+          return '<td><button class="cell '+cls+'" title="'+esc(tip)+'" onclick="toggleCell(\''+esc(t.name)+'\','+ai+','+ci+')">'+(st===true?'✓':(st===false?'✕':'–'))+'</button></td>';
         }).join('')+'</tr>';
     }).join('');
     var sub='<tr class="subtot"><td class="crit">Passed</td>'+accts.map(function(a){
@@ -1248,6 +1313,7 @@ function renderCriteria(){
   }).join('');
   $('crit-list').innerHTML=html;
   applyGridLock();
+  try{ renderAutoBtn(); }catch(_ab){}
 }
 /* THE GRID IS SEALED UNTIL THE TIMER RUNS. The review is a timed session, so no verdict may
    be recorded before ▶ Start review stamps the begin time — otherwise a reviewer could fill
