@@ -219,6 +219,9 @@ header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
 .cell.pass{background:#dcfce7;color:#15803d;border-color:#86efac}
 .cell.fail{background:#fee2e2;color:#dc2626;border-color:#fca5a5}
 .cell:not(.pass):not(.fail){background:#fffbeb;border-color:#fcd34d;border-style:dashed;color:#b45309}
+/* a cell the lead moved away from the peer's verdict — the disagreement the chain exists to surface */
+.cell.changed{box-shadow:0 0 0 2px #6366f1;position:relative}
+.cell.changed::after{content:'';position:absolute;top:-3px;right:-3px;width:7px;height:7px;border-radius:50%;background:#6366f1}
 .cell:disabled{cursor:not-allowed;opacity:.75}
 @keyframes qanudge{0%,100%{transform:scale(1)}30%{transform:scale(1.07)}60%{transform:scale(.98)}}
 .nudge{animation:qanudge .5s ease}
@@ -493,6 +496,7 @@ function qClearDraft(){ try{ var k=qDraftKey(); if(k) localStorage.removeItem(k)
 var ADMIN_PASS = "JMBeast_020298";
 var USER=null, EMPLOYEES=[], IS_ADMIN=false, VIEW='compute';
 var AUDIT={};   // { taskName: [ { name, states:[bool...] } ] }
+var PEER_STATES=null;   // the peer's marks as loaded, so a lead's changes can be flagged
 var clientQA=false;   // "With Client's QA" → auto-deduct 10 points from the final score
 var CLIENT_QA_DEDUCT=10;
 
@@ -695,7 +699,26 @@ function setMode(m){
   MODE=m;
   var emp=$('c-emp');
   if(m==='peer'){ loadMyAssignment(); }
-  else { if(emp){ emp.disabled=false; } loadLeadQueue(); }
+  else {
+    /* Switching to the lead screen must CLEAR the peer target. It used to leave the peer's
+       name and board on screen, so a lead appeared to be reviewing their peer assignment
+       again — the single-option select couldn't hold anyone else either. */
+    if(emp){
+      emp.disabled=false;
+      emp.innerHTML='<option value="">Pick a review from your queue…</option>'+
+        (EMPLOYEES||[]).map(function(e){
+          return '<option value="'+esc(e.employee_id)+'">'+esc(e.full_name||e.employee_id)+' ('+esc(e.employee_id)+')</option>'; }).join('');
+      emp.value='';
+    }
+    AUDIT=defaultAudit();
+    CTX_READY=false; CTX_STATE='loading';
+    try{ renderCriteria(); }catch(_r){}
+    var bar=$('sample-bar');
+    if(bar){ window._barOwned=true;
+      bar.style.cssText='margin:8px 0 12px;padding:11px 14px;border-radius:11px;background:rgba(21,128,61,.07);border:1px solid rgba(21,128,61,.3);font-size:12.5px;';
+      bar.innerHTML='<b>Lead screen.</b> Pick a review from your queue above — it loads the exact board the peer used.'; }
+    loadLeadQueue();
+  }
   renderModeBar(); applyClientQAGate(); renderStaticContext();
   var sb=$('save-btn'); if(sb) sb.textContent = (m==='peer') ? 'Submit peer review (stage 1 of 3)' : 'Submit lead review (stage 2 of 3)';
 }
@@ -792,15 +815,22 @@ async function loadPeerBoard(empId, week){
       }
     }
     AUDIT=defaultAudit();
+    PEER_STATES=null;
     var board=null; try{ board=JSON.parse(it.peer_board||'null'); }catch(_b){ board=null; }
     if(board && board.accounts){
       var p=curProject();
+      PEER_STATES={};
       p.tasks.forEach(function(t){
         var names=board.accounts[t.name];
         if(!names || !names.length) return;
-        AUDIT[t.name]=names.map(function(nm){
-          return { name:String(nm||''), states:t.criteria.map(function(){ return null; }) };
+        var st=(board.states && board.states[t.name]) || [];
+        AUDIT[t.name]=names.map(function(nm,ai){
+          var row=(st[ai]||[]).slice();
+          // pre-fill with the peer's verdict; any gap stays unmarked so it still must be answered
+          var states=t.criteria.map(function(_c,ci){ return (row[ci]===true||row[ci]===false)?row[ci]:null; });
+          return { name:String(nm||''), states:states };
         });
+        PEER_STATES[t.name]=AUDIT[t.name].map(function(a){ return a.states.slice(); });
       });
     }
     CTX_READY=true; CTX_STATE='ready';
@@ -809,16 +839,28 @@ async function loadPeerBoard(empId, week){
     if(bar){
       window._barOwned=true;
       bar.style.cssText='margin:8px 0 12px;padding:11px 14px;border-radius:11px;background:rgba(21,128,61,.07);border:1px solid rgba(21,128,61,.3);font-size:12.5px;';
-      bar.innerHTML='<b>Lead screen · the same board the peer used.</b> '+
-        esc(it.peer_name||'The peer')+' audited these exact accounts on <b>'+esc(it.peer_project||'—')+'</b> and scored <b>'+esc(it.peer_score)+'%</b>. '+
-        'Your checks start blank — mark what you actually find.';
+      bar.innerHTML='<b>Lead screen · the peer\'s completed board.</b> '+
+        esc(it.peer_name||'The peer')+' audited these accounts on <b>'+esc(it.peer_project||'—')+'</b> and scored <b>'+esc(it.peer_score)+'%</b>. '+
+        'Their marks are pre-filled — <b>change only what you find different</b>. Anything you change is ringed in blue.';
     }
     return !!(board && board.accounts);
   }catch(e){ return false; }
 }
 async function leadPick(empId, week){
   try{
-    $('c-emp').value=empId;
+    MODE='lead';
+    var sel=$('c-emp');
+    if(sel){
+      // the peer stage leaves this select holding ONE option; a lead target isn't in it, so the
+      // assignment must be added before it can be selected — otherwise value silently stays put
+      sel.disabled=false;
+      if(!Array.prototype.some.call(sel.options,function(o){ return String(o.value).toUpperCase()===String(empId).toUpperCase(); })){
+        var nm=empId;
+        try{ var e=(EMPLOYEES||[]).filter(function(x){ return String(x.employee_id).toUpperCase()===String(empId).toUpperCase(); })[0]; if(e) nm=(e.full_name||empId)+' ('+empId+')'; }catch(_e){}
+        sel.insertAdjacentHTML('beforeend','<option value="'+esc(empId)+'">'+esc(nm)+'</option>');
+      }
+      sel.value=empId;
+    }
     if($('c-week')) $('c-week').value=String(week);
     MODE='lead'; try{ renderModeBar(); }catch(_m){}
     var ok=await loadPeerBoard(empId, week);
@@ -912,7 +954,10 @@ async function loadEmployees(){
        it came second it replaced the locked option with "Select employee…", blanking the value,
        and the reviewer hit "Pick an employee first" AFTER completing a 30-minute audit.
        A peer never picks from a list, so don't build one for them. */
-    if(MY_ASSIGNMENT && MY_ASSIGNMENT.reviewee_id && !IS_ADMIN){
+    /* Lock the picker to the assignment ONLY during the peer stage. A lead reviews a different
+       person, and a single-option select silently refuses any other value — which is why the
+       lead screen kept showing the peer's assignment instead of the lead target. */
+    if(MY_ASSIGNMENT && MY_ASSIGNMENT.reviewee_id && !IS_ADMIN && MODE!=='lead'){
       $('c-emp').innerHTML='<option value="'+esc(MY_ASSIGNMENT.reviewee_id)+'">'+esc(MY_ASSIGNMENT.reviewee_name||MY_ASSIGNMENT.reviewee_id)+' ('+esc(MY_ASSIGNMENT.reviewee_id)+')</option>';
       $('c-emp').value=MY_ASSIGNMENT.reviewee_id;
       $('c-emp').disabled=true;
@@ -922,8 +967,8 @@ async function loadEmployees(){
     $('c-emp').innerHTML='<option value="">Select employee…</option>'+EMPLOYEES.map(function(e){
       return '<option value="'+esc(e.employee_id)+'">'+esc(e.full_name||e.employee_id)+' ('+esc(e.employee_id)+')</option>';
     }).join('');
-    // assignment may have landed while this was in flight — re-apply it
-    if(MY_ASSIGNMENT && MY_ASSIGNMENT.reviewee_id && !IS_ADMIN){ $('c-emp').value=MY_ASSIGNMENT.reviewee_id; }
+    // assignment may have landed while this was in flight — re-apply it (peer stage only)
+    if(MY_ASSIGNMENT && MY_ASSIGNMENT.reviewee_id && !IS_ADMIN && MODE!=='lead'){ $('c-emp').value=MY_ASSIGNMENT.reviewee_id; }
   }catch(e){ $('c-emp').innerHTML='<option value="">Server busy — retrying…</option>'; setTimeout(loadEmployees, 15000); }
 }
 /* ── PROJECT SCOPING — show only the project(s) the reviewed employee actually worked on ──
@@ -1039,7 +1084,10 @@ function renderCriteria(){
       return '<tr><td class="crit critlbl" title="Click to flip this row" onclick="flipRow(\''+esc(t.name)+'\','+ci+')">'+esc(lbl)+'</td>'+
         accts.map(function(a,ai){
           var st=a.states[ci]; var cls=st===true?'pass':(st===false?'fail':'');
-          return '<td><button class="cell '+cls+'" onclick="toggleCell(\''+esc(t.name)+'\','+ai+','+ci+')">'+(st===true?'✓':(st===false?'✕':'–'))+'</button></td>';
+          var was=(PEER_STATES && PEER_STATES[t.name] && PEER_STATES[t.name][ai]) ? PEER_STATES[t.name][ai][ci] : undefined;
+          var changed=(PEER_STATES && was!==undefined && was!==st);
+          if(changed) cls+=' changed';
+          return '<td><button class="cell '+cls+'" title="'+(changed?('Peer marked '+(was===true?'Pass':(was===false?'Fail':'—'))+' — you changed it'):'')+'" onclick="toggleCell(\''+esc(t.name)+'\','+ai+','+ci+')">'+(st===true?'✓':(st===false?'✕':'–'))+'</button></td>';
         }).join('')+'</tr>';
     }).join('');
     var sub='<tr class="subtot"><td class="crit">Passed</td>'+accts.map(function(a){
@@ -1451,11 +1499,12 @@ function renderStaticContext(){
   var who=(MODE==='peer')
     ? ((MY_ASSIGNMENT&&MY_ASSIGNMENT.reviewee_name)||'Loading your assignment…')
     : (function(){ var s=$('c-emp'); return (s&&s.selectedIndex>=0&&s.options[s.selectedIndex])?s.options[s.selectedIndex].text.replace(/\s*\([^)]*\)\s*$/,''):'Pick from your lead queue'; })();
+  var stageLbl=(MODE==='lead')?'Reviewing · LEAD screen':'Reviewing';
   var projKey=($('c-proj')||{}).value||'';
   var projLbl=CTX_READY ? ((PROJECTS[projKey]&&PROJECTS[projKey].label)||projKey||'—') : 'Loading…';
   var mv=($('c-month')||{}).value||'';
   var mLbl=mv?(function(){ try{ return new Date(mv+'-01T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'}); }catch(e){ return mv; } })():'—';
-  host.innerHTML=fld('Reviewing', who, true)+fld('Project', projLbl)+fld('Month', mLbl)+fld('Week', 'Week '+((($('c-week')||{}).value)||'1'));
+  host.innerHTML=fld(stageLbl, who, true)+fld('Project', projLbl)+fld('Month', mLbl)+fld('Week', 'Week '+((($('c-week')||{}).value)||'1'));
 }
 /* ══ REVIEW TIMER — the review is a timed session, not a guess ══
    Start stamps the real begin time; the clock runs live; submitting stamps the end.
@@ -1615,6 +1664,17 @@ function _boardAccounts(){
   }catch(e){}
   return out;
 }
+/* The peer's actual verdicts, cell by cell. The lead's board is pre-filled from these so they
+   verify a completed audit rather than redoing it from scratch — and anything they change is
+   flagged, which is precisely the disagreement the accuracy policy is meant to catch. */
+function _boardStates(){
+  var out={};
+  try{
+    var p=curProject(); if(!p) return out;
+    p.tasks.forEach(function(t){ out[t.name]=(AUDIT[t.name]||[]).map(function(a){ return (a.states||[]).slice(); }); });
+  }catch(e){}
+  return out;
+}
 /* ---- save ---- */
 async function saveScore(){
   var emp=$('c-emp').value, month=$('c-month').value, week=$('c-week').value, proj=$('c-proj').value;
@@ -1667,7 +1727,7 @@ async function saveScore(){
         +'&notes='+encodeURIComponent(($('c-note').value||'')+' | failed checks: '+focus.length)
         +'&project='+encodeURIComponent(proj)
         // the exact board the peer audited: project + the account name in every column
-        +'&board='+encodeURIComponent(JSON.stringify({ project:proj, accounts:_boardAccounts() }))
+        +'&board='+encodeURIComponent(JSON.stringify({ project:proj, accounts:_boardAccounts(), states:_boardStates() }))
         +'&_='+Date.now();
       var pd=await qPost(pu, async function(){
         // Verify: did the peer review actually land despite the timeout?
