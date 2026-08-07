@@ -855,7 +855,9 @@ async function loadGaps(force){
   document.getElementById('gaps-range').textContent=from+' → '+to;
   box.innerHTML='<div class="empty">Scanning every task-day in the range…</div>';
   try{
-    var r=await fetch(PORTAL_URL+'?action=prod_gaps&from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to)+(force?'&_='+Date.now():''));
+    // force=1 tells the SERVER to skip its 15-minute cache. &_= alone only busted the browser's,
+    // which is why Rescan kept returning the same stale scan after a deploy.
+    var r=await fetch(PORTAL_URL+'?action=prod_gaps&from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to)+(force?'&force=1&_='+Date.now():''));
     var d=await r.json();
     if(!d||!d.ok) throw new Error((d&&d.error)||'error');
     GAPS=d; renderGaps();
@@ -906,8 +908,9 @@ function renderGaps(){
     gapSection('Output under an unknown employee','recorded against a name or ID that is not in the directory',
       d.unknown_employee, [['raw_id','Recorded as'],['date','Date'],['project','Project'],['task','Task'],['units','Units','right']],'purple');
 }
-/* Badge on load so gaps are visible without opening anything */
-setTimeout(function(){ try{
+/* The gap scan is HEAVY (full worklog + Data Center read). It runs only when you open the
+   panel — never automatically on page load, which used to crowd the backend. */
+if(false) setTimeout(function(){ try{
   var from=($('d-from')||{}).value||'', to=($('d-to')||{}).value||'';
   fetch(PORTAL_URL+'?action=prod_gaps&from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to))
     .then(function(r){ return r.json(); })
