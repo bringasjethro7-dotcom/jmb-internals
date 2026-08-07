@@ -256,7 +256,187 @@ function planFor(day){ return PLANS[Math.min(day,6)] + (day>6?' · day '+day:'')
 function $(id){return document.getElementById(id);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('on'); setTimeout(function(){t.classList.remove('on');},2400); }
-function bump(task,n){ return fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now()).catch(function(){}); }
+/* ══════════════ PROOF OF WORK ══════════════
+   Every output in this tool now needs a screenshot before it counts.
+
+   Gated at bump() deliberately: that is the single choke point through which every recorded
+   output passes, so one change covers every button in the tool and no path can slip past it.
+   bump() opens the proof panel and only posts the count once the screenshots have uploaded.
+   Cancel, and it rejects — which stops the rest of the caller's flow, so the tool never marks
+   something done that wasn't counted.
+
+   Capture uses getDisplayMedia. The browser ties permission to the STREAM, not the frame, so
+   the window is picked ONCE and every capture after that is instant. Works on the Vysor window
+   too, which is how phone work gets captured. Requires HTTPS. */
+var SHOT={ stream:null, video:null, max:5 };
+function shotSupported(){ return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia); }
+function shotLive(){ return !!(SHOT.stream && SHOT.stream.getVideoTracks().length && SHOT.stream.getVideoTracks()[0].readyState==='live'); }
+async function shotStart(){
+  if(!shotSupported()){ toast('This browser can\'t capture windows — use 📎 to attach a file.'); return false; }
+  try{
+    toast('Pick the window you\'re working in — your browser, or Vysor if you\'re on the phone.');
+    SHOT.stream=await navigator.mediaDevices.getDisplayMedia({ video:{ frameRate:1 }, audio:false });
+    SHOT.video=document.createElement('video'); SHOT.video.srcObject=SHOT.stream; SHOT.video.muted=true;
+    await SHOT.video.play();
+    SHOT.stream.getVideoTracks()[0].addEventListener('ended', function(){
+      SHOT.stream=null; SHOT.video=null; try{ renderShotBar(); }catch(e){}
+      toast('Screen sharing stopped. Click 📷 Pick window to resume.');
+    });
+    renderShotBar(); toast('Window locked in — 📷 is one click from now on.');
+    return true;
+  }catch(e){ toast('Capture cancelled.'); return false; }
+}
+function shotStop(){ try{ if(SHOT.stream) SHOT.stream.getTracks().forEach(function(t){ t.stop(); }); }catch(e){}
+  SHOT.stream=null; SHOT.video=null; renderShotBar(); }
+function shotGrab(){
+  if(!shotLive()) return null;
+  var v=SHOT.video, w=v.videoWidth, h=v.videoHeight; if(!w||!h) return null;
+  var max=1400, sw=w, sh=h;
+  if(sw>max||sh>max){ var r=Math.min(max/sw,max/sh); sw=Math.round(sw*r); sh=Math.round(sh*r); }
+  var c=document.createElement('canvas'); c.width=sw; c.height=sh;
+  c.getContext('2d').drawImage(v,0,0,sw,sh);
+  return c.toDataURL('image/jpeg',0.72);
+}
+function renderShotBar(){
+  var bar=document.getElementById('shot-bar');
+  if(!bar){
+    bar=document.createElement('div'); bar.id='shot-bar';
+    bar.style.cssText='position:fixed;left:12px;bottom:12px;z-index:9997;display:flex;align-items:center;'+
+      'padding:8px 12px;border-radius:999px;background:rgba(15,23,42,.92);color:#e2e8f0;font:700 12px Manrope,system-ui,sans-serif;'+
+      'box-shadow:0 10px 30px rgba(0,0,0,.35);';
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = shotLive()
+    ? '<span style="width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 8px #34d399;margin-right:8px;"></span>Capture armed'+
+      '<button onclick="shotStop()" style="margin-left:8px;background:rgba(255,255,255,.12);border:none;color:#e2e8f0;border-radius:7px;padding:4px 9px;font-weight:700;cursor:pointer;">Stop</button>'
+    : '<span style="width:8px;height:8px;border-radius:50%;background:#94a3b8;margin-right:8px;"></span>Capture off'+
+      '<button onclick="shotStart()" style="margin-left:8px;background:#0f766e;border:none;color:#fff;border-radius:7px;padding:4px 10px;font-weight:800;cursor:pointer;">📷 Pick window</button>';
+}
+function proofCompress(file){
+  return new Promise(function(res,rej){
+    var fr=new FileReader();
+    fr.onload=function(){
+      var im=new Image();
+      im.onload=function(){
+        var max=1400, w=im.width, h=im.height;
+        if(w>max||h>max){ var r=Math.min(max/w,max/h); w=Math.round(w*r); h=Math.round(h*r); }
+        var c=document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(im,0,0,w,h);
+        res(c.toDataURL('image/jpeg',0.72));
+      };
+      im.onerror=function(){ rej(new Error('bad image')); };
+      im.src=fr.result;
+    };
+    fr.onerror=function(){ rej(new Error('read failed')); };
+    fr.readAsDataURL(file);
+  });
+}
+var PROOF={ imgs:[], ctx:null, resolve:null, reject:null };
+function proofPanel(){
+  var ov=document.getElementById('proof-ov');
+  if(ov) return ov;
+  ov=document.createElement('div'); ov.id='proof-ov';
+  ov.style.cssText='position:fixed;inset:0;top:0;right:0;bottom:0;left:0;z-index:99998;background:rgba(8,12,20,.72);display:none;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML=
+    '<div style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:20px 22px;box-shadow:0 40px 100px rgba(0,0,0,.4);">'+
+      '<div style="font:800 17px Sora,Manrope,sans-serif;">Attach proof</div>'+
+      '<div id="proof-what" style="font-size:12.5px;color:#64748b;margin-top:3px;"></div>'+
+      '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">'+
+        '<button id="proof-cap" style="background:#0f766e;color:#fff;border:none;border-radius:9px;padding:10px 16px;font-weight:800;cursor:pointer;">📷 Capture window</button>'+
+        '<button id="proof-pick" style="background:#475569;color:#fff;border:none;border-radius:9px;padding:10px 14px;font-weight:800;cursor:pointer;">📎 Attach file</button>'+
+        '<span style="font-size:12px;color:#64748b;align-self:center;">or paste with Ctrl+V · up to 5</span>'+
+      '</div>'+
+      '<input type="file" id="proof-file" accept="image/*" multiple style="display:none;">'+
+      '<div id="proof-thumbs" style="display:flex;flex-wrap:wrap;margin-top:12px;"></div>'+
+      '<input id="proof-note" placeholder="Optional note" style="width:100%;margin-top:12px;padding:9px 11px;border:1px solid #e2e8f0;border-radius:9px;font-size:13px;">'+
+      '<div style="display:flex;justify-content:flex-end;margin-top:14px;">'+
+        '<button id="proof-cancel" style="padding:9px 16px;border-radius:9px;border:1px solid #e2e8f0;background:#fff;font-weight:700;cursor:pointer;margin-right:9px;">Cancel</button>'+
+        '<button id="proof-save" style="padding:9px 20px;border-radius:9px;border:none;background:#0f766e;color:#fff;font-weight:800;cursor:pointer;">Save proof &amp; count it</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(ov);
+  document.getElementById('proof-pick').onclick=function(){ document.getElementById('proof-file').click(); };
+  document.getElementById('proof-file').onchange=function(){ proofAdd(this.files); this.value=''; };
+  document.getElementById('proof-cap').onclick=async function(){
+    if(PROOF.imgs.length>=SHOT.max){ toast('5 screenshots is the maximum.'); return; }
+    if(!shotLive()){ var ok=await shotStart(); if(!ok) return; }
+    var img=shotGrab();
+    if(!img){ toast('Could not read the window — pick it again.'); shotStop(); return; }
+    PROOF.imgs.push(img); proofThumb(img);
+  };
+  document.getElementById('proof-cancel').onclick=function(){ proofClose(true); };
+  document.getElementById('proof-save').onclick=proofSubmit;
+  document.addEventListener('paste', function(ev){
+    var o=document.getElementById('proof-ov'); if(!o||o.style.display==='none') return;
+    var items=(ev.clipboardData&&ev.clipboardData.items)||[], files=[];
+    for(var i=0;i<items.length;i++){ if(items[i].type.indexOf('image')===0){ var f=items[i].getAsFile(); if(f) files.push(f); } }
+    if(files.length){ ev.preventDefault(); proofAdd(files); }
+  });
+  return ov;
+}
+function proofThumb(d){
+  var host=document.getElementById('proof-thumbs'); if(!host) return;
+  var w=document.createElement('div');
+  w.style.cssText='position:relative;width:74px;height:74px;border-radius:9px;overflow:hidden;border:1px solid #e2e8f0;margin:0 8px 8px 0;';
+  w.innerHTML='<img src="'+d+'" style="width:100%;height:100%;object-fit:cover;">'+
+    '<button style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;line-height:1;">×</button>';
+  w.querySelector('button').onclick=function(){ var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1); w.remove(); };
+  host.appendChild(w);
+}
+async function proofAdd(files){
+  for(var i=0;i<files.length;i++){
+    if(PROOF.imgs.length>=SHOT.max){ toast('5 screenshots is the maximum.'); break; }
+    try{ var d=await proofCompress(files[i]); PROOF.imgs.push(d); proofThumb(d); }catch(e){}
+  }
+}
+function proofClose(cancelled){
+  var ov=document.getElementById('proof-ov'); if(ov) ov.style.display='none';
+  var rej=PROOF.reject; PROOF.imgs=[]; PROOF.resolve=null; PROOF.reject=null;
+  if(cancelled && rej){ var e=new Error('proof cancelled'); e.proofCancelled=true; rej(e); }
+}
+async function proofSubmit(){
+  if(!PROOF.imgs.length){ toast('Attach at least one screenshot.'); return; }
+  var btn=document.getElementById('proof-save'); btn.disabled=true; btn.textContent='Uploading…';
+  try{
+    var body={ action:'proof_save', employee_id:USER.id, full_name:(USER.name||USER.id),
+      project:PROJECT, task:PROOF.ctx.task||'', account:PROOF.ctx.account||'',
+      date:(typeof today==='function'?today():''), outputs:PROOF.ctx.n||1,
+      note:(document.getElementById('proof-note').value||''), images:PROOF.imgs };
+    var r=await fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) });
+    var d=await r.json();
+    if(d && d.ok){
+      var res=PROOF.resolve; var n=d.count;
+      PROOF.imgs=[]; PROOF.resolve=null; PROOF.reject=null;
+      var ov=document.getElementById('proof-ov'); if(ov) ov.style.display='none';
+      toast(n+' screenshot'+(n>1?'s':'')+' saved as proof.');
+      if(res) res(true);
+    } else {
+      toast('Proof not saved: '+((d&&d.error)||'unknown')+' — nothing was counted.');
+    }
+  }catch(e){ toast('Upload failed — nothing was counted. Try again.'); }
+  btn.disabled=false; btn.textContent='Save proof & count it';
+}
+/* THE GATE. Every output routes through here, so proof cannot be bypassed by any button. */
+function bump(task,n){
+  return new Promise(function(resolve,reject){
+    PROOF.imgs=[]; PROOF.ctx={task:task,n:(n||1)}; PROOF.resolve=null; PROOF.reject=reject;
+    var ov=proofPanel(); ov.style.display='flex';
+    document.getElementById('proof-what').textContent=task+' · counts as '+(n||1);
+    document.getElementById('proof-note').value='';
+    document.getElementById('proof-thumbs').innerHTML='';
+    PROOF.resolve=function(){
+      fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)
+        +'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now())
+        .then(function(){ resolve(true); }).catch(function(){ resolve(true); });
+    };
+  });
+}
+/* A cancelled proof stops the caller's flow — that's intended, and shouldn't spam the console. */
+window.addEventListener('unhandledrejection', function(ev){
+  if(ev.reason && ev.reason.proofCancelled){ ev.preventDefault(); }
+});
+try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderShotBar(); }catch(e){} });
+     setTimeout(function(){ try{ renderShotBar(); }catch(e){} }, 1200); }catch(e){}
 function today(){ // JMB business day — resets 8:00 AM Philippine time (a night shift never splits across two days)
   try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-8*3600*1000)); }
   catch(e){ return new Date(Date.now()-8*3600*1000).toISOString().slice(0,10); } }
