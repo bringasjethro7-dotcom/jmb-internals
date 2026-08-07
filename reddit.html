@@ -351,6 +351,274 @@ function phaseIx(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return i; retu
 function $(id){return document.getElementById(id);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('on'); setTimeout(function(){t.classList.remove('on');},2400); }
+/* ══════════ ONE-CLICK WINDOW CAPTURE ══════════
+   Snipping tool → paste is four actions per screenshot. This is one.
+
+   The browser will not let a page grab the screen silently — the user must choose a source.
+   But the PERMISSION and the SOURCE PICK are per-STREAM, not per-frame. So we open the stream
+   once ("Pick your Reddit window"), keep it alive, and every camera click after that grabs a
+   frame instantly with no dialog at all. The stream lives until the VA stops it or closes the
+   tab, which for a shift means one pick and then pure one-click capture.
+
+   Requires HTTPS — internals.jmbvirtuals.com qualifies. If the browser refuses (old build,
+   permission denied), we fall back to the paste/file panel so nobody is ever stuck. */
+var SHOT={ stream:null, video:null, max:5 };
+function shotSupported(){
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+}
+function shotLive(){
+  return !!(SHOT.stream && SHOT.stream.getVideoTracks().length && SHOT.stream.getVideoTracks()[0].readyState==='live');
+}
+async function shotStart(){
+  if(!shotSupported()){ toast('This browser can\'t capture windows — use the 📎 button instead.'); return false; }
+  toast('Pick the window you\'re working in — your Reddit browser, or Vysor if you\'re on the phone.');
+  try{
+    SHOT.stream=await navigator.mediaDevices.getDisplayMedia({
+      video:{ frameRate:1 }, audio:false          // 1fps — we only ever grab stills
+    });
+    SHOT.video=document.createElement('video');
+    SHOT.video.srcObject=SHOT.stream; SHOT.video.muted=true;
+    await SHOT.video.play();
+    // the VA can stop sharing from Chrome's own bar — notice it and offer to re-pick
+    SHOT.stream.getVideoTracks()[0].addEventListener('ended', function(){
+      SHOT.stream=null; SHOT.video=null; try{ renderShotBar(); }catch(e){}
+      toast('Screen sharing stopped. Click 📷 Pick window to resume.');
+    });
+    renderShotBar();
+    toast('Window locked in — every 📷 from now on is one click.');
+    return true;
+  }catch(e){ toast('Capture cancelled.'); return false; }
+}
+function shotStop(){
+  try{ if(SHOT.stream) SHOT.stream.getTracks().forEach(function(t){ t.stop(); }); }catch(e){}
+  SHOT.stream=null; SHOT.video=null; renderShotBar();
+}
+function shotGrab(){
+  if(!shotLive()) return null;
+  var v=SHOT.video, w=v.videoWidth, h=v.videoHeight;
+  if(!w||!h) return null;
+  var max=1400, sw=w, sh=h;
+  if(sw>max||sh>max){ var r=Math.min(max/sw,max/sh); sw=Math.round(sw*r); sh=Math.round(sh*r); }
+  var c=document.createElement('canvas'); c.width=sw; c.height=sh;
+  c.getContext('2d').drawImage(v,0,0,sw,sh);
+  return c.toDataURL('image/jpeg',0.72);
+}
+/* A persistent bar so the VA always knows whether capture is armed. */
+function renderShotBar(){
+  var bar=document.getElementById('shot-bar');
+  if(!bar){
+    bar=document.createElement('div'); bar.id='shot-bar';
+    bar.style.cssText='position:fixed;left:12px;bottom:12px;z-index:9997;display:flex;align-items:center;gap:8px;'+
+      'padding:8px 12px;border-radius:999px;background:rgba(15,23,42,.92);color:#e2e8f0;font:700 12px Inter,system-ui,sans-serif;'+
+      'box-shadow:0 10px 30px rgba(0,0,0,.35);';
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = shotLive()
+    ? '<span style="width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 8px #34d399;"></span>'+
+      'Capture armed · 📷 is one click'+
+      '<button onclick="shotStop()" style="margin-left:6px;background:rgba(255,255,255,.12);border:none;color:#e2e8f0;border-radius:7px;padding:4px 9px;font-weight:700;cursor:pointer;">Stop</button>'
+    : '<span style="width:8px;height:8px;border-radius:50%;background:#94a3b8;"></span>'+
+      'Capture off'+
+      '<button onclick="shotStart()" style="margin-left:6px;background:#0f766e;border:none;color:#fff;border-radius:7px;padding:4px 10px;font-weight:800;cursor:pointer;">📷 Pick window</button>';
+}
+/* THE CAMERA BUTTON. Grabs a frame straight into the proof tray for this session.
+   Up to 5 per session — the cap is enforced here and in the panel. */
+async function shotForSession(id, phk, n){
+  var r0=(typeof row==='function'?row(id):null)||{};
+  var p=(typeof phase==='function'?phase(phk):null)||{};
+  var key='s:'+id+':'+phk+':'+n;
+  SHOTTRAY[key]=SHOTTRAY[key]||[];
+  if(SHOTTRAY[key].length>=SHOT.max){ toast('5 screenshots is the max for one session.'); return; }
+  if(!shotLive()){ var okStart=await shotStart(); if(!okStart) return; }
+  var img=shotGrab();
+  if(!img){ toast('Could not read the window — re-pick it.'); shotStop(); return; }
+  SHOTTRAY[key].push(img);
+  toast('📷 '+SHOTTRAY[key].length+'/'+SHOT.max+' captured for session '+n+'.');
+  renderShotCount(id, phk, n);
+}
+var SHOTTRAY={};
+function renderShotCount(id, phk, n){
+  var arr=SHOTTRAY['s:'+id+':'+phk+':'+n]||[];
+  var el=document.getElementById('shotc-'+id+'-'+phk+'-'+n);
+  if(el){ el.textContent = arr.length ? (arr.length+'/'+SHOT.max) : ''; }
+  // flip the camera green and unlock the session button in place — no reload, no lost scroll
+  try{ if(el&&el.parentNode) el.parentNode.style.background = arr.length ? '#0f766e' : '#b45309'; }catch(e){}
+  var b=document.getElementById('sess-'+id+'-'+phk+'-'+n);
+  if(b && arr.length && b.disabled){
+    b.disabled=false; b.className='go'; b.style.opacity=''; b.style.cursor='';
+    b.title=''; b.innerHTML=IC.check+' Session '+n;
+    b.onclick=function(){ sessionDone(id,phk,n); };
+  }
+}
+/* CREATION PROOF — a screenshot of the account that was actually made. Same tray mechanics
+   as sessions, keyed 'c:<rowId>' so the two never mix. */
+async function shotForCreate(id){
+  var k='c:'+id; SHOTTRAY[k]=SHOTTRAY[k]||[];
+  if(SHOTTRAY[k].length>=SHOT.max){ toast('5 screenshots is the max.'); return; }
+  if(!shotLive()){ var okStart=await shotStart(); if(!okStart) return; }
+  var img=shotGrab();
+  if(!img){ toast('Could not read the window — re-pick it.'); shotStop(); return; }
+  SHOTTRAY[k].push(img);
+  toast('📷 '+SHOTTRAY[k].length+'/'+SHOT.max+' captured.');
+  renderCreateCount(id);
+}
+function shotPickCreate(id){
+  var k='c:'+id; SHOTTRAY[k]=SHOTTRAY[k]||[];
+  if(SHOTTRAY[k].length>=SHOT.max){ toast('5 screenshots is the max.'); return; }
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.multiple=true;
+  inp.onchange=async function(){
+    for(var i=0;i<inp.files.length;i++){
+      if(SHOTTRAY[k].length>=SHOT.max) break;
+      try{ SHOTTRAY[k].push(await proofCompress(inp.files[i])); }catch(e){}
+    }
+    toast('📎 '+SHOTTRAY[k].length+'/'+SHOT.max+' attached.');
+    renderCreateCount(id);
+  };
+  inp.click();
+}
+function renderCreateCount(id){
+  var arr=SHOTTRAY['c:'+id]||[];
+  var el=document.getElementById('shotc-c-'+id);
+  if(el){ el.textContent=arr.length?(arr.length+'/'+SHOT.max):''; try{ el.parentNode.style.background=arr.length?'#0f766e':'#b45309'; }catch(e){} }
+  var b=document.getElementById('cbtn-'+id);
+  if(b && arr.length && b.disabled){
+    b.disabled=false; b.className='up'; b.style.opacity=''; b.style.cursor=''; b.title='';
+    b.innerHTML=IC.check+' DONE (+1 Reddit Account Creation)';
+    b.onclick=function(){ newDone(id); };
+  }
+}
+/* Fallback for anyone whose browser can't screen-capture — same tray, same 5 cap. */
+function shotPickFile(id, phk, n){
+  var key='s:'+id+':'+phk+':'+n;
+  SHOTTRAY[key]=SHOTTRAY[key]||[];
+  if(SHOTTRAY[key].length>=SHOT.max){ toast('5 screenshots is the max for one session.'); return; }
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.multiple=true;
+  inp.onchange=async function(){
+    for(var i=0;i<inp.files.length;i++){
+      if(SHOTTRAY[key].length>=SHOT.max) break;
+      try{ SHOTTRAY[key].push(await proofCompress(inp.files[i])); }catch(e){}
+    }
+    toast('📎 '+SHOTTRAY[key].length+'/'+SHOT.max+' attached for session '+n+'.');
+    renderShotCount(id, phk, n);
+  };
+  inp.click();
+}
+SHOT.trayFor=function(id,phk,n){ return SHOTTRAY['s:'+id+':'+phk+':'+n]||[]; };
+SHOT.clearTray=function(id,phk,n){ delete SHOTTRAY['s:'+id+':'+phk+':'+n]; };
+/* ══════════ PROOF CAPTURE ══════════
+   The Reddit accounts are private, so a reviewer can't open a post to check it. The only
+   evidence that survives is what the VA had on screen. This grabs it with as little friction
+   as possible: Ctrl+V pastes straight from the snipping tool, or pick files.
+
+   Images are resized and re-encoded to JPEG in the browser BEFORE upload — a raw 4K PNG
+   screenshot is ~8 MB and would blow the Apps Script payload limit and the VA's data. At
+   1400px/0.72 quality a Reddit screenshot lands around 150–250 KB and stays perfectly legible. */
+var PROOF={ imgs:[], ctx:null, ondone:null };
+function proofCompress(file){
+  return new Promise(function(res,rej){
+    var fr=new FileReader();
+    fr.onload=function(){
+      var im=new Image();
+      im.onload=function(){
+        var max=1400, w=im.width, h=im.height;
+        if(w>max || h>max){ var r=Math.min(max/w,max/h); w=Math.round(w*r); h=Math.round(h*r); }
+        var c=document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(im,0,0,w,h);
+        res(c.toDataURL('image/jpeg',0.72));
+      };
+      im.onerror=function(){ rej(new Error('bad image')); };
+      im.src=fr.result;
+    };
+    fr.onerror=function(){ rej(new Error('read failed')); };
+    fr.readAsDataURL(file);
+  });
+}
+function proofOpen(ctx, onDone){
+  PROOF.ctx=ctx||{}; PROOF.ondone=onDone||null;
+  // anything the 📷 button already grabbed for this session is carried straight in
+  PROOF.imgs=(PROOF.ctx.preload||[]).slice(0,5);
+  var ov=document.getElementById('proof-ov');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='proof-ov';
+    ov.style.cssText='position:fixed;inset:0;z-index:99998;background:rgba(8,12,20,.72);display:flex;align-items:center;justify-content:center;padding:16px;';
+    ov.innerHTML=
+      '<div style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:20px 22px;box-shadow:0 40px 100px rgba(0,0,0,.4);">'+
+        '<div style="font:800 17px Sora,Inter,sans-serif;">Attach proof</div>'+
+        '<div id="proof-what" style="font-size:12.5px;color:#64748b;margin-top:3px;"></div>'+
+        '<div id="proof-drop" tabindex="0" style="margin-top:14px;border:2px dashed #cbd5e1;border-radius:12px;padding:22px;text-align:center;cursor:pointer;outline:none;">'+
+          '<div style="font-weight:800;font-size:14px;color:#0f172a;">Paste a screenshot (Ctrl+V)</div>'+
+          '<div style="font-size:12px;color:#64748b;margin-top:4px;">or click to pick files · up to 8</div>'+
+        '</div>'+
+        '<input type="file" id="proof-file" accept="image/*" multiple style="display:none;">'+
+        '<div id="proof-thumbs" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>'+
+        '<input id="proof-note" placeholder="Optional note (e.g. subreddit, account)" style="width:100%;margin-top:12px;padding:9px 11px;border:1px solid #e2e8f0;border-radius:9px;font-size:13px;">'+
+        '<div style="display:flex;gap:9px;justify-content:flex-end;margin-top:14px;">'+
+          '<button id="proof-cancel" style="padding:9px 16px;border-radius:9px;border:1px solid #e2e8f0;background:#fff;font-weight:700;cursor:pointer;">Cancel</button>'+
+          '<button id="proof-save" style="padding:9px 20px;border-radius:9px;border:none;background:#0f766e;color:#fff;font-weight:800;cursor:pointer;">Save proof &amp; count it</button>'+
+        '</div>'+
+      '</div>';
+    document.body.appendChild(ov);
+    document.getElementById('proof-drop').onclick=function(){ document.getElementById('proof-file').click(); };
+    document.getElementById('proof-file').onchange=function(){ proofAdd(this.files); this.value=''; };
+    document.getElementById('proof-cancel').onclick=proofClose;
+    document.getElementById('proof-save').onclick=proofSubmit;
+    document.addEventListener('paste', function(ev){
+      if(!document.getElementById('proof-ov') || document.getElementById('proof-ov').style.display==='none') return;
+      var items=(ev.clipboardData&&ev.clipboardData.items)||[];
+      var files=[]; for(var i=0;i<items.length;i++){ if(items[i].type.indexOf('image')===0){ var f=items[i].getAsFile(); if(f) files.push(f); } }
+      if(files.length){ ev.preventDefault(); proofAdd(files); }
+    });
+  }
+  ov.style.display='flex';
+  document.getElementById('proof-what').textContent=
+    (PROOF.ctx.task||'Output')+(PROOF.ctx.account?(' · '+PROOF.ctx.account):'')+' · counts as '+(PROOF.ctx.outputs||1);
+  document.getElementById('proof-note').value='';
+  document.getElementById('proof-thumbs').innerHTML='';
+  PROOF.imgs.forEach(function(d){ proofThumb(d); });      // show the banked captures
+  var dz=document.getElementById('proof-drop');
+  if(dz) dz.innerHTML='<div style="font-weight:800;font-size:14px;color:#0f172a;">📷 Capture window · paste (Ctrl+V) · or click to pick files</div>'+
+    '<div style="font-size:12px;color:#64748b;margin-top:4px;">Up to 5 per session'+(PROOF.imgs.length?(' · '+PROOF.imgs.length+' already captured'):'')+'</div>';
+  setTimeout(function(){ try{ document.getElementById('proof-drop').focus(); }catch(e){} },30);
+}
+function proofClose(){ var ov=document.getElementById('proof-ov'); if(ov) ov.style.display='none'; PROOF.imgs=[]; }
+function proofThumb(d){
+  var host=document.getElementById('proof-thumbs'); if(!host) return;
+  var wrap=document.createElement('div');
+  wrap.style.cssText='position:relative;width:74px;height:74px;border-radius:9px;overflow:hidden;border:1px solid #e2e8f0;';
+  wrap.innerHTML='<img src="'+d+'" style="width:100%;height:100%;object-fit:cover;">'+
+    '<button style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;line-height:1;">×</button>';
+  wrap.querySelector('button').onclick=function(){
+    var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1); wrap.remove(); };
+  host.appendChild(wrap);
+}
+async function proofAdd(files){
+  for(var i=0;i<files.length;i++){
+    if(PROOF.imgs.length>=5){ toast('5 screenshots is the max for one session.'); break; }
+    try{ var d=await proofCompress(files[i]); PROOF.imgs.push(d); proofThumb(d); }catch(e){}
+  }
+}
+async function proofSubmit(){
+  if(!PROOF.imgs.length){ toast('Attach at least one screenshot.'); return; }
+  var btn=document.getElementById('proof-save'); btn.disabled=true; btn.textContent='Uploading…';
+  try{
+    var body={ action:'proof_save', employee_id:USER.id, full_name:(USER.name||USER.id),
+      project:PROJECT, task:PROOF.ctx.task||'', account:PROOF.ctx.account||'',
+      date:today(), shift:(typeof vaKeyOf==='function'?vaKeyOf(USER.id):''),
+      outputs:PROOF.ctx.outputs||1, note:(document.getElementById('proof-note').value||''),
+      images:PROOF.imgs };
+    var r=await fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) });
+    var d=await r.json();
+    if(d && d.ok){
+      var done=PROOF.ondone; proofClose();
+      toast(d.count+' screenshot'+(d.count>1?'s':'')+' saved as proof.');
+      if(done) await done();                      // the output is only counted AFTER proof lands
+    } else {
+      toast('Proof not saved: '+((d&&d.error)||'unknown')+' — nothing was counted.');
+    }
+  }catch(e){ toast('Upload failed — nothing was counted. Try again.'); }
+  btn.disabled=false; btn.textContent='Save proof & count it';
+}
+try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderShotBar(); }catch(e){} }); setTimeout(function(){ try{ renderShotBar(); }catch(e){} }, 1200); }catch(e){}
 function bump(task,n){ return fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now()).catch(function(){}); }
 
 async function signIn(){
@@ -482,7 +750,17 @@ function render(){
         '<div class="meta1" style="font-weight:700;color:#c2410c;">Fresh account — hit DONE to count the creation output. Moves to Creation stock after 1 day.</div>'+
         '<div class="btns">'+(counted
           ?'<button disabled style="opacity:.55">'+IC.check+' Done — counted</button>'
-          :'<button class="up" onclick="newDone(\''+r.id+'\')">'+IC.check+' DONE (+1 Reddit Account Creation)</button>')+'</div></div>';
+          :((function(){
+              var k='c:'+r.id, have=(SHOTTRAY[k]||[]).length;
+              var cam='<button class="up" title="Capture the created account as proof" '+
+                'onclick="shotForCreate(\''+r.id+'\')" style="background:'+(have?'#0f766e':'#b45309')+';">📷'+
+                '<span id="shotc-c-'+r.id+'" style="font-size:10px;font-weight:800;margin-left:4px;">'+(have?(have+'/5'):'')+'</span></button>'+
+                '<button class="up" title="Attach an image file instead" onclick="shotPickCreate(\''+r.id+'\')" style="background:#475569;">📎</button>';
+              var go = have
+                ? '<button id="cbtn-'+r.id+'" class="up" onclick="newDone(\''+r.id+'\')">'+IC.check+' DONE (+1 Reddit Account Creation)</button>'
+                : '<button id="cbtn-'+r.id+'" disabled style="opacity:.45;cursor:not-allowed" title="Screenshot the created account first">'+IC.lock+' Proof needed</button>';
+              return cam+go;
+            })()))+'</div></div>';
     }
     if(p.k==='creation'){
       var nBan=ROWS.filter(function(x){return x.status==='banned';}).length;
@@ -554,16 +832,48 @@ async function setKarma(id, cur){
 function sessBtns(r, phk, gainTxt){
   var _ow=r.assigned_to||r.created_by; var s1=markOk(r.meta&&r.meta.s1,_ow), s2=markOk(r.meta&&r.meta.s2,_ow);
   var g=gainTxt?(' ('+gainTxt+')'):'';
+  /* PROOF GATES THE SESSION. The Session button is locked until at least one screenshot is
+     banked for it, so a count can never exist without evidence behind it. 📷 captures the
+     window; the paperclip is the fallback for anyone whose browser can't screen-capture. */
+  function shots(nn){ return (SHOT.trayFor?SHOT.trayFor(r.id,phk,nn):[]).length; }
+  function cam(nn){
+    var have=shots(nn);
+    return '<button class="go" title="Capture this window as proof (up to 5 per session)" '+
+        'onclick="shotForSession(\''+r.id+'\',\''+phk+'\','+nn+')" '+
+        'style="padding:6px 10px;background:'+(have?'#0f766e':'#b45309')+';">📷'+
+        '<span id="shotc-'+r.id+'-'+phk+'-'+nn+'" style="font-size:10px;font-weight:800;margin-left:4px;">'+
+        (have?(have+'/5'):'')+'</span></button>'+
+      '<button class="go" title="Attach an image file instead" '+
+        'onclick="shotPickFile(\''+r.id+'\',\''+phk+'\','+nn+')" '+
+        'style="padding:6px 9px;background:#475569;">📎</button>';
+  }
+  function sessBtn(nn, enabled){
+    var have=shots(nn);
+    if(!enabled) return '<button disabled style="opacity:.45;cursor:not-allowed" title="Finish Session 1 first">Session '+nn+' '+IC.lock+'</button>';
+    if(!have)    return '<button id="sess-'+r.id+'-'+phk+'-'+nn+'" disabled style="opacity:.45;cursor:not-allowed" '+
+                        'title="Attach proof first — tap 📷 to capture your window">Session '+nn+' '+IC.lock+' proof needed</button>';
+    return '<button id="sess-'+r.id+'-'+phk+'-'+nn+'" class="go" onclick="sessionDone(\''+r.id+'\',\''+phk+'\','+nn+')">'+IC.check+' Session '+nn+g+'</button>';
+  }
   var b1=s1?'<button disabled style="opacity:.55">'+IC.check+' Session 1 done</button>'
-           :'<button class="go" onclick="sessionDone(\''+r.id+'\',\''+phk+'\',1)">'+IC.check+' Session 1'+g+'</button>';
+           :(cam(1)+sessBtn(1,true));
   var b2=s2?'<button disabled style="opacity:.55">'+IC.check+' Session 2 done</button>'
-           :(s1?'<button class="go" onclick="sessionDone(\''+r.id+'\',\''+phk+'\',2)">'+IC.check+' Session 2'+g+'</button>'
-               :'<button disabled style="opacity:.45;cursor:not-allowed" title="Finish Session 1 first">Session 2 '+IC.lock+'</button>');
+           :(s1?(cam(2)+sessBtn(2,true))
+               :sessBtn(2,false));
   return b1+b2;
 }
 async function newDone(id){
   var r0=row(id); if(!r0) return;
   if(r0.meta&&r0.meta.cdone){ toast('Already counted.'); return; }
+  // PROOF FIRST. These accounts are private, so the screenshot is the only thing a reviewer
+  // can ever check. The output is counted inside the callback — if the upload fails, nothing
+  // is counted, and the VA is told so rather than silently losing the evidence.
+  var banked=SHOTTRAY['c:'+id]||[];
+  if(!banked.length){ toast('Screenshot the created account first — tap 📷.'); return; }
+  proofOpen({ task:'Reddit Account Creation', account:(r0.handle||r0.name||''), outputs:1, preload:banked },
+    async function(){ delete SHOTTRAY['c:'+id]; await newDoneCounted(id); });
+}
+async function newDoneCounted(id){
+  var r0=row(id); if(!r0) return;
   await bump('Reddit Account Creation',1);
   // cstamp/added keep this creation inside TODAY's target; cdone marks it as delivered output.
   var m=Object.assign({}, r0.meta||{}, {cdone:1, cstamp:vaKeyOf(USER.id), added:(r0.meta&&r0.meta.added)||vaKeyOf(USER.id)});
@@ -588,13 +898,35 @@ async function stampSession(id, n){
 async function sessionDone(id, phk, n){
   n=(n===2)?2:1;
   var p=phase(phk);
-  if(phk==='recovery'){ await bump('Reddit Warmup',1); await stampSession(id,n); toast('+1 recovery session · '+n+'/2'+(n===2?' — day complete!':'')); load(); return; }
+  var r0=row(id)||{};
+  var acct=(r0.handle||r0.name||'');
+  // belt and braces — the button is locked, but never trust the button alone
+  if(!(SHOT.trayFor?SHOT.trayFor(id,phk,n):[]).length){
+    toast('Attach proof first — tap 📷 to capture your window.'); return;
+  }
+  // Comment farming (warm-up) and posting both need evidence — same reason as creation.
+  if(phk==='recovery'){
+    proofOpen({ task:'Reddit Warmup', account:acct, outputs:1, preload:(SHOT.trayFor?SHOT.trayFor(id,phk,n):[]), key:'s:'+id+':'+phk+':'+n },
+      async function(){ await bump('Reddit Warmup',1); await stampSession(id,n);
+        toast('+1 recovery session · '+n+'/2'+(n===2?' — day complete!':'')); load(); });
+    return;
+  }
   if(!p||!p.task){ await stampSession(id,n); toast('Session '+n+'/2 logged ✓'+(n===2?' — day complete!':'')); load(); return; }
+  var banked=(SHOT.trayFor?SHOT.trayFor(id,phk,n):[]);
+  proofOpen({ task:p.task, account:acct, outputs:p.tn||1, preload:banked, key:'s:'+id+':'+phk+':'+n },
+    async function(){ if(SHOT.clearTray) SHOT.clearTray(id,phk,n); await sessionDoneCounted(id, phk, n); });
+}
+async function sessionDoneCounted(id, phk, n){
+  var p=phase(phk);
   await bump(p.task, p.tn); await stampSession(id,n);
   toast((p.task==='Reddit Posting'?('+'+p.tn+' Reddit Posting'):'+1 Reddit Warmup')+' · session '+n+'/2'+(n===2?' — day complete!':(p.task==='Reddit Posting'?' — rotate subs, captions & photos!':'')));
   load();
 }
-async function dmsDone(id, n){ await bump('DM Replies', n); toast('+'+n+' DM Replies'); load(); }
+async function dmsDone(id, n){
+  var r0=row(id)||{};
+  proofOpen({ task:'DM Replies', account:(r0.handle||r0.name||''), outputs:n },
+    async function(){ await bump('DM Replies', n); toast('+'+n+' DM Replies'); load(); });
+}
 async function promote(id, nextk){
   var p=phase(nextk);
   if(!confirm('Promote this account to '+p.n+'? Do this only when the profile assessment is clean.')) return;
