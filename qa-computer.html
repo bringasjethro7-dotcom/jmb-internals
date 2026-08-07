@@ -349,14 +349,19 @@ header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
    <div id="view-dash" style="display:none">
     <div class="controls">
       <label>Month
-        <input type="month" id="d-month" onchange="loadDashboard()">
+        <input type="month" id="d-month" onchange="loadDashboard();try{loadAssignQueue();}catch(e){}">
       </label>
-      <button class="btn ghost sm" onclick="loadDashboard()" style="align-self:flex-end">↻ Refresh</button>
+      <button class="btn ghost sm" onclick="loadDashboard();try{loadAssignQueue();}catch(e){}" style="align-self:flex-end">↻ Refresh</button>
     </div>
     <div class="card">
       <h2>Weekly QA schedule</h2>
       <div class="sub" id="sched-sub">Due date per week — a cell turns red when its due date passes with no QA saved. Admin can assign.</div>
       <div class="schedrow" id="sched-row"></div>
+    </div>
+    <div class="card" id="assign-card" style="margin-top:16px;display:none;">
+      <h2>Awaiting lead assignment</h2>
+      <div class="sub">Peer reviews land here when submitted. Pick who screens each one — the lead is notified straight away. A reviewer can't be given their own paper, or one they already peer-reviewed.</div>
+      <div id="assign-list" style="margin-top:10px;"></div>
     </div>
     <div class="card" style="margin-top:16px">
       <h2>Monthly QA completion</h2>
@@ -729,7 +734,7 @@ async function loadLeadQueue(){
       if(IS_ADMIN || meU==='JMBEAST') return true;
       return String(it.lead_assigned_id||'').toUpperCase()===meU;
     });
-    if(!waiting.length){ host.innerHTML='<b>Team lead review</b> · nothing assigned to you yet — you\'re notified the moment a peer review lands on your screen.'; return; }
+    if(!waiting.length){ host.innerHTML='<b>Team lead review</b> · nothing assigned to you yet — an admin assigns lead reviews, and you\'re notified the moment one lands on your screen.'; return; }
     host.innerHTML='<b>Team lead review</b> · <b style="color:#15803d;">'+waiting.length+'</b> review'+(waiting.length>1?'s':'')+' assigned to you'+
       '<div style="font-size:11.5px;opacity:.75;margin:4px 0 7px;">Open the same board, audit it yourself, then save — your score becomes the lead stage and goes to the manager for approval.</div>'+
       waiting.map(function(it){
@@ -813,7 +818,7 @@ function showView(v){
   $('view-dash').style.display    = (v==='dash')?'block':'none';
   $('nav-compute').classList.toggle('active', v==='compute');
   $('nav-dash').classList.toggle('active', v==='dash');
-  if(v==='dash') loadDashboard();
+  if(v==='dash'){ loadDashboard(); try{ loadAssignQueue(); }catch(_a){} }
 }
 
 /* ---- employees ---- */
@@ -1760,6 +1765,50 @@ function renderDash(rows){
     }
     return '<tr><td class="nm"><b>'+esc(r.full_name)+'</b><span class="eid">'+esc(r.employee_id)+'</span></td>'+cells+'<td>'+last+'</td></tr>';
   }).join('');
+}
+/* ══ ADMIN: assign a lead to each submitted peer review ══
+   Replaces the automatic shuffle. The shuffle couldn't know who's on leave, who already has
+   five reviews queued, or who is too close to the work — so the admin decides. */
+async function loadAssignQueue(){
+  if(!IS_ADMIN) return;
+  var card=$('assign-card'), host=$('assign-list'); if(!card||!host) return;
+  card.style.display='';
+  host.innerHTML='<div class="empty">Loading…</div>';
+  try{
+    var month=$('d-month').value||curMonth();
+    var d=await qGet(PORTAL_URL+'?action=qa_pending_assign&month='+encodeURIComponent(month), {ttl:10000});
+    var items=(d&&d.items)||[];
+    if(!items.length){ host.innerHTML='<div class="empty">No peer reviews waiting. They appear here the moment a peer submits.</div>'; return; }
+    var opts=(EMPLOYEES||[]).map(function(e){
+      return '<option value="'+esc(e.employee_id)+'">'+esc(e.full_name||e.employee_id)+'</option>'; }).join('');
+    host.innerHTML=items.map(function(it,ix){
+      var badge = it.assigned
+        ? '<span style="font-size:11px;font-weight:800;color:#15803d;">assigned → '+esc(it.lead_assigned_name||it.lead_assigned_id)+'</span>'
+        : '<span style="font-size:11px;font-weight:800;color:#b45309;">unassigned</span>';
+      return '<div class="slrow" style="align-items:center;gap:10px;flex-wrap:wrap;">'+
+        '<span style="flex:1;min-width:190px;"><b>'+esc(it.name)+'</b> · W'+it.week+
+          '<div style="font-size:11px;color:var(--t3);">peer '+esc(it.peer_name||it.peer_id)+' scored '+esc(it.peer_score)+'% · '+badge+'</div></span>'+
+        '<select id="asg-'+ix+'" style="min-width:170px;padding:5px 8px;border-radius:8px;border:1px solid var(--line);">'+
+          '<option value="">Choose lead reviewer…</option>'+opts+'</select>'+
+        '<button class="btn" style="padding:6px 14px;" onclick="assignLead('+ix+')">'+(it.assigned?'Reassign':'Assign')+'</button>'+
+      '</div>';
+    }).join('');
+    ASSIGN_ROWS=items;
+  }catch(e){ host.innerHTML='<div class="empty">Could not load the queue.</div>'; }
+}
+var ASSIGN_ROWS=[];
+async function assignLead(ix){
+  var it=ASSIGN_ROWS[ix]; if(!it) return;
+  var sel=$('asg-'+ix); var lead=sel?sel.value:'';
+  if(!lead){ toast('Pick a lead reviewer first.'); return; }
+  if(String(lead).toUpperCase()===String(it.employee_id).toUpperCase()){ toast('Nobody reviews their own paper.'); return; }
+  if(String(lead).toUpperCase()===String(it.peer_id).toUpperCase()){ toast('That person already peer-reviewed this one — the lead screen has to be a second pair of eyes.'); return; }
+  try{
+    var r=await fetch(PORTAL_URL+'?action=qa_assign_lead&id='+encodeURIComponent(it.id)+'&lead_id='+encodeURIComponent(lead)+'&_='+Date.now());
+    var d=await r.json();
+    if(d&&d.ok){ toast('Assigned '+d.lead_name+' to review '+d.employee+' W'+d.week+'.'); qBust(/qa_pending_assign|qa_review_list/); loadAssignQueue(); }
+    else toast('Could not assign: '+((d&&d.error)||'unknown'));
+  }catch(e){ toast('Network error.'); }
 }
 async function submitMonth(i){
   var r=DASH_ROWS[i]; if(!r) return;
