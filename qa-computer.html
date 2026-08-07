@@ -143,6 +143,9 @@ textarea.note:focus{border-color:var(--o1)}
    the value never even reaches a readable state on screen. Not selectable, so you can't
    copy it out of the DOM by dragging over it either. */
 .wkcell.blurred{filter:blur(6px);user-select:none;pointer-events:none;letter-spacing:1px}
+.wc.prov{border-style:dashed !important;border-color:rgba(180,83,9,.55) !important;background:rgba(180,83,9,.05) !important;position:relative}
+.wc.prov .wprov{font-size:8.5px;font-weight:900;letter-spacing:.10em;text-transform:uppercase;color:#b45309;margin-top:1px}
+.wc.prov .wv{font-style:italic}
 .subok.blurred-avg{filter:blur(5px);user-select:none}
 .schedrow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:6px 0 2px}
 @media(max-width:640px){.schedrow{grid-template-columns:repeat(2,1fr)}}
@@ -1428,13 +1431,41 @@ async function onContextChange(){
   }
   if(!emp||!month){ $('wk-chips').innerHTML=''; $('wk-avg').textContent='—'; $('audit-list').innerHTML='<div class="empty">Pick an employee.</div>'; return; }
   try{
-    var d=await qGet(PORTAL_URL+'?action=get_qa_weekly&employee_id='+encodeURIComponent(emp)+'&month='+encodeURIComponent(month), {ttl:15000}); var w=(d&&d.weeks)||{}; var selW=parseInt($('c-week').value,10);
+    var d=await qGet(PORTAL_URL+'?action=get_qa_weekly&employee_id='+encodeURIComponent(emp)+'&month='+encodeURIComponent(month), {ttl:15000});
+    var w=(d&&d.weeks)||{}, pend=(d&&d.pending)||{}, selW=parseInt($('c-week').value,10);
     $('wk-avg').textContent=(d&&d.avg!=null)?d.avg:'—';
-    var html=''; for(var k=1;k<=4;k++){ var v=(w[k]!==''&&w[k]!=null&&!isNaN(w[k]))?Number(w[k]):null;
-      var col=v==null?'var(--t3)':(v>=90?'var(--green)':(v>=75?'var(--amber)':'var(--red)'));
-      html+='<div class="wc'+(k===selW?' sel':'')+'"><div class="wn">W'+k+'</div><div class="wv" style="color:'+col+'">'+(v==null?'—':v)+'</div></div>';
+    var anyPending=false;
+    var html='';
+    for(var k=1;k<=4;k++){
+      var v=(w[k]!==''&&w[k]!=null&&!isNaN(w[k]))?Number(w[k]):null;
+      var p=(v==null)?pend[k]:null;
+      /* An approved week shows a solid score. An unapproved one shows the provisional number
+         dimmed, dashed and marked with the stage it's waiting on — visibly NOT final, so it
+         can't be mistaken for a settled result while the lead and manager still have it. */
+      if(v==null && p){
+        anyPending=true;
+        var pc=(p.score>=90?'var(--green)':(p.score>=75?'var(--amber)':'var(--red)'));
+        var tip=(p.stage==='peer'?('Peer review by '+(p.peer_name||'a teammate')+' — awaiting team lead')
+               :(p.stage==='lead'?('Lead review'+(p.lead_name?(' by '+p.lead_name):'')+' — awaiting manager approval')
+               :'Awaiting approval'));
+        html+='<div class="wc prov'+(k===selW?' sel':'')+'" title="'+esc(tip)+'">'+
+                '<div class="wn">W'+k+'</div>'+
+                '<div class="wv" style="color:'+pc+';opacity:.72;">'+p.score+'</div>'+
+                '<div class="wprov">'+(p.stage==='peer'?'peer':'lead')+'</div>'+
+              '</div>';
+      } else {
+        var col=v==null?'var(--t3)':(v>=90?'var(--green)':(v>=75?'var(--amber)':'var(--red)'));
+        html+='<div class="wc'+(k===selW?' sel':'')+'"><div class="wn">W'+k+'</div><div class="wv" style="color:'+col+'">'+(v==null?'—':v)+'</div></div>';
+      }
     }
     $('wk-chips').innerHTML=html;
+    var pn=$('wk-pendnote');
+    if(!pn){ pn=document.createElement('div'); pn.id='wk-pendnote';
+      pn.style.cssText='margin-top:8px;font-size:11.5px;font-weight:600;color:#b45309;';
+      var wc=$('wk-chips'); if(wc&&wc.parentNode) wc.parentNode.insertBefore(pn, wc.nextSibling); }
+    pn.innerHTML = anyPending
+      ? 'Dashed weeks are <b>provisional</b> — recorded but not yet approved. They don\'t count toward the month average or the scorecard until the manager signs off.'
+      : '';
   }catch(e){}
   try{
     var r2=await fetch(PORTAL_URL+'?action=qa_audit_get&employee_id='+encodeURIComponent(emp)+'&month='+encodeURIComponent(month)+'&_='+Date.now());
