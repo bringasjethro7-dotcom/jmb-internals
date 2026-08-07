@@ -404,7 +404,13 @@ var ALTR_URL   = "https://script.google.com/macros/s/AKfycbxp7wcIf48urxm2DcPoNgd
      · WRITES are confirmed: a timed-out submit is verified against the server before it's
        reported as failed, so nobody double-submits a review
      · live health chip so trouble is visible before anyone reports it                       */
-var _qfx={ max:4, active:0, q:[[],[],[]], ok:0, fail:0, ms:0, n:0, lastErr:0, stale:0 };
+/* CONCURRENCY = 2, not 4.
+   Apps Script executes requests from ONE user SERIALLY. Firing four at once doesn't parallelise
+   anything — they queue on Google's side, each waits behind the others, and the slow ones hit
+   the client timeout and are recorded as failures. That is what "In flight 4/4 · OK 1 · Failed 7"
+   was showing: not a broken server, a self-inflicted request storm. Two slots keeps the UI
+   responsive while letting each call finish inside its window. */
+var _qfx={ max:2, active:0, q:[[],[],[]], ok:0, fail:0, ms:0, n:0, lastErr:0, stale:0 };
 function _qfxPump(){ while(_qfx.active<_qfx.max){ var j=_qfx.q[0].shift()||_qfx.q[1].shift()||_qfx.q[2].shift(); if(!j) return; _qfx.active++; j(); } }
 function _qfxRun(fn,pri){ return new Promise(function(res,rej){
   _qfx.q[Math.max(0,Math.min(2,pri==null?1:pri))].push(function(){ fn().then(function(v){ _qfx.active--; _qfxPump(); res(v); },function(e){ _qfx.active--; _qfxPump(); rej(e); }); });
@@ -425,7 +431,7 @@ function _qfxOnce(url,timeout,pri){
 var _qCache={}, _qFlight={};
 /* READ — cached, deduped, retried. ttl 0 = always fresh. */
 function qGet(url, opt){
-  opt=opt||{}; var ttl=(opt.ttl==null?15000:opt.ttl), pri=(opt.pri==null?1:opt.pri), tries=(opt.tries||4);
+  opt=opt||{}; var ttl=(opt.ttl==null?15000:opt.ttl), pri=(opt.pri==null?1:opt.pri), tries=(opt.tries||3);
   var key=String(url).replace(/[?&]_=\d+/,''), now=Date.now(), c=_qCache[key];
   if(ttl>0 && c && (now-c.t)<ttl){
     if((now-c.t)>ttl/2 && !c.rev){ c.rev=true; _qfxOnce(url,45000,2).then(function(t){ _qCache[key]={t:Date.now(),txt:t}; },function(){ c.rev=false; }); }
@@ -879,8 +885,12 @@ function startApp(){
   IS_PEER  = !IS_ADMIN;                            // admin = manager approval only
   MODE     = IS_ADMIN ? 'admin' : 'peer';
   if(!IS_ADMIN){ try{ document.querySelectorAll('.btn').forEach(function(b){ if(/dashboard/i.test(b.textContent||'')) b.style.display='none'; }); }catch(_h){} }   // dashboard = admin only
+  /* STAGGERED BOOT. Apps Script runs one request per user at a time, so firing everything at
+     once just makes each one wait behind the others until some time out. Order matters:
+     the assignment and the audit board are what the reviewer is staring at, so they go first;
+     the lead queue is background and can arrive a couple of seconds later. */
   if(!IS_ADMIN) loadMyAssignment();
-  if(IS_LEAD) loadLeadQueue();
+  if(IS_LEAD) setTimeout(function(){ try{ loadLeadQueue(); }catch(e){} }, 2500);
   // Chain banner + role-accurate button label — nobody has to guess which stage they're doing.
   try{
     var sb=$('save-btn');
@@ -896,7 +906,10 @@ function startApp(){
   $('d-month').value = curMonth();
   buildProjectDropdown();
   onProjectChange();
-  loadEmployees();
+  // the roster is only needed for the admin picker and the lead's target list — never on the
+  // peer's critical path, so it waits until the board has had its turn
+  if(IS_ADMIN) loadEmployees();
+  else setTimeout(function(){ try{ loadEmployees(); }catch(e){} }, 4000);
 }
 /* ── PEER MODE — this VA can only audit the teammate this week's shuffle gave them ── */
 async function loadMyAssignment(){
