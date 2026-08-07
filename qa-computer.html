@@ -361,6 +361,11 @@ header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
     <div class="card" id="assign-card" style="margin-top:16px;display:none;">
       <h2>Awaiting lead assignment</h2>
       <div class="sub">Peer reviews land here when submitted. Pick who screens each one — the lead is notified straight away. A reviewer can't be given their own paper, or one they already peer-reviewed.</div>
+      <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+        <button class="btn" id="asg-all-btn" onclick="assignAll(true)" style="background:#0f766e;color:#fff;padding:8px 16px;">⚡ Auto-assign all</button>
+        <button class="btn ghost sm" onclick="assignAll(false)">Fill gaps only</button>
+        <span style="font-size:11.5px;color:var(--t3);">Balanced across the lead pool — each review goes to whoever is carrying the least.</span>
+      </div>
       <div id="assign-list" style="margin-top:10px;"></div>
     </div>
     <div class="card" style="margin-top:16px">
@@ -979,7 +984,13 @@ function renderCriteria(){
 /* THE GRID IS SEALED UNTIL THE TIMER RUNS. The review is a timed session, so no verdict may
    be recorded before ▶ Start review stamps the begin time — otherwise a reviewer could fill
    the whole board and then start the clock to fake a compliant session length. */
-function reviewLive(){ return !!TIMER.start; }
+/* The PEER stage is a timed 30-minute session and stays gated behind ▶ Start.
+   The LEAD stage is a verification pass over work someone else already sampled — a stopwatch
+   there added friction without adding integrity, so it runs untimed. The open/submit times are
+   still recorded automatically for the audit trail; the lead just doesn't have to start a clock. */
+function isLeadStage(){ return MODE==='lead'; }
+var LEAD_OPEN_AT=null;
+function reviewLive(){ return isLeadStage() ? true : !!TIMER.start; }
 function requireTimer(){
   if(reviewLive()) return true;
   toast('Press ▶ Start review first — checks are recorded against the timed session.');
@@ -1300,7 +1311,7 @@ async function probeOtherWeeks(emp, month, week){
       }).join(' · ')+' — switch if you were pointed at the wrong week.';
   }catch(e){ if($('wkprobe')) $('wkprobe').textContent=''; }
 }
-function switchWeek(w){
+function switchWeek(w){ LEAD_OPEN_AT=null;
   try{ var s=$('c-week'); if(s){ s.value=String(w); onContextChange(); window.scrollTo({top:0,behavior:'smooth'}); } }catch(e){}
 }
 /* Grey the grid out and disable every cell until ▶ Start review is pressed. Account-name
@@ -1313,7 +1324,7 @@ function applyGridLock(){
     host.querySelectorAll('.critlbl').forEach(function(td){ td.style.cursor=live?'pointer':'not-allowed'; });
     host.style.opacity=live?'1':'.55';
     var note=$('grid-lock-note');
-    if(!live){
+    if(!live && !isLeadStage()){
       if(!note){
         note=document.createElement('div'); note.id='grid-lock-note';
         note.style.cssText='margin:0 0 10px;padding:9px 13px;border-radius:10px;background:rgba(180,83,9,.08);border:1px solid rgba(180,83,9,.35);font-size:12.5px;font-weight:700;color:#7c2d12;';
@@ -1401,6 +1412,12 @@ function tmRender(){
     host=document.createElement('div'); host.id='tm-bar';
     host.style.cssText='display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px;padding:10px 14px;border-radius:12px;background:#fff;border:1px solid rgba(15,23,42,.12);';
     var t=$('proj-title'); if(t&&t.parentNode) t.parentNode.insertBefore(host, t.nextSibling);
+  }
+  if(isLeadStage()){                       // untimed stage — no clock, no Start button
+    if(!LEAD_OPEN_AT) LEAD_OPEN_AT=Date.now();
+    host.innerHTML='<span style="font-size:12px;color:#64748b;">Lead verification pass · untimed. '+
+      'Mark every criterion, then submit — your score becomes the lead stage and goes to the manager.</span>';
+    return;
   }
   var tgt=tmTarget();
   if(!TIMER.start){
@@ -1583,8 +1600,12 @@ async function saveScore(){
   // ── LEAD MODE: stage 2 of the chain. Saves as the lead review (rejected by the backend if
   //    no peer review exists yet), then waits for manager approval before it counts.
   if(IS_LEAD && MODE==='lead'){
-    if(!TIMER.start){ b.disabled=false; b.textContent='Submit lead review (stage 2 of 3)'; toast('Press ▶ Start review first — the session is timed.'); return; }
-    var _lStart=new Date(TIMER.start).toISOString(), _lMins=tmMins(), _lEnd=new Date().toISOString();
+    // No timer gate here — the lead stage is untimed. Open and submit times are still stamped
+    // from when the board was opened, so the audit trail keeps a real duration.
+    var _lOpen=LEAD_OPEN_AT || TIMER.start || Date.now();
+    var _lStart=new Date(_lOpen).toISOString();
+    var _lMins=Math.max(1, Math.round((Date.now()-_lOpen)/60000));
+    var _lEnd=new Date().toISOString();
     try{
       var lu=PORTAL_URL+'?action=qa_review_submit'
         +'&employee_id='+encodeURIComponent(emp)
@@ -1797,6 +1818,30 @@ async function loadAssignQueue(){
   }catch(e){ host.innerHTML='<div class="empty">Could not load the queue.</div>'; }
 }
 var ASSIGN_ROWS=[];
+/* One click for the whole queue. force=true reassigns everything, force=false only fills the
+   rows with nobody on them. Leads get ONE notification listing all their reviews — twenty
+   separate pings would just get muted. */
+async function assignAll(force){
+  if(!IS_ADMIN) return;
+  var n=(ASSIGN_ROWS||[]).length;
+  var msg = force
+    ? 'Reassign ALL '+n+' waiting review'+(n===1?'':'s')+'? Anyone already pencilled in may change. Reviews a lead has already scored are untouched.'
+    : 'Assign leads to the reviews that currently have nobody?';
+  if(!confirm(msg)) return;
+  var btn=$('asg-all-btn'); if(btn){ btn.disabled=true; btn.textContent='Assigning…'; }
+  try{
+    var month=$('d-month').value||curMonth();
+    var r=await fetch(PORTAL_URL+'?action=qa_assign_all&month='+encodeURIComponent(month)+'&force='+(force?'1':'0')+'&_='+Date.now());
+    var d=await r.json();
+    if(d&&d.ok){
+      var spread=Object.keys(d.per_lead||{}).map(function(k){ return k+' '+d.per_lead[k]; }).join(' · ');
+      toast(d.assigned+' review'+(d.assigned===1?'':'s')+' assigned'+(spread?(' — '+spread):'')+'.');
+      if((d.skipped||[]).length) toast(d.skipped.length+' could not be assigned — no eligible lead.');
+      qBust(/qa_pending_assign|qa_review_list/); loadAssignQueue();
+    } else toast('Could not assign: '+((d&&d.error)||'unknown'));
+  }catch(e){ toast('Network error.'); }
+  if(btn){ btn.disabled=false; btn.textContent='⚡ Auto-assign all'; }
+}
 async function assignLead(ix){
   var it=ASSIGN_ROWS[ix]; if(!it) return;
   var sel=$('asg-'+ix); var lead=sel?sel.value:'';
