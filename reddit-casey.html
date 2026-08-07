@@ -799,14 +799,10 @@ async function addAcct(){
     if(d&&d.ok){
       $('ra-user').value=''; if($('ra-new')) $('ra-new').checked=false;
       if(isNew){
-        // REAL-TIME CREATION CREDIT — the account is counted the moment it's added.
-        // (Previously it waited for a DONE click, so same-day creations were missing from output.)
-        await bump('Reddit Account Creation',1);
-        try{
-          var nm=Object.assign({}, {cdate:cd, pstart:ps}, {cdone:1, cstamp:vaKeyOf(USER.id)});
-          await fetch(API+'?action=pa_update&id='+encodeURIComponent(d.id)+'&meta='+encodeURIComponent(JSON.stringify(nm))+'&_='+Date.now());
-        }catch(_cm){}
-        toast('Added to Newly Created · +1 Reddit Account Creation counted now');
+        /* NO CREDIT ON ADD — see reddit.html. Counting at add time both skipped the screenshot
+           gate and rendered the card into the disabled "Done — counted" state, making the 📷
+           button unreachable. Proof first, then DONE counts it. */
+        toast('Added to Newly Created · screenshot the account, then hit DONE to count it');
       } else {
         toast('Added → '+(phase(phk)||{n:phk}).n+' (existing account seeded)');
       }
