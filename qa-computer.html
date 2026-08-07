@@ -490,15 +490,52 @@ function qBust(re){ Object.keys(_qCache).forEach(function(k){ if(!re||re.test(k)
 /* DRAFT SAFETY — a half-finished audit must survive a refresh, a crash or a dead connection. */
 // v2 — drafts saved under the old all-Pass default would restore a fully-ticked board and
 // unlock submit instantly. Bumping the key retires every pre-existing draft.
+/* THE TWO STAGES ARE FULLY SEPARATE.
+   The draft key used to resolve to the peer ASSIGNMENT whenever the viewer wasn't an admin —
+   so a team lead auditing someone else saved their work under the peer target's key, and the
+   two boards overwrote each other. The key now includes the STAGE and the person actually on
+   screen, so a peer draft and a lead draft can never collide. */
 function qDraftKey(){ try{
-  // Key off the ASSIGNMENT, not the dropdown. If the select ever blanks, the key would change
-  // and an in-progress audit would be saved somewhere it could never be restored from.
-  var who=(!IS_ADMIN && MY_ASSIGNMENT && MY_ASSIGNMENT.reviewee_id) ? MY_ASSIGNMENT.reviewee_id : $('c-emp').value;
-  return 'qa_draft_v2_'+(USER&&USER.id)+'_'+who+'_'+$('c-proj').value+'_'+$('c-month').value+'_W'+(($('c-week')||{}).value||'1');
+  var stage=(MODE==='lead')?'lead':(IS_ADMIN?'admin':'peer');
+  var who=(stage==='peer' && MY_ASSIGNMENT && MY_ASSIGNMENT.reviewee_id)
+            ? MY_ASSIGNMENT.reviewee_id
+            : ($('c-emp').value||'');
+  if(!who) return '';
+  return 'qa_draft_v3_'+stage+'_'+(USER&&USER.id)+'_'+who+'_'+$('c-proj').value+'_'+$('c-month').value+'_W'+(($('c-week')||{}).value||'1');
 }catch(e){ return ''; } }
-function qSaveDraft(){ try{ var k=qDraftKey(); if(!k||!AUDIT) return; localStorage.setItem(k, JSON.stringify({ audit:AUDIT, note:(($('c-note')||{}).value||''), clientQA:clientQA, t:Date.now() })); }catch(e){} }
+function qSaveDraft(){ try{ var k=qDraftKey(); if(!k||!AUDIT) return;
+  localStorage.setItem(k, JSON.stringify({ audit:AUDIT, note:(($('c-note')||{}).value||''), clientQA:clientQA,
+    stage:((MODE==='lead')?'lead':(IS_ADMIN?'admin':'peer')), t:Date.now() })); }catch(e){} }
 function qLoadDraft(){ try{ var k=qDraftKey(); if(!k) return null; var d=JSON.parse(localStorage.getItem(k)||'null'); return (d && (Date.now()-d.t)<72*3600*1000)?d:null; }catch(e){ return null; } }
 function qClearDraft(){ try{ var k=qDraftKey(); if(k) localStorage.removeItem(k); }catch(e){} }
+/* A visible reminder of which stage you're in and whether the other one has unfinished work,
+   so nobody discovers a half-done review only when their week is scored. */
+function renderStageBanner(){
+  try{
+    if(IS_ADMIN) return;
+    var host=$('stage-banner');
+    if(!host){
+      host=document.createElement('div'); host.id='stage-banner';
+      host.style.cssText='margin:0 0 10px;padding:8px 13px;border-radius:10px;font-size:12px;font-weight:700;';
+      var mb=$('mode-bar'); if(mb&&mb.parentNode) mb.parentNode.insertBefore(host, mb.nextSibling);
+    }
+    var lead=(MODE==='lead');
+    // is there an unfinished draft in the OTHER stage?
+    var other=lead?'peer':'lead', otherOpen=false;
+    try{
+      for(var i=0;i<localStorage.length;i++){
+        var k=localStorage.key(i);
+        if(k && k.indexOf('qa_draft_v3_'+other+'_'+(USER&&USER.id))===0){ otherOpen=true; break; }
+      }
+    }catch(_ls){}
+    host.style.background = lead ? 'rgba(21,128,61,.08)' : 'rgba(37,99,235,.07)';
+    host.style.border     = '1px solid '+(lead?'rgba(21,128,61,.3)':'rgba(37,99,235,.28)');
+    host.style.color      = lead ? '#15803d' : '#1d4ed8';
+    host.innerHTML = (lead ? 'STAGE 2 · Team lead verification' : 'STAGE 1 · Your own peer review')+
+      (otherOpen ? ' <span style="color:#b45309;font-weight:800;">· you have an unfinished '+other+' review saved</span>' : '')+
+      ' <span style="opacity:.65;font-weight:600;">— the two are kept separate; switching never touches the other board.</span>';
+  }catch(e){}
+}
 var ADMIN_PASS = "JMBeast_020298";
 var USER=null, EMPLOYEES=[], IS_ADMIN=false, VIEW='compute';
 var AUDIT={};   // { taskName: [ { name, states:[bool...] } ] }
@@ -702,6 +739,15 @@ var IS_PEER=false, IS_LEAD=false, MY_ASSIGNMENT=null, MODE='peer', PEER_DONE=fal
    The switch only appears once their peer review for the week is submitted. */
 function setMode(m){
   if(m==='lead' && !PEER_DONE){ toast('Finish your own peer review first — everyone starts as a peer.'); return; }
+  if(m===MODE) return;
+  /* Park whatever is on screen under the CURRENT stage's key before switching, then clear every
+     piece of shared state. AUDIT, PEER_STATES, SAMPLE and the timer are all single globals —
+     leaving any of them behind is what made the two stages bleed into each other. */
+  try{ qSaveDraft(); }catch(_sd){}
+  try{ if(TIMER.tick) clearInterval(TIMER.tick); }catch(_t){}
+  TIMER.start=null; TIMER.tick=null;
+  PEER_STATES=null; SAMPLE=null; _projFixed=false; LEAD_OPEN_AT=null;
+  window._barOwned=false;
   MODE=m;
   var emp=$('c-emp');
   if(m==='peer'){ loadMyAssignment(); }
@@ -725,7 +771,7 @@ function setMode(m){
       bar.innerHTML='<b>Lead screen.</b> Pick a review from your queue above — it loads the exact board the peer used.'; }
     loadLeadQueue();
   }
-  renderModeBar(); applyClientQAGate(); renderStaticContext();
+  renderModeBar(); applyClientQAGate(); renderStaticContext(); renderStageBanner();
   var sb=$('save-btn'); if(sb) sb.textContent = (m==='peer') ? 'Submit peer review (stage 1 of 3)' : 'Submit lead review (stage 2 of 3)';
 }
 function renderModeBar(){
@@ -1563,6 +1609,7 @@ function applyGridLock(){
 function restoreDraftIfAny(){
   try{
     var dr=qLoadDraft(); if(!dr || !dr.audit) return;
+    if(dr.stage && dr.stage!==((MODE==='lead')?'lead':(IS_ADMIN?'admin':'peer'))) return;   // wrong stage
     var same=Object.keys(dr.audit).every(function(k){ return AUDIT[k] && dr.audit[k].length===AUDIT[k].length; });
     if(!same) return;
     Object.keys(AUDIT).forEach(function(k){
@@ -1610,7 +1657,10 @@ function renderStaticContext(){
    Start stamps the real begin time; the clock runs live; submitting stamps the end.
    Peer target 30 min · Lead target 20 min. Start/end/elapsed are sent with the review. */
 var TIMER={start:null, tick:null};
-function tmKey(){ try{ return 'qa_timer_'+(USER&&USER.id)+'_'+$('c-emp').value+'_'+$('c-month').value+'_W'+((($('c-week')||{}).value)||'1'); }catch(e){ return ''; } }
+/* The peer stage is timed and the lead stage isn't, but they shared one timer key — so a
+   running peer clock followed the viewer into the lead screen and back. Stage-scoped now. */
+function tmKey(){ try{ var stage=(MODE==='lead')?'lead':'peer';
+  return 'qa_timer_'+stage+'_'+(USER&&USER.id)+'_'+$('c-emp').value+'_'+$('c-month').value+'_W'+((($('c-week')||{}).value)||'1'); }catch(e){ return ''; } }
 function tmTarget(){ return (MODE==='lead')?20:30; }
 function tmFmt(ms){ var s=Math.max(0,Math.floor(ms/1000)); var m=Math.floor(s/60); return (m<10?'0':'')+m+':'+((s%60)<10?'0':'')+(s%60); }
 function tmStart(){
@@ -2048,7 +2098,7 @@ function applyBoot(d){
       if(cur) sel.value=cur;
     }
   }
-  try{ renderModeBar(); applyClientQAGate(); renderStaticContext(); }catch(_r){}
+  try{ renderModeBar(); applyClientQAGate(); renderStaticContext(); renderStageBanner(); }catch(_r){}
   try{ renderLeadQueue(d); }catch(_lq){}
   // the audit board
   if(d.sample){ applyBootSample(d.sample); }
