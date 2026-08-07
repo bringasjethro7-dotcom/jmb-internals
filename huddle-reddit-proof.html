@@ -7,11 +7,21 @@
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@700;800&display=swap" rel="stylesheet">
 <style>
   /* ── film shell ── */
+  /* ── TV COMPATIBILITY ──
+     Smart-TV browsers are years behind desktop Chrome. Two things here are deliberate:
+       · NO `inset` shorthand — unsupported on webOS/Tizen builds, and an unsupported
+         positioning shorthand collapses the element to zero size, which renders as a
+         completely black screen with no slides and no error.
+       · NO flex `gap` for anything structural — it arrived late in Chromium and older TV
+         browsers silently ignore it. Margins are used instead so layout never depends on it. */
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Manrope',system-ui,sans-serif;background:#0b1220;color:#0f172a;height:100vh;overflow:hidden}
-  #stage{position:absolute;inset:0;overflow:hidden;background:radial-gradient(1200px 700px at 22% 8%,#152742,#0b1220 62%)}
-  .scene{position:absolute;inset:0;display:none;flex-direction:column;padding:5vh 6vw 11vh}
-  .scene.on{display:flex;animation:fade .5s ease forwards}
+  html,body{width:100%;height:100%}
+  body{font-family:'Manrope',system-ui,sans-serif;background:#0b1220;color:#0f172a;overflow:hidden}
+  #stage{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;overflow:hidden;
+    background:radial-gradient(1200px 700px at 22% 8%,#152742,#0b1220 62%)}
+  .scene{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;
+    display:none;flex-direction:column;padding:5vh 6vw 11vh;opacity:1}
+  .scene.on{display:block;display:flex;animation:fade .5s ease forwards}
   @keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
   .eyebrow{font-size:1.3vh;font-weight:800;letter-spacing:.22em;text-transform:uppercase;color:#5eead4;margin-bottom:.9vh}
   h1{font-family:'Sora',sans-serif;font-size:5.2vh;line-height:1.08;color:#fff;letter-spacing:-.02em}
@@ -22,7 +32,8 @@
   #narr b{color:#bae6fd}
   #filmprog{position:absolute;left:0;right:0;bottom:0;height:.5vh;background:rgba(255,255,255,.10)}
   #filmprog i{display:block;height:100%;width:0;background:linear-gradient(90deg,#5eead4,#0ea5a4)}
-  .chain{display:flex;gap:1vw;margin-top:1vh}
+  .chain{display:flex;margin-top:1vh}
+  .chain>.step+.step{margin-left:1vw}
   .step{flex:1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);border-radius:1vh;padding:1.6vh 1.2vw}
   .step .n{font-family:'Sora',sans-serif;font-size:1.3vh;font-weight:800;color:#062e2a;background:#5eead4;border-radius:999px;padding:.2vh 1vh;display:inline-block;margin-bottom:.8vh}
   .step b{display:block;color:#fff;font-size:1.9vh;font-family:'Sora',sans-serif;margin-bottom:.4vh}
@@ -33,23 +44,27 @@
   .app{--bg:#f6f7fb;--card:#fff;--ink:#171a21;--ink2:#5b6470;--ink3:#8a93a3;--line:#e5e8ef;--or:#ff4500;--or2:#c93400;--ok:#10b981;
     background:var(--bg);border-radius:1.2vh;overflow:hidden;box-shadow:0 24px 60px -18px rgba(0,0,0,.65);
     flex:1;min-height:0;display:flex;flex-direction:column;color:var(--ink);font-size:1.5vh}
-  .chrome{background:#eef2f7;border-bottom:1px solid #dde5ee;padding:.9vh 1.2vw;display:flex;align-items:center;gap:.6vw;flex:none}
+  .chrome{background:#eef2f7;border-bottom:1px solid #dde5ee;padding:.9vh 1.2vw;display:flex;align-items:center;flex:none}
+  .chrome>*+*{margin-left:.6vw}
   .dot{width:1.1vh;height:1.1vh;border-radius:50%;background:#cbd5e1}
   .url{flex:1;background:#fff;border:1px solid #dde5ee;border-radius:.6vh;padding:.35vh 1vw;font-size:1.25vh;color:#64748b}
   .appbody{padding:2vh 1.8vw;overflow:hidden;flex:1}
   .app h3{font-family:'Sora',sans-serif;font-size:2.2vh;margin-bottom:.4vh}
   .app h3 em{font-style:normal;color:var(--or)}
   .appsub{color:var(--ink2);font-size:1.3vh;margin-bottom:1.6vh}
-  .sect{display:flex;align-items:center;gap:.8vw;margin:1.6vh 0 .8vh}
+  .sect{display:flex;align-items:center;margin:1.6vh 0 .8vh}
+  .sect>*+*{margin-left:.8vw}
   .sect b{font-family:'Sora',sans-serif;font-size:1.5vh;white-space:nowrap}
   .sect span{font-size:1.2vh;color:var(--ink3);font-weight:800}
   .sect i{flex:1;height:1px;background:var(--line)}
   .acct{background:var(--card);border:1px solid var(--line);border-radius:1.4vh;padding:1.5vh 1.4vw;box-shadow:0 1px 2px rgba(15,23,42,.05);max-width:46vw}
-  .hd{display:flex;align-items:center;gap:.6vw}
+  .hd{display:flex;align-items:center}
+  .hd>*+*{margin-left:.6vw}
   .hd b{font-size:1.75vh}
   .ph2{font-size:1.15vh;font-weight:900;border-radius:100px;padding:.35vh 1vh;white-space:nowrap}
   .meta1{font-size:1.25vh;color:var(--ink3);margin-top:.5vh}
-  .btns{display:flex;gap:.45vw;flex-wrap:wrap;margin-top:1.2vh}
+  .btns{display:flex;flex-wrap:wrap;margin-top:1.2vh}
+  .btns button{margin:0 .45vw .45vh 0}
   .btns button{border:1px solid var(--line);background:#fff;border-radius:.9vh;padding:.75vh 1vw;font-size:1.3vh;font-weight:800;color:var(--ink2);font-family:inherit}
   .btns button.go{border-color:rgba(16,185,129,.5);color:#0f766e;background:rgba(16,185,129,.08)}
   .btns button.up{border-color:rgba(255,69,0,.4);color:var(--or2);background:rgba(255,69,0,.06)}
@@ -57,13 +72,15 @@
   .btns button.camoff{border-color:rgba(180,83,9,.5);color:#fff;background:#b45309}
   .btns button.clip{border-color:#475569;color:#fff;background:#475569}
   .btns button.lock{opacity:.5;color:var(--ink3);background:#f1f5f9}
-  .shotbar{display:inline-flex;align-items:center;gap:.7vw;padding:1vh 1.3vw;border-radius:999px;background:#171a21;color:#e2e8f0;font-weight:800;font-size:1.4vh}
-  .shotbar .led{width:1vh;height:1vh;border-radius:50%}
+  .shotbar{display:inline-flex;align-items:center;padding:1vh 1.3vw;border-radius:999px;background:#171a21;color:#e2e8f0;font-weight:800;font-size:1.4vh}
+  .shotbar .led{width:1vh;height:1vh;border-radius:50%;margin-right:.7vw}
+  .shotbar .btn{margin-left:.7vw}
   .shotbar .btn{border-radius:.7vh;padding:.5vh 1.1vw;font-weight:800}
   .panel{background:#fff;border-radius:1.2vh;padding:1.8vh 1.6vw;max-width:40vw;box-shadow:0 8px 24px rgba(15,23,42,.12)}
   .panel .t{font-family:'Sora',sans-serif;font-size:2vh}
   .panel .s{font-size:1.3vh;color:var(--ink3);margin:.3vh 0 1.3vh}
-  .thumbs{display:flex;gap:.6vw}
+  .thumbs{display:flex}
+  .thumbs div+div{margin-left:.6vw}
   .thumbs div{width:8vh;height:8vh;border-radius:.9vh;background:linear-gradient(135deg,#e2e8f0,#cbd5e1);border:1px solid #cbd5e1}
   .note{border:1px solid var(--line);border-radius:.9vh;padding:.9vh 1.1vw;font-size:1.3vh;color:var(--ink3);margin-top:1.2vh}
   .savebtn{background:#0f766e;color:#fff;border-radius:.9vh;padding:.9vh 1.6vw;font-weight:800;font-size:1.45vh;display:inline-block;margin-top:1.2vh}
@@ -208,7 +225,7 @@
   <h2>Check, note, save</h2>
   <div class="app">
     <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">Attach proof</span></div>
-    <div class="appbody" style="display:flex;align-items:flex-start;gap:2vw">
+    <div class="appbody" style="display:flex;align-items:flex-start">
       <div class="panel">
         <div class="t">Attach proof</div>
         <div class="s">Reddit Posting · u/casey_mainacct · counts as 4</div>
@@ -216,7 +233,7 @@
         <div class="note">Optional note (e.g. subreddit, account)</div>
         <div class="savebtn">Save proof &amp; count it</div>
       </div>
-      <div style="flex:1">
+      <div style="flex:1;margin-left:2vw">
         <div class="toast">2 screenshots saved as proof.</div>
         <div class="appsub" style="margin-top:1.6vh;line-height:1.8">
           The panel opens already holding the shots you took.<br>
@@ -415,6 +432,28 @@ function kickoff(){
 }
 ['click','keydown'].forEach(function(ev){ document.addEventListener(ev, kickoff, {once:false}); });
 show(0); tick();
+/* SAFETY NET. If the first scene has no measurable height a moment after load, the browser
+   didn't apply the layout — almost always an unsupported CSS feature on a TV build. Force the
+   TV stylesheet and pin explicit pixel sizing so something always renders rather than black. */
+setTimeout(function(){
+  try{
+    var sc=scenes[0]; if(!sc) return;
+    var r=sc.getBoundingClientRect();
+    if(r.height<40 || r.width<40){
+      document.body.classList.add('tv');
+      var st=document.getElementById('stage');
+      var W=window.innerWidth||1280, H=window.innerHeight||720;
+      st.style.position='absolute'; st.style.left='0'; st.style.top='0';
+      st.style.width=W+'px'; st.style.height=H+'px';
+      scenes.forEach(function(x){
+        x.style.position='absolute'; x.style.left='0'; x.style.top='0';
+        x.style.width=W+'px'; x.style.height=H+'px'; x.style.opacity='1';
+        x.style.animation='none';
+      });
+      show(i);
+    }
+  }catch(e){}
+}, 1200);
 var _hasVoice = !!(window.speechSynthesis && typeof SpeechSynthesisUtterance!=='undefined');
 if(!_hasVoice){
   VOICE=false;
