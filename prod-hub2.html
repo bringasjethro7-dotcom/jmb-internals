@@ -333,7 +333,7 @@ async function loadCutoffs(){
   var month=$('cut-month').value; if(!month) return;
   $('cut-body').innerHTML='<div class="empty">Loading…</div>';
   try{
-    var r=await fetch(PORTAL_URL+'?action=prod_cutoffs_all&month='+encodeURIComponent(month)+'&_='+Date.now());
+    var r=await fetch(PORTAL_URL+'?viewer_id='+encodeURIComponent((USER&&USER.id)||'')+'&action=prod_cutoffs_all&month='+encodeURIComponent(month)+'&_='+Date.now());
     var d=await r.json();
     if(!d||!d.ok){ $('cut-body').innerHTML='<div class="empty" style="color:var(--red)">Could not load ('+esc((d&&d.error)||'error')+').</div>'; return; }
     renderCutoffs(d);
@@ -372,7 +372,7 @@ window.toggleCutTasks=function(tr){
   if(open) return;
   var cell=det.querySelector('td'), emp=cell.getAttribute('data-emp');
   cell.innerHTML='<span style="font-size:11px;color:var(--t3);">Loading tasks…</span>';
-  fetch(PORTAL_URL+'?action=prod_cutoffs&employee_id='+encodeURIComponent(emp)+'&month='+encodeURIComponent($('cut-month').value)+'&_='+Date.now())
+  fetch(PORTAL_URL+'?viewer_id='+encodeURIComponent((USER&&USER.id)||'')+'&action=prod_cutoffs&employee_id='+encodeURIComponent(emp)+'&month='+encodeURIComponent($('cut-month').value)+'&_='+Date.now())
     .then(function(r){return r.json();}).then(function(d){
       if(!d||!d.ok){ cell.innerHTML='<span style="font-size:11px;color:var(--red)">Could not load.</span>'; return; }
       cell.innerHTML=(d.cutoffs||[]).map(function(c){
@@ -407,7 +407,7 @@ async function load(){
   if(!from||!to) return;
   $('results').innerHTML='<div class="empty">Loading…</div>';
   try{
-    var r=await fetch(PORTAL_URL+'?action=productivity&scope=all&from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to)+'&_='+Date.now());
+    var r=await fetch(PORTAL_URL+'?viewer_id='+encodeURIComponent((USER&&USER.id)||'')+'&action=productivity&scope=all&from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to)+'&_='+Date.now());
     var d=await r.json();
     if(!d||!d.ok){ $('results').innerHTML='<div class="empty">Could not load productivity data.</div>'; return; }
     render(d);
