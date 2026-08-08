@@ -913,19 +913,26 @@ async function sessionDone(id, phk, n){
   }
   if(!p||!p.task){ await stampSession(id,n); toast('Session '+n+'/2 logged ✓'+(n===2?' — day complete!':'')); load(); return; }
   var banked=(SHOT.trayFor?SHOT.trayFor(id,phk,n):[]);
-  proofOpen({ task:p.task, account:acct, outputs:p.tn||1, preload:banked, key:'s:'+id+':'+phk+':'+n },
+  /* ONE PER SESSION. Posting used to count p.tn — the posts made in that session, which is
+     5 or 7 on the strong phases — so a Strong account produced 14 units a day while a Warming
+     account produced 2, and the two were compared as if they were the same job. Output is now
+     the session: 2 sessions per account per day, whatever the phase. */
+  proofOpen({ task:p.task, account:acct, outputs:1, preload:banked, key:'s:'+id+':'+phk+':'+n },
     async function(){ if(SHOT.clearTray) SHOT.clearTray(id,phk,n); await sessionDoneCounted(id, phk, n); });
 }
 async function sessionDoneCounted(id, phk, n){
   var p=phase(phk);
-  await bump(p.task, p.tn); await stampSession(id,n);
-  toast((p.task==='Reddit Posting'?('+'+p.tn+' Reddit Posting'):'+1 Reddit Warmup')+' · session '+n+'/2'+(n===2?' — day complete!':(p.task==='Reddit Posting'?' — rotate subs, captions & photos!':'')));
+  await bump(p.task, 1); await stampSession(id,n);
+  toast('+1 '+p.task+' · session '+n+'/2'+(n===2?' — day complete!':(p.task==='Reddit Posting'?' — rotate subs, captions & photos!':'')));
   load();
 }
 async function dmsDone(id, n){
   var r0=row(id)||{};
   proofOpen({ task:'DM Replies', account:(r0.handle||r0.name||''), outputs:n },
-    async function(){ await bump('DM Replies', n); toast('+'+n+' DM Replies'); load(); });
+    /* DM Replies are part of the posting shift, not a separate deliverable — counting them
+       double-credits the same work, so no bump. The screenshot is still taken and stored, so
+       QA can review the DMs even though they produce no output number. */
+    async function(){ toast(n+' DM replies logged — evidence saved, not counted as output.'); load(); });
 }
 async function promote(id, nextk){
   var p=phase(nextk);

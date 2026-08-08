@@ -2148,6 +2148,16 @@ var _tuSent=false;
 function reportToolUse(){ if(_tuSent||!USER) return; _tuSent=true;
   try{ fetch('https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec?action=tool_used&employee_id='+encodeURIComponent(USER.employee_id||USER.id||'')+'&tool=altr&_='+Date.now()); }catch(_e){} }
 function dcAutoPush(silent){
+  /* DISABLED — the daily push now runs server-side (pushDailyOutputs in altr-apps-script.gs).
+     This function read the LIVE board and wrote it as the day's total, which meant:
+       · nothing was recorded unless someone had this tab open, and whatever the board showed
+         at the last push became the frozen total for the whole day;
+       · board state isn't a day's work, so the portal received 1-4 completed items against
+         nine-hour shifts — the "ALTR outputs not being pulled" problem.
+     po_batch is an ABSOLUTE upsert, so leaving this running would overwrite the accurate
+     server-side numbers with board state every time the tool is opened. Left as a no-op
+     rather than deleted so the existing call sites stay harmless. */
+  if(true) return;
   try{
     var PORTAL='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
     var today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-8*3600*1000));
