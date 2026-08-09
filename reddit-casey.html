@@ -341,8 +341,8 @@ var PH=[
  {k:'nsfw',      n:'NSFW Comments',  c:'#dc2626', client:true, plan:'5 min browsing · search 5 · upvote 3 · 2 comments/replies (approved subs). CLIENT updates this status.', task:'Reddit Warmup', tn:1},
  {k:'day1',      n:'Day 1 Posting',  c:'#e11d48', dur:1, plan:'3 min browsing · set name/bio/avatar · upvote 2 · 2–3 comments · 1 post/session · ROTATE subs/captions/photos — 1 day.', task:'Reddit Posting', tn:1},
  {k:'early',     n:'Early Posting',  c:'#be123c', plan:'3 min browsing · upvote 2 · 2–3 comments · 2 posts/session', task:'Reddit Posting', tn:2},
- {k:'earlydm',   n:'Early + DMs',    c:'#b91c1c', plan:'3 min browsing · 2–3 comments · 2 posts/session · 4 DMs AM + 4 DMs PM', task:'Reddit Posting', tn:2, dms:8},
- {k:'medium',    n:'Medium + DMs',   c:'#a41c1c', plan:'3 min browsing · 2–3 comments · 3 posts/session · 4 DMs AM + 4 DMs PM', task:'Reddit Posting', tn:3, dms:8},
+ {k:'earlydm',   n:'Early + DMs',    c:'#b91c1c', plan:'3 min browsing · 2–3 comments · 2 posts/session · up to 4 DMs per session (only if users are available)', task:'Reddit Posting', tn:2},
+ {k:'medium',    n:'Medium + DMs',   c:'#a41c1c', plan:'3 min browsing · 2–3 comments · 3 posts/session · up to 4 DMs per session (only if users are available)', task:'Reddit Posting', tn:3},
  {k:'strong',    n:'Strong',         c:'#991b1b', plan:'3 min browsing · 2–3 comments · 5 posts/session · 8 DMs per shift', task:'Reddit Posting', tn:5, dms:8},
  {k:'superstrong',n:'Super Strong',  c:'#7f1d1d', plan:'3 min browsing · 2–3 comments · 7 posts/session · 8 DMs/shift · upvote 2', task:'Reddit Posting', tn:7, dms:8}
 ];
@@ -362,7 +362,11 @@ function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('on'); set
 
    Requires HTTPS — internals.jmbvirtuals.com qualifies. If the browser refuses (old build,
    permission denied), we fall back to the paste/file panel so nobody is ever stuck. */
-var SHOT={ stream:null, video:null, max:5 };
+/* 10, not 5. Attaching from Drive means downloading a batch then picking them all at once —
+   with a cap of 5 the picker accepted the extras and silently dropped them, so it felt like
+   files had to go one at a time. The tray now holds a normal session's worth, and anything
+   over the cap is reported rather than discarded quietly. */
+var SHOT={ stream:null, video:null, max:10 };
 function shotSupported(){
   return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
 }
@@ -494,11 +498,13 @@ function shotPickFile(id, phk, n){
   if(SHOTTRAY[key].length>=SHOT.max){ toast('5 screenshots is the max for one session.'); return; }
   var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.multiple=true;
   inp.onchange=async function(){
+    var added=0, skipped=0;
     for(var i=0;i<inp.files.length;i++){
-      if(SHOTTRAY[key].length>=SHOT.max) break;
-      try{ SHOTTRAY[key].push(await proofCompress(inp.files[i])); }catch(e){}
+      if(SHOTTRAY[key].length>=SHOT.max){ skipped++; continue; }
+      try{ SHOTTRAY[key].push(await proofCompress(inp.files[i])); added++; }catch(e){ skipped++; }
     }
-    toast('📎 '+SHOTTRAY[key].length+'/'+SHOT.max+' attached for session '+n+'.');
+    toast('📎 '+added+' attached ('+SHOTTRAY[key].length+'/'+SHOT.max+')'+
+          (skipped?(' · '+skipped+' skipped — tray is full'):'')+' for session '+n+'.');
     renderShotCount(id, phk, n);
   };
   inp.click();
