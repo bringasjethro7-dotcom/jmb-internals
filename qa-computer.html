@@ -967,10 +967,19 @@ function startApp(){
    never automatic: the roll-up score is what reaches their scorecard, and you can override it. */
 var FACTORY=null, FRUNNING=false;
 function fCrit(){
-  // the criteria list per task for the CURRENT project set, sent so the backend can score
+  /* Keyed by PROJECT||TASK, not task alone.
+     'Posting' exists under both 'Reddit - Altz' and 'IG Reels - Stefan'. Keyed by name only,
+     one silently overwrote the other — so a Reddit VA was scored against the IG Reels
+     checklist and failed for having no Story, no Trial Reel, no trending music and no text
+     overlay. None of those are his job.
+     The bare task name is still sent as a fallback for anything the server can't resolve by
+     project, but the scoped key always wins. */
   var map={};
   try{ Object.keys(PROJECTS).forEach(function(k){
-    (PROJECTS[k].tasks||[]).forEach(function(t){ map[t.name]=t.criteria; }); }); }catch(e){}
+    (PROJECTS[k].tasks||[]).forEach(function(t){
+      map[k+'||'+t.name]=t.criteria;
+      if(!map[t.name]) map[t.name]=t.criteria;      // fallback only — never overwrites
+    }); }); }catch(e){}
   return map;
 }
 async function factoryRun(){
