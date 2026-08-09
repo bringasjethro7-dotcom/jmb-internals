@@ -362,6 +362,9 @@ header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
         <label style="font-size:11px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;">Week
           <select id="f-week" onchange="factoryLoad()" style="display:block;margin-top:4px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;">
             <option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+        <input id="f-only" placeholder="One VA (e.g. JMB022) — blank = everyone"
+               title="Test a single VA before spending API calls on the whole team. Re-runs someone already processed."
+               style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:600 12px 'Manrope',sans-serif;min-width:230px;">
         <button class="btn" id="f-run" onclick="factoryRun()" style="background:#7c3aed;color:#fff;padding:9px 18px;">⚙ Process screenshots</button>
         <button class="btn ghost sm" onclick="factoryLoad()">↻ Refresh</button>
         <button class="btn" id="f-approve-all" onclick="factoryApproveAll()" style="background:#0f766e;color:#fff;padding:9px 16px;">✓ Approve all</button>
@@ -981,10 +984,16 @@ async function factoryRun(){
     while(guard++ < 30){
       if(btn) btn.textContent='⚙ Processing… ('+pass+' done)';
       var r=await fetch(PORTAL_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+        /* `only` lets you point the whole run at one VA — the sane first move before spending
+           API calls on the entire team. Type an employee ID into the box; blank runs everyone.
+           `force` re-runs someone already processed, so the same person can be checked again
+           while you judge whether the verdicts are trustworthy. */
         body:JSON.stringify({ action:'qa_factory_run', month:month, week:week, confirm:'RUN',
-                              limit:3, criteria_map:fCrit() }) });
+                              limit:3, criteria_map:fCrit(),
+                              only:((document.getElementById('f-only')||{}).value||'').trim(),
+                              force:((document.getElementById('f-only')||{}).value||'').trim()?'1':'' }) });
       var d=await r.json();
-      if(!d||!d.ok){ toast('Factory error: '+((d&&d.error)||'unknown')); break; }
+      if(!d||!d.ok){ toast('Factory: '+((d&&d.note)||(d&&d.error)||'unknown error')); break; }
       pass+=(d.processed||[]).length;
       if(prog) prog.innerHTML='Processed <b>'+pass+'</b> task result(s) · <b>'+d.remaining+'</b> VA(s) remaining'+
         ((d.no_proof||[]).length? (' · <span style="color:#b45309;">'+d.no_proof.length+' with no screenshots this pass</span>'):'');
