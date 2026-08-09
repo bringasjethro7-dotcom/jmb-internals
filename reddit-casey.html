@@ -545,6 +545,13 @@ function proofOpen(ctx, onDone){
       '<div style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:20px 22px;box-shadow:0 40px 100px rgba(0,0,0,.4);">'+
         '<div style="font:800 17px Sora,Inter,sans-serif;">Attach proof</div>'+
         '<div id="proof-what" style="font-size:12.5px;color:#64748b;margin-top:3px;"></div>'+
+        /* WHAT THE SCREENSHOT HAS TO SHOW.
+           QA is scored from these images against the SOP checklist, and a criterion the picture
+           can't settle is dropped rather than passed — so evidence nobody thought to capture
+           simply stops being measured. Suelto scored 100 with the DM criterion contributing
+           nothing, because his shots showed inboxes but never a sent message.
+           The requirement belongs here, at the moment of capture, not in a memo. */
+        '<div id="proof-need" style="font-size:12px;line-height:1.5;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:9px 11px;margin-top:9px;display:none;"></div>'+
         '<div id="proof-drop" tabindex="0" style="margin-top:14px;border:2px dashed #cbd5e1;border-radius:12px;padding:22px;text-align:center;cursor:pointer;outline:none;">'+
           '<div style="font-weight:800;font-size:14px;color:#0f172a;">Paste a screenshot (Ctrl+V)</div>'+
           '<div style="font-size:12px;color:#64748b;margin-top:4px;">or click to pick files · up to 8</div>'+
@@ -572,6 +579,35 @@ function proofOpen(ctx, onDone){
   ov.style.display='flex';
   document.getElementById('proof-what').textContent=
     (PROOF.ctx.task||'Output')+(PROOF.ctx.account?(' · '+PROOF.ctx.account):'')+' · counts as '+(PROOF.ctx.outputs||1);
+  /* Per-task capture requirements, keyed to the QA criteria that are scored from these images.
+     Keep each line concrete enough to act on while the screen is still open. */
+  var NEED={
+    'Reddit Posting':[
+      'The post itself — image AND caption visible together',
+      'The subreddit name in shot (top of the post or the URL bar)',
+      'Your reply under a comment, with the account name visible',
+      'The DM you SENT — open the chat so the outgoing message is on screen, not just the inbox'
+    ],
+    'Reddit Warmup':[
+      'The comment you left, with the subreddit visible',
+      'The profile or Comments tab showing the account name',
+      'Anything you upvoted or joined, if the SOP asks for it'
+    ],
+    'Reddit Account Creation':[
+      'The finished profile page showing the new username',
+      'Avatar and bio in shot if the SOP requires them set'
+    ]
+  };
+  var need=NEED[String(PROOF.ctx.task||'')]||null;
+  var nb=document.getElementById('proof-need');
+  if(nb){
+    if(need){
+      nb.innerHTML='<b>Make sure these are visible — QA is scored from this screenshot:</b>'+
+        '<ul style="margin:6px 0 0 16px;padding:0;">'+need.map(function(x){ return '<li>'+x+'</li>'; }).join('')+'</ul>'+
+        '<div style="margin-top:6px;opacity:.85;">Anything not visible can\'t be checked — it is left out of your score, not passed.</div>';
+      nb.style.display='block';
+    } else nb.style.display='none';
+  }
   document.getElementById('proof-note').value='';
   document.getElementById('proof-thumbs').innerHTML='';
   PROOF.imgs.forEach(function(d){ proofThumb(d); });      // show the banked captures
