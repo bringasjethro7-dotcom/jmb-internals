@@ -1057,14 +1057,26 @@ function factoryDetail(ix){
   var html=rows.map(function(x){
     var v={}; try{ v=JSON.parse(x.verdicts||'{}'); }catch(e){}
     var lines=Object.keys(v).map(function(c){
-      var vd=v[c].verdict, ic=(vd==='pass'?'<span style="color:#15803d;font-weight:800;">✓</span>'
-                 :(vd==='fail'?'<span style="color:#dc2626;font-weight:800;">✕</span>'
-                 :'<span style="color:#b45309;font-weight:800;">?</span>'));
-      return '<div style="padding:4px 0;border-bottom:1px dashed var(--line);">'+ic+' '+esc(c)+
+      /* A criterion is now judged per ACCOUNT, so it can be partly met — 6 of 8 accounts. The
+         old three-state icon couldn't express that and would have shown a clean tick for a
+         criterion two accounts failed. */
+      var vd=v[c].verdict;
+      var ic=(vd==='pass'?'<span style="color:#15803d;font-weight:800;">✓</span>'
+             :(vd==='fail'?'<span style="color:#dc2626;font-weight:800;">✕</span>'
+             :(vd==='partial'?'<span style="color:#b45309;font-weight:800;">◐</span>'
+             :'<span style="color:#b45309;font-weight:800;">?</span>')));
+      /* Show unclear alongside the ratio — a criterion scored 4/4 with three accounts
+         unevidenced is not the same as 4/4 with none, and the score can't tell them apart. */
+      var cnt=(v[c].checked!=null && v[c].checked>0)
+            ? ('<span style="font-size:10.5px;color:var(--t3);font-weight:700;"> · '+v[c].passed+'/'+v[c].checked+' accounts'+
+               (v[c].unclear?('<span style="color:#b45309;"> · '+v[c].unclear+' unevidenced</span>'):'')+'</span>')
+            : (v[c].unclear?('<span style="font-size:10.5px;color:#b45309;font-weight:700;"> · '+v[c].unclear+' unevidenced, none scored</span>'):'');
+      return '<div style="padding:4px 0;border-bottom:1px dashed var(--line);">'+ic+' '+esc(c)+cnt+
              '<div style="font-size:11px;color:var(--t3);margin-left:16px;">'+esc(v[c].why||'')+'</div></div>';
     }).join('');
     return '<div style="background:var(--card2);border-radius:10px;padding:10px 12px;margin-top:8px;">'+
-      '<b>'+esc(x.task)+'</b> · '+esc(x.project)+' · '+x.passed+'/'+x.total+' checks · '+
+      '<b>'+esc(x.task)+'</b> · '+esc(x.project)+' · '+x.passed+'/'+x.total+' account checks'+
+      ((x.sessions_checked&&x.sessions_total)?(' across '+x.sessions_checked+' of '+x.sessions_total+' sessions'):'')+' · '+
       x.screenshots+' screenshot(s) · <span style="color:#b45309;">'+x.skipped_manual+' not checkable from an image</span>'+
       '<div style="margin-top:6px;">'+(lines||'<i style="color:var(--t3);">no verdicts recorded</i>')+'</div></div>';
   }).join('');
