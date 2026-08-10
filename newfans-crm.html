@@ -1,0 +1,531 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JMB — NewFans · Website &amp; CRM Setup</title>
+<style>
+  :root{--bg:#f6f7fb;--card:#fff;--ink:#171a21;--ink2:#5b6470;--ink3:#8a93a3;--line:#e5e8ef;--x:#0f1419;--x2:#536471;--ok:#10b981;--susp:#ef4444;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Manrope',system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
+  .wrap{max-width:1100px;margin:0 auto;padding:24px 16px 60px}
+  h1{font-family:'Sora',sans-serif;font-size:24px}
+  .sub{color:var(--ink2);font-size:13px;margin:5px 0 16px}
+  .top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 15px;text-align:center}
+  .stat b{font-family:'Sora',sans-serif;font-size:20px;display:block}
+  .stat span{font-size:10.5px;color:var(--ink3);font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+  .addbox{display:flex;gap:8px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px;margin-bottom:16px}
+  .addbox input{flex:1;min-width:180px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px}
+  .addbox button{background:#0f1419;color:#fff;border:none;border-radius:10px;padding:9px 16px;font-weight:800;cursor:pointer}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+  .acct{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 15px}
+  .acct.done-today{border-color:rgba(16,185,129,.5)}
+  .acct.susp{opacity:.55}
+  .hd{display:flex;align-items:center;gap:8px}
+  .hd b{font-size:14.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dayb{font-size:11px;font-weight:900;color:#fff;background:#0f1419;border-radius:100px;padding:3px 10px}
+  .plan{font-size:12px;color:var(--ink2);background:rgba(15,20,25,.04);border-radius:9px;padding:8px 10px;margin:9px 0;line-height:1.55}
+  .plan b{color:var(--ink)}
+  .btns{display:flex;gap:6px;flex-wrap:wrap}
+  .btns button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 11px;font-size:11.5px;font-weight:800;cursor:pointer;color:var(--ink2)}
+  .btns button.go{border-color:rgba(16,185,129,.5);color:#0f766e;background:rgba(16,185,129,.08)}
+  .btns button.bad{border-color:rgba(239,68,68,.4);color:#b91c1c;background:rgba(239,68,68,.06)}
+  .muted{color:var(--ink3);font-size:12px;padding:6px 2px}
+  #signin{max-width:360px;margin:12vh auto;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px;text-align:center}
+  #signin input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:14px;margin-top:9px}
+  #signin button{width:100%;margin-top:12px;background:#0f1419;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;cursor:pointer;font-size:14px}
+  #si-err{display:none;color:#b91c1c;font-size:12.5px;margin-top:9px}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#171a21;color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;opacity:0;transition:.3s;pointer-events:none;z-index:50}
+  .toast.on{opacity:1}
+
+  /* ── UI v2: calmer look, section headers, ⋯ menus, big progress panel ── */
+  .acct,.model{box-shadow:0 1px 2px rgba(15,23,42,.05);transition:box-shadow .15s}
+  .acct:hover,.model:hover{box-shadow:0 8px 22px rgba(15,23,42,.09)}
+  .sect{grid-column:1/-1;display:flex;align-items:center;gap:10px;margin:14px 0 2px}
+  .sect b{font-family:'Sora',sans-serif;font-size:13.5px;white-space:nowrap}
+  .sect span{font-size:11px;color:var(--ink3);font-weight:800}
+  .sect i{flex:1;height:1px;background:var(--line)}
+  .ph2{font-size:10px;font-weight:900;border-radius:100px;padding:3px 9px;white-space:nowrap}
+  .meta1{font-size:10.5px;color:var(--ink3);margin-top:4px}
+  .planbox{margin:8px 0 2px}
+  .planbox summary{list-style:none;cursor:pointer;font-size:11px;font-weight:800;color:var(--ink3)}
+  .planbox summary::-webkit-details-marker{display:none}
+  .planbox summary::after{content:' ▾'}
+  .planbox[open] summary::after{content:' ▴'}
+  .planbox>div{font-size:11.5px;color:var(--ink2);background:rgba(15,23,42,.035);border-radius:9px;padding:7px 10px;margin-top:5px;line-height:1.5}
+  .kmenu{position:relative}
+  .kmenu summary{list-style:none;cursor:pointer;width:27px;height:27px;border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--ink3);font-weight:900;background:#fff;font-size:14px}
+  .kmenu summary::-webkit-details-marker{display:none}
+  .kmenu[open] summary{background:var(--bg)}
+  .kmenu .dd{position:absolute;right:0;top:31px;z-index:30;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(15,23,42,.16);padding:6px;min-width:210px;display:flex;flex-direction:column;gap:2px}
+  .kmenu .dd button{border:none;background:none;text-align:left;padding:8px 10px;border-radius:8px;font:700 12px 'Manrope',sans-serif;color:var(--ink2);cursor:pointer;white-space:nowrap}
+  .kmenu .dd button:hover{background:var(--bg)}
+  .kmenu .dd button.danger{color:#b91c1c}
+  .kmenu .dd .sep{height:1px;background:var(--line);margin:4px 6px}
+  .acct .btns,.model .btns{margin-top:8px}
+  .pvwrap{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 18px 8px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+  .pvrow{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
+  .pvrow.first{border-top:none}
+  .pvav{width:36px;height:36px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font:800 12.5px 'Sora',sans-serif;color:#fff}
+  .pvbar{height:14px;border-radius:8px;background:rgba(15,23,42,.07);overflow:hidden}
+  .pvbar i{display:block;height:100%;border-radius:8px;transition:width .4s}
+  .pvpct{font-family:'Sora',sans-serif;font-weight:800;min-width:118px;text-align:right;line-height:1.25}
+</style>
+</head><body>
+<div id="signin" class="wrap">
+  <div class="card" style="max-width:380px;margin:12vh auto;">
+    <div class="brand">🗂 JMB <i>Website &amp; CRM</i></div>
+    <div class="sub">NewFans · CRM — sign in with Employee ID + PIN</div>
+    <input id="si-id" placeholder="Employee ID (e.g. JMB001)">
+    <input id="si-pin" type="password" placeholder="PIN">
+    <div id="si-err" class="err" style="display:none"></div>
+    <button class="go" id="si-btn" style="width:100%" onclick="signIn()">Sign in</button>
+  </div>
+</div>
+<div id="app" style="display:none">
+  <div class="wrap">
+    <div class="hdr"><div class="brand">🗂 JMB <i>Website &amp; CRM Setup</i> <span id="who" class="muted"></span></div></div>
+    <div class="sub">One card per client build. Steps run in order and each needs a screenshot — once the repo is handed over, that screenshot is the only record the step happened. <b>Never paste client tokens or keys into this tool</b> — keep them where the client sent them.</div>
+    <div id="stats" class="stats"></div>
+    <div class="card" style="margin:14px 0;">
+      <div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;">
+        <input id="cr-name" placeholder="Client / build name (e.g. acme-crm)" style="flex:1;min-width:220px;">
+        <select id="cr-flow" style="padding:9px 11px;border:1px solid #e2e8f0;border-radius:9px;font:700 13px inherit;">
+          <option value="crm">CRM Setup (5 steps)</option>
+          <option value="website">Website / Web App (9 steps)</option>
+        </select>
+        <button class="go" onclick="addBuild()">+ Add build</button>
+      </div>
+    </div>
+    <div id="grid"></div>
+  </div>
+</div>
+<div id="toast" class="toast"></div>
+<script>
+var API='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
+var PROJECT='IG Reels - Moma';
+var USER=null, ROWS=[];
+var NAMES={}, SHIFTOF={}, PHOTOOF={};
+function drivePhoto(u){ u=String(u||''); if(!u) return ''; var m=u.match(/[-\w]{25,}/); return m?('https://drive.google.com/thumbnail?id='+m[0]+'&sz=w128'):u; }
+/* ── fetching layer: timeout + retry on READS (never on writes), local cache for instant paint,
+   visibility-aware polling (pauses when the tab is hidden, refreshes on focus) ── */
+async function jFetch(url, tries){
+  tries=(tries==null)?2:tries;
+  for(var a=0;a<=tries;a++){
+    try{
+      var ctl=(typeof AbortController!=='undefined')?new AbortController():null;
+      var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },10000):null;
+      var r=await fetch(url, ctl?{signal:ctl.signal}:undefined);
+      if(tm) clearTimeout(tm);
+      return await r.json();
+    }catch(e){ if(a===tries) throw e; await new Promise(function(res){ setTimeout(res, 500*(a+1)); }); }
+  }
+}
+function cacheRows(){ try{ sessionStorage.setItem('dc_rows_'+PROJECT, JSON.stringify({t:Date.now(), rows:ROWS})); }catch(e){} }
+function paintCached(){ try{ var c=JSON.parse(sessionStorage.getItem('dc_rows_'+PROJECT)||'null');
+  if(c && c.rows && c.rows.length && (Date.now()-c.t)<10*60*1000){ ROWS=c.rows; render(); return true; } }catch(e){} return false; }
+function smartPoll(){
+  setInterval(function(){ if(!document.hidden) load(); }, 60000);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) load(); });
+  window.addEventListener('focus', function(){ load(); });
+}
+/* ── VA view tabs: '👤 My accounts' (default) · '🌐 All' · one tab per VA ── */
+var FILTER=(function(){ try{ return sessionStorage.getItem('dc_va_'+PROJECT)||'mine'; }catch(e){ return 'mine'; } })();
+function ownerOf(r){ return String(r.assigned_to||r.created_by||'').toLowerCase(); }
+function delBtn(id){ return '<button onclick="delAcct(\''+id+'\')" title="Delete (wrong entry)" style="border:1px solid rgba(239,68,68,.3);background:#fff;color:#b91c1c;border-radius:8px;padding:5px 8px;font-size:10.5px;font-weight:800;cursor:pointer;">🗑</button>'; }
+function vaName(id){ return NAMES[String(id||'').toLowerCase()]||id||'—'; }
+function cdateOf(r){ return (r.meta&&r.meta.cdate)||''; }
+function ageTxt(r){ var c=cdateOf(r); if(!c) return ''; var days=Math.max(0,Math.round((Date.now()-new Date(c+'T00:00:00').getTime())/86400000)); return c+' · '+days+'d old'; }
+var AVC=['#6366f1','#0ea5e9','#10b981','#f59e0b','#ec4899','#8b5cf6','#14b8a6','#f97316'];
+function kmenu(items){
+  return '<details class="kmenu" onclick="event.stopPropagation()"><summary>⋯</summary><div class="dd">'+items.map(function(it){
+    if(it==='---') return '<div class="sep"></div>';
+    return '<button class="'+(it[2]||'')+'" onclick="this.closest(\'details\').removeAttribute(\'open\');'+it[1]+'">'+it[0]+'</button>';
+  }).join('')+'</div></details>';
+}
+document.addEventListener('click', function(e){
+  document.querySelectorAll('details.kmenu[open]').forEach(function(d){ if(!d.contains(e.target)) d.removeAttribute('open'); });
+});
+function _maybeSnap(done, tot){
+  // Record today's completion (like ALTR's Record Day) — once per change, fire-and-forget.
+  try{
+    if(!USER||!USER.id||!tot) return;
+    var k='snap_'+PROJECT+'_'+vaKeyOf(USER.id), v=done+'/'+tot;
+    if(sessionStorage.getItem(k)===v) return;
+    sessionStorage.setItem(k, v);
+    fetch(API+'?action=po_snap&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent('📋 Board Completion')+'&done='+done+'&total='+tot+'&date='+encodeURIComponent(today())+'&_='+Date.now()).catch(function(){});
+  }catch(e){}
+}
+function amKey(){ return today()+'·AM'; }
+function renderByVA(segs, doneFn, activeFn, amFn){
+  var host=document.getElementById('byva'); if(!host) return;
+  var by={}; ROWS.forEach(function(r){ var k=String(r.assigned_to||r.created_by||'—').toLowerCase(); (by[k]=by[k]||[]).push(r); });
+  var keys=Object.keys(by);
+  if(!keys.length){ host.innerHTML=''; return; }
+  var mine=String((USER&&USER.id)||'').toLowerCase();
+  var list=keys.map(function(k,i){
+    var rows=by[k];
+    var act=activeFn?rows.filter(activeFn):rows;
+    var done=doneFn?act.filter(doneFn).length:0, tot=act.length;
+    return {k:k,i:i,done:done,tot:tot,pct:tot?Math.round(done/tot*100):0,n:rows.length};
+  }).sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
+  try{ var _me=list.filter(function(o){ return o.k===mine; })[0]; if(_me) _maybeSnap(_me.done, _me.tot); }catch(_ms){}
+  host.innerHTML='<div class="pvwrap">'+
+    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked this shift · resets per shift · ☀ 8 AM / 🌙 8 PM</span></div>'+
+    list.map(function(o,ix){
+      var pc=o.pct>=100?'#10b981':(o.pct>=70?'#f59e0b':'#ef4444');
+      var name=vaName(o.k);
+      var init=String(name).split(/\s+/).slice(0,2).map(function(w){return w.charAt(0);}).join('').toUpperCase()||'?';
+      var me=(o.k===mine);
+      return '<div class="pvrow'+(ix===0?' first':'')+'"'+(me?' style="background:rgba(16,185,129,.05);border-radius:12px;padding-left:10px;padding-right:10px;"':'')+'>'+
+        (PHOTOOF[o.k]?('<img src="'+PHOTOOF[o.k]+'" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex:none;box-shadow:0 2px 8px rgba(15,23,42,.18);">')
+          :('<div class="pvav" style="background:'+AVC[o.i%AVC.length]+'">'+esc(init)+'</div>'))+
+        '<div style="flex:1;min-width:0;">'+
+          '<div style="display:flex;align-items:baseline;gap:8px;"><b style="font-size:13.5px;">'+(SHIFTOF[o.k]==='night'?'🌙 ':(SHIFTOF[o.k]?'☀ ':''))+esc(name)+'</b>'+(me?'<span style="font-size:10px;color:#0f766e;font-weight:800;">you</span>':'')+'<span style="font-size:11px;color:var(--ink3);font-weight:700;">'+o.n+' on board</span></div>'+
+          '<div class="pvbar" style="margin-top:7px;"><i style="width:'+Math.min(100,o.pct)+'%;background:'+pc+';"></i></div>'+
+        '</div>'+
+        '<div class="pvpct" style="color:'+pc+'"><span style="font-size:17px;">'+o.done+' / '+o.tot+'</span><br><span style="font-size:12.5px;">'+o.pct+'%'+(o.pct>=100&&o.tot?' ✅':'')+' today</span></div>'+
+      '</div>';
+    }).join('')+'</div>';
+}
+var PLANS={
+ 1:'Scroll 2 min + 20s · change <b>PFP, header, username</b> · <b>2 reposts</b> (no follows) · <b>2 normal posts</b>',
+ 2:'Scroll 2 min · change <b>profile name</b> (female name.txt — NOT username) · follow <b>1 page</b> · <b>2 reposts</b> · <b>2 posts</b>',
+ 3:'Scroll 1 min · follow <b>10 niche accounts</b> (5+5) · <b>1 repost</b> · <b>1 post</b>',
+ 4:'<b>25 follows</b> split across opens: 5 / 10 / 10',
+ 5:'Scroll 1 min · <b>30–45 follows</b> (randomize!) in 4–5 opens: 10 / 10 / 15 / rest',
+ 6:'<b>35–50 follows daily</b> (randomize total, batches & scroll time; client error → smaller batches)'
+};
+function shotStop(){ try{ if(SHOT.stream) SHOT.stream.getTracks().forEach(function(t){ t.stop(); }); }catch(e){}
+  SHOT.stream=null; SHOT.video=null; renderShotBar(); }
+function shotGrab(){
+  if(!shotLive()) return null;
+  var v=SHOT.video, w=v.videoWidth, h=v.videoHeight; if(!w||!h) return null;
+  var max=1400, sw=w, sh=h;
+  if(sw>max||sh>max){ var r=Math.min(max/sw,max/sh); sw=Math.round(sw*r); sh=Math.round(sh*r); }
+  var c=document.createElement('canvas'); c.width=sw; c.height=sh;
+  c.getContext('2d').drawImage(v,0,0,sw,sh);
+  return c.toDataURL('image/jpeg',0.72);
+}
+function renderShotBar(){
+  var bar=document.getElementById('shot-bar');
+  if(!bar){
+    bar=document.createElement('div'); bar.id='shot-bar';
+    bar.style.cssText='position:fixed;left:12px;bottom:12px;z-index:9997;display:flex;align-items:center;'+
+      'padding:8px 12px;border-radius:999px;background:rgba(15,23,42,.92);color:#e2e8f0;font:700 12px Manrope,system-ui,sans-serif;'+
+      'box-shadow:0 10px 30px rgba(0,0,0,.35);';
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = shotLive()
+    ? '<span style="width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 8px #34d399;margin-right:8px;"></span>Capture armed'+
+      '<button onclick="shotStop()" style="margin-left:8px;background:rgba(255,255,255,.12);border:none;color:#e2e8f0;border-radius:7px;padding:4px 9px;font-weight:700;cursor:pointer;">Stop</button>'
+    : '<span style="width:8px;height:8px;border-radius:50%;background:#94a3b8;margin-right:8px;"></span>Capture off'+
+      '<button onclick="shotStart()" style="margin-left:8px;background:#0f766e;border:none;color:#fff;border-radius:7px;padding:4px 10px;font-weight:800;cursor:pointer;">📷 Pick window</button>';
+}
+function proofCompress(file){
+  return new Promise(function(res,rej){
+    var fr=new FileReader();
+    fr.onload=function(){
+      var im=new Image();
+      im.onload=function(){
+        var max=1400, w=im.width, h=im.height;
+        if(w>max||h>max){ var r=Math.min(max/w,max/h); w=Math.round(w*r); h=Math.round(h*r); }
+        var c=document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(im,0,0,w,h);
+        res(c.toDataURL('image/jpeg',0.72));
+      };
+      im.onerror=function(){ rej(new Error('bad image')); };
+      im.src=fr.result;
+    };
+    fr.onerror=function(){ rej(new Error('read failed')); };
+    fr.readAsDataURL(file);
+  });
+}
+var PROOF={ imgs:[], ctx:null, resolve:null, reject:null };
+function proofPanel(){
+  var ov=document.getElementById('proof-ov');
+  if(ov) return ov;
+  ov=document.createElement('div'); ov.id='proof-ov';
+  ov.style.cssText='position:fixed;inset:0;top:0;right:0;bottom:0;left:0;z-index:99998;background:rgba(8,12,20,.72);display:none;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML=
+    '<div style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:20px 22px;box-shadow:0 40px 100px rgba(0,0,0,.4);">'+
+      '<div style="font:800 17px Sora,Manrope,sans-serif;">Attach proof</div>'+
+      '<div id="proof-what" style="font-size:12.5px;color:#64748b;margin-top:3px;"></div>'+
+      '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">'+
+        '<button id="proof-cap" style="background:#0f766e;color:#fff;border:none;border-radius:9px;padding:10px 16px;font-weight:800;cursor:pointer;">📷 Capture window</button>'+
+        '<button id="proof-pick" style="background:#475569;color:#fff;border:none;border-radius:9px;padding:10px 14px;font-weight:800;cursor:pointer;">📎 Attach file</button>'+
+        '<span style="font-size:12px;color:#64748b;align-self:center;">or paste with Ctrl+V · up to 5</span>'+
+      '</div>'+
+      '<input type="file" id="proof-file" accept="image/*" multiple style="display:none;">'+
+      '<div id="proof-thumbs" style="display:flex;flex-wrap:wrap;margin-top:12px;"></div>'+
+      '<input id="proof-note" placeholder="Optional note" style="width:100%;margin-top:12px;padding:9px 11px;border:1px solid #e2e8f0;border-radius:9px;font-size:13px;">'+
+      '<div style="display:flex;justify-content:flex-end;margin-top:14px;">'+
+        '<button id="proof-cancel" style="padding:9px 16px;border-radius:9px;border:1px solid #e2e8f0;background:#fff;font-weight:700;cursor:pointer;margin-right:9px;">Cancel</button>'+
+        '<button id="proof-save" style="padding:9px 20px;border-radius:9px;border:none;background:#0f766e;color:#fff;font-weight:800;cursor:pointer;">Save proof &amp; count it</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(ov);
+  document.getElementById('proof-pick').onclick=function(){ document.getElementById('proof-file').click(); };
+  document.getElementById('proof-file').onchange=function(){ proofAdd(this.files); this.value=''; };
+  document.getElementById('proof-cap').onclick=async function(){
+    if(PROOF.imgs.length>=SHOT.max){ toast('5 screenshots is the maximum.'); return; }
+    if(!shotLive()){ var ok=await shotStart(); if(!ok) return; }
+    var img=shotGrab();
+    if(!img){ toast('Could not read the window — pick it again.'); shotStop(); return; }
+    PROOF.imgs.push(img); proofThumb(img);
+  };
+  document.getElementById('proof-cancel').onclick=function(){ proofClose(true); };
+  document.getElementById('proof-save').onclick=proofSubmit;
+  document.addEventListener('paste', function(ev){
+    var o=document.getElementById('proof-ov'); if(!o||o.style.display==='none') return;
+    var items=(ev.clipboardData&&ev.clipboardData.items)||[], files=[];
+    for(var i=0;i<items.length;i++){ if(items[i].type.indexOf('image')===0){ var f=items[i].getAsFile(); if(f) files.push(f); } }
+    if(files.length){ ev.preventDefault(); proofAdd(files); }
+  });
+  return ov;
+}
+function proofThumb(d){
+  var host=document.getElementById('proof-thumbs'); if(!host) return;
+  var w=document.createElement('div');
+  w.style.cssText='position:relative;width:74px;height:74px;border-radius:9px;overflow:hidden;border:1px solid #e2e8f0;margin:0 8px 8px 0;';
+  w.innerHTML='<img src="'+d+'" style="width:100%;height:100%;object-fit:cover;">'+
+    '<button style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;line-height:1;">×</button>';
+  w.querySelector('button').onclick=function(){ var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1); w.remove(); };
+  host.appendChild(w);
+}
+async function proofAdd(files){
+  for(var i=0;i<files.length;i++){
+    if(PROOF.imgs.length>=SHOT.max){ toast('5 screenshots is the maximum.'); break; }
+    try{ var d=await proofCompress(files[i]); PROOF.imgs.push(d); proofThumb(d); }catch(e){}
+  }
+}
+function proofClose(cancelled){
+  var ov=document.getElementById('proof-ov'); if(ov) ov.style.display='none';
+  var rej=PROOF.reject; PROOF.imgs=[]; PROOF.resolve=null; PROOF.reject=null;
+  if(cancelled && rej){ var e=new Error('proof cancelled'); e.proofCancelled=true; rej(e); }
+}
+async function proofSubmit(){
+  if(!PROOF.imgs.length){ toast('Attach at least one screenshot.'); return; }
+  var btn=document.getElementById('proof-save'); btn.disabled=true; btn.textContent='Uploading…';
+  try{
+    var body={ action:'proof_save', employee_id:USER.id, full_name:(USER.name||USER.id),
+      project:PROJECT, task:PROOF.ctx.task||'', account:PROOF.ctx.account||'',
+      date:(typeof today==='function'?today():''), outputs:PROOF.ctx.n||1,
+      note:(document.getElementById('proof-note').value||''), images:PROOF.imgs };
+    var r=await fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) });
+    var d=await r.json();
+    if(d && d.ok){
+      var res=PROOF.resolve; var n=d.count;
+      PROOF.imgs=[]; PROOF.resolve=null; PROOF.reject=null;
+      var ov=document.getElementById('proof-ov'); if(ov) ov.style.display='none';
+      toast(n+' screenshot'+(n>1?'s':'')+' saved as proof.');
+      if(res) res(true);
+    } else {
+      toast('Proof not saved: '+((d&&d.error)||'unknown')+' — nothing was counted.');
+    }
+  }catch(e){ toast('Upload failed — nothing was counted. Try again.'); }
+  btn.disabled=false; btn.textContent='Save proof & count it';
+}
+/* THE GATE. Every output routes through here, so proof cannot be bypassed by any button. */
+/* PROOF WITHOUT A COUNT.
+   A session is evidence, not output — the day already counts one. bump() would post po_bump
+   and (n||1) turns 0 into 1, so four sessions would quadruple Project John's volume and break
+   every comparison against the weeks already recorded. This stores the screenshots and stops.
+   Rejects on cancel, so backing out leaves the session unmarked. */
+function proofOnly(task, account){
+  return new Promise(function(resolve,reject){
+    PROOF.imgs=[]; PROOF.ctx={task:task, account:account||'', n:1};
+    PROOF.resolve=null; PROOF.reject=reject;
+    var ov=proofPanel(); ov.style.display='flex';
+    document.getElementById('proof-what').textContent=task+(account?(' · '+account):'')+' · evidence only, no output counted';
+    document.getElementById('proof-note').value='';
+    document.getElementById('proof-thumbs').innerHTML='';
+    PROOF.resolve=function(){ resolve(true); };
+  });
+}
+function bump(task,n){
+  return new Promise(function(resolve,reject){
+    PROOF.imgs=[]; PROOF.ctx={task:task,n:(n||1)}; PROOF.resolve=null; PROOF.reject=reject;
+    var ov=proofPanel(); ov.style.display='flex';
+    document.getElementById('proof-what').textContent=task+' · counts as '+(n||1);
+    document.getElementById('proof-note').value='';
+    document.getElementById('proof-thumbs').innerHTML='';
+    PROOF.resolve=function(){
+      fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)
+        +'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now())
+        .then(function(){ resolve(true); }).catch(function(){ resolve(true); });
+    };
+  });
+}
+/* A cancelled proof stops the caller's flow — that's intended, and shouldn't spam the console. */
+window.addEventListener('unhandledrejection', function(ev){
+  if(ev.reason && ev.reason.proofCancelled){ ev.preventDefault(); }
+});
+try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderShotBar(); }catch(e){} });
+     setTimeout(function(){ try{ renderShotBar(); }catch(e){} }, 1200); }catch(e){}
+function today(){ // JMB business day — resets 8:00 AM Philippine time (a night shift never splits across two days)
+  try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-8*3600*1000)); }
+  catch(e){ return new Date(Date.now()-8*3600*1000).toISOString().slice(0,10); } }
+function shiftKey(){ // per-SHIFT work key — morning 08:00–19:59 = date·AM · night 20:00–07:59 = start-date·PM
+  try{
+    var h=parseInt(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',hour12:false}).format(new Date()),10);
+    var base=(h<8)? new Date(Date.now()-24*3600*1000) : new Date();
+    var d=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(base);
+    return d+((h>=8&&h<20)?'·AM':'·PM');
+  }catch(e){ return today()+'·?' ; } }
+function isTodayMark(v){ // transition-tolerant: plain business date OR the short-lived ·AM/·PM formats
+  return v===today() || v===today()+'·AM' || v===today()+'·PM'; }
+// Per-VA shift window: ☀ morning VAs reset 8 AM · 🌙 night VAs reset 8 PM. A VA's bar lives
+// through their whole shift AND after it, until THEIR next shift starts. Keys: date·AM / date·PM.
+function vaKeyOf(empId){
+  var sh=SHIFTOF[String(empId||'').toLowerCase()];
+  if(sh==='night'){
+    var d=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-20*3600*1000));
+    return d+'·PM';   // night window: 8 PM → next 8 PM, keyed by its start date
+  }
+  return today()+'·AM';   // morning window: 8 AM → next 8 AM
+}
+function markOk(v, empId){
+  if(!v) return false;
+  if(v===vaKeyOf(empId)) return true;
+  // transition day: pre-shift-key plain marks still count for MORNING VAs only
+  var sh=SHIFTOF[String(empId||'').toLowerCase()];
+  return sh!=='night' && v===today();
+}
+
+
+
+
+async function signIn(){
+  var id=$('si-id').value.trim(), pin=$('si-pin').value.trim(); var err=$('si-err'); err.style.display='none';
+  if(!id||!pin){ err.style.display='block'; err.textContent='Enter your Employee ID and PIN.'; return; }
+  try{
+    var r=await fetch(API+'?id='+encodeURIComponent(id)+'&pin='+encodeURIComponent(pin)+'&_='+Date.now()); var d=await r.json();
+    if(!d||d.error){ err.style.display='block'; err.textContent=(d&&d.error==='WRONG_PIN')?'Incorrect PIN.':'Employee not found.'; return; }
+    USER={ id:d.employee_id, name:d.full_name||d.employee_id };
+    try{ sessionStorage.setItem('john_user', JSON.stringify(USER)); }catch(e){}
+    start();
+  }catch(e){ err.style.display='block'; err.textContent='Network error — try again.'; }
+}
+function start(){ try{ fetch(API+'?action=tool_used&employee_id='+encodeURIComponent(USER.id)+'&tool=newfans-crm&_='+Date.now()); }catch(_tu){} $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name; try{ $('jn-cdate').value=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){} loadNames(); paintCached(); load(); smartPoll(); }
+
+async function load(){
+  try{
+    var d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
+    if(!d||!d.ok) throw new Error((d&&d.error)||'load'); ROWS=d.rows||[]; cacheRows(); render();
+  }catch(e){ $('grid').innerHTML='<div class="muted">Could not load — redeploy the Apps Script (pa_list).</div>'; }
+}
+
+/* ══════════ WEBSITE & CRM SETUP — one card per client build ══════════
+   Two workflows from the SOP manual, run per client rather than per day: a build finishes when
+   its steps are done, whenever that is. Steps run in order because they genuinely depend on
+   each other — you cannot QA a site you have not deployed — and each one needs a screenshot,
+   which is also the only record that a step was done at all once the repo is handed over.
+
+   NO CREDENTIAL FIELDS ANYWHERE IN THIS TOOL, DELIBERATELY.
+   The SOP collects Supabase tokens, GitHub classic tokens, Resend keys and Google OAuth
+   secrets. A box to paste them into would put live client credentials in a spreadsheet that
+   dozens of people can read, and screenshots of that box would put them in Drive as well.
+   They stay wherever the client sent them; this tool tracks progress only. */
+var FLOWS={
+  website:{ label:'Website / Web App', task:'Website Build', steps:[
+    ['Client requirements gathered','Business name, app name, logo, brand colours, pages, features, images, contact details, social links, example sites.'],
+    ['Master template copied and renamed','Duplicated and renamed to the client (e.g. acme-website). Work only inside the copy.'],
+    ['Built with Claude Code','Frontend, backend, database, auth, APIs and admin dashboard as needed.'],
+    ['Design reviewed','Branding, responsiveness, navigation, buttons, forms, images, layout — before deployment.'],
+    ['Services configured','Only what the build needs: GitHub, Supabase, Vercel, Resend, Stripe, Google OAuth, OpenAI, Cloudinary.'],
+    ['Deployed to Vercel','Deployed and core functionality tested.'],
+    ['QA testing done','Links, forms, responsiveness, loading speed, functionality.'],
+    ['Client customisation done','Branding, domain, email, members, modules, and any existing data imported.'],
+    ['Final delivery','Live URL, admin access, documentation and handover instructions provided.']
+  ]},
+  crm:{ label:'CRM Setup', task:'CRM Setup', steps:[
+    ['Client information collected','Supabase token, GitHub classic token, Resend key, verified domain, Google OAuth (optional), CRM name, logo, team members, customer CSV. Keep them out of this tool.'],
+    ['CRM template copied and renamed','Duplicated and renamed. Work only inside the copy — never reuse another client\'s folder.'],
+    ['Claude Code setup run','Setup prompt pasted, every prompt answered: project name, tokens, server region, Google credentials if needed.'],
+    ['Deployed with Vercel','Repository imported, Vite selected, deployed, custom domain added if required.'],
+    ['Final CRM configuration','Branding, Resend email, members, roles, modules, dashboard widgets, pipelines, lead import with Trigger Automations OFF, Lead Capture tested.']
+  ]}
+};
+function cFlow(r){ return FLOWS[((r&&r.meta)||{}).flow==='website'?'website':'crm']; }
+function cStepOk(r,i){ return !!(((r&&r.meta)||{})['step'+i]); }
+function cDoneCount(r){ var f=cFlow(r), c=0; for(var i=1;i<=f.steps.length;i++) if(cStepOk(r,i)) c++; return c; }
+
+function render(){
+  if(!USER) return;
+  var live=ROWS.filter(function(r){ return r.status!=='suspended'; });
+  var fin=live.filter(function(r){ return cDoneCount(r)>=cFlow(r).steps.length; }).length;
+  $('stats').innerHTML=
+    '<div class="stat"><b>'+live.length+'</b><span>BUILDS</span></div>'+
+    '<div class="stat"><b class="g">'+fin+'</b><span>DELIVERED</span></div>'+
+    '<div class="stat"><b>'+(live.length-fin)+'</b><span>IN PROGRESS</span></div>';
+  if(!live.length){ $('grid').innerHTML='<div class="muted">No builds yet — add a client above.</div>'; return; }
+  var out=[];
+  ['crm','website'].forEach(function(k){
+    var list=live.filter(function(r){ return (((r.meta||{}).flow==='website')?'website':'crm')===k; });
+    if(!list.length) return;
+    out.push('<div class="sect"><b>'+(k==='crm'?'🗂 CRM Setup':'🌐 Website / Web App')+'</b><span>'+list.length+'</span><i></i></div>');
+    list.forEach(function(r){
+      var f=cFlow(r), n=f.steps.length, done=cDoneCount(r), full=(done>=n);
+      var rows=f.steps.map(function(st,ix){
+        var i=ix+1, ok=cStepOk(r,i), next=(!ok && done===ix);
+        var btn = ok ? '<button disabled style="opacity:.55">✓ '+i+'</button>'
+                : (next ? '<button class="go" onclick="cStep(\''+r.id+'\','+i+')">📷 Step '+i+'</button>'
+                        : '<button disabled style="opacity:.35" title="Finish step '+(done+1)+' first">'+i+'</button>');
+        return '<div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px dashed var(--line,#e2e8f0);">'+
+          '<div style="flex:0 0 auto;">'+btn+'</div>'+
+          '<div style="flex:1;"><b style="font-size:12.5px;'+(ok?'opacity:.55;':'')+'">'+esc(st[0])+'</b>'+
+          '<div class="meta1" style="margin:2px 0 0;">'+esc(st[1])+'</div></div></div>';
+      }).join('');
+      out.push('<div class="acct'+(full?' done-today':'')+'">'+
+        '<div class="hd"><b>'+esc(r.handle)+'</b>'+
+          '<span class="ph2" style="background:#0f766e14;color:#0f766e;border:1px solid #0f766e2e">'+done+'/'+n+' steps</span>'+
+          (full?'<span class="ph2" style="background:#16a34a14;color:#15803d;border:1px solid #16a34a2e">✓ Delivered</span>':'')+
+          kmenu([['⛔ Archive',"setStatus('"+r.id+"','suspended')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+
+        '</div>'+
+        '<div class="meta1">'+esc(vaName(r.assigned_to||r.created_by))+' · '+esc(f.label)+'</div>'+
+        '<div style="margin-top:8px;">'+rows+'</div></div>');
+    });
+  });
+  $('grid').innerHTML=out.join('');
+}
+async function cStep(id, i){
+  var r=ROWS.filter(function(x){return x.id===id;})[0]; if(!r) return;
+  if(cStepOk(r,i)){ toast('Step already logged.'); return; }
+  var f=cFlow(r), st=f.steps[i-1];
+  /* Proof before the step is marked — a build is handed over and the repo leaves; the
+     screenshot is the only lasting record that the step happened. */
+  try{ await bump(f.task+' — '+st[0], 1); }
+  catch(e){ if(e && e.proofCancelled) return; toast('Connection error.'); return; }
+  try{
+    var meta=Object.assign({}, r.meta||{}); meta['step'+i]=vaKeyOf(USER.id); meta['step'+i+'_at']=Date.now();
+    var d=await (await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(meta))+'&_='+Date.now())).json();
+    if(d&&d.ok){
+      r.meta=meta;
+      var left=f.steps.length-cDoneCount(r);
+      toast(left>0?('Step '+i+' logged · '+left+' to go.'):(r.handle+' delivered ✅'));
+      load();
+    } else toast('Could not save.');
+  }catch(e){ toast('Connection error.'); }
+}
+async function addBuild(){
+  var name=$('cr-name').value.trim(); if(!name){ toast('Type the client or build name.'); return; }
+  var flow=$('cr-flow').value;
+  try{
+    var meta=encodeURIComponent(JSON.stringify({flow:flow}));
+    var d=await (await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(name)+'&status=active&meta='+meta+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now())).json();
+    if(d&&d.ok){ $('cr-name').value=''; toast('Build added — work through the steps in order.'); load(); }
+    else if(d&&d.error==='DUPLICATE') toast('That name is already on the board.');
+    else toast('Could not add.');
+  }catch(e){ toast('Connection error.'); }
+}
+async function setStatus(id, st){
+  if(st==='suspended' && !confirm('Archive this build? Steps already logged are kept.')) return;
+  try{ var d=await (await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status='+encodeURIComponent(st)+'&_='+Date.now())).json();
+    if(d&&d.ok){ toast('Archived.'); load(); } }catch(e){ toast('Connection error.'); }
+}
+async function delAcct(id){
+  if(!confirm('Delete this build? Use only for a wrong entry.')) return;
+  try{ var d=await (await fetch(API+'?action=pa_delete&id='+encodeURIComponent(id)+'&_='+Date.now())).json();
+    if(d&&d.ok){ toast('Deleted.'); load(); } }catch(e){ toast('Connection error.'); }
+}
+
+</script></body></html>

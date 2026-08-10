@@ -573,7 +573,7 @@ function proofOpen(ctx, onDone){
     document.body.appendChild(ov);
     document.getElementById('proof-drop').onclick=function(){ document.getElementById('proof-file').click(); };
     document.getElementById('proof-file').onchange=function(){ proofAdd(this.files); this.value=''; };
-    document.getElementById('proof-cancel').onclick=proofClose;
+    document.getElementById('proof-cancel').onclick=function(){ proofClose(true); };
     document.getElementById('proof-save').onclick=proofSubmit;
     document.addEventListener('paste', function(ev){
       if(!document.getElementById('proof-ov') || document.getElementById('proof-ov').style.display==='none') return;
@@ -622,7 +622,14 @@ function proofOpen(ctx, onDone){
     '<div style="font-size:12px;color:#64748b;margin-top:4px;">Up to 5 per session'+(PROOF.imgs.length?(' · '+PROOF.imgs.length+' already captured'):'')+'</div>';
   setTimeout(function(){ try{ document.getElementById('proof-drop').focus(); }catch(e){} },30);
 }
-function proofClose(){ var ov=document.getElementById('proof-ov'); if(ov) ov.style.display='none'; PROOF.imgs=[]; }
+function proofClose(cancelled){
+  var ov=document.getElementById('proof-ov'); if(ov) ov.style.display='none';
+  PROOF.imgs=[];
+  /* Backing out must stop the caller, not just hide the panel — otherwise the action carries on
+     and the output is counted with no screenshot behind it. */
+  var oc=PROOF.onCancel; PROOF.onCancel=null; PROOF.ondone=null;
+  if(cancelled===true && oc){ try{ oc(); }catch(e){} }
+}
 function proofThumb(d){
   var host=document.getElementById('proof-thumbs'); if(!host) return;
   var wrap=document.createElement('div');
@@ -651,7 +658,9 @@ async function proofSubmit(){
     var r=await fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) });
     var d=await r.json();
     if(d && d.ok){
-      var done=PROOF.ondone; proofClose();
+      var done=PROOF.ondone; _PROOF_AT=Date.now();   // proof is in — bump() may now count
+      PROOF.onCancel=null;                          // saved, so the cancel path must not fire
+      proofClose();
       toast(d.count+' screenshot'+(d.count>1?'s':'')+' saved as proof.');
       if(done) await done();                      // the output is only counted AFTER proof lands
     } else {
@@ -661,7 +670,27 @@ async function proofSubmit(){
   btn.disabled=false; btn.textContent='Save proof & count it';
 }
 try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderShotBar(); }catch(e){} }); setTimeout(function(){ try{ renderShotBar(); }catch(e){} }, 1200); }catch(e){}
-function bump(task,n){ return fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now()).catch(function(){}); }
+/* ── NOTHING COUNTS WITHOUT PROOF ──
+   Every other tool routes po_bump through the proof panel, so an output cannot exist without a
+   screenshot behind it. Reddit's bump() was a bare fetch: it counted whatever it was asked to,
+   and relied on each call site remembering to wrap itself in proofOpen(). That is how account
+   creation ended up counting the moment a username was typed.
+   bump() now checks that a proof landed moments ago. If one did — the normal path, called from
+   inside a proofOpen callback — it counts. If not, it opens the panel itself and counts only
+   after the upload succeeds. A future call site cannot bypass it by forgetting. */
+var _PROOF_AT=0;                 // when the last successful proof upload completed
+var _PROOF_WINDOW=90000;         // how recently that must have been, in ms
+function _bumpRaw(task,n){
+  return fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now()).catch(function(){});
+}
+function bump(task,n){
+  if(Date.now()-_PROOF_AT <= _PROOF_WINDOW) return _bumpRaw(task,n);
+  return new Promise(function(resolve,reject){
+    proofOpen({ task:task, outputs:(n||1) }, async function(){ await _bumpRaw(task,n); resolve(true); });
+    // proofClose() rejects with proofCancelled when the VA backs out, which stops the caller
+    PROOF.onCancel=function(){ var e=new Error('proof cancelled'); e.proofCancelled=true; reject(e); };
+  });
+}
 
 async function signIn(){
   var id=$('si-id').value.trim(), pin=$('si-pin').value.trim(); var err=$('si-err'); err.style.display='none';
