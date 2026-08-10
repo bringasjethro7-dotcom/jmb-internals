@@ -637,7 +637,22 @@ function proofThumb(d){
   wrap.innerHTML='<img src="'+d+'" style="width:100%;height:100%;object-fit:cover;">'+
     '<button style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;line-height:1;">×</button>';
   wrap.querySelector('button').onclick=function(){
-    var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1); wrap.remove(); };
+    /* Remove it from BOTH lists. The panel uploads PROOF.imgs, but the 📷 tray is a separate
+       array that feeds the button's counter, the "proof attached" gate, and the preload when
+       the panel is reopened. Deleting from one left the shot alive in the other: the count
+       still included it, and backing out then reopening brought the deleted picture back. */
+    var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1);
+    try{
+      var tk=(PROOF.ctx&&PROOF.ctx.key)||'';
+      if(tk && SHOTTRAY[tk]){
+        var tx=SHOTTRAY[tk].indexOf(d); if(tx>=0) SHOTTRAY[tk].splice(tx,1);
+        if(!SHOTTRAY[tk].length) delete SHOTTRAY[tk];
+        var pp=tk.split(':');
+        if(pp[0]==='s' && typeof renderShotCount==='function') renderShotCount(pp[1],pp[2],pp[3]);
+        if(pp[0]==='c' && typeof renderCreateCount==='function') renderCreateCount(pp[1]);
+      }
+    }catch(e){}
+    wrap.remove(); };
   host.appendChild(wrap);
 }
 async function proofAdd(files){
@@ -940,7 +955,7 @@ async function newDone(id){
   // is counted, and the VA is told so rather than silently losing the evidence.
   var banked=SHOTTRAY['c:'+id]||[];
   if(!banked.length){ toast('Screenshot the created account first — tap 📷.'); return; }
-  proofOpen({ task:'Reddit Account Creation', account:(r0.handle||r0.name||''), outputs:1, preload:banked },
+  proofOpen({ task:'Reddit Account Creation', account:(r0.handle||r0.name||''), outputs:1, preload:banked, key:'c:'+id },
     async function(){ delete SHOTTRAY['c:'+id]; await newDoneCounted(id); });
 }
 async function newDoneCounted(id){
