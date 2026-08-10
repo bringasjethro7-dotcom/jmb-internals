@@ -90,6 +90,59 @@
 </div>
 <div id="toast" class="toast"></div>
 <script>
+
+/* Shared helpers lifted whole from the Project John tool — the earlier extraction cut them
+   mid-file, which is why sign-in failed with $ / toast / esc undefined. */
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('on'); setTimeout(function(){t.classList.remove('on');},2400); }
+async function loadNames(){
+  function _dirFetch(url){ return new Promise(function(res,rej){
+    var ctl=(typeof AbortController!=='undefined')?new AbortController():null;
+    var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },45000):null;
+    fetch(url, ctl?{signal:ctl.signal}:undefined).then(function(r){ return r.json(); })
+      .then(function(j){ if(tm) clearTimeout(tm); res(j); })
+      .catch(function(e){ if(tm) clearTimeout(tm); rej(e); });
+  }); }
+  try{
+    var d=null;
+    try{ d=await _dirFetch(API+'?action=emp_dir&_='+Date.now()); }catch(_e1){}
+    if(!d || !d.employees || !d.employees.length){ d=await _dirFetch(API+'?action=get_all_employees&_='+Date.now()); }
+    if(!d || !d.employees || !d.employees.length) throw new Error('empty');
+    (d.employees||[]).forEach(function(e){
+      var k=String(e.employee_id).toLowerCase();
+      NAMES[k]=e.full_name||e.employee_id;
+      var sh=String(e.shift||'').toLowerCase();
+      if(!sh && e.payslips && e.payslips.length) sh=String((e.payslips[0]||{}).shift||'').toLowerCase();
+      SHIFTOF[k]=sh;
+      PHOTOOF[k]=drivePhoto(e.photo||'');
+    });
+    try{ sessionStorage.setItem('jmb_empdir', JSON.stringify({N:NAMES, S:SHIFTOF, P:PHOTOOF, t:Date.now()})); }catch(_p){}
+    try{ render(); }catch(_r){}
+  }catch(e){
+    _nmTry=(typeof _nmTry==='number'?_nmTry:0)+1;
+    var wait=Math.min(300000, 30000*Math.pow(2,_nmTry-1)) + Math.random()*10000;   // 30s→60s→…→5min + jitter
+    setTimeout(loadNames, wait);
+  }
+}
+function shotSupported(){ return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia); }
+function shotLive(){ return !!(SHOT.stream && SHOT.stream.getVideoTracks().length && SHOT.stream.getVideoTracks()[0].readyState==='live'); }
+async function shotStart(){
+  if(!shotSupported()){ toast('This browser can\'t capture windows — use 📎 to attach a file.'); return false; }
+  try{
+    toast('Pick the window you\'re working in — your browser, or Vysor if you\'re on the phone.');
+    SHOT.stream=await navigator.mediaDevices.getDisplayMedia({ video:{ frameRate:1 }, audio:false });
+    SHOT.video=document.createElement('video'); SHOT.video.srcObject=SHOT.stream; SHOT.video.muted=true;
+    await SHOT.video.play();
+    SHOT.stream.getVideoTracks()[0].addEventListener('ended', function(){
+      SHOT.stream=null; SHOT.video=null; try{ renderShotBar(); }catch(e){}
+      toast('Screen sharing stopped. Click 📷 Pick window to resume.');
+    });
+    renderShotBar(); toast('Window locked in — 📷 is one click from now on.');
+    return true;
+  }catch(e){ toast('Capture cancelled.'); return false; }
+}
+
 var API='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
 var PROJECT='IG Reels - Moma';
 var USER=null, ROWS=[];
