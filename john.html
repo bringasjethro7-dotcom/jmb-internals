@@ -417,6 +417,22 @@ async function proofSubmit(){
   btn.disabled=false; btn.textContent='Save proof & count it';
 }
 /* THE GATE. Every output routes through here, so proof cannot be bypassed by any button. */
+/* PROOF WITHOUT A COUNT.
+   A session is evidence, not output — the day already counts one. bump() would post po_bump
+   and (n||1) turns 0 into 1, so four sessions would quadruple Project John's volume and break
+   every comparison against the weeks already recorded. This stores the screenshots and stops.
+   Rejects on cancel, so backing out leaves the session unmarked. */
+function proofOnly(task, account){
+  return new Promise(function(resolve,reject){
+    PROOF.imgs=[]; PROOF.ctx={task:task, account:account||'', n:1};
+    PROOF.resolve=null; PROOF.reject=reject;
+    var ov=proofPanel(); ov.style.display='flex';
+    document.getElementById('proof-what').textContent=task+(account?(' · '+account):'')+' · evidence only, no output counted';
+    document.getElementById('proof-note').value='';
+    document.getElementById('proof-thumbs').innerHTML='';
+    PROOF.resolve=function(){ resolve(true); };
+  });
+}
 function bump(task,n){
   return new Promise(function(resolve,reject){
     PROOF.imgs=[]; PROOF.ctx={task:task,n:(n||1)}; PROOF.resolve=null; PROOF.reject=reject;
@@ -518,7 +534,13 @@ function render(){
     if(r.status==='suspended'){ out.push('<div class="acct susp"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#ef444414;color:#b91c1c;border:1px solid #ef44442e">⛔ Suspended</span>'+kmenu([['↩ Reinstate',"setStatus('"+r.id+"','active')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+'</div>'); return; }
     out.push('<div class="acct'+(done?' done-today':'')+'"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#0f141910;color:#0f1419;border:1px solid #0f141926">Day '+r.day+'</span>'+kmenu([['⛔ Suspended',"setStatus('"+r.id+"','suspended')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+
       '<details class="planbox"'+(done?'':' open')+'><summary>📋 Day '+r.day+' plan</summary><div>'+planFor(r.day)+'</div></details>'+
-      '<div class="btns">'+(done?'<button disabled style="opacity:.55">✓ Done today</button>':'<button class="go" onclick="dayDone(\''+r.id+'\','+r.day+')">✓ Day '+r.day+' done</button>')+'</div></div>');
+      '<div class="btns">'+sessBtns(r)+'</div>'+
+      '<div class="btns">'+(done
+        ? '<button disabled style="opacity:.55">✓ Done today</button>'
+        : (sessDone(r)>=JN_SESSIONS
+            ? '<button class="go" onclick="dayDone(\''+r.id+'\','+r.day+')">✓ Day '+r.day+' done</button>'
+            : '<button disabled style="opacity:.45;cursor:not-allowed" title="Finish all '+JN_SESSIONS+' sessions first">🔒 Day '+r.day+' done ('+sessDone(r)+'/'+JN_SESSIONS+')</button>'))+
+      '</div></div>');
   });
   $('grid').innerHTML=out.join('');
 }
@@ -535,7 +557,56 @@ async function addAcct(){
     else toast('Could not add.');
   }catch(e){ toast('Connection error.'); }
 }
+/* ── FOUR SESSIONS PER ACCOUNT PER DAY ──
+   The day used to be one button and one screenshot, so a whole day's follows rested on a single
+   image and QA had one session to sample per account. Four sessions each carrying their own
+   proof gives the auto-check four times the evidence and reflects how the work is actually
+   done — spread across the shift, not in one sitting.
+   Day done stays locked until all four are in: an account is not finished because someone says
+   so, it is finished when the sessions exist. Session marks are stamped with the shift key, so
+   they reset when the shift does — the same rule the day mark already used. */
+var JN_SESSIONS=4;
+function sessMark(r,n){ return ((r&&r.meta)||{})['s'+n]; }
+function sessOk(r,n){ return markOk(sessMark(r,n), r.assigned_to||r.created_by); }
+function sessDone(r){ var c=0; for(var i=1;i<=JN_SESSIONS;i++) if(sessOk(r,i)) c++; return c; }
+function sessBtns(r){
+  var out=[];
+  for(var i=1;i<=JN_SESSIONS;i++){
+    var ok=sessOk(r,i);
+    // sessions run in order, so a missed one can't be papered over by doing the next
+    var next=(!ok && sessDone(r)===(i-1));
+    out.push(ok
+      ? '<button disabled style="opacity:.55">✓ S'+i+'</button>'
+      : (next ? '<button class="go" onclick="sessDone_('+"'"+r.id+"'"+','+i+')">📷 Session '+i+'</button>'
+              : '<button disabled style="opacity:.35;cursor:not-allowed" title="Finish session '+(sessDone(r)+1)+' first">S'+i+'</button>'));
+  }
+  return out.join('');
+}
+async function sessDone_(id, n){
+  var r0=ROWS.filter(function(x){return x.id===id;})[0]; if(!r0) return;
+  if(sessOk(r0,n)){ toast('Session '+n+' is already logged.'); return; }
+  /* Proof first. bump() rejects when the VA backs out of the screenshot, which stops the
+     session being marked — the same ordering every other tool now uses. */
+  try{ await proofOnly((r0.day<=3?'Setup Day':'Follow Day')+' — Session '+n, r0.handle); }
+  catch(e){ if(e && e.proofCancelled) return; toast('Connection error.'); return; }
+  try{
+    var m=Object.assign({}, r0.meta||{}); m['s'+n]=vaKeyOf(USER.id);
+    var rr=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now());
+    var d=await rr.json();
+    if(d&&d.ok){
+      r0.meta=m;
+      var left=JN_SESSIONS-sessDone(r0);
+      toast(left>0 ? ('Session '+n+' logged · '+left+' to go.') : ('All '+JN_SESSIONS+' sessions done — you can finish the day.'));
+      load();
+    } else toast('Could not save.');
+  }catch(e){ toast('Connection error.'); }
+}
 async function dayDone(id, day){
+  var r0=ROWS.filter(function(x){return x.id===id;})[0];
+  if(r0 && sessDone(r0)<JN_SESSIONS){ toast('Finish all '+JN_SESSIONS+' sessions first.'); return; }
+  /* The day still counts ONE output. The four sessions carry the evidence; counting each of
+     them as output would quadruple everyone's Project John volume overnight and break every
+     comparison against the weeks already recorded. */
   await bump(day<=3?'Setup Day':'Follow Day',1);   // proof before the day advances
 
   try{
