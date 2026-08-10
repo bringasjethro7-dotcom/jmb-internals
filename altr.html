@@ -1395,6 +1395,135 @@ function filterAccounts(kind, accts, map, ff, q){
     return true;
   });
 }
+
+/* ══════════ SCREENSHOT PROOF — per account, posting and sourcing ══════════
+   ALTR was the last tool without evidence capture, so its QA had nothing to read: the auto-check
+   could see how many boxes were ticked but never what was actually posted or sourced.
+   Capture is PER ACCOUNT because that is the unit QA scores against — one account's shots are
+   one "session", and a criterion like "Folder Complete (4 Contents)" can only be judged against
+   a specific account's folder, not a phone's worth of them.
+   Boxes stay freely clickable all shift; Record Day is what refuses. The board is built around
+   rapid ticking and gating each cell would wreck it. */
+var APROOF={ imgs:[], ctx:null, busy:false };
+var ATRAY={};                                  // key -> [dataURL]  (kind|phone|user|acct|handle)
+var APROOF_MAX=6;
+var PORTAL_EXEC='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
+function aBizDay(){   // JMB business day — 08:00 PHT rollover, same rule as every other tool
+  try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-8*3600*1000)); }
+  catch(e){ return new Date(Date.now()-8*3600*1000).toISOString().slice(0,10); }
+}
+function aKey(kind,a){ return kind+'|'+a.phone+'|'+a.user+'|'+a.acct+'|'+a.handle; }
+
+/* What the screenshots have to show, written from the QA criteria they are scored against.
+   If the picture can't settle a criterion it is left out of the score rather than failed, so
+   evidence nobody thought to capture simply stops being measured. */
+var APROOF_NEED={
+  post:{ title:'Posting — attach 2 screenshots',
+         lines:['<b>1 posted item</b> — the post live on the account, caption visible',
+                '<b>The scheduled posts</b> — the queue/schedule screen for this account',
+                'Account handle visible in both, so the shots can be tied to this account'] },
+  src:{  title:'Sourcing — attach the content folder',
+         lines:['<b>The folder for this account, showing all 4 files</b> per content set',
+                'File names or thumbnails legible enough to see the set is complete',
+                'Watermark-free frame visible, and the caption if one is set'] }
+};
+function aProofOpen(kind, a){
+  var k=aKey(kind,a);
+  APROOF.ctx={ kind:kind, a:a, key:k };
+  APROOF.imgs=(ATRAY[k]||[]).slice(0,APROOF_MAX);
+  var need=APROOF_NEED[kind];
+  var ov=document.getElementById('aproof-ov');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='aproof-ov';
+    ov.style.cssText='position:fixed;left:0;top:0;right:0;bottom:0;z-index:99999;background:rgba(8,12,20,.72);display:flex;align-items:center;justify-content:center;padding:16px;';
+    ov.innerHTML='<div style="background:#fff;color:#0f172a;border-radius:16px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:20px 22px;box-shadow:0 40px 100px rgba(0,0,0,.4);">'+
+      '<div id="aproof-t" style="font:800 17px Sora,Inter,sans-serif;"></div>'+
+      '<div id="aproof-w" style="font-size:12.5px;color:#64748b;margin-top:3px;"></div>'+
+      '<div id="aproof-need" style="font-size:12px;line-height:1.55;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:9px 11px;margin-top:10px;"></div>'+
+      '<div id="aproof-drop" style="margin-top:12px;border:2px dashed #cbd5e1;border-radius:12px;padding:20px;text-align:center;cursor:pointer;">'+
+        '<div style="font-weight:800;font-size:14px;">Paste a screenshot (Ctrl+V)</div>'+
+        '<div style="font-size:12px;color:#64748b;margin-top:4px;">or click to pick files · up to '+APROOF_MAX+'</div></div>'+
+      '<input type="file" id="aproof-file" accept="image/*" multiple style="display:none;">'+
+      '<div id="aproof-thumbs" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>'+
+      '<div style="display:flex;gap:9px;justify-content:flex-end;margin-top:14px;">'+
+        '<button id="aproof-x" style="padding:9px 16px;border-radius:9px;border:1px solid #e2e8f0;background:#fff;font-weight:700;cursor:pointer;">Cancel</button>'+
+        '<button id="aproof-s" style="padding:9px 20px;border-radius:9px;border:none;background:#0f766e;color:#fff;font-weight:800;cursor:pointer;">Save proof</button>'+
+      '</div></div>';
+    document.body.appendChild(ov);
+    document.getElementById('aproof-drop').onclick=function(){ document.getElementById('aproof-file').click(); };
+    document.getElementById('aproof-file').onchange=function(){ aProofAdd(this.files); this.value=''; };
+    document.getElementById('aproof-x').onclick=function(){ ov.style.display='none'; };
+    document.getElementById('aproof-s').onclick=aProofSave;
+    document.addEventListener('paste', function(ev){
+      var o=document.getElementById('aproof-ov'); if(!o||o.style.display==='none') return;
+      var it=(ev.clipboardData&&ev.clipboardData.items)||[], f=[];
+      for(var i=0;i<it.length;i++) if(it[i].type.indexOf('image')===0){ var x=it[i].getAsFile(); if(x) f.push(x); }
+      if(f.length){ ev.preventDefault(); aProofAdd(f); }
+    });
+  }
+  ov.style.display='flex';
+  document.getElementById('aproof-t').textContent=need.title;
+  document.getElementById('aproof-w').textContent='@'+a.handle+' · P'+a.phone+' · U'+a.user+' · A'+a.acct;
+  document.getElementById('aproof-need').innerHTML='<b>QA is scored from these screenshots:</b><ul style="margin:6px 0 0 16px;padding:0;">'+
+    need.lines.map(function(x){ return '<li>'+x+'</li>'; }).join('')+'</ul>'+
+    '<div style="margin-top:6px;opacity:.85;">Anything not visible can\'t be checked — it is left out of the score, not passed.</div>';
+  document.getElementById('aproof-thumbs').innerHTML='';
+  APROOF.imgs.forEach(aProofThumb);
+}
+function aProofThumb(d){
+  var h=document.getElementById('aproof-thumbs'); if(!h) return;
+  var w=document.createElement('div');
+  w.style.cssText='position:relative;width:74px;height:74px;border-radius:9px;overflow:hidden;border:1px solid #e2e8f0;';
+  w.innerHTML='<img src="'+d+'" style="width:100%;height:100%;object-fit:cover;"><button style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;cursor:pointer;line-height:1;">×</button>';
+  w.querySelector('button').onclick=function(){ var i=APROOF.imgs.indexOf(d); if(i>=0) APROOF.imgs.splice(i,1); w.remove(); };
+  h.appendChild(w);
+}
+function aProofCompress(file){
+  return new Promise(function(res,rej){
+    var fr=new FileReader();
+    fr.onload=function(){ var im=new Image();
+      im.onload=function(){ var max=1400,w=im.width,h=im.height;
+        if(w>max||h>max){ var r=Math.min(max/w,max/h); w=Math.round(w*r); h=Math.round(h*r); }
+        var c=document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(im,0,0,w,h); res(c.toDataURL('image/jpeg',0.72)); };
+      im.onerror=function(){ rej(new Error('bad image')); }; im.src=fr.result; };
+    fr.onerror=function(){ rej(new Error('read failed')); }; fr.readAsDataURL(file);
+  });
+}
+async function aProofAdd(files){
+  for(var i=0;i<files.length;i++){
+    if(APROOF.imgs.length>=APROOF_MAX){ toast(APROOF_MAX+' screenshots is the max.'); break; }
+    try{ var d=await aProofCompress(files[i]); APROOF.imgs.push(d); aProofThumb(d); }catch(e){}
+  }
+}
+async function aProofSave(){
+  if(!APROOF.imgs.length){ toast('Attach at least one screenshot.'); return; }
+  if(APROOF.busy) return; APROOF.busy=true;
+  var btn=document.getElementById('aproof-s'); btn.disabled=true; btn.textContent='Uploading…';
+  var c=APROOF.ctx;
+  try{
+    var body={ action:'proof_save', employee_id:USER.employee_id, full_name:(USER.full_name||USER.employee_id),
+      project:'ALTR', task:(c.kind==='post'?'Vysor IG Posting':'Content Sourcing'),
+      account:c.a.handle, date:aBizDay(), outputs:1,
+      note:'P'+c.a.phone+' U'+c.a.user+' A'+c.a.acct, images:APROOF.imgs };
+    var r=await fetch(PORTAL_EXEC, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) });
+    var d=await r.json();
+    if(d&&d.ok){
+      ATRAY[c.key]=APROOF.imgs.slice(0);
+      document.getElementById('aproof-ov').style.display='none';
+      toast('📷 proof saved for @'+c.a.handle);
+      if(c.kind==='post') renderPosting(); else renderSourcing();
+    } else toast('Proof not saved: '+((d&&d.error)||'unknown'));
+  }catch(e){ toast('Upload failed — try again.'); }
+  btn.disabled=false; btn.textContent='Save proof'; APROOF.busy=false;
+}
+function aProofBtn(kind, a){
+  var has=(ATRAY[aKey(kind,a)]||[]).length;
+  return '<button class="kebab" title="'+(has?(has+' screenshot(s) attached'):'Attach the screenshots QA is scored from')+'" '+
+    'style="color:'+(has?'#0f766e':'#b45309')+';font-weight:800;" '+
+    'onclick="event.stopPropagation();aProofOpen(\''+kind+'\',{phone:\''+escAttr(a.phone)+'\',user:\''+escAttr(a.user)+'\',acct:\''+escAttr(a.acct)+'\',handle:\''+escAttr(a.handle)+'\'})">📷'+(has?('<span style="font-size:10px;margin-left:2px;">'+has+'</span>'):'')+'</button>';
+}
+
 function acctRow(kind, a, r){
   var cells=r?String(r.cells||''):''; var nums=r?String(r.nums||''):''; var n=boxesFor(kind,a,r); var g=greenCount(kind,cells,n);
   var va=r&&r.va_code?r.va_code:'';
@@ -1415,10 +1544,10 @@ function acctRow(kind, a, r){
   var cellsDiv='<div class="cells'+(locked?' locked':'')+'" data-kind="'+kind+'" data-p="'+esc(a.phone)+'" data-u="'+esc(a.user)+'" data-a="'+esc(a.acct)+'" data-h="'+esc(a.handle)+'">'+boxes+'</div>';
   var tagB = (typeof acctTagBadge==='function') ? acctTagBadge(a, true) : '';   // admin-set issue flag, employee taps to clear
   if(kind==='post'){  // compact single line: box sits inline
-    return '<div class="arow post"><div class="atop">'+meta+susp+vaTag+tagB+audioSelHTML(a)+noteInputHTML(a)+cellsDiv+kebab+'</div></div>';
+    return '<div class="arow post"><div class="atop">'+meta+susp+vaTag+tagB+audioSelHTML(a)+noteInputHTML(a)+cellsDiv+aProofBtn('post',a)+kebab+'</div></div>';
   }
   var counter='<span class="cellcount"><b>'+g+'</b>/'+assigned+'</span>';
-  return '<div class="arow"><div class="atop">'+meta+susp+vaTag+counter+kebab+'</div>'+cellsDiv+'</div>';
+  return '<div class="arow"><div class="atop">'+meta+susp+vaTag+counter+aProofBtn('src',a)+kebab+'</div>'+cellsDiv+'</div>';
 }
 /* Assigned-audio dropdown — options come from the current audio promotions */
 function audioSelHTML(a){
@@ -2198,7 +2327,44 @@ function dcAutoPush(silent){
       .catch(function(){});
   }catch(_dc){}
 }
+/* Which accounts did real work today, and which of those have no screenshots?
+   Posting counts an account worked when its first cell is green; sourcing when a cell carries
+   today's gdate. Only accounts that were actually worked are required to have proof — nobody
+   is asked to photograph an account they never touched. */
+function aMissingProof(){
+  var miss={post:[], src:[]}, today=(STATE&&STATE.date)||aBizDay();
+  try{
+    var pm=postingMap(), gp=String(greenState('post'));
+    (STATE.accounts||[]).forEach(function(a){
+      if(a.status && a.status!=='active') return;
+      var r=pm[postKey(a)]; if(!(r && cellAt(r.cells,0)===gp)) return;      // not posted today
+      if(!(ATRAY[aKey('post',a)]||[]).length) miss.post.push('@'+a.handle);
+    });
+  }catch(e){}
+  try{
+    var sm=sourceMap();
+    sourcingAccounts().forEach(function(a){
+      if(a.status && a.status!=='active') return;
+      var r=sm[srcKey(a)]; if(!r) return;
+      var n=srcLen(r); if(!countTodaySrc(r.cells, r.gdates, n)) return;     // nothing sourced today
+      if(!(ATRAY[aKey('src',a)]||[]).length) miss.src.push('@'+a.handle);
+    });
+  }catch(e){}
+  return miss;
+}
 async function recordDay(){
+  /* Record Day is the gate, not the boxes. The board is built around rapid ticking and
+     blocking each cell would wreck the workflow — but the day cannot be closed without the
+     evidence QA is scored from, or the screenshots simply never arrive. */
+  var miss=aMissingProof(), tot=miss.post.length+miss.src.length;
+  if(tot){
+    var show=function(arr){ return arr.slice(0,12).join(', ')+(arr.length>12?(' …and '+(arr.length-12)+' more'):''); };
+    alert('Screenshots are missing before the day can be recorded.\n\n'+
+      (miss.post.length?('POSTING — '+miss.post.length+' account(s) posted with no proof:\n'+show(miss.post)+'\n\n'):'')+
+      (miss.src.length?('SOURCING — '+miss.src.length+' account(s) sourced with no proof:\n'+show(miss.src)+'\n\n'):'')+
+      'Tap 📷 on each account and attach what the panel asks for, then record the day.');
+    return;
+  }
   if(!confirm('Record today’s sourcing — totals AND each employee’s daily target/sourced — to history (kept for volume review)? The board stays as-is (nothing is cleared).')) return;
   try{
     var r=await apiPost({ action:'src_record', by:firstName(USER.full_name||USER.employee_id) });

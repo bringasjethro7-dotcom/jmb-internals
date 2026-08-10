@@ -32,6 +32,16 @@
   .kb{font-size:10px;font-weight:900;color:#6228d7;background:rgba(98,40,215,.1);border-radius:100px;padding:3px 8px}
   .plan{font-size:11.5px;color:var(--ink2);background:rgba(214,41,118,.05);border-radius:9px;padding:7px 10px;margin:9px 0;line-height:1.5}
   .ticks{display:flex;gap:6px;margin:9px 0}
+  /* ORIGINAL / REPURPOSE — additive segmented control. Uses the same rounded-pill language as
+     the status chips so it reads as part of the card rather than a bolted-on widget. Only the
+     active option is filled; the inactive one stays a plain outline. */
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:100px;overflow:hidden;margin:8px 0 0}
+  .seg button{border:0;background:#fff;color:var(--ink2);font:800 10.5px 'Manrope',sans-serif;
+              padding:5px 12px;cursor:pointer;transition:background .12s,color .12s}
+  .seg button+button{border-left:1px solid var(--line)}
+  .seg button.on-o{background:#2563eb;color:#fff}
+  .seg button.on-r{background:#f59e0b;color:#fff}
+  .seg button:disabled{cursor:default}
   .ticks button{flex:1;border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 4px;font-size:11.5px;font-weight:800;cursor:pointer;color:var(--ink2)}
   .ticks button.on{border-color:rgba(16,185,129,.55);color:#0f766e;background:rgba(16,185,129,.1);cursor:default}
   .ticks button.na{opacity:.4;cursor:not-allowed}
@@ -752,6 +762,7 @@ function render(){
     menu.push(['⛔ Suspended',"setStatus('"+r.id+"','suspended')"]);
     menu.push('---'); menu.push(['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']);
     out.push('<div class="acct'+(fullDone(r)?' done':'')+'"><div class="hd"><b>'+esc(r.handle)+'</b>'+kchip+kmenu(menu)+'</div>'+who+
+      segType(r)+
       '<div class="ticks">'+
         '<button class="'+(t.s?'on':'')+'" '+(t.s?'disabled':'')+' onclick="tick(\''+r.id+'\',\'s\')">'+(t.s?'✓ ':'')+'Story</button>'+
         '<button class="'+(t.f?'on':'')+'" '+(t.f?'disabled':'')+' onclick="tick(\''+r.id+'\',\'f\')">'+(t.f?'✓ ':'')+'Feed</button>'+
@@ -776,6 +787,35 @@ async function addAcct(){
   }catch(e){ toast('Connection error.'); }
 }
 function row(id){ return ROWS.filter(function(r){return r.id===id;})[0]; }
+/* ── ORIGINAL / REPURPOSE ──
+   A property of the CONTENT, recorded per account, and deliberately independent of the
+   Story/Feed/Reel completion state — a card can be fully ticked and still be repurposed
+   content. Records created before this existed have no value, so they read as "original":
+   that is what the back catalogue actually was, and defaulting to the other way round would
+   silently relabel everyone's history.
+   Set only by this control. No classification, no guessing, no review state. */
+function typeOf(r){ return (((r||{}).meta||{}).type==='repurpose') ? 'repurpose' : 'original'; }
+function segType(r){
+  var t=typeOf(r);
+  return '<div class="seg" title="Is this account\'s content original or repurposed?">'+
+    '<button class="'+(t==='original'?'on-o':'')+'" onclick="setType(\''+r.id+'\',\'original\')">Original</button>'+
+    '<button class="'+(t==='repurpose'?'on-r':'')+'" onclick="setType(\''+r.id+'\',\'repurpose\')">Repurpose</button>'+
+  '</div>';
+}
+async function setType(id, val){
+  var r0=row(id); if(!r0) return;
+  val=(val==='repurpose')?'repurpose':'original';
+  if(typeOf(r0)===val) return;                       // already set — no write, no flicker
+  /* Paint immediately: this is a label, not an output, so it shouldn't wait on the network or
+     take the card through a full re-render. The reload afterwards reconciles it. */
+  r0.meta=Object.assign({}, r0.meta||{}, {type:val});
+  try{ render(); }catch(e){}                          // render() dispatches to the active tab
+  try{
+    var d=await saveMeta(r0, r0.meta);
+    if(!(d&&d.ok)){ toast('Could not save — reverting.'); load(); return; }
+    toast(val==='repurpose'?'Marked as Repurpose.':'Marked as Original.');
+  }catch(e){ toast('Connection error — reverting.'); load(); }
+}
 async function saveMeta(r, meta){
   var rr=await fetch(API+'?action=pa_update&id='+encodeURIComponent(r.id)+'&meta='+encodeURIComponent(JSON.stringify(meta))+'&_='+Date.now());
   return (await rr.json());
