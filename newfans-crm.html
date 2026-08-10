@@ -154,7 +154,7 @@ async function shotStart(){
 }
 
 var API='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
-var PROJECT='IG Reels - Moma';
+var PROJECT='NewFans';
 var USER=null, ROWS=[];
 var NAMES={}, SHIFTOF={}, PHOTOOF={};
 function drivePhoto(u){ u=String(u||''); if(!u) return ''; var m=u.match(/[-\w]{25,}/); return m?('https://drive.google.com/thumbnail?id='+m[0]+'&sz=w128'):u; }
@@ -292,6 +292,9 @@ function proofCompress(file){
     fr.readAsDataURL(file);
   });
 }
+/* Screen-capture state. Lost in the extraction that built this file — proofAdd() reads
+   SHOT.max, so without it every attach threw and the picker appeared to do nothing. */
+var SHOT={ stream:null, video:null, max:5 };
 var PROOF={ imgs:[], ctx:null, resolve:null, reject:null };
 function proofPanel(){
   var ov=document.getElementById('proof-ov');
@@ -458,7 +461,7 @@ async function signIn(){
     start();
   }catch(e){ err.style.display='block'; err.textContent='Network error — try again.'; }
 }
-function start(){ try{ fetch(API+'?action=tool_used&employee_id='+encodeURIComponent(USER.id)+'&tool=newfans-crm&_='+Date.now()); }catch(_tu){} $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name; try{ $('jn-cdate').value=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){} loadNames(); paintCached(); load(); smartPoll(); }
+function start(){ try{ fetch(API+'?action=tool_used&employee_id='+encodeURIComponent(USER.id)+'&tool=newfans-crm&_='+Date.now()); }catch(_tu){} $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name; loadNames(); paintCached(); load(); smartPoll(); }
 
 async function load(){
   try{
@@ -504,7 +507,15 @@ function cDoneCount(r){ var f=cFlow(r), c=0; for(var i=1;i<=f.steps.length;i++) 
 
 function render(){
   if(!USER) return;
-  var live=ROWS.filter(function(r){ return r.status!=='suspended'; });
+  /* ONLY THIS TOOL'S ROWS.
+     pa_list returns everything under project "NewFans", which the Wallpost tool also writes to
+     — so its accounts and bookkeeping rows (like __shift) were being rendered here as client
+     builds, complete with whoever happened to create them. A build is a row this tool made, and
+     the only rows this tool makes carry meta.flow. */
+  var live=ROWS.filter(function(r){
+    var f=((r&&r.meta)||{}).flow;
+    return r.status!=='suspended' && (f==='crm' || f==='website');
+  });
   var fin=live.filter(function(r){ return cDoneCount(r)>=cFlow(r).steps.length; }).length;
   $('stats').innerHTML=
     '<div class="stat"><b>'+live.length+'</b><span>BUILDS</span></div>'+
