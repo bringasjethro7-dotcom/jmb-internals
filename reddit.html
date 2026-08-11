@@ -24,7 +24,13 @@
   .acct{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 15px}
   .acct.done{border-color:rgba(16,185,129,.5)}
   .acct.dim{opacity:.55}
-  .hd{display:flex;align-items:center;gap:8px}
+  /* The header is a flex row and the chips are nowrap, so the ONLY thing that could shrink was
+     the handle — adding the phase select and the cover chip squeezed usernames down to a single
+     letter. The handle now refuses to shrink below a readable width and the chips wrap under it
+     instead. Reading the username is the whole point of the card. */
+  .hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .hd>b{flex:1 1 auto;min-width:11ch;overflow-wrap:anywhere}
+  .hd .ph2,.hd .phsel,.hd .kmenu{flex:0 0 auto}
   .hd b{font-size:14.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .ph{font-size:10px;font-weight:900;color:#fff;border-radius:100px;padding:3px 9px;white-space:nowrap}
   .plan{font-size:11.5px;color:var(--ink2);background:rgba(255,69,0,.045);border-radius:9px;padding:7px 10px;margin:9px 0;line-height:1.5}
@@ -50,7 +56,8 @@
   .sect b{font-family:'Sora',sans-serif;font-size:13.5px;white-space:nowrap}
   .sect span{font-size:11px;color:var(--ink3);font-weight:800}
   .sect i{flex:1;height:1px;background:var(--line)}
-  .ph2{font-size:10px;font-weight:900;border-radius:100px;padding:3px 9px;white-space:nowrap}
+  .ph2{font-size:10px;font-weight:900;border-radius:100px;padding:3px 9px;white-space:nowrap;
+       max-width:190px;overflow:hidden;text-overflow:ellipsis}
   .meta1{font-size:10.5px;color:var(--ink3);margin-top:4px}
   .planbox{margin:8px 0 2px}
   .planbox summary{list-style:none;cursor:pointer;font-size:11px;font-weight:800;color:var(--ink3)}
@@ -436,7 +443,11 @@ function _maybeSnap(done, tot){
 function amKey(){ return today()+'·AM'; }
 function renderByVA(segs, doneFn, activeFn, amFn){
   var host=document.getElementById('byva'); if(!host) return;
-  var by={}; ROWS.forEach(function(r){ var k=String(r.assigned_to||r.created_by||'—').toLowerCase(); (by[k]=by[k]||[]).push(r); });
+  /* Grouped by who WORKS the account today, not who owns it. A covered account's sessions are
+     done by the stand-in, so the target and the progress have to sit with them — otherwise the
+     absent VA shows a bar they cannot move and the stand-in appears to be doing half a shift.
+     The server already credits output to whoever is signed in; this makes the board agree. */
+  var by={}; ROWS.forEach(function(r){ var k=worksFor(r)||'—'; (by[k]=by[k]||[]).push(r); });
   var keys=Object.keys(by);
   if(!keys.length){ host.innerHTML=''; return; }
   var mine=String((USER&&USER.id)||'').toLowerCase();
@@ -974,7 +985,10 @@ async function load(){
 function renderMatrix(){
   var host=document.getElementById('matrix'); if(!host) return;
   var cols=[{k:'new',n:'New',c:'#fb923c'}].concat(PH.map(function(p){ return {k:p.k,n:p.n,c:p.c}; })).concat([{k:'recovery',n:'Recovery',c:'#f97316'},{k:'tempban',n:'Temp ban',c:'#ea580c'},{k:'banned',n:'Banned',c:'#991b1b'}]);
-  var by={}; ROWS.forEach(function(r){ var k=String(r.assigned_to||r.created_by||'—').toLowerCase(); (by[k]=by[k]||[]).push(r); });
+  /* Deliberately grouped by the REAL owner, unlike the progress panel above: this matrix is
+     about who holds which accounts across the ladder, and a one-day cover shouldn't rewrite the
+     ownership picture. */
+  var by={}; ROWS.forEach(function(r){ var k=ownerOf(r)||'—'; (by[k]=by[k]||[]).push(r); });
   var keys=Object.keys(by).sort(function(a,b){ return by[b].length-by[a].length; });
   if(!keys.length){ host.innerHTML='<div class="muted">No accounts yet.</div>'; return; }
   var head='<tr><th style="text-align:left;padding:6px 9px;position:sticky;left:0;background:var(--card);">VA</th>'+cols.map(function(c){ return '<th style="padding:6px 7px;font-size:10px;white-space:nowrap;color:'+c.c+';">'+c.n+'</th>'; }).join('')+'<th style="padding:6px 9px;">Total</th></tr>';
