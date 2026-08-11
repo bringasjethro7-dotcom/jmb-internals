@@ -86,13 +86,13 @@
     <div class="sub">One card per client build. Steps run in order and each needs a screenshot — once the repo is handed over, that screenshot is the only record the step happened. <b>Never paste client tokens or keys into this tool</b> — keep them where the client sent them.</div>
     <div id="stats" class="stats"></div>
     <div class="card" style="margin:14px 0;">
-      <div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center;">
-        <input id="cr-name" placeholder="Client / build name (e.g. acme-crm)" style="flex:1;min-width:220px;">
-        <select id="cr-flow" style="padding:9px 11px;border:1px solid #e2e8f0;border-radius:9px;font:700 13px inherit;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <input id="cr-name" placeholder="Client / build name (e.g. acme-crm)" style="flex:1;min-width:220px;padding:10px 12px;border:1px solid #E4E7EC;border-radius:10px;font:600 13px inherit;">
+        <select id="cr-flow" style="padding:10px 12px;border:1px solid #E4E7EC;border-radius:10px;font:700 13px inherit;">
           <option value="crm">CRM Setup (5 steps)</option>
-          <option value="website">Website / Web App (9 steps)</option>
+          <option value="website">Website / Web App (4 steps)</option>
         </select>
-        <button class="go" onclick="addBuild()">+ Add build</button>
+        <button class="go" onclick="addBuild()" style="padding:10px 16px;border-radius:10px;">+ Add build</button>
       </div>
     </div>
     <div id="grid"></div>
@@ -482,18 +482,13 @@ async function load(){
    dozens of people can read, and screenshots of that box would put them in Drive as well.
    They stay wherever the client sent them; this tool tracks progress only. */
 var FLOWS={
-  website:{ label:'Website / Web App', task:'Website Build', steps:[
-    ['Client requirements gathered','Business name, app name, logo, brand colours, pages, features, images, contact details, social links, example sites.'],
-    ['Master template copied and renamed','Duplicated and renamed to the client (e.g. acme-website). Work only inside the copy.'],
-    ['Built with Claude Code','Frontend, backend, database, auth, APIs and admin dashboard as needed.'],
-    ['Design reviewed','Branding, responsiveness, navigation, buttons, forms, images, layout — before deployment.'],
-    ['Services configured','Only what the build needs: GitHub, Supabase, Vercel, Resend, Stripe, Google OAuth, OpenAI, Cloudinary.'],
-    ['Deployed to Vercel','Deployed and core functionality tested.'],
-    ['QA testing done','Links, forms, responsiveness, loading speed, functionality.'],
-    ['Client customisation done','Branding, domain, email, members, modules, and any existing data imported.'],
-    ['Final delivery','Live URL, admin access, documentation and handover instructions provided.']
+  website:{ label:'Website / Web App', task:'Website Build', accent:'#3B6FE0', steps:[
+    ['Website Info Gathered','Business name, niche, purpose, pages and features needed, contact details.'],
+    ['Services Screenshot','Supabase, Vercel, GitHub — a screenshot of each set up. No tokens or keys in this tool.'],
+    ['Project Folder Confirmed','Local project folder path / repo location noted.'],
+    ['Live Website Delivered','Final live URL working, link shared with the client.']
   ]},
-  crm:{ label:'CRM Setup', task:'CRM Setup', steps:[
+  crm:{ label:'CRM Setup', task:'CRM Setup', accent:'#1E8E5A', steps:[
     ['Client information collected','Supabase token, GitHub classic token, Resend key, verified domain, Google OAuth (optional), CRM name, logo, team members, customer CSV. Keep them out of this tool.'],
     ['CRM template copied and renamed','Duplicated and renamed. Work only inside the copy — never reuse another client\'s folder.'],
     ['Claude Code setup run','Setup prompt pasted, every prompt answered: project name, tokens, server region, Google credentials if needed.'],
@@ -517,36 +512,60 @@ function render(){
     return r.status!=='suspended' && (f==='crm' || f==='website');
   });
   var fin=live.filter(function(r){ return cDoneCount(r)>=cFlow(r).steps.length; }).length;
+  /* Three equal columns rather than a stack — the three numbers are one comparison, and colour
+     carries the meaning faster than the label does. */
+  var _stat=function(n,label,col){
+    return '<div style="background:#fff;border:1px solid #E4E7EC;border-radius:12px;padding:14px 16px;">'+
+      '<div style="font:800 26px \'Sora\',sans-serif;color:'+col+';line-height:1.1;">'+n+'</div>'+
+      '<div style="font:800 10px \'Manrope\',sans-serif;letter-spacing:.08em;color:#667085;margin-top:3px;">'+label+'</div></div>'; };
+  $('stats').style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0;';
   $('stats').innerHTML=
-    '<div class="stat"><b>'+live.length+'</b><span>BUILDS</span></div>'+
-    '<div class="stat"><b class="g">'+fin+'</b><span>DELIVERED</span></div>'+
-    '<div class="stat"><b>'+(live.length-fin)+'</b><span>IN PROGRESS</span></div>';
+    _stat(live.length,'BUILDS','#3B6FE0')+
+    _stat(fin,'DELIVERED','#1E8E5A')+
+    _stat(live.length-fin,'IN PROGRESS','#B5790A');
   if(!live.length){ $('grid').innerHTML='<div class="muted">No builds yet — add a client above.</div>'; return; }
   var out=[];
   ['crm','website'].forEach(function(k){
     var list=live.filter(function(r){ return (((r.meta||{}).flow==='website')?'website':'crm')===k; });
     if(!list.length) return;
-    out.push('<div class="sect"><b>'+(k==='crm'?'🗂 CRM Setup':'🌐 Website / Web App')+'</b><span>'+list.length+'</span><i></i></div>');
+    var _acc=FLOWS[k].accent;
+    out.push('<div class="sect"><b><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+_acc+';margin-right:7px;vertical-align:1px;"></span>'+
+      (k==='crm'?'CRM Setup':'Website / Web App')+'</b><span>'+list.length+'</span><i></i></div>');
     list.forEach(function(r){
       var f=cFlow(r), n=f.steps.length, done=cDoneCount(r), full=(done>=n);
+      /* Three states, so the eye lands on the ONE step that needs doing: done is struck through
+         and muted, the first incomplete step is highlighted and flagged Current, everything
+         after it is plain grey. Descriptions are untouched. */
       var rows=f.steps.map(function(st,ix){
         var i=ix+1, ok=cStepOk(r,i), next=(!ok && done===ix);
-        var btn = ok ? '<button disabled style="opacity:.55">✓ '+i+'</button>'
-                : (next ? '<button class="go" onclick="cStep(\''+r.id+'\','+i+')">📷 Step '+i+'</button>'
-                        : '<button disabled style="opacity:.35" title="Finish step '+(done+1)+' first">'+i+'</button>');
-        return '<div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px dashed var(--line,#e2e8f0);">'+
-          '<div style="flex:0 0 auto;">'+btn+'</div>'+
-          '<div style="flex:1;"><b style="font-size:12.5px;'+(ok?'opacity:.55;':'')+'">'+esc(st[0])+'</b>'+
-          '<div class="meta1" style="margin:2px 0 0;">'+esc(st[1])+'</div></div></div>';
+        var icon = ok ? '<span style="color:#1E8E5A;font-weight:900;">✓</span>'
+                 : (next ? '<span style="color:#3B6FE0;font-weight:900;">◉</span>'
+                         : '<span style="color:#D0D5DD;font-weight:900;">○</span>');
+        var title = ok
+          ? '<b style="font-size:12.5px;color:#98A2B3;text-decoration:line-through;">'+esc(st[0])+'</b>'
+          : (next
+              ? '<b style="font-size:12.5px;color:#3B6FE0;">'+esc(st[0])+'</b>'+
+                '<span style="margin-left:7px;font:800 9.5px \'Manrope\',sans-serif;letter-spacing:.06em;background:#EAF0FD;color:#3B6FE0;border-radius:99px;padding:2px 7px;">CURRENT</span>'
+              : '<b style="font-size:12.5px;color:#475467;">'+esc(st[0])+'</b>');
+        var btn = ok ? ''
+                : (next ? '<button class="go" onclick="cStep(\''+r.id+'\','+i+')" style="padding:5px 11px;font-size:11.5px;">📷 Attach &amp; complete</button>' : '');
+        return '<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #F2F4F7;">'+
+          '<div style="flex:0 0 auto;width:16px;text-align:center;line-height:1.4;">'+icon+'</div>'+
+          '<div style="flex:1;">'+title+
+            '<div style="font-size:11.5px;color:#98A2B3;margin-top:2px;line-height:1.5;">'+esc(st[1])+'</div></div>'+
+          '<div style="flex:0 0 auto;">'+btn+'</div></div>';
       }).join('');
-      out.push('<div class="acct'+(full?' done-today':'')+'">'+
-        '<div class="hd"><b>'+esc(r.handle)+'</b>'+
-          '<span class="ph2" style="background:#0f766e14;color:#0f766e;border:1px solid #0f766e2e">'+done+'/'+n+' steps</span>'+
-          (full?'<span class="ph2" style="background:#16a34a14;color:#15803d;border:1px solid #16a34a2e">✓ Delivered</span>':'')+
+      var badge = full
+        ? '<span style="background:#E7F6EE;color:#1E8E5A;border:1px solid #B7E4CD;border-radius:99px;padding:3px 10px;font:800 10.5px \'Manrope\',sans-serif;">'+n+'/'+n+' steps · Delivered</span>'
+        : '<span style="background:#FEF6E7;color:#B5790A;border:1px solid #F5DCA6;border-radius:99px;padding:3px 10px;font:800 10.5px \'Manrope\',sans-serif;">'+done+'/'+n+' steps</span>';
+      out.push('<div style="background:#fff;border:1px solid #E4E7EC;border-radius:12px;padding:14px 16px;margin-bottom:10px;">'+
+        '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
+          '<b style="flex:1 1 auto;min-width:10ch;font-size:14px;color:#101828;">'+esc(r.handle)+'</b>'+
+          badge+
           kmenu([['⛔ Archive',"setStatus('"+r.id+"','suspended')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+
         '</div>'+
-        '<div class="meta1">'+esc(vaName(r.assigned_to||r.created_by))+' · '+esc(f.label)+'</div>'+
-        '<div style="margin-top:8px;">'+rows+'</div></div>');
+        '<div style="font-size:11.5px;color:#98A2B3;margin-top:2px;">'+esc(vaName(r.assigned_to||r.created_by))+' · '+esc(f.label)+'</div>'+
+        '<div style="margin-top:10px;">'+rows+'</div></div>');
     });
   });
   $('grid').innerHTML=out.join('');

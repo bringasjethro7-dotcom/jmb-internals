@@ -244,10 +244,16 @@ function renderByVA(segs, doneFn, activeFn, amFn){
       '</div>';
     }).join('')+'</div>';
 }
+/* Setup days are ORDERED CHECKLISTS, not one-line summaries. Days 1-3 are a sequence a VA works
+   down while looking at the card; a compressed line meant they had to hold the order in their
+   head, which is exactly where steps get skipped. Follow-phase days stay one-liners because
+   they genuinely are a single repeated action. */
+function _jList(items){ return '<ol style="margin:4px 0 0 18px;padding:0;line-height:1.65;">'+
+  items.map(function(x){ return '<li>'+x+'</li>'; }).join('')+'</ol>'; }
 var PLANS={
- 1:'Scroll 2 min + 20s · change <b>PFP, header, username</b> · <b>2 reposts</b> (no follows) · <b>2 normal posts</b>',
- 2:'Scroll 2 min · change <b>profile name</b> (female name.txt — NOT username) · follow <b>1 page</b> · <b>2 reposts</b> · <b>2 posts</b>',
- 3:'Scroll 1 min · follow <b>10 niche accounts</b> (5+5) · <b>1 repost</b> · <b>1 post</b>',
+ 1:_jList(['Scroll 2 minutes','Repost (no follow)','Normal post','Scroll 20 seconds','Repost','Normal post']),
+ 2:_jList(['Scroll 2 minutes','Change profile name to a random <b>female name</b> (not username)','Follow 1 random page','Repost from homepage','Normal post','Scroll 20 seconds','Repost from homepage','Normal post']),
+ 3:_jList(['Change profile photo and header (<b>never reuse media</b>)','Scroll 1 minute','Follow 5 target accounts','Repost from homepage','Normal post','Follow 5 target accounts']),
  4:'<b>25 follows</b> split across opens: 5 / 10 / 10',
  5:'Scroll 1 min · <b>30–45 follows</b> (randomize!) in 4–5 opens: 10 / 10 / 15 / rest',
  6:'<b>35–50 follows daily</b> (randomize total, batches & scroll time; client error → smaller batches)'
@@ -534,13 +540,22 @@ function render(){
     if(r.status==='suspended'){ out.push('<div class="acct susp"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#ef444414;color:#b91c1c;border:1px solid #ef44442e">⛔ Suspended</span>'+kmenu([['↩ Reinstate',"setStatus('"+r.id+"','active')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+'</div>'); return; }
     out.push('<div class="acct'+(done?' done-today':'')+'"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#0f141910;color:#0f1419;border:1px solid #0f141926">Day '+r.day+'</span>'+kmenu([['⛔ Suspended',"setStatus('"+r.id+"','suspended')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+
       '<details class="planbox"'+(done?'':' open')+'><summary>📋 Day '+r.day+' plan</summary><div>'+planFor(r.day)+'</div></details>'+
-      '<div class="btns">'+sessBtns(r)+'</div>'+
-      '<div class="btns">'+(done
-        ? '<button disabled style="opacity:.55">✓ Done today</button>'
-        : (sessDone(r)>=JN_SESSIONS
-            ? '<button class="go" onclick="dayDone(\''+r.id+'\','+r.day+')">✓ Day '+r.day+' done</button>'
-            : '<button disabled style="opacity:.45;cursor:not-allowed" title="Finish all '+JN_SESSIONS+' sessions first">🔒 Day '+r.day+' done ('+sessDone(r)+'/'+JN_SESSIONS+')</button>'))+
-      '</div></div>');
+      /* SETUP (days 1-3) has no sessions — it is a checklist you work once, so a single action
+         completes the day. FOLLOW phase (day 4+) keeps the four sessions, and the day-done button
+         simply APPEARS once all four are in rather than sitting there as a locked "(2/4)" label.
+         A disabled button carrying a counter told the VA what they could not do; the pills above
+         already say where they are. */
+      (r.day<=3
+        ? '<div class="btns">'+(done
+            ? '<button disabled style="opacity:.55">✓ Done today</button>'
+            : '<button class="go" onclick="dayDone(\''+r.id+'\','+r.day+')">✓ Mark day '+r.day+' complete</button>')+'</div>'
+        : '<div class="btns">'+sessBtns(r)+'</div>'+
+          (done
+            ? '<div class="btns"><button disabled style="opacity:.55">✓ Done today</button></div>'
+            : (sessDone(r)>=JN_SESSIONS
+                ? '<div class="btns"><button class="go" onclick="dayDone(\''+r.id+'\','+r.day+')">✓ Day '+r.day+' done</button></div>'
+                : '')))+
+      '</div>');
   });
   $('grid').innerHTML=out.join('');
 }
@@ -603,7 +618,9 @@ async function sessDone_(id, n){
 }
 async function dayDone(id, day){
   var r0=ROWS.filter(function(x){return x.id===id;})[0];
-  if(r0 && sessDone(r0)<JN_SESSIONS){ toast('Finish all '+JN_SESSIONS+' sessions first.'); return; }
+  /* Setup days 1-3 have no sessions to finish — the checklist IS the day. Only the follow phase
+     is gated on all four. */
+  if(r0 && r0.day>3 && sessDone(r0)<JN_SESSIONS){ toast('Finish all '+JN_SESSIONS+' sessions first.'); return; }
   /* The day still counts ONE output. The four sessions carry the evidence; counting each of
      them as output would quadruple everyone's Project John volume overnight and break every
      comparison against the weeks already recorded. */
