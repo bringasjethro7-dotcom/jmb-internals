@@ -155,23 +155,138 @@ function smartPoll(){
 /* ── PRIVACY: each VA sees ONLY their own accounts + their own totals. Admin sees everything. ── */
 var BOSS=['jmbeast'];
 function isBoss(){ return !!(USER && BOSS.indexOf(String(USER.id||'').toLowerCase())>=0); }
-function scopeRows(rs){ if(isBoss()) return rs; var me=String((USER&&USER.id)||'').toLowerCase(); return (rs||[]).filter(function(r){ return ownerOf(r)===me; }); }
+function scopeRows(rs){ if(isBoss()) return rs; var me=String((USER&&USER.id)||'').toLowerCase();
+  return (rs||[]).filter(function(r){ return worksFor(r)===me; }); }
 /* ── VA view tabs: '👤 My accounts' (default) · '🌐 All' · one tab per VA — ADMIN ONLY ── */
 var FILTER=(function(){ try{ return sessionStorage.getItem('dc_va_'+PROJECT)||'mine'; }catch(e){ return 'mine'; } })();
 function ownerOf(r){ return String(r.assigned_to||r.created_by||'').toLowerCase(); }
+/* ── SHIFT COVER (today only, per ACCOUNT) ──
+   COVER maps an ACCOUNT ID to whoever is working it today: { "acc123":"jmb024" }. Per account
+   rather than per person, so an absent VA's fifty accounts can be split across several stand-ins
+   instead of dropping the whole load on one.
+   The row's real owner is never touched; the arrangement stops applying tomorrow. Output counts
+   to whoever is signed in doing the work. */
+var COVER={};
+function coveredTo(r){ return COVER[String((r&&r.id)||'')]||''; }
+function worksFor(r){ return coveredTo(r) || ownerOf(r); }      // who is responsible TODAY
+/* A covered account looks exactly like your own once it is on your board, which is how someone
+   ends up working the wrong list tomorrow when the cover has lapsed. The chip says whose it
+   really is, on both sides: the stand-in sees "covering for X", the owner sees "with Y today". */
+function coverChip(r){
+  var to=coveredTo(r); if(!to) return '';
+  var me=String((USER&&USER.id)||'').toLowerCase();
+  var owner=ownerOf(r);
+  var txt = (to===me) ? ('covering for '+vaName(owner))
+          : (owner===me) ? ('with '+vaName(to)+' today')
+          : (vaName(owner)+' → '+vaName(to));
+  return '<span class="ph2" style="background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;">🔁 '+esc(txt)+'</span>';
+}
+async function loadCover(){
+  try{
+    var d=await (await fetch(API+'?action=cover_get&project='+encodeURIComponent(PROJECT)+'&_='+Date.now())).json();
+    COVER=(d&&d.cover)||{};
+  }catch(e){ COVER={}; }
+}
+async function setCover(ids, to){
+  if(!ids || !ids.length){ toast('Pick at least one account.'); return; }
+  try{
+    var d=await (await fetch(API+'?action=cover_set&project='+encodeURIComponent(PROJECT)
+      +'&ids='+encodeURIComponent(ids.join(','))
+      +'&to='+encodeURIComponent(to||'')
+      +'&by='+encodeURIComponent(USER.id)+'&_='+Date.now())).json();
+    if(d&&d.ok){
+      COVER=d.cover||{};
+      toast(to ? (ids.length+' account(s) → '+vaName(to)+' for today') : ('Cover lifted on '+ids.length+' account(s)'));
+      render();
+    } else toast('Could not set cover: '+((d&&(d.detail||d.error))||'unknown'));
+  }catch(e){ toast('Connection error.'); }
+}
+/* Lead-only. Choose the absent VA, tick the accounts to hand over, choose who takes them.
+   Ticking is per account precisely so a big list can be split in two or three passes: assign
+   twenty to one stand-in, then the next twenty to another, without losing your place. */
+var CV_FROM='';
+function cvSetFrom(v){ CV_FROM=v; renderTabs(); }
+function cvSelected(){
+  var out=[]; document.querySelectorAll('.cvchk:checked').forEach(function(x){ out.push(x.value); });
+  return out;
+}
+function cvAssign(){ setCover(cvSelected(), document.getElementById('cv-to').value); }
+function cvAssignAll(){
+  var to=document.getElementById('cv-to').value;
+  setCover(ROWS.filter(function(r){ return ownerOf(r)===CV_FROM; }).map(function(r){ return r.id; }), to);
+}
+function coverBar(){
+  if(!isBoss()) return '';
+  var ids={}; ROWS.forEach(function(r){ var o=ownerOf(r); if(o) ids[o]=1; });
+  var list=Object.keys(ids).sort(function(a,b){ return vaName(a).localeCompare(vaName(b)); });
+  var opt=function(sel){ return '<option value="">— pick —</option>'+list.map(function(k){
+    return '<option value="'+esc(k)+'"'+(sel===k?' selected':'')+'>'+esc(vaName(k))+'</option>'; }).join(''); };
+
+  // accounts belonging to the chosen VA, with who currently covers each
+  var mine=CV_FROM?ROWS.filter(function(r){ return ownerOf(r)===CV_FROM; }):[];
+  var picker='';
+  if(CV_FROM){
+    picker='<div style="margin-top:9px;max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;">'+
+      (mine.length? mine.map(function(r){
+        var cv=coveredTo(r);
+        return '<label style="display:flex;gap:8px;align-items:center;padding:3px 2px;font-size:12px;">'+
+          '<input type="checkbox" class="cvchk" value="'+esc(r.id)+'">'+
+          '<span style="flex:1;">'+esc(r.handle)+'</span>'+
+          (cv?('<span style="color:#9a3412;font-weight:800;font-size:11px;">→ '+esc(vaName(cv))+'</span>'):'')+
+        '</label>'; }).join('') : '<div class="muted" style="font-size:12px;">No accounts for this VA.</div>')+
+      '</div>'+
+      '<div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap;">'+
+        '<button onclick="document.querySelectorAll(\'.cvchk\').forEach(function(x){x.checked=true;})" style="border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 11px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Tick all</button>'+
+        '<button onclick="document.querySelectorAll(\'.cvchk\').forEach(function(x){x.checked=false;})" style="border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 11px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Clear</button>'+
+        '<button onclick="cvAssign()" style="border:1px solid #0f766e;background:#0f766e;color:#fff;border-radius:9px;padding:6px 13px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Assign ticked → today</button>'+
+        '<button onclick="setCover(cvSelected(),\'\')" style="border:1px solid #fed7aa;background:#fff7ed;color:#9a3412;border-radius:9px;padding:6px 11px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Lift on ticked</button>'+
+      '</div>';
+  }
+
+  // who is holding what right now — grouped by stand-in, because that is the question a lead asks
+  var byTo={};
+  Object.keys(COVER).forEach(function(aid){
+    var r=ROWS.filter(function(x){ return String(x.id)===aid; })[0]; if(!r) return;
+    (byTo[COVER[aid]]=byTo[COVER[aid]]||[]).push(r); });
+  var active=Object.keys(byTo).map(function(to){
+    var rs=byTo[to];
+    return '<span style="display:inline-flex;align-items:center;gap:6px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:100px;padding:4px 10px;font:800 11px \'Manrope\',sans-serif;margin:2px 4px 0 0;">'+
+      esc(vaName(to))+' · '+rs.length+' account'+(rs.length>1?'s':'')+
+      '<button onclick="setCover('+JSON.stringify(rs.map(function(r){return r.id;})).replace(/"/g,'&quot;')+',\'\')" title="Lift all of these" style="border:0;background:transparent;color:#9a3412;cursor:pointer;font-weight:900;">×</button></span>'; }).join('');
+
+  return '<div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 12px;">'+
+    '<div style="font:800 12px \'Manrope\',sans-serif;color:var(--ink2);margin-bottom:7px;">🔁 Shift cover — today only · split accounts across as many VAs as you need</div>'+
+    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'+
+      '<span style="font-size:11.5px;color:var(--ink3);font-weight:800;">Absent VA</span>'+
+      '<select onchange="cvSetFrom(this.value)" style="padding:7px 9px;border:1px solid var(--line);border-radius:9px;font:700 12px inherit;">'+opt(CV_FROM)+'</select>'+
+      '<span style="font-size:11.5px;color:var(--ink3);font-weight:800;">hand to</span>'+
+      '<select id="cv-to" style="padding:7px 9px;border:1px solid var(--line);border-radius:9px;font:700 12px inherit;">'+opt('')+'</select>'+
+      '<button onclick="cvAssignAll()" style="border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 11px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Hand over ALL</button>'+
+    '</div>'+
+    picker+
+    (active?('<div style="margin-top:9px;">'+active+'</div>'):'<div style="margin-top:8px;color:var(--ink3);font-size:11.5px;">No covers today.</div>')+
+  '</div>';
+}
 function filterRows(){ if(!isBoss()) FILTER='mine';   // non-admin: stale saved filters (All / another VA) would show an empty board
-  if(FILTER==='all') return ROWS; var t=(FILTER==='mine')?String((USER&&USER.id)||'').toLowerCase():FILTER; return ROWS.filter(function(r){ return ownerOf(r)===t; }); }
+  if(FILTER==='all') return ROWS;
+  var t=(FILTER==='mine')?String((USER&&USER.id)||'').toLowerCase():FILTER;
+  /* "Mine" means what I am responsible for TODAY — my own rows plus anything I'm covering.
+     Picking another VA's tab still shows THEIR rows, including ones handed to someone else, so
+     a lead can always see the real ownership behind a cover. */
+  if(FILTER==='mine') return ROWS.filter(function(r){ return worksFor(r)===t; });
+  return ROWS.filter(function(r){ return ownerOf(r)===t; }); }
 function setFilter(f){ FILTER=f; try{ sessionStorage.setItem('dc_va_'+PROJECT,f); }catch(e){} render(); }
 function renderTabs(){
   var host=document.getElementById('vatabs'); if(!host) return;
   if(!isBoss()){ host.innerHTML=''; return; }
+  var _cb=coverBar();
   var mine=String((USER&&USER.id)||'').toLowerCase();
   var by={}; ROWS.forEach(function(r){ var k=ownerOf(r)||'—'; by[k]=(by[k]||0)+1; });
   function pill(val,label,n){ var on=(FILTER===val);
     return '<button onclick="setFilter(\''+val+'\')" style="border:1px solid '+(on?'#0f766e':'var(--line)')+';background:'+(on?'rgba(16,185,129,.12)':'var(--card)')+';color:'+(on?'#0f766e':'var(--ink2)')+';border-radius:100px;padding:6px 13px;font:800 12px \'Manrope\',sans-serif;cursor:pointer;white-space:nowrap;">'+label+(n!=null?(' · '+n):'')+'</button>'; }
   var html=[ pill('mine','My accounts', by[mine]||0), pill('all','All', ROWS.length) ];
   Object.keys(by).sort(function(a,b){ return by[b]-by[a]; }).forEach(function(k){ if(k===mine||k==='—') return; html.push(pill(k, esc(vaName(k)), by[k])); });
-  host.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap;">'+html.join('')+'</div>';
+  host.innerHTML=_cb+'<div style="display:flex;gap:6px;flex-wrap:wrap;">'+html.join('')+'</div>';
 }
 /* Names + shift assignments: hydrate instantly from the last good copy, then refresh from the
    server and RETRY until it succeeds — one slow response can no longer leave IDs on screen
@@ -347,6 +462,67 @@ var PH=[
  {k:'superstrong',n:'Super Strong',  c:'#7f1d1d', plan:'3 min browsing · 2–3 comments · 7 posts/session · 8 DMs/shift · upvote 2', task:'Reddit Posting', tn:7, dms:8}
 ];
 function phase(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return PH[i]; return null; }
+/* ── PHASE PICKER ON THE CARD ──
+   The badge showed the phase but moving an account meant hunting through the ⋯ menu, which only
+   ever offered a couple of destinations. This turns the badge itself into the control.
+   Values are the account's `status` field — the same one grpR() groups by — so changing it here
+   moves the card into its new section on the next render, with no special casing.
+   The four lifecycle states (Newly created, Recovery, Temp banned, Banned) are in the same list
+   as the ten SOP phases because to the person using the board they are all "where this account
+   is", and splitting them across two controls only makes you hunt in two places. */
+var PHASE_EXTRA=[
+  {k:'new',      n:'Newly Created', c:'#fb923c'},
+  {k:'creationstandby', n:'Creation Standby', c:'#f59e0b'},
+  {k:'recovery', n:'Spam Recovery', c:'#0ea5e9'},
+  {k:'tempban',  n:'Temp Banned',   c:'#d97706'},
+  {k:'banned',   n:'Banned',        c:'#ef4444'}
+];
+function phaseAll(){ return PH.map(function(x){ return {k:x.k,n:x.n,c:x.c}; }).concat(PHASE_EXTRA); }
+function phaseMeta(k){ var a=phaseAll(); for(var i=0;i<a.length;i++) if(a[i].k===k) return a[i];
+  return {k:k,n:String(k||'—'),c:'#64748b'}; }
+function phaseSelect(r){
+  var cur=String(r.status||''), m=phaseMeta(cur);
+  var opts=phaseAll().map(function(x){
+    return '<option value="'+esc(x.k)+'"'+(x.k===cur?' selected':'')+'>'+esc(x.n)+'</option>'; }).join('');
+  // If the row carries a status not in either list, keep it as an option so opening the picker
+  // can never silently rewrite it to something else.
+  if(!phaseAll().some(function(x){ return x.k===cur; }) && cur){
+    opts='<option value="'+esc(cur)+'" selected>'+esc(cur)+'</option>'+opts;
+  }
+  return '<select class="ph2 phsel" data-id="'+esc(r.id)+'" data-prev="'+esc(cur)+'" '+
+    'onchange="changePhase(this)" title="Move this account to another phase" '+
+    'style="background:'+m.c+'14;color:'+m.c+';border:1px solid '+m.c+'2e;border-radius:100px;'+
+    'padding:3px 9px;font:800 10.5px \'Manrope\',sans-serif;cursor:pointer;max-width:170px;">'+opts+'</select>';
+}
+async function changePhase(sel){
+  var id=sel.getAttribute('data-id'), prev=sel.getAttribute('data-prev'), next=sel.value;
+  if(next===prev) return;
+  if(next==='banned' && !confirm('Mark BANNED? It leaves the active pool (outputs already earned are kept).')){
+    sel.value=prev; return;
+  }
+  var label=phaseMeta(next).n;
+  sel.disabled=true;
+  var restore=sel.style.cssText;
+  sel.style.opacity='.6';
+  try{
+    var d=await (await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)
+      +'&status='+encodeURIComponent(next)+'&_='+Date.now())).json();
+    if(d&&d.ok){
+      sel.setAttribute('data-prev',next);
+      toast('Moved to '+label+'.');
+      load();                      // re-render regroups the card into its new section
+    } else {
+      sel.value=prev; sel.disabled=false; sel.style.cssText=restore;
+      toast('Could not move: '+((d&&d.error)||'unknown'));
+    }
+  }catch(e){
+    /* Revert on failure. A dropdown left showing the new phase after a failed save is worse
+       than no control at all — the board would disagree with the database and nobody would
+       know which was right. */
+    sel.value=prev; sel.disabled=false; sel.style.cssText=restore;
+    toast('Connection error — phase unchanged.');
+  }
+}
 function phaseIx(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return i; return -1; }
 function $(id){return document.getElementById(id);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
@@ -739,6 +915,10 @@ function start(){ try{ fetch(API+'?action=tool_used&employee_id='+encodeURICompo
 var _ldRetryT=null;
 async function load(){
   try{
+    /* Covers must be known BEFORE the rows are scoped. scopeRows() drops anything that isn't
+       yours, so loading them afterwards would filter a covered VA's accounts out of the board
+       before they were ever considered. */
+    try{ await loadCover(); }catch(_c){}
     var d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
     if(!d||!d.ok) throw new Error((d&&d.error)||'load'); ROWS=scopeRows(d.rows||[]); cacheRows(); render();
     if(_ldRetryT){ clearTimeout(_ldRetryT); _ldRetryT=null; }
@@ -805,12 +985,12 @@ function render(){
   var gcnt={}; sorted.forEach(function(r){ var g=grpR(r); gcnt[g]=(gcnt[g]||0)+1; });
   function cardR(r){
     var who=esc(vaName(r.assigned_to||r.created_by))+(cdateOf(r)?(' · '+esc(ageTxt(r))):'');
-    if(r.status==='tempban') return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#d9770614;color:#b45309;border:1px solid #d977062e">Temp Banned</span>'+kmenu([[IC.ban+' Permanent ban',"setPhase('"+r.id+"','banned')"],'---',[IC.trash+' Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+
+    if(r.status==='tempban') return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b>'+phaseSelect(r)+coverChip(r)+kmenu([[IC.ban+' Permanent ban',"setPhase('"+r.id+"','banned')"],'---',[IC.trash+' Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+
       '<div class="meta1">'+who+'</div>'+
       '<div class="meta1" style="color:#b45309;font-weight:700;">Sitting out a temporary ban — no sessions until it lifts. Check it daily.</div>'+
       '<div class="btns"><button class="go" onclick="tbLifted(\''+r.id+'\')">'+IC.check+' Ban lifted → back to '+(phase((r.meta&&r.meta.prev)||'warming')||{n:'phase'}).n+'</button></div></div>';
-    if(r.status==='banned') return '<div class="acct dim"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#ef444414;color:#b91c1c;border:1px solid #ef44442e">Banned</span>'+kmenu([[IC.undo+' Reinstate (rare)',"setPhase('"+r.id+"','warming')"],'---',[IC.trash+' Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div><div class="meta1">'+who+'</div></div>';
-    if(r.status==='recovery') return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#0ea5e914;color:#0369a1;border:1px solid #0ea5e92e">Recovery</span>'+kmenu([[IC.ban+' Banned',"setPhase('"+r.id+"','banned')"],'---',[IC.trash+' Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+
+    if(r.status==='banned') return '<div class="acct dim"><div class="hd"><b>'+esc(r.handle)+'</b>'+phaseSelect(r)+coverChip(r)+kmenu([[IC.undo+' Reinstate (rare)',"setPhase('"+r.id+"','warming')"],'---',[IC.trash+' Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div><div class="meta1">'+who+'</div></div>';
+    if(r.status==='recovery') return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b>'+phaseSelect(r)+coverChip(r)+kmenu([[IC.ban+' Banned',"setPhase('"+r.id+"','banned')"],'---',[IC.trash+' Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+
       '<div class="meta1">'+who+'</div>'+
       '<details class="planbox"><summary>'+IC.doc+' Recovery plan</summary><div>10 min ACTIVE browsing · upvote 2–4 posts · reply to 2–3 comments. No posting until clear.</div></details>'+
       '<div class="btns">'+sessBtns(r,'recovery','+1 recovery')+
@@ -831,7 +1011,7 @@ function render(){
     menu.push('---'); menu.push([IC.trash+' Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']);
     if(r.status==='new'){
       var counted=!!(r.meta&&r.meta.cdone);
-      return '<div class="acct" style="border-color:rgba(251,146,60,.5);"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#fb923c14;color:#c2410c;border:1px solid #fb923c2e">Newly Created</span>'+kmenu([[IC.ban+' Banned',"setPhase('"+r.id+"','banned')"],'---',[IC.trash+' Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+
+      return '<div class="acct" style="border-color:rgba(251,146,60,.5);"><div class="hd"><b>'+esc(r.handle)+'</b>'+phaseSelect(r)+coverChip(r)+kmenu([[IC.ban+' Banned',"setPhase('"+r.id+"','banned')"],'---',[IC.trash+' Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+
         '<div class="meta1">'+who+'</div>'+
         '<div class="meta1" style="font-weight:700;color:#c2410c;">Fresh account — hit DONE to count the creation output. Moves to Creation stock after 1 day.</div>'+
         '<div class="btns">'+(counted
@@ -850,13 +1030,13 @@ function render(){
     }
     if(p.k==='creation'){
       var nBan=ROWS.filter(function(x){return x.status==='banned';}).length;
-      return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:'+p.c+'14;color:'+p.c+';border:1px solid '+p.c+'2e">'+p.n+'</span>'+kmenu(menu)+'</div>'+
+      return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b>'+phaseSelect(r)+coverChip(r)+kmenu(menu)+'</div>'+
         '<div class="meta1">'+gate+who+'</div>'+
         '<div class="meta1" style="font-weight:700;color:#475569;">Standby — no daily sessions, no effect on your progress %. '+(canUp?'Aged 4d+ — ready to replace a banned account.':'Ages to day 4, then waits as replacement stock.')+(nBan?(' <span style="color:#b91c1c">'+nBan+' banned waiting for replacement.</span>'):'')+'</div>'+
         (canUp?('<div class="btns"><button class="up" onclick="promote(\''+r.id+'\',\'warming\')">'+IC.up+' Move to Warming — replace a banned account</button></div>'):'')+
       '</div>';
     }
-    return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:'+p.c+'14;color:'+p.c+';border:1px solid '+p.c+'2e">'+p.n+'</span>'+kmenu(menu)+'</div>'+
+    return '<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b>'+phaseSelect(r)+coverChip(r)+kmenu(menu)+'</div>'+
       '<div class="meta1">'+gate+who+'</div>'+
       '<details class="planbox"><summary>'+IC.doc+' Today\'s plan</summary><div>'+p.plan+'</div></details>'+
       '<div class="btns">'+sessBtns(r, p.k, p.task?(p.task==='Reddit Posting'?('+'+p.tn+' posts'):'+1 warm'):null)+
