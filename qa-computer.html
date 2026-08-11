@@ -365,7 +365,7 @@ header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
         <input id="f-only" placeholder="One VA (e.g. JMB022) — blank = everyone"
                title="Test a single VA before spending API calls on the whole team. Re-runs someone already processed."
                style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:600 12px 'Manrope',sans-serif;min-width:230px;">
-        <button class="btn" id="f-run" onclick="factoryRun()" style="background:#7c3aed;color:#fff;padding:9px 18px;">⚙ Process screenshots</button>
+        <button class="btn" id="f-run" onclick="factoryRun()" title="Runs every VA for the selected week, in one click — or just the VA named in the box" style="background:#7c3aed;color:#fff;padding:9px 18px;">⚙ Run QA — everyone</button>
         <button class="btn ghost sm" onclick="factoryLoad()">↻ Refresh</button>
         <button class="btn" id="f-approve-all" onclick="factoryApproveAll()" style="background:#0f766e;color:#fff;padding:9px 16px;">✓ Approve all</button>
       </div>
@@ -1052,8 +1052,10 @@ async function factoryRun(){
   var month=$('f-month').value||curMonth(), week=$('f-week').value||'1';
   if(btn){ btn.disabled=true; }
   var pass=0, total=0, guard=0;
+  var vaDone={}, totalVAs=null, noProof=0, passMs=[], passStart=Date.now();
+  if(prog) prog.innerHTML='<span style="color:var(--t3);">Starting…</span>';
   try{
-    while(guard++ < 30){
+    while(guard++ < 60){          // 3 VAs a pass — 60 passes covers ~180, well past the roster
       if(btn) btn.textContent='⚙ Processing… ('+pass+' done)';
       var r=await fetch(PORTAL_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
         /* `only` lets you point the whole run at one VA — the sane first move before spending
@@ -1067,14 +1069,41 @@ async function factoryRun(){
       var d=await r.json();
       if(!d||!d.ok){ toast('Factory: '+((d&&d.note)||(d&&d.error)||'unknown error')); break; }
       pass+=(d.processed||[]).length;
-      if(prog) prog.innerHTML='Processed <b>'+pass+'</b> task result(s) · <b>'+d.remaining+'</b> VA(s) remaining'+
-        ((d.no_proof||[]).length? (' · <span style="color:#b45309;">'+d.no_proof.length+' with no screenshots this pass</span>'):'');
+      /* PROGRESS.
+         The run already processes everyone in one click — it loops until the server says done —
+         but with only a task count on screen an admin had no idea whether they were a minute in
+         or ten. Each pass handles a slice of VAs and reports how many are left, so the total is
+         (done so far + remaining) once the first pass returns. From there the bar, the counts
+         and an ETA from the average pass time all follow. */
+      var vaThis=(d.processed||[]).reduce(function(set,x){ set[x.employee_id]=1; return set; },{});
+      Object.keys(vaThis).forEach(function(k){ vaDone[k]=1; });
+      noProof+=((d.no_proof||[]).length);
+      var doneVAs=Object.keys(vaDone).length;
+      if(totalVAs==null) totalVAs=doneVAs+(d.remaining||0);
+      passMs.push(Date.now()-passStart); passStart=Date.now();
+      var avg=passMs.reduce(function(a,b){return a+b;},0)/passMs.length;
+      var pct=totalVAs? Math.min(100, Math.round(doneVAs/totalVAs*100)) : 0;
+      var etaMs=(d.remaining||0)>0 ? avg*Math.ceil((d.remaining||0)/3) : 0;
+      var eta=etaMs>0 ? (etaMs>60000 ? ('~'+Math.ceil(etaMs/60000)+' min left') : ('~'+Math.ceil(etaMs/1000)+'s left')) : 'finishing…';
+      if(btn) btn.textContent='⚙ Processing… '+pct+'%';
+      if(prog) prog.innerHTML=
+        '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'+
+          '<b style="font-size:13px;color:var(--t1);">'+pct+'%</b>'+
+          '<span>'+doneVAs+' of '+totalVAs+' VA(s) · '+pass+' task result(s) · '+eta+'</span>'+
+          (noProof?('<span style="color:#b45309;">'+noProof+' with no screenshots</span>'):'')+
+        '</div>'+
+        '<div style="margin-top:6px;height:8px;border-radius:99px;background:var(--line);overflow:hidden;">'+
+          '<i style="display:block;height:100%;width:'+pct+'%;background:linear-gradient(90deg,#7c3aed,#a855f7);border-radius:99px;transition:width .3s;"></i></div>';
       if(d.done || d.remaining===0) break;
     }
-    toast('Processing complete.');
+    if(prog){
+      var el=prog.querySelector('i'); if(el) el.style.width='100%';
+      var b1=prog.querySelector('b'); if(b1) b1.textContent='100%';
+    }
+    toast('Processing complete — '+pass+' task result(s) across '+Object.keys(vaDone).length+' VA(s).');
     factoryLoad();
   }catch(e){ toast('Factory run failed.'); }
-  if(btn){ btn.disabled=false; btn.textContent='⚙ Process screenshots'; }
+  if(btn){ btn.disabled=false; btn.textContent='⚙ Run QA — everyone'; }
   FRUNNING=false;
 }
 async function factoryLoad(){
