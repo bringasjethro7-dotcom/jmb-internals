@@ -213,7 +213,11 @@ function cvSelected(){
 function cvAssign(){ setCover(cvSelected(), document.getElementById('cv-to').value); }
 function cvAssignAll(){
   var to=document.getElementById('cv-to').value;
-  setCover(ROWS.filter(function(r){ return ownerOf(r)===CV_FROM; }).map(function(r){ return r.id; }), to);
+  /* Only the ones not already handed over. Sweeping up everything would silently re-point
+     accounts you deliberately gave to someone else a minute ago. */
+  var ids=ROWS.filter(function(r){ return ownerOf(r)===CV_FROM && !coveredTo(r); }).map(function(r){ return r.id; });
+  if(!ids.length){ toast('Nothing left to assign for this VA.'); return; }
+  setCover(ids, to);
 }
 function coverBar(){
   if(!isBoss()) return '';
@@ -222,37 +226,64 @@ function coverBar(){
   var opt=function(sel){ return '<option value="">— pick —</option>'+list.map(function(k){
     return '<option value="'+esc(k)+'"'+(sel===k?' selected':'')+'>'+esc(vaName(k))+'</option>'; }).join(''); };
 
-  // accounts belonging to the chosen VA, with who currently covers each
-  var mine=CV_FROM?ROWS.filter(function(r){ return ownerOf(r)===CV_FROM; }):[];
+  /* Only what is still UNASSIGNED. An account you have just handed over drops off the list, so
+     working through fifty is a shrinking queue rather than a wall you have to keep re-reading to
+     find where you got to. What has been assigned lives in the panel below instead. */
+  var mineAll=CV_FROM?ROWS.filter(function(r){ return ownerOf(r)===CV_FROM; }):[];
+  var mine=mineAll.filter(function(r){ return !coveredTo(r); });
   var picker='';
   if(CV_FROM){
-    picker='<div style="margin-top:9px;max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;">'+
+    var doneN=mineAll.length-mine.length;
+    picker='<div style="margin-top:8px;font-size:11.5px;color:var(--ink3);font-weight:800;">'+
+        mine.length+' still to assign'+(doneN?(' · '+doneN+' already handed over'):'')+'</div>'+
+      '<div style="margin-top:6px;max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;">'+
       (mine.length? mine.map(function(r){
-        var cv=coveredTo(r);
         return '<label style="display:flex;gap:8px;align-items:center;padding:3px 2px;font-size:12px;">'+
           '<input type="checkbox" class="cvchk" value="'+esc(r.id)+'">'+
           '<span style="flex:1;">'+esc(r.handle)+'</span>'+
-          (cv?('<span style="color:#9a3412;font-weight:800;font-size:11px;">→ '+esc(vaName(cv))+'</span>'):'')+
-        '</label>'; }).join('') : '<div class="muted" style="font-size:12px;">No accounts for this VA.</div>')+
+          '<span style="color:var(--ink3);font-size:11px;">'+esc((phaseMeta(r.status)||{}).n||'')+'</span>'+
+        '</label>'; }).join('')
+        : '<div class="muted" style="font-size:12px;">'+(mineAll.length?'All of this VA\'s accounts are assigned.':'No accounts for this VA.')+'</div>')+
       '</div>'+
-      '<div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap;">'+
+      (mine.length?('<div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap;">'+
         '<button onclick="document.querySelectorAll(\'.cvchk\').forEach(function(x){x.checked=true;})" style="border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 11px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Tick all</button>'+
         '<button onclick="document.querySelectorAll(\'.cvchk\').forEach(function(x){x.checked=false;})" style="border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 11px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Clear</button>'+
         '<button onclick="cvAssign()" style="border:1px solid #0f766e;background:#0f766e;color:#fff;border-radius:9px;padding:6px 13px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Assign ticked → today</button>'+
-        '<button onclick="setCover(cvSelected(),\'\')" style="border:1px solid #fed7aa;background:#fff7ed;color:#9a3412;border-radius:9px;padding:6px 11px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Lift on ticked</button>'+
-      '</div>';
+      '</div>'):'');
   }
 
-  // who is holding what right now — grouped by stand-in, because that is the question a lead asks
+  /* THE HANDOVER BOARD — every account currently covered, grouped by who is holding it.
+     Collapsed to counts by default because the useful glance is "who has how many"; expand a
+     name to see the handles and lift them one at a time. */
   var byTo={};
   Object.keys(COVER).forEach(function(aid){
     var r=ROWS.filter(function(x){ return String(x.id)===aid; })[0]; if(!r) return;
     (byTo[COVER[aid]]=byTo[COVER[aid]]||[]).push(r); });
-  var active=Object.keys(byTo).map(function(to){
-    var rs=byTo[to];
-    return '<span style="display:inline-flex;align-items:center;gap:6px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:100px;padding:4px 10px;font:800 11px \'Manrope\',sans-serif;margin:2px 4px 0 0;">'+
-      esc(vaName(to))+' · '+rs.length+' account'+(rs.length>1?'s':'')+
-      '<button onclick="setCover('+JSON.stringify(rs.map(function(r){return r.id;})).replace(/"/g,'&quot;')+',\'\')" title="Lift all of these" style="border:0;background:transparent;color:#9a3412;cursor:pointer;font-weight:900;">×</button></span>'; }).join('');
+  var toKeys=Object.keys(byTo).sort(function(a,b){ return byTo[b].length-byTo[a].length; });
+  var totalCovered=toKeys.reduce(function(n,k){ return n+byTo[k].length; },0);
+  var board='';
+  if(toKeys.length){
+    board='<div style="margin-top:11px;border-top:1px solid var(--line);padding-top:9px;">'+
+      '<div style="font:800 11.5px \'Manrope\',sans-serif;color:var(--ink2);margin-bottom:6px;">'+
+        'Handed over today · <b>'+totalCovered+'</b> account'+(totalCovered>1?'s':'')+' across '+toKeys.length+' VA'+(toKeys.length>1?'s':'')+'</div>'+
+      toKeys.map(function(to){
+        var rs=byTo[to];
+        var idsJson=JSON.stringify(rs.map(function(r){ return r.id; })).replace(/"/g,'&quot;');
+        return '<details style="margin:4px 0;border:1px solid #fed7aa;background:#fff7ed;border-radius:10px;padding:6px 10px;">'+
+          '<summary style="cursor:pointer;font:800 11.5px \'Manrope\',sans-serif;color:#9a3412;display:flex;align-items:center;gap:8px;">'+
+            '<span style="flex:1;">'+esc(vaName(to))+' · '+rs.length+' account'+(rs.length>1?'s':'')+'</span>'+
+            '<button onclick="event.preventDefault();event.stopPropagation();setCover('+idsJson+',\'\')" '+
+              'style="border:1px solid #fdba74;background:#fff;color:#9a3412;border-radius:8px;padding:3px 9px;font:800 10.5px \'Manrope\',sans-serif;cursor:pointer;">Lift all</button>'+
+          '</summary>'+
+          '<div style="margin-top:6px;">'+rs.map(function(r){
+            return '<div style="display:flex;gap:8px;align-items:center;font-size:11.5px;padding:2px 0;color:#7c2d12;">'+
+              '<span style="flex:1;">'+esc(r.handle)+'</span>'+
+              '<span style="opacity:.75;">from '+esc(vaName(ownerOf(r)))+'</span>'+
+              '<button onclick="setCover([\''+esc(r.id)+'\'],\'\')" title="Return this one" '+
+                'style="border:0;background:transparent;color:#9a3412;cursor:pointer;font-weight:900;">×</button>'+
+            '</div>'; }).join('')+'</div></details>'; }).join('')+
+    '</div>';
+  }
 
   return '<div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 12px;">'+
     '<div style="font:800 12px \'Manrope\',sans-serif;color:var(--ink2);margin-bottom:7px;">🔁 Shift cover — today only · split accounts across as many VAs as you need</div>'+
@@ -264,7 +295,7 @@ function coverBar(){
       '<button onclick="cvAssignAll()" style="border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 11px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Hand over ALL</button>'+
     '</div>'+
     picker+
-    (active?('<div style="margin-top:9px;">'+active+'</div>'):'<div style="margin-top:8px;color:var(--ink3);font-size:11.5px;">No covers today.</div>')+
+    (board||'<div style="margin-top:8px;color:var(--ink3);font-size:11.5px;">Nothing handed over today.</div>')+
   '</div>';
 }
 function filterRows(){ if(!isBoss()) FILTER='mine';   // non-admin: stale saved filters (All / another VA) would show an empty board
