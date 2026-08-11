@@ -169,6 +169,14 @@ function ownerOf(r){ return String(r.assigned_to||r.created_by||'').toLowerCase(
 var COVER={};
 function coveredTo(r){ return COVER[String((r&&r.id)||'')]||''; }
 function worksFor(r){ return coveredTo(r) || ownerOf(r); }      // who is responsible TODAY
+/* Only accounts that can actually be WORKED today are worth handing over. A banned account has
+   left the pool, a temp-banned one is waiting out its suspension, and neither produces anything
+   for a stand-in — putting them in the list just pads it and makes the real count wrong.
+   Creation standby is excluded for the same reason: nothing to do on it this shift. */
+function coverable(r){
+  var st=String((r&&r.status)||'').toLowerCase();
+  return st!=='banned' && st!=='tempban' && st!=='creationstandby';
+}
 /* A covered account looks exactly like your own once it is on your board, which is how someone
    ends up working the wrong list tomorrow when the cover has lapsed. The chip says whose it
    really is, on both sides: the stand-in sees "covering for X", the owner sees "with Y today". */
@@ -215,7 +223,7 @@ function cvAssignAll(){
   var to=document.getElementById('cv-to').value;
   /* Only the ones not already handed over. Sweeping up everything would silently re-point
      accounts you deliberately gave to someone else a minute ago. */
-  var ids=ROWS.filter(function(r){ return ownerOf(r)===CV_FROM && !coveredTo(r); }).map(function(r){ return r.id; });
+  var ids=ROWS.filter(function(r){ return ownerOf(r)===CV_FROM && coverable(r) && !coveredTo(r); }).map(function(r){ return r.id; });
   if(!ids.length){ toast('Nothing left to assign for this VA.'); return; }
   setCover(ids, to);
 }
@@ -229,13 +237,15 @@ function coverBar(){
   /* Only what is still UNASSIGNED. An account you have just handed over drops off the list, so
      working through fifty is a shrinking queue rather than a wall you have to keep re-reading to
      find where you got to. What has been assigned lives in the panel below instead. */
-  var mineAll=CV_FROM?ROWS.filter(function(r){ return ownerOf(r)===CV_FROM; }):[];
+  var mineAll=CV_FROM?ROWS.filter(function(r){ return ownerOf(r)===CV_FROM && coverable(r); }):[];
   var mine=mineAll.filter(function(r){ return !coveredTo(r); });
   var picker='';
   if(CV_FROM){
     var doneN=mineAll.length-mine.length;
+    var skipped=ROWS.filter(function(r){ return ownerOf(r)===CV_FROM && !coverable(r); }).length;
     picker='<div style="margin-top:8px;font-size:11.5px;color:var(--ink3);font-weight:800;">'+
-        mine.length+' still to assign'+(doneN?(' · '+doneN+' already handed over'):'')+'</div>'+
+        mine.length+' still to assign'+(doneN?(' · '+doneN+' already handed over'):'')+
+        (skipped?(' · <span style="color:#b45309;">'+skipped+' banned/suspended, not transferable</span>'):'')+'</div>'+
       '<div style="margin-top:6px;max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;">'+
       (mine.length? mine.map(function(r){
         return '<label style="display:flex;gap:8px;align-items:center;padding:3px 2px;font-size:12px;">'+
