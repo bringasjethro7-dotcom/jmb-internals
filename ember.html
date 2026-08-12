@@ -68,8 +68,6 @@
   .kmenu .dd button:hover{background:var(--bg)}
   .kmenu .dd button.danger{color:#b91c1c}
   .kmenu .dd .sep{height:1px;background:var(--line);margin:4px 6px}
-  .capbtn{flex:none;width:27px;height:27px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;padding:0}
-  .capbtn:hover{background:rgba(15,118,110,.08);border-color:rgba(15,118,110,.45)}
   .acct .btns,.model .btns{margin-top:8px}
   .pvwrap{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 18px 8px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .pvrow{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
@@ -90,7 +88,7 @@
 
 <div class="wrap" id="app" style="display:none">
   <h1>👻 JMB <em>Ember</em> Tool <span style="font-size:12px;color:var(--ink3);font-weight:600" id="who"></span></h1>
-  <div class="sub">Snapchat account ops — keep every VPS full, every Live account running, and Airtable in sync. Adding an account to Stock counts <b>+1 Account Setup</b> (capture proof; tick "just created it" for <b>+1 Account Creation</b> too). Live accounts produce the output — 📷 capture proof to verify them daily. Untouched Stock counts nothing. Banned/locked accounts leave the pool (your credit stays).</div>
+  <div class="sub">Snapchat account ops — keep every VPS full, every Live account running, and Airtable in sync. Creating an account counts <b>+1 Account Creation</b>; taking one Live counts <b>+1 Account Setup</b>. Banned/locked accounts leave the pool (your credit stays).</div>
   <div class="top" id="stats"></div>
   <div class="addbox">
     <input id="em-user" placeholder="Account username (letters — periods OK for client-given)">
@@ -322,11 +320,11 @@ function shotStop(){ try{ if(SHOT.stream) SHOT.stream.getTracks().forEach(functi
 function shotGrab(){
   if(!shotLive()) return null;
   var v=SHOT.video, w=v.videoWidth, h=v.videoHeight; if(!w||!h) return null;
-  var max=1400, sw=w, sh=h;
+  var max=1200, sw=w, sh=h;
   if(sw>max||sh>max){ var r=Math.min(max/sw,max/sh); sw=Math.round(sw*r); sh=Math.round(sh*r); }
   var c=document.createElement('canvas'); c.width=sw; c.height=sh;
   c.getContext('2d').drawImage(v,0,0,sw,sh);
-  return c.toDataURL('image/jpeg',0.72);
+  return c.toDataURL('image/jpeg',0.62);
 }
 function renderShotBar(){
   var bar=document.getElementById('shot-bar');
@@ -349,11 +347,11 @@ function proofCompress(file){
     fr.onload=function(){
       var im=new Image();
       im.onload=function(){
-        var max=1400, w=im.width, h=im.height;
+        var max=1200, w=im.width, h=im.height;
         if(w>max||h>max){ var r=Math.min(max/w,max/h); w=Math.round(w*r); h=Math.round(h*r); }
         var c=document.createElement('canvas'); c.width=w; c.height=h;
         c.getContext('2d').drawImage(im,0,0,w,h);
-        res(c.toDataURL('image/jpeg',0.72));
+        res(c.toDataURL('image/jpeg',0.62));
       };
       im.onerror=function(){ rej(new Error('bad image')); };
       im.src=fr.result;
@@ -363,6 +361,59 @@ function proofCompress(file){
   });
 }
 var PROOF={ imgs:[], ctx:null, resolve:null, reject:null };
+/* ── BACKGROUND PROOF UPLOAD ────────────────────────────────────────────────────────────
+   The old flow kept every screenshot in the browser and shipped all of them in one POST when
+   the VA pressed Save. That put the entire upload — up to 8 images, several MB of base64 —
+   in front of the person at the exact moment they were trying to move to the next account.
+   Now each image starts uploading the instant it is attached, while they carry on working,
+   and Save just sends the ids back. The wait moves off the critical path.
+   PUP.q maps a data-url to its upload state so a thumbnail can show progress and so Save can
+   wait only for whatever is genuinely still in flight. */
+var PUP={ q:{}, n:0 };
+function pupKey(d){ return d.length+'|'+d.slice(-24); }
+function pupStart(dataUrl, ctx){
+  var k=pupKey(dataUrl);
+  if(PUP.q[k]) return PUP.q[k];
+  var st={ state:'up', id:null, err:null };
+  st.p = fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'proof_img', employee_id:(USER&&USER.id)||'',
+        task:(ctx&&ctx.task)||'', date:(typeof today==='function'?today():''), image:dataUrl }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d && d.ok && d.id){ st.state='done'; st.id=d.id; }
+      else { st.state='fail'; st.err=(d&&d.error)||'upload'; }
+      pupPaint(); return st;
+    })
+    .catch(function(e){ st.state='fail'; st.err=String(e&&e.message||e); pupPaint(); return st; });
+  PUP.q[k]=st; pupPaint();
+  return st;
+}
+/* Small status line so the VA can see uploads finishing rather than guessing. */
+function pupPaint(){
+  var el=document.getElementById('pup-stat'); if(!el) return;
+  var keys=(PROOF.imgs||[]).map(pupKey);
+  var up=0, done=0, fail=0;
+  keys.forEach(function(k){ var s=PUP.q[k]; if(!s) return;
+    if(s.state==='up') up++; else if(s.state==='done') done++; else fail++; });
+  el.textContent = fail ? (fail+' failed — they will be retried on save')
+                 : up ? ('Uploading '+up+'…  '+done+' ready')
+                 : done ? (done+' screenshot'+(done>1?'s':'')+' ready') : '';
+  el.style.color = fail ? '#b91c1c' : (up ? '#b45309' : '#047857');
+}
+/* Returns the Drive ids for the current selection, waiting only on uploads still running and
+   retrying anything that failed. A failed image is retried inline rather than silently dropped —
+   proof that never reached Drive would mean output that never got counted. */
+async function pupIds(ctx){
+  var out=[];
+  for(var i=0;i<PROOF.imgs.length;i++){
+    var d=PROOF.imgs[i], k=pupKey(d), st=PUP.q[k];
+    if(!st || st.state==='fail'){ delete PUP.q[k]; st=pupStart(d,ctx); }
+    var r=await st.p;
+    if(r && r.state==='done' && r.id) out.push(r.id); else return null;
+  }
+  return out;
+}
+
 function proofPanel(){
   var ov=document.getElementById('proof-ov');
   if(ov) return ov;
@@ -379,6 +430,7 @@ function proofPanel(){
       '</div>'+
       '<input type="file" id="proof-file" accept="image/*" multiple style="display:none;">'+
       '<div id="proof-thumbs" style="display:flex;flex-wrap:wrap;margin-top:12px;"></div>'+
+      '<div id="pup-stat" style="margin-top:7px;font-size:11.5px;font-weight:700;min-height:15px;"></div>'+
       '<input id="proof-note" placeholder="Optional note" style="width:100%;margin-top:12px;padding:9px 11px;border:1px solid #e2e8f0;border-radius:9px;font-size:13px;">'+
       '<div style="display:flex;justify-content:flex-end;margin-top:14px;">'+
         '<button id="proof-cancel" style="padding:9px 16px;border-radius:9px;border:1px solid #e2e8f0;background:#fff;font-weight:700;cursor:pointer;margin-right:9px;">Cancel</button>'+
@@ -393,7 +445,7 @@ function proofPanel(){
     if(!shotLive()){ var ok=await shotStart(); if(!ok) return; }
     var img=shotGrab();
     if(!img){ toast('Could not read the window — pick it again.'); shotStop(); return; }
-    PROOF.imgs.push(img); proofThumb(img);
+    PROOF.imgs.push(img); proofThumb(img); pupStart(img, PROOF.ctx);
   };
   document.getElementById('proof-cancel').onclick=function(){ proofClose(true); };
   document.getElementById('proof-save').onclick=proofSubmit;
@@ -417,12 +469,12 @@ function proofThumb(d){
 async function proofAdd(files){
   for(var i=0;i<files.length;i++){
     if(PROOF.imgs.length>=SHOT.max){ toast('5 screenshots is the maximum.'); break; }
-    try{ var d=await proofCompress(files[i]); PROOF.imgs.push(d); proofThumb(d); }catch(e){}
+    try{ var d=await proofCompress(files[i]); PROOF.imgs.push(d); proofThumb(d); pupStart(d, PROOF.ctx); }catch(e){}
   }
 }
 function proofClose(cancelled){
   var ov=document.getElementById('proof-ov'); if(ov) ov.style.display='none';
-  var rej=PROOF.reject; PROOF.imgs=[]; PROOF.resolve=null; PROOF.reject=null;
+  var rej=PROOF.reject; PROOF.imgs=[]; PUP.q={}; PROOF.resolve=null; PROOF.reject=null;
   if(cancelled && rej){ var e=new Error('proof cancelled'); e.proofCancelled=true; rej(e); }
 }
 async function proofSubmit(){
@@ -431,13 +483,16 @@ async function proofSubmit(){
   try{
     var body={ action:'proof_save', employee_id:USER.id, full_name:(USER.name||USER.id),
       project:PROJECT, task:PROOF.ctx.task||'', account:PROOF.ctx.account||'',
-      date:(typeof today==='function'?today():''), outputs:(PROOF.ctx.n==null?1:PROOF.ctx.n),
-      note:(document.getElementById('proof-note').value||''), images:PROOF.imgs };
+      date:(typeof today==='function'?today():''), outputs:PROOF.ctx.n||1,
+      note:(document.getElementById('proof-note').value||'') };
+    var _ids=await pupIds(PROOF.ctx);
+    if(_ids && _ids.length===PROOF.imgs.length){ body.ids=_ids; }
+    else { body.images=PROOF.imgs; }   // fall back to the old inline path rather than lose the proof
     var r=await fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) });
     var d=await r.json();
     if(d && d.ok){
       var res=PROOF.resolve; var n=d.count;
-      PROOF.imgs=[]; PROOF.resolve=null; PROOF.reject=null;
+      PROOF.imgs=[]; PUP.q={}; PROOF.resolve=null; PROOF.reject=null;
       var ov=document.getElementById('proof-ov'); if(ov) ov.style.display='none';
       toast(n+' screenshot'+(n>1?'s':'')+' saved as proof.');
       if(res) res(true);
@@ -447,38 +502,20 @@ async function proofSubmit(){
   }catch(e){ toast('Upload failed — nothing was counted. Try again.'); }
   btn.disabled=false; btn.textContent='Save proof & count it';
 }
-/* THE GATE. Every output routes through here, so proof cannot be bypassed by any button.
-   proofAsk(task, n, account) → opens the panel, resolves once screenshots are saved (n=0 ⇒ proof only).
-   poBump(task, n) → posts the count. bump() chains the two, same behavior as before. */
-function proofAsk(task,n,account){
+/* THE GATE. Every output routes through here, so proof cannot be bypassed by any button. */
+function bump(task,n){
   return new Promise(function(resolve,reject){
-    PROOF.imgs=[]; PROOF.ctx={task:task,n:n,account:account||''}; PROOF.resolve=resolve; PROOF.reject=reject;
+    PROOF.imgs=[]; PROOF.ctx={task:task,n:(n||1)}; PROOF.resolve=null; PROOF.reject=reject;
     var ov=proofPanel(); ov.style.display='flex';
-    document.getElementById('proof-what').textContent=task+(n?(' · counts as '+n):' · proof only');
+    document.getElementById('proof-what').textContent=task+' · counts as '+(n||1);
     document.getElementById('proof-note').value='';
     document.getElementById('proof-thumbs').innerHTML='';
+    PROOF.resolve=function(){
+      fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)
+        +'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now())
+        .then(function(){ resolve(true); }).catch(function(){ resolve(true); });
+    };
   });
-}
-function poBump(task,n){
-  return fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)
-    +'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now()).catch(function(){});
-}
-function bump(task,n){
-  return proofAsk(task,(n||1)).then(function(){ return poBump(task,n||1); }).then(function(){ return true; });
-}
-/* Per-account 📷 capture — every card except Banned. Live: proof doubles as the daily
-   "verified running" check (Live accounts are what produce the output). Other columns: proof only. */
-async function captureFor(id){
-  var r=ROWS.filter(function(x){return x.id===id;})[0];
-  if(!r || r.status==='banned') return;
-  var labels={stock:'📦 Stock proof', setup:'🛠 Setup proof', live:'🟢 Verified running', needsfix:'🔧 Fix proof'};
-  try{
-    await proofAsk((labels[r.status]||'📎 Proof')+' — '+r.handle, (r.status==='live'?1:0), r.handle);
-    if(r.status==='live'){
-      if(markOk(r.meta&&r.meta.last, r.assigned_to||r.created_by)){ toast('Proof saved ✓ (already verified today)'); }
-      else { await checkedToday(id); }
-    } else { toast('Proof saved for '+r.handle+' 📸'); }
-  }catch(e){ /* capture cancelled — nothing recorded */ }
 }
 /* A cancelled proof stops the caller's flow — that's intended, and shouldn't spam the console. */
 window.addEventListener('unhandledrejection', function(ev){
@@ -535,12 +572,11 @@ function render(){
       var btns='', menu=[];
       if(st==='stock'){ btns='<button class="warn" onclick="move(\''+r.id+'\',\'setup\')">🛠 Assign to VPS</button>'; }
       else if(st==='setup'){ btns='<button class="go" onclick="move(\''+r.id+'\',\'live\')">🟢 Setup done → Live</button>'; menu.push(['🔧 Needs fix',"move('"+r.id+"','needsfix')"]); }
-      else if(st==='live'){ btns=(markOk(r.meta&&r.meta.last, r.assigned_to||r.created_by)?'<button disabled style="opacity:.5">✓ Verified today</button>':'<button class="go" onclick="captureFor(\''+r.id+'\')">📷 Verify running today</button>'); menu.push(['🔧 Needs fix',"move('"+r.id+"','needsfix')"]); menu.push(['🔴 Banned / Locked',"move('"+r.id+"','banned')"]); }
+      else if(st==='live'){ btns=(markOk(r.meta&&r.meta.last, r.assigned_to||r.created_by)?'<button disabled style="opacity:.5">✓ Verified today</button>':'<button class="go" onclick="checkedToday(\''+r.id+'\')">✓ Verified running today</button>'); menu.push(['🔧 Needs fix',"move('"+r.id+"','needsfix')"]); menu.push(['🔴 Banned / Locked',"move('"+r.id+"','banned')"]); }
       else if(st==='needsfix'){ btns='<button class="go" onclick="move(\''+r.id+'\',\'live\')">✓ Fixed → Live</button>'; menu.push(['🔴 Banned',"move('"+r.id+"','banned')"]); }
       if(menu.length) menu.push('---');
       menu.push(['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']);
-      var cap=(st==='banned')?'':('<button class="capbtn" title="📷 Capture proof'+(st==='live'?' + verify running':'')+'" onclick="captureFor(\''+r.id+'\')">📷</button>');
-      return '<div class="acct"><div style="display:flex;align-items:center;gap:6px;"><b style="flex:1;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(r.handle)+'</b>'+cap+kmenu(menu)+'</div><div class="who">'+esc(r.model||'')+' · '+esc(vaName(r.assigned_to||r.created_by))+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+'</div><div class="btns">'+btns+'</div></div>';
+      return '<div class="acct"><div style="display:flex;align-items:center;gap:6px;"><b style="flex:1;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(r.handle)+'</b>'+kmenu(menu)+'</div><div class="who">'+esc(r.model||'')+' · '+esc(vaName(r.assigned_to||r.created_by))+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+'</div><div class="btns">'+btns+'</div></div>';
     }).join('');
     return '<div class="col '+df[2]+'"><h3><i></i>'+df[1]+' · '+items.length+'</h3>'+(cards||'<div class="muted">None.</div>')+'</div>';
   }).join('');
@@ -556,21 +592,8 @@ async function addAcct(){
     var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(u)+'&model='+encodeURIComponent(m)+'&status='+encodeURIComponent(st)+'&meta='+meta+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
     var d=await r.json();
     if(d&&d.ok){ $('em-user').value=''; if($('em-new')) $('em-new').checked=false;
-      if(st==='stock'){
-        /* Added to Stock ⇒ +1 Account Setup right now (capture proof), + Creation if just made. */
-        try{
-          await proofAsk('🛠 Account Setup — '+u+(isNew?' (+1 Creation too)':''), 1, u);
-          await poBump('Account Setup',1);
-          if(isNew) await poBump('Account Creation',1);
-          toast('Added → stock · +1 Account Setup'+(isNew?' · +1 Account Creation 🎉':'')+' ✅');
-        }catch(e){ toast('Added → stock — capture cancelled, nothing counted.'); }
-      } else {
-        try{
-          if(isNew){ await bump('Account Creation',1); }
-          toast('Added → '+st+(isNew?' · +1 Account Creation 🎉':' (existing account seeded)'));
-        }catch(e){ toast('Added → '+st+' — capture cancelled, nothing counted.'); }
-      }
-      load(); }
+      if(isNew){ await bump('Account Creation',1); }
+      toast('Added → '+st+(isNew?' · +1 Account Creation 🎉':' (existing account seeded)')); load(); }
     else if(d&&d.error==='DUPLICATE') toast('That username is already on the board — SOP: always search first!');
     else toast('Could not add.');
   }catch(e){ toast('Connection error.'); }
@@ -586,7 +609,7 @@ async function move(id, st){
     var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&status='+encodeURIComponent(st)+'&_='+Date.now());
     var d=await r.json();
     if(d&&d.ok){
-      if(st==='live'){ toast('Live! ✅ (traffic starts in ~10 min) — setup was already counted at Stock.'); }
+      if(st==='live'){ await bump('Account Setup',1); toast('Live! +1 Account Setup ✅ (traffic starts in ~10 min)'); }
       else if(st==='banned'){ toast('Marked banned — fill the free VPS slot from Stock.'); }
       else toast('Updated.');
       load();

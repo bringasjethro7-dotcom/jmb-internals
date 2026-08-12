@@ -1405,6 +1405,48 @@ function filterAccounts(kind, accts, map, ff, q){
    Boxes stay freely clickable all shift; Record Day is what refuses. The board is built around
    rapid ticking and gating each cell would wreck it. */
 var APROOF={ imgs:[], ctx:null, busy:false };
+/* ── BACKGROUND PROOF UPLOAD ────────────────────────────────────────────────────────────
+   Same fix as the other tools: each screenshot goes to Drive the moment it is attached,
+   rather than all of them in one POST when the VA presses Save. The wait moves off the
+   critical path instead of being made marginally faster.
+   NOTE: this tool's USER object uses employee_id, not id. */
+var PUP={ q:{} };
+function pupKey(d){ return d.length+'|'+d.slice(-24); }
+function pupStart(dataUrl, task){
+  var k=pupKey(dataUrl);
+  if(PUP.q[k]) return PUP.q[k];
+  var st={ state:'up', id:null };
+  st.p = fetch(PORTAL_EXEC, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'proof_img',
+        employee_id:(USER&&USER.employee_id)||'', task:task||'',
+        date:(typeof aBizDay==='function'?aBizDay():''), image:dataUrl }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(d&&d.ok&&d.id){ st.state='done'; st.id=d.id; } else st.state='fail';
+                       pupPaint(); return st; })
+    .catch(function(){ st.state='fail'; pupPaint(); return st; });
+  PUP.q[k]=st; pupPaint(); return st;
+}
+function pupPaint(){
+  var el=document.getElementById('pup-stat'); if(!el) return;
+  var up=0,done=0,fail=0;
+  (APROOF.imgs||[]).forEach(function(d){ var s=PUP.q[pupKey(d)]; if(!s) return;
+    if(s.state==='up') up++; else if(s.state==='done') done++; else fail++; });
+  el.textContent = fail ? (fail+' failed — will retry on save')
+                 : up ? ('Uploading '+up+'…  '+done+' ready')
+                 : done ? (done+' screenshot'+(done>1?'s':'')+' ready') : '';
+  el.style.color = fail ? '#b91c1c' : (up ? '#b45309' : '#047857');
+}
+/* Null on any miss, so the caller falls back to the inline path rather than losing proof. */
+async function pupIds(task){
+  var out=[];
+  for(var i=0;i<APROOF.imgs.length;i++){
+    var d=APROOF.imgs[i], k=pupKey(d), st=PUP.q[k];
+    if(!st || st.state==='fail'){ delete PUP.q[k]; st=pupStart(d,task); }
+    var r=await st.p;
+    if(r && r.state==='done' && r.id) out.push(r.id); else return null;
+  }
+  return out;
+}
 var ATRAY={};                                  // key -> [dataURL]  (kind|phone|user|acct|handle)
 var APROOF_MAX=6;
 var PORTAL_EXEC='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
@@ -1447,6 +1489,7 @@ function aProofOpen(kind, a){
       '<div id="aproof-thumbs" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>'+
       '<div style="display:flex;gap:9px;justify-content:flex-end;margin-top:14px;">'+
         '<button id="aproof-x" style="padding:9px 16px;border-radius:9px;border:1px solid #e2e8f0;background:#fff;font-weight:700;cursor:pointer;">Cancel</button>'+
+        '<div id="pup-stat" style="margin-top:7px;font-size:11.5px;font-weight:700;min-height:15px;"></div>'+
         '<button id="aproof-s" style="padding:9px 20px;border-radius:9px;border:none;background:#0f766e;color:#fff;font-weight:800;cursor:pointer;">Save proof</button>'+
       '</div></div>';
     document.body.appendChild(ov);
@@ -1482,10 +1525,10 @@ function aProofCompress(file){
   return new Promise(function(res,rej){
     var fr=new FileReader();
     fr.onload=function(){ var im=new Image();
-      im.onload=function(){ var max=1400,w=im.width,h=im.height;
+      im.onload=function(){ var max=1200,w=im.width,h=im.height;
         if(w>max||h>max){ var r=Math.min(max/w,max/h); w=Math.round(w*r); h=Math.round(h*r); }
         var c=document.createElement('canvas'); c.width=w; c.height=h;
-        c.getContext('2d').drawImage(im,0,0,w,h); res(c.toDataURL('image/jpeg',0.72)); };
+        c.getContext('2d').drawImage(im,0,0,w,h); res(c.toDataURL('image/jpeg',0.62)); };
       im.onerror=function(){ rej(new Error('bad image')); }; im.src=fr.result; };
     fr.onerror=function(){ rej(new Error('read failed')); }; fr.readAsDataURL(file);
   });
@@ -1493,7 +1536,8 @@ function aProofCompress(file){
 async function aProofAdd(files){
   for(var i=0;i<files.length;i++){
     if(APROOF.imgs.length>=APROOF_MAX){ toast(APROOF_MAX+' screenshots is the max.'); break; }
-    try{ var d=await aProofCompress(files[i]); APROOF.imgs.push(d); aProofThumb(d); }catch(e){}
+    try{ var d=await aProofCompress(files[i]); APROOF.imgs.push(d); aProofThumb(d);
+         pupStart(d, (APROOF.ctx&&APROOF.ctx.kind==='post')?'Vysor IG Posting':'Content Sourcing'); }catch(e){}
   }
 }
 async function aProofSave(){
@@ -1505,7 +1549,10 @@ async function aProofSave(){
     var body={ action:'proof_save', employee_id:USER.employee_id, full_name:(USER.full_name||USER.employee_id),
       project:'ALTR', task:(c.kind==='post'?'Vysor IG Posting':'Content Sourcing'),
       account:c.a.handle, date:aBizDay(), outputs:1,
-      note:'P'+c.a.phone+' U'+c.a.user+' A'+c.a.acct, images:APROOF.imgs };
+      note:'P'+c.a.phone+' U'+c.a.user+' A'+c.a.acct };
+    var _ids=await pupIds(body.task);
+    if(_ids && _ids.length===APROOF.imgs.length){ body.ids=_ids; }
+    else { body.images=APROOF.imgs; }   // fall back to inline rather than lose the proof
     var r=await fetch(PORTAL_EXEC, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) });
     var d=await r.json();
     if(d&&d.ok){

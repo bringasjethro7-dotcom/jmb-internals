@@ -629,11 +629,11 @@ function shotGrab(){
   if(!shotLive()) return null;
   var v=SHOT.video, w=v.videoWidth, h=v.videoHeight;
   if(!w||!h) return null;
-  var max=1400, sw=w, sh=h;
+  var max=1200, sw=w, sh=h;
   if(sw>max||sh>max){ var r=Math.min(max/sw,max/sh); sw=Math.round(sw*r); sh=Math.round(sh*r); }
   var c=document.createElement('canvas'); c.width=sw; c.height=sh;
   c.getContext('2d').drawImage(v,0,0,sw,sh);
-  return c.toDataURL('image/jpeg',0.72);
+  return c.toDataURL('image/jpeg',0.62);
 }
 /* A persistent bar so the VA always knows whether capture is armed. */
 function renderShotBar(){
@@ -664,7 +664,7 @@ async function shotForSession(id, phk, n){
   if(!shotLive()){ var okStart=await shotStart(); if(!okStart) return; }
   var img=shotGrab();
   if(!img){ toast('Could not read the window — re-pick it.'); shotStop(); return; }
-  SHOTTRAY[key].push(img);
+  SHOTTRAY[key].push(img); try{ pupStart(img, {task:(PROOF&&PROOF.ctx&&PROOF.ctx.task)||''}); }catch(_pu){}
   toast('📷 '+SHOTTRAY[key].length+'/'+SHOT.max+' captured for session '+n+'.');
   renderShotCount(id, phk, n);
 }
@@ -754,11 +754,11 @@ function proofCompress(file){
     fr.onload=function(){
       var im=new Image();
       im.onload=function(){
-        var max=1400, w=im.width, h=im.height;
+        var max=1200, w=im.width, h=im.height;
         if(w>max || h>max){ var r=Math.min(max/w,max/h); w=Math.round(w*r); h=Math.round(h*r); }
         var c=document.createElement('canvas'); c.width=w; c.height=h;
         c.getContext('2d').drawImage(im,0,0,w,h);
-        res(c.toDataURL('image/jpeg',0.72));
+        res(c.toDataURL('image/jpeg',0.62));
       };
       im.onerror=function(){ rej(new Error('bad image')); };
       im.src=fr.result;
@@ -792,6 +792,7 @@ function proofOpen(ctx, onDone){
         '</div>'+
         '<input type="file" id="proof-file" accept="image/*" multiple style="display:none;">'+
         '<div id="proof-thumbs" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;"></div>'+
+        '<div id="pup-stat" style="margin-top:7px;font-size:11.5px;font-weight:700;min-height:15px;"></div>'+
         '<input id="proof-note" placeholder="Optional note (e.g. subreddit, account)" style="width:100%;margin-top:12px;padding:9px 11px;border:1px solid #e2e8f0;border-radius:9px;font-size:13px;">'+
         '<div style="display:flex;gap:9px;justify-content:flex-end;margin-top:14px;">'+
           '<button id="proof-cancel" style="padding:9px 16px;border-radius:9px;border:1px solid #e2e8f0;background:#fff;font-weight:700;cursor:pointer;">Cancel</button>'+
@@ -886,7 +887,7 @@ function proofThumb(d){
 async function proofAdd(files){
   for(var i=0;i<files.length;i++){
     if(PROOF.imgs.length>=5){ toast('5 screenshots is the max for one session.'); break; }
-    try{ var d=await proofCompress(files[i]); PROOF.imgs.push(d); proofThumb(d); }catch(e){}
+    try{ var d=await proofCompress(files[i]); PROOF.imgs.push(d); proofThumb(d); pupStart(d, PROOF.ctx); }catch(e){}
   }
 }
 async function proofSubmit(){
@@ -896,8 +897,10 @@ async function proofSubmit(){
     var body={ action:'proof_save', employee_id:USER.id, full_name:(USER.name||USER.id),
       project:PROJECT, task:PROOF.ctx.task||'', account:PROOF.ctx.account||'',
       date:today(), shift:(typeof vaKeyOf==='function'?vaKeyOf(USER.id):''),
-      outputs:PROOF.ctx.outputs||1, note:(document.getElementById('proof-note').value||''),
-      images:PROOF.imgs };
+      outputs:PROOF.ctx.outputs||1, note:(document.getElementById('proof-note').value||'') };
+    var _ids=await pupIds(PROOF.ctx);
+    if(_ids && _ids.length===PROOF.imgs.length){ body.ids=_ids; }
+    else { body.images=PROOF.imgs; }   // fall back to the old inline path rather than lose the proof
     var r=await fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) });
     var d=await r.json();
     if(d && d.ok){
