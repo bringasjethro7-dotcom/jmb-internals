@@ -209,6 +209,8 @@ table tbody tr:hover td{background:rgba(255,107,26,.05)}
   .btn:hover,.card:hover,.panel:hover,.tile:hover{transform:none}
   .btn,.card,.panel,.tile{transition:none}
 }
+  .cand.picked{ outline:2px solid #0f766e; outline-offset:-2px; background:#f0fdfa; }
+  .cand .bpick{ accent-color:#0f766e; }
 </style>
 </head>
 <body>
@@ -564,12 +566,17 @@ function conApproveCopy(emp, full){
 
 /* ====== KANBAN ====== */
 function renderBoard(){
+  try{ batchBar(); }catch(e){}
   var byStage={}; STAGES.forEach(function(s){ byStage[s]=[]; });
   (STATE.candidates||[]).forEach(function(c){ var s=STAGES.indexOf(String(c.stage))>=0?String(c.stage):'applied'; byStage[s].push(c); });
   $('board').innerHTML=STAGES.map(function(s){
     var cards=byStage[s].map(function(c){ return candCard(c); }).join('') || '<div style="color:var(--t3);font-size:12px;text-align:center;padding:1rem .5rem">—</div>';
     return '<div class="col" data-stage="'+s+'" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event,\''+s+'\')">'
-      +'<div class="colh"><span class="nm"><span class="dot" style="background:'+STAGE_COLOR[s]+'"></span>'+STAGE_LABEL[s]+'</span><span class="ct">'+byStage[s].length+'</span></div>'
+      +'<div class="colh"><span class="nm"><span class="dot" style="background:'+STAGE_COLOR[s]+'"></span>'+STAGE_LABEL[s]+'</span>'
+      +((s==='screening'||s==='applied')&&byStage[s].length
+        ? '<button title="Select every applicant in this column" onclick="event.stopPropagation();batchAllIn(\''+s+'\')" style="background:none;border:1px solid var(--line);color:var(--t3);border-radius:7px;padding:1px 7px;font-size:10.5px;font-weight:700;cursor:pointer;margin-left:auto;margin-right:6px;">select all</button>'
+        : '')
+      +'<span class="ct">'+byStage[s].length+'</span></div>'
       +'<div class="colbody">'+cards+'</div></div>';
   }).join('');
 }
@@ -595,8 +602,13 @@ function candCard(c){
       +'<button class="cbtn pass" onclick="screenCand(event,\''+c.id+'\',\'pass\')">✓ Pass</button>'
       +'<button class="cbtn fail" onclick="screenCand(event,\''+c.id+'\',\'fail\')">✕ Fail</button></div>';
   }
-  return '<div class="cand" draggable="true" ondragstart="onDragStart(event,\''+c.id+'\')" ondragend="onDragEnd(event)" onclick="openCandidate(\''+c.id+'\')">'
-    +'<div class="cn">'+esc(c.name||'(no name)')+'</div>'
+  var tick = (String(c.stage)==='screening' || String(c.stage)==='applied')
+    ? '<input type="checkbox" class="bpick" '+(BATCH[c.id]?'checked':'')+
+      ' title="Select for batch assessment" onclick="batchToggle(event,\''+c.id+'\')" '+
+      'style="margin-right:7px;width:15px;height:15px;cursor:pointer;vertical-align:-2px;">'
+    : '';
+  return '<div class="cand'+(BATCH[c.id]?' picked':'')+'" data-id="'+c.id+'" draggable="true" ondragstart="onDragStart(event,\''+c.id+'\')" ondragend="onDragEnd(event)" onclick="openCandidate(\''+c.id+'\')">'
+    +'<div class="cn">'+tick+esc(c.name||'(no name)')+'</div>'
     +(c.position?'<div class="cp">'+esc(c.position)+'</div>':'')
     +'<div class="cmeta">'+(c.source?'<span class="src">'+esc(c.source)+'</span>':'')+(c.applied?'<span>applied '+esc(String(c.applied).slice(0,10))+'</span>':'')+'</div>'
     +(extra?'<div class="crow">'+extra+'</div>':'')
@@ -627,6 +639,83 @@ var ASSESS_DEFAULT_COVERAGE =
   'The exam is taken on a laptop and has two parts:\n'+
   '• Written exam — 50 items, 25 minutes (70% of the score): 20 Grammar (Senior High School level), 15 Mathematics & Logic, and 15 Technology / VA & SMM platforms.\n'+
   '• Typing test — 5 minutes, up to 3 attempts (best counts), target 40 WPM (30% of the score).';
+
+/* ── BATCH ASSESSMENT ─────────────────────────────────────────────────────────────────────
+   The in-office exam is a sitting: one date, one venue, one coverage, many people. Scheduling
+   one at a time meant re-typing the same details per applicant and one round trip each, which
+   with twenty in screening is twenty modals and twenty waits. Tick the ones you want, fill the
+   schedule once, and the server does the whole sitting in a single execution. */
+var BATCH=Object.create(null);
+function batchOn(){ return Object.keys(BATCH).length; }
+function batchToggle(ev,id){
+  ev.stopPropagation();
+  if(BATCH[id]) delete BATCH[id]; else BATCH[id]=1;
+  batchBar(); document.querySelectorAll('.cand[data-id="'+id+'"]').forEach(function(el){
+    el.classList.toggle('picked', !!BATCH[id]); });
+}
+function batchClear(){ BATCH=Object.create(null); batchBar(); renderBoard(); }
+function batchAllIn(stage){
+  (STATE.candidates||[]).forEach(function(c){ if(String(c.stage)===stage) BATCH[c.id]=1; });
+  batchBar(); renderBoard();
+}
+function batchBar(){
+  var bar=document.getElementById('batch-bar');
+  if(!bar){
+    bar=document.createElement('div'); bar.id='batch-bar';
+    bar.style.cssText='position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9998;'+
+      'display:none;align-items:center;gap:10px;background:#0f172a;color:#e8eefc;padding:10px 16px;'+
+      'border-radius:999px;box-shadow:0 16px 44px rgba(0,0,0,.4);font:700 13px Manrope,system-ui,sans-serif;';
+    document.body.appendChild(bar);
+  }
+  var n=batchOn();
+  bar.style.display = n ? 'flex' : 'none';
+  bar.innerHTML = n
+    ? '<span>'+n+' selected</span>'
+      +'<button onclick="openAssessBatch()" style="background:#0f766e;border:none;color:#fff;border-radius:9px;padding:7px 14px;font-weight:800;cursor:pointer;">📅 Schedule assessment</button>'
+      +'<button onclick="batchClear()" style="background:rgba(255,255,255,.12);border:none;color:#e8eefc;border-radius:9px;padding:7px 12px;font-weight:700;cursor:pointer;">Clear</button>'
+    : '';
+}
+/* Reuses the single-applicant modal. _asCand stays null so submitAssess knows this is a batch. */
+function openAssessBatch(){
+  if(!batchOn()) return;
+  _asCand=null; _asBatch=true;
+  var names=(STATE.candidates||[]).filter(function(c){ return BATCH[c.id]; });
+  var noMail=names.filter(function(c){ return !c.email; }).length;
+  $('as-who').innerHTML='<b>'+names.length+' applicants</b> — one sitting, same date and venue<br>'
+    +'<span style="color:var(--t3)">'+names.slice(0,6).map(function(c){return esc(c.name||c.id);}).join(', ')
+    +(names.length>6?(' +'+(names.length-6)+' more'):'')+'</span>'
+    +(noMail?('<br><span style="color:#b45309">⚠ '+noMail+' have no email on file — they will be scheduled but not emailed</span>'):'');
+  $('as-date').value=''; $('as-time').value='';
+  $('as-dur').value=ASSESS_DEFAULT_DUR;
+  $('as-office').value=ASSESS_DEFAULT_OFFICE;
+  $('as-cover').value=ASSESS_DEFAULT_COVERAGE;
+  $('as-note').value='';
+  $('as-send').textContent='Send '+names.length+' schedules';
+  $('assess-modal').classList.add('open');
+}
+async function submitAssessBatch(){
+  var ids=Object.keys(BATCH); if(!ids.length) return;
+  var date=$('as-date').value, office=$('as-office').value.trim();
+  if(!date){ toast('Pick the assessment date.'); return; }
+  if(!office){ toast('Enter the office address (venue).'); return; }
+  var btn=$('as-send'); btn.disabled=true; btn.textContent='Sending '+ids.length+'…';
+  try{
+    var r=await apiPost({ action:'candidate_assess_batch', ids:JSON.stringify(ids),
+      date:date, time:$('as-time').value, duration:$('as-dur').value.trim(),
+      office:office, coverage:$('as-cover').value, note:$('as-note').value.trim() });
+    if(r && r.ok){
+      var msg=r.emailed+' of '+r.scheduled+' emailed';
+      if(r.no_email && r.no_email.length) msg+=' · '+r.no_email.length+' had no email';
+      if(r.failed && r.failed.length)    msg+=' · '+r.failed.length+' failed';
+      toast(msg);
+      BATCH=Object.create(null);
+    } else toast((r&&r.error)?r.error:'Batch failed.');
+    await loadState();
+  }catch(e){ toast('Batch failed.'); }
+  finally{ btn.disabled=false; _asBatch=false; batchBar(); closeAssess(); }
+}
+var _asBatch=false;
+
 function openAssess(c){
   _asCand=c;
   $('as-who').innerHTML='<b>'+esc(c.name||'Applicant')+'</b>'+(c.position?' · '+esc(c.position):'')+'<br><span style="color:var(--t3)">'+esc(c.email||'⚠ no email on file')+'</span>';
@@ -637,8 +726,12 @@ function openAssess(c){
   $('as-note').value='';
   $('assess-modal').classList.add('open');
 }
-function closeAssess(){ $('assess-modal').classList.remove('open'); _asCand=null; }
+function closeAssess(){
+  $('assess-modal').classList.remove('open'); _asCand=null; _asBatch=false;
+  var b=$('as-send'); if(b) b.textContent='Send schedule & move to Assessment';
+}
 async function submitAssess(){
+  if(_asBatch) return submitAssessBatch();     // same modal, many applicants
   var c=_asCand; if(!c) return;
   var date=$('as-date').value, office=$('as-office').value.trim();
   if(!date){ toast('Pick the assessment date.'); return; }
