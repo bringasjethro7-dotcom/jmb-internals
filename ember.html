@@ -105,6 +105,7 @@
 </div>
 <div class="toast" id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 var API='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
 var PROJECT='Ember Management';
@@ -320,7 +321,7 @@ function shotStop(){ try{ if(SHOT.stream) SHOT.stream.getTracks().forEach(functi
 function shotGrab(){
   if(!shotLive()) return null;
   var v=SHOT.video, w=v.videoWidth, h=v.videoHeight; if(!w||!h) return null;
-  var max=1200, sw=w, sh=h;
+  var max=1000, sw=w, sh=h;
   if(sw>max||sh>max){ var r=Math.min(max/sw,max/sh); sw=Math.round(sw*r); sh=Math.round(sh*r); }
   var c=document.createElement('canvas'); c.width=sw; c.height=sh;
   c.getContext('2d').drawImage(v,0,0,sw,sh);
@@ -347,7 +348,7 @@ function proofCompress(file){
     fr.onload=function(){
       var im=new Image();
       im.onload=function(){
-        var max=1200, w=im.width, h=im.height;
+        var max=1000, w=im.width, h=im.height;
         if(w>max||h>max){ var r=Math.min(max/w,max/h); w=Math.round(w*r); h=Math.round(h*r); }
         var c=document.createElement('canvas'); c.width=w; c.height=h;
         c.getContext('2d').drawImage(im,0,0,w,h);
@@ -361,6 +362,45 @@ function proofCompress(file){
   });
 }
 var PROOF={ imgs:[], ctx:null, resolve:null, reject:null };
+
+/* ── PROOF STORAGE: straight to Supabase, not through Apps Script ──────────────────────────
+   Apps Script runs ONE execution at a time for the whole deployment. Every screenshot upload
+   queued behind every timer heartbeat, every board load, every other VA — which is why proof
+   was slow on exactly the three highest-volume tools. Supabase Storage has no such queue, so
+   uploads go browser -> storage in parallel and Apps Script only records the URL afterwards.
+   comms.html has used this same path for chat attachments all along; this is that path.
+   If the bucket is missing or storage errors, we fall back to the Apps Script upload so a VA
+   is never blocked — proof that never lands is worse than proof that lands slowly. */
+var PSUPA_URL='https://rvyrnkjqxnijxydloujk.supabase.co';
+var PSUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2eXJua2pxeG5panh5ZGxvdWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NzAwODQsImV4cCI6MjA5NzE0NjA4NH0.SwkSkmbeWrhm5PZZDSZ1Z4hbjpQ0L2CRtuKQmpHshBE';
+var PSUPA_BUCKET='proof';
+var _psb=null;
+function psb(){
+  if(_psb) return _psb;
+  var Lib=window.supabase||window.Supabase;
+  if(!Lib||!Lib.createClient) return null;
+  try{ _psb=Lib.createClient(PSUPA_URL,PSUPA_KEY); }catch(e){ _psb=null; }
+  return _psb;
+}
+function _dataUrlToBlob(d){
+  var m=/^data:([^;]+);base64,(.*)$/.exec(d); if(!m) return null;
+  var bin=atob(m[2]), a=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i);
+  return new Blob([a],{type:m[1]});
+}
+async function psUpload(dataUrl, emp, task){
+  var sb=psb(); if(!sb) throw new Error('no client');
+  var blob=_dataUrlToBlob(dataUrl); if(!blob) throw new Error('bad image');
+  var d=new Date(), ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  var safe=String(task||'task').replace(/[^A-Za-z0-9]+/g,'-').slice(0,40);
+  var path=(emp||'unknown')+'/'+ym+'/'+safe+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+'.jpg';
+  var up=await sb.storage.from(PSUPA_BUCKET).upload(path, blob, { contentType:'image/jpeg', upsert:false });
+  if(up.error) throw up.error;
+  var u=sb.storage.from(PSUPA_BUCKET).getPublicUrl(path).data.publicUrl;
+  if(!u) throw new Error('no url');
+  return u;
+}
+
 /* ── BACKGROUND PROOF UPLOAD ────────────────────────────────────────────────────────────
    The old flow kept every screenshot in the browser and shipped all of them in one POST when
    the VA pressed Save. That put the entire upload — up to 8 images, several MB of base64 —
@@ -374,17 +414,23 @@ function pupKey(d){ return d.length+'|'+d.slice(-24); }
 function pupStart(dataUrl, ctx){
   var k=pupKey(dataUrl);
   if(PUP.q[k]) return PUP.q[k];
-  var st={ state:'up', id:null, err:null };
-  st.p = fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ action:'proof_img', employee_id:(USER&&USER.id)||'',
-        task:(ctx&&ctx.task)||'', date:(typeof today==='function'?today():''), image:dataUrl }) })
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if(d && d.ok && d.id){ st.state='done'; st.id=d.id; }
-      else { st.state='fail'; st.err=(d&&d.error)||'upload'; }
-      pupPaint(); return st;
-    })
-    .catch(function(e){ st.state='fail'; st.err=String(e&&e.message||e); pupPaint(); return st; });
+  var st={ state:'up', id:null, url:null, err:null };
+  var emp=(USER&&(USER.id||USER.employee_id))||'', tk=(ctx&&ctx.task)||'';
+  st.p = psUpload(dataUrl, emp, tk)
+    .then(function(u){ st.state='done'; st.url=u; pupPaint(); return st; })
+    .catch(function(){
+      /* Storage unavailable — fall back to the Apps Script path rather than block the VA. */
+      return fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body: JSON.stringify({ action:'proof_img', employee_id:emp, tk:tk, task:tk,
+            date:(typeof today==='function'?today():''), image:dataUrl }) })
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          if(d && d.ok && d.id){ st.state='done'; st.id=d.id; }
+          else { st.state='fail'; st.err=(d&&d.error)||'upload'; }
+          pupPaint(); return st;
+        })
+        .catch(function(e){ st.state='fail'; st.err=String(e&&e.message||e); pupPaint(); return st; });
+    });
   PUP.q[k]=st; pupPaint();
   return st;
 }
@@ -403,15 +449,19 @@ function pupPaint(){
 /* Returns the Drive ids for the current selection, waiting only on uploads still running and
    retrying anything that failed. A failed image is retried inline rather than silently dropped —
    proof that never reached Drive would mean output that never got counted. */
-async function pupIds(ctx){
-  var out=[];
+async function pupRefs(ctx){
+  var urls=[], ids=[];
   for(var i=0;i<PROOF.imgs.length;i++){
     var d=PROOF.imgs[i], k=pupKey(d), st=PUP.q[k];
     if(!st || st.state==='fail'){ delete PUP.q[k]; st=pupStart(d,ctx); }
     var r=await st.p;
-    if(r && r.state==='done' && r.id) out.push(r.id); else return null;
+    if(!r || r.state!=='done') return null;
+    if(r.url) urls.push(r.url); else if(r.id) ids.push(r.id); else return null;
   }
-  return out;
+  /* Mixed batches can happen if storage dropped mid-session; send whichever is complete. */
+  if(urls.length===PROOF.imgs.length) return { urls:urls };
+  if(ids.length===PROOF.imgs.length)  return { ids:ids };
+  return null;
 }
 
 function proofPanel(){
@@ -485,9 +535,10 @@ async function proofSubmit(){
       project:PROJECT, task:PROOF.ctx.task||'', account:PROOF.ctx.account||'',
       date:(typeof today==='function'?today():''), outputs:PROOF.ctx.n||1,
       note:(document.getElementById('proof-note').value||'') };
-    var _ids=await pupIds(PROOF.ctx);
-    if(_ids && _ids.length===PROOF.imgs.length){ body.ids=_ids; }
-    else { body.images=PROOF.imgs; }   // fall back to the old inline path rather than lose the proof
+    var _ref=await pupRefs(PROOF.ctx);
+    if(_ref && _ref.urls){ body.urls=_ref.urls; }
+    else if(_ref && _ref.ids){ body.ids=_ref.ids; }
+    else { body.images=PROOF.imgs; }   // fall back to the inline path rather than lose the proof
     var r=await fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) });
     var d=await r.json();
     if(d && d.ok){
