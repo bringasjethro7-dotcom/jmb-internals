@@ -557,6 +557,34 @@ async function proofSubmit(){
   }catch(e){ toast('Upload failed — nothing was counted. Try again.'); }
   btn.disabled=false; btn.textContent='Save proof & count it';
 }
+
+/* ── PER-ACCOUNT PROOF ─────────────────────────────────────────────────────────────────────
+   A camera on every account card so a VA can attach evidence against a SPECIFIC account at any
+   time — including live accounts during daily monitoring, which is most of the shift and which
+   the bump() gate never covered. bump() only fires on Account Creation and on moving an account
+   to Live, so once an account was live there was nowhere to put a screenshot.
+   Deliberately does NOT call po_bump: this attaches evidence, it does not add output. Creation
+   and Setup already count, and a camera anyone can press repeatedly must not move the numbers. */
+var EMPROOF_DONE={};                       // account id -> true once proof is saved this session
+function emProofBtn(r){
+  var has=!!EMPROOF_DONE[r.id];
+  return '<button class="kebab" title="'+(has?'Screenshots attached':'Attach screenshots for this account')+'" '+
+    'style="color:'+(has?'#0f766e':'#b45309')+';font-weight:800;padding:0 4px;" '+
+    'onclick="event.stopPropagation();emProof(\''+r.id+'\')">📷</button>';
+}
+function emProof(id){
+  var r=null; ROWS.forEach(function(x){ if(x.id===id) r=x; });
+  if(!r){ toast('Account not found — refresh and try again.'); return; }
+  PROOF.imgs=[]; PUP.q={};
+  PROOF.ctx={ task:'Snapchat Creation', account:r.handle, n:1 };
+  PROOF.reject=null;
+  var ov=proofPanel(); ov.style.display='flex';
+  document.getElementById('proof-what').textContent='@'+r.handle+' · evidence only, does not add output';
+  document.getElementById('proof-note').value='';
+  document.getElementById('proof-thumbs').innerHTML='';
+  var st=document.getElementById('pup-stat'); if(st) st.textContent='';
+  PROOF.resolve=function(){ EMPROOF_DONE[id]=true; try{ render(); }catch(e){} };
+}
 /* THE GATE. Every output routes through here, so proof cannot be bypassed by any button. */
 function bump(task,n){
   return new Promise(function(resolve,reject){
@@ -631,7 +659,7 @@ function render(){
       else if(st==='needsfix'){ btns='<button class="go" onclick="move(\''+r.id+'\',\'live\')">✓ Fixed → Live</button>'; menu.push(['🔴 Banned',"move('"+r.id+"','banned')"]); }
       if(menu.length) menu.push('---');
       menu.push(['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']);
-      return '<div class="acct"><div style="display:flex;align-items:center;gap:6px;"><b style="flex:1;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(r.handle)+'</b>'+kmenu(menu)+'</div><div class="who">'+esc(r.model||'')+' · '+esc(vaName(r.assigned_to||r.created_by))+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+'</div><div class="btns">'+btns+'</div></div>';
+      return '<div class="acct"><div style="display:flex;align-items:center;gap:6px;"><b style="flex:1;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(r.handle)+'</b>'+emProofBtn(r)+kmenu(menu)+'</div><div class="who">'+esc(r.model||'')+' · '+esc(vaName(r.assigned_to||r.created_by))+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+'</div><div class="btns">'+btns+'</div></div>';
     }).join('');
     return '<div class="col '+df[2]+'"><h3><i></i>'+df[1]+' · '+items.length+'</h3>'+(cards||'<div class="muted">None.</div>')+'</div>';
   }).join('');
