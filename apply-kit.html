@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Application Kit — JMB Virtuals</title>
+<style>
+/* Light theme. Text colours are chosen against the WHITE card, not the page — the last time
+   a palette went light here the labels kept their dark-theme colours and became unreadable. */
+:root{--bg:#f5f7fb;--card:#ffffff;--card2:#f1f5f9;--line:rgba(15,23,42,.11);
+--t1:#0f172a;--t2:#475569;--t3:#78849a;--o1:#ea580c;--o2:#c2410c;--gr:#047857;--rd:#b91c1c;--am:#b45309}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t1);font:14px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:20px 16px 70px}
+h1{font-size:22px;margin:0 0 3px;letter-spacing:-.4px}
+.sub{color:var(--t2);font-size:12.5px;margin-bottom:16px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;border-bottom:1px solid var(--line);padding-bottom:10px}
+.tab{background:var(--card);border:1px solid var(--line);color:var(--t2);padding:7px 14px;border-radius:9px;
+  font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.tab:hover{border-color:rgba(15,23,42,.22)}
+.tab.on{background:#fff4ec;border-color:rgba(234,88,12,.5);color:var(--o2)}
+.pane{display:none}.pane.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin-bottom:12px;
+  box-shadow:0 1px 3px rgba(15,23,42,.06)}
+.card h3{margin:0 0 3px;font-size:14.5px;color:var(--t1)}
+.card .why{color:var(--t3);font-size:11.5px;margin-bottom:9px}
+pre.tpl{white-space:pre-wrap;background:var(--card2);border:1px solid var(--line);border-radius:10px;
+  padding:12px 13px;font:13px/1.62 inherit;color:var(--t1);margin:0 0 9px}
+pre.tpl b{color:var(--o2);font-weight:700;background:#ffe8d6;border-radius:3px;padding:0 3px}
+.btn{background:#fff;border:1px solid rgba(15,23,42,.18);color:var(--t1);padding:6px 13px;border-radius:8px;
+  font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.btn:hover{background:#f8fafc;border-color:rgba(15,23,42,.32)}
+.btn.p{background:linear-gradient(135deg,#f97316,#ea580c);border:none;color:#fff}
+.btn.p:hover{background:linear-gradient(135deg,#ea580c,#c2410c)}
+.btn.sm{padding:4px 9px;font-size:11px}
+.vars{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px;margin-bottom:6px}
+label{display:block;font-size:10.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.7px;margin-bottom:3px;font-weight:700}
+input,select,textarea{width:100%;background:#fff;border:1px solid rgba(15,23,42,.16);color:var(--t1);
+  border-radius:8px;padding:7px 9px;font:13px inherit;font-family:inherit}
+input::placeholder{color:#9aa5b6}
+input:focus,select:focus,textarea:focus{outline:none;border-color:rgba(234,88,12,.65);box-shadow:0 0 0 3px rgba(234,88,12,.12)}
+table{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--card);border-radius:12px;overflow:hidden;
+  box-shadow:0 1px 3px rgba(15,23,42,.06)}
+th{text-align:left;color:var(--t3);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;
+  padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap;background:#f8fafc}
+td{padding:6px 8px;border-bottom:1px solid rgba(15,23,42,.06);vertical-align:middle}
+tr.due{background:#fffaeb}
+tr.won{background:#ecfdf5}
+td input,td select{padding:5px 7px;font-size:12.5px;border-color:transparent;background:transparent}
+td input:focus,td select:focus{background:#fff;border-color:rgba(234,88,12,.65)}
+.pill{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;letter-spacing:.4px}
+.pill.due{background:#fde68a;color:#78350f}
+.stat{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:9px;margin-bottom:12px}
+.st{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:10px 12px;
+  box-shadow:0 1px 3px rgba(15,23,42,.06)}
+.st b{display:block;font-size:21px;line-height:1.15}
+.st span{font-size:10.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.6px}
+.note{background:#fff4ec;border:1px solid rgba(234,88,12,.3);border-radius:10px;
+  padding:10px 13px;font-size:12.5px;color:#7c2d12;margin-bottom:13px}
+.note b{color:var(--o2)}
+.warn{background:#fef2f2;border:1px solid rgba(185,28,28,.28);border-radius:10px;
+  padding:10px 13px;font-size:12.5px;color:#7f1d1d;margin-bottom:13px}
+.warn b{color:var(--rd)}
+.file{display:flex;align-items:center;gap:11px;background:var(--card2);border:1px solid var(--line);
+  border-radius:10px;padding:11px 13px;margin-bottom:8px}
+.file b{font-size:13px}.file span{font-size:11.5px;color:var(--t3);display:block}
+.file .ic{width:34px;height:34px;border-radius:8px;background:#ffe8d6;color:var(--o2);
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;flex:0 0 34px}
+.qa{border-left:2px solid rgba(234,88,12,.45);padding-left:12px;margin-bottom:13px}
+.qa b{display:block;font-size:13px;margin-bottom:3px;color:var(--t1)}
+.qa p{margin:0;color:var(--t2);font-size:12.5px}
+.rowbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:11px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#0f172a;
+  border:1px solid rgba(15,23,42,.9);color:#fff;padding:9px 18px;border-radius:10px;
+  font-size:12.5px;font-weight:700;opacity:0;pointer-events:none;transition:.2s;z-index:50;
+  box-shadow:0 8px 24px rgba(15,23,42,.28)}
+.toast.on{opacity:1}
+@media(max-width:640px){.hidem{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Application Kit</h1>
+  <div class="sub">Reddit &amp; IG Reels account management — proposals, resume, and where every application stands.</div>
+
+  <div class="tabs">
+    <button class="tab on" data-p="p1">Proposals</button>
+    <button class="tab" data-p="p2">Tracker</button>
+    <button class="tab" data-p="p3">Answers</button>
+    <button class="tab" data-p="p4">Resume &amp; files</button>
+  </div>
+
+  <!-- ══════════ PROPOSALS ══════════ -->
+  <div class="pane on" id="p1">
+    <div class="warn"><b>Not for Upwork.</b> Their banned-jobs policy covers adult content and work supporting OnlyFans-type platforms. Applying there for this niche risks the account itself.</div>
+
+    <div class="card">
+      <h3>Fill once, applies to every template</h3>
+      <div class="why">Typed here, injected into all messages below. Nothing is sent anywhere — it stays in this browser.</div>
+      <div class="vars">
+        <div><label>Employer name</label><input id="v_name" placeholder="Sarah"></div>
+        <div><label>Role / post title</label><input id="v_role" placeholder="Reddit Poster"></div>
+        <div><label>Accounts in trial</label><input id="v_acc" value="3"></div>
+        <div><label>Your rate line</label><input id="v_rate" placeholder="$5/hr or $600/mo"></div>
+        <div><label>Available from</label><input id="v_date" type="date"></div>
+      </div>
+    </div>
+
+    <div class="note">Under 200 words, one ask per message, and never account-farming mechanics in a public post — it reads as risk to the client and draws the wrong attention.</div>
+
+    <div id="tpls"></div>
+  </div>
+
+  <!-- ══════════ TRACKER ══════════ -->
+  <div class="pane" id="p2">
+    <div class="stat" id="stats"></div>
+    <div class="note">Rows turn <b>amber</b> when a follow-up is due. Most replies come from the second message, not the first — this is the whole reason the tracker exists.</div>
+    <div class="rowbar">
+      <button class="btn p" onclick="addRow()">+ Add application</button>
+      <button class="btn" onclick="exportCsv()">Export CSV</button>
+      <select id="filt" onchange="render()" style="width:auto">
+        <option value="">All statuses</option>
+        <option>Applied</option><option>Follow-up sent</option><option>Replied</option>
+        <option>Interview</option><option>Trial</option><option>Won</option><option>Closed</option>
+      </select>
+      <span style="color:var(--t3);font-size:11.5px" id="cnt"></span>
+    </div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr>
+        <th>Employer / post</th><th>Board</th><th class="hidem">Applied</th><th>Rate quoted</th>
+        <th>Status</th><th>Follow up</th><th class="hidem">Notes</th><th></th>
+      </tr></thead>
+      <tbody id="tb"></tbody>
+    </table></div>
+  </div>
+
+  <!-- ══════════ ANSWERS ══════════ -->
+  <div class="pane" id="p3">
+    <div class="card">
+      <h3>The five questions you will get</h3>
+      <div class="why">Have these ready. The ban question is the one you win on.</div>
+      <div class="qa"><b>"What is your rate?"</b><p>Give a range with a reason attached, never a bare number. <i>"Depends on accounts and daily volume — for [N] accounts at [X] posts a day I'd be around [rate]. Happy to price a test week lower so you can judge before committing."</i></p></div>
+      <div class="qa"><b>"How many accounts can you handle?"</b><p>Honest and specific. Overcommitting is how the relationship dies in month two. Say what one person carries properly, and that you scale with vetted specialists under the same SOP past that point.</p></div>
+      <div class="qa"><b>"Can you work US hours?"</b><p>Yes — name the hours in <i>their</i> timezone, not yours.</p></div>
+      <div class="qa"><b>"How do I know the work is being done?"</b><p>Your strongest ground. Screenshot on every task, daily log per account, checklist scoring on a review cycle. Offer to show the reporting format.</p></div>
+      <div class="qa"><b>"What happens if an account gets banned?"</b><p>Never claim it won't. <i>"It happens to everyone in this niche. The difference is you hear about it from me the same day, the account comes out of rotation immediately, and a replacement or warm-up starts rather than the schedule quietly draining."</i> Honesty here reads as experience, because it is.</p></div>
+    </div>
+    <div class="card">
+      <h3>What not to do</h3>
+      <div class="qa"><b>Don't open with "hardworking and passionate."</b><p>It's what every other applicant writes, and it signals you have nothing concrete to lead with.</p></div>
+      <div class="qa"><b>Don't attach the spec portfolio.</b><p>Every metric in it is stamped SAMPLE. A buyer who reads that label then has reason to re-examine everything else you sent.</p></div>
+      <div class="qa"><b>Don't follow up more than twice.</b><p>Two is persistence. Four is a reason not to hire you.</p></div>
+      <div class="qa"><b>Don't invent history.</b><p>Buyers in this niche ask for handles and references as a matter of course. A backstory that collapses costs the client, the platform reputation, and every referral behind it.</p></div>
+    </div>
+  </div>
+
+  <!-- ══════════ FILES ══════════ -->
+  <div class="pane" id="p4">
+    <div class="card">
+      <h3>Send these</h3>
+      <div class="why">Paths are relative to the Portal folder. Open from your machine if the links don't resolve here.</div>
+      <div class="file"><div class="ic">PDF</div><div><b>JMB_Resume_SMM_Reddit_IG.pdf</b><span>The one you attach. Send this, not the DOCX.</span></div></div>
+      <div class="file"><div class="ic">DOC</div><div><b>JMB_Resume_SMM_Reddit_IG.docx</b><span>Editable master. Update here, re-export the PDF.</span></div></div>
+      <div class="file"><div class="ic">MD</div><div><b>JMB_Proposal_Kit_OnlineJobsPH.md</b><span>Full written kit — same templates as the Proposals tab.</span></div></div>
+      <div class="file"><div class="ic">IMG</div><div><b>Reporting sample screenshot</b><span>To create: a daily log with client names and account handles removed.</span></div></div>
+    </div>
+    <div class="card">
+      <h3>Open item on the resume</h3>
+      <div class="why">Fix before you send it anywhere.</div>
+      <p style="margin:0;color:var(--t2);font-size:12.5px">JMB Virtuals is dated <b style="color:var(--am)">[START DATE] – present</b>. No file in the Portal records when you founded it, so it was left blank rather than guessed at.</p>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── Templates. {name} etc. are filled from the vars bar at send time. ───────────
+   Kept as data rather than markup so a wording change happens in one place. */
+var TPL=[
+ {id:'base',t:'Base — general Reddit + IG post',
+  why:'Use when the post asks for both platforms, or is vague about which.',
+  b:"Hi {name},\n\nI manage Reddit and Instagram promotion for creator accounts — currently nine client programmes running daily.\n\nThe part most people skip: every posting task in my workflow carries a screenshot before it counts as done, and accounts get scored against a written checklist on a review cycle. So you wouldn't be taking my word for what went out. You'd see it.\n\nOn Reddit I run to strict cadence rules — minimum 4 hours between posts, joined the subreddit before posting or commenting, no duplicate image or caption in a day. That discipline is usually the difference between an account that lasts and one that gets restricted in week two.\n\nHappy to run a paid test week on {acc} accounts so you can judge the reporting before committing to anything.\n\n— Jethro"},
+ {id:'reddit',t:'Reddit only',
+  why:'Opens with a question. Employers reply to questions more than to pitches.',
+  b:"Hi {name},\n\nI run Reddit promotion programmes for creator accounts — posting, comment seeding, DM outreach per SOP, and warm-up phases before an account carries promotional posts.\n\nWhat I'd want to know first: how many accounts, what phase each one is in, and whether you already have subreddit targets or want me to build the list.\n\nThe way I work, every post is screenshot-evidenced and every account is tracked through its own lifecycle stage, so restricted accounts get pulled and reported the same day rather than quietly draining your schedule.\n\nCadence rules I hold to: 4-hour minimum between posts, subreddit joined before posting or commenting, no duplicate image or caption same day, no repeat commenting in the same subreddit same day.\n\nCan I run a paid test week on {acc} accounts?\n\n— Jethro"},
+ {id:'ig',t:'IG Reels only',
+  why:'Leads on ban prevention, which is the IG client’s actual fear.',
+  b:"Hi {name},\n\nI manage daily Instagram Reels programmes for creator accounts — story, feed post and trial reel per account per day, with rotating hashtags, trending audio, text overlay and link-in-bio CTA.\n\nTwo things that matter more than they sound: content assigned 1-to-1 per account so the same clip never goes out twice, and a compliance pass on every piece so nothing crosses Instagram's line. Bans in this niche are usually self-inflicted, and both of those are why.\n\nYou'd get a daily sheet showing what posted per account, plus anything that broke — flagged accounts, missing content, failed logins. You hear about problems from me rather than from a drop in your numbers.\n\nWould a paid test week on {acc} accounts be useful?\n\n— Jethro"},
+ {id:'full',t:'Full management — multi-platform',
+  why:'For bigger operations. Sells the SOP, which is what they actually lack.',
+  b:"Hi {name},\n\nI manage multi-platform promotion for creator accounts — Reddit, Instagram, X and Snapchat — and I build the SOPs and quality control behind them, not just the posting.\n\nCurrently nine client programmes run through a system I designed: live time tracking, mandatory screenshot proof on every task, and automated review of those screenshots against a written checklist per account.\n\nFor a multi-platform setup I'd start by writing the SOP — account list, content source, posting rules, escalation path — before the first post goes out. Undocumented rules get followed inconsistently, which is where most of these operations quietly fail.\n\nOpen to a call this week, or a paid test on a subset of accounts.\n\n— Jethro"},
+ {id:'trial',t:'Trial offer — price-sensitive posts',
+  why:'Skips the pitch entirely. Best reply rate when the post is competing on rate.',
+  b:"Hi {name},\n\nRather than pitch, a straight offer: give me {acc} accounts for one paid week. At the end you get a daily log of every post with screenshots, a written note of anything that broke, and a recommendation on what your cadence should actually be.\n\nIf the reporting isn't clearly better than what you have now, we stop there and you've lost one week.\n\nI run Reddit and IG posting programmes daily and hold to strict cadence rules — 4-hour post intervals, subreddit joined before posting, no duplicate captions same day — because account survival is worth more to you than volume.\n\n— Jethro"},
+ {id:'f1',t:'Follow-up 1 — send 3 days later',
+  why:'Adds something new (the sample) rather than just nudging.',
+  b:"Hi {name} — following up on my application for the {role} post. Still interested. If it helps, I can send a sample of the daily reporting a client receives so you can see the format before deciding."},
+ {id:'f2',t:'Follow-up 2 — send 7 days after that',
+  why:'The graceful exit. Giving them an easy out is what makes people reply.',
+  b:"Hi {name} — last note from me so I'm not a pest. If the role is filled, no problem at all. If you're still looking, I have capacity for {acc} accounts starting {date}."}
+];
+
+function V(){
+  var d=document.getElementById('v_date').value, nice=d;
+  if(d){ var p=d.split('-'); nice=new Date(p[0],p[1]-1,p[2]).toLocaleDateString('en-US',{month:'long',day:'numeric'}); }
+  return { name:val('v_name')||'[Name]', role:val('v_role')||'[role]',
+           acc:val('v_acc')||'[2-3]', rate:val('v_rate')||'[rate]', date:nice||'[date]' };
+}
+function val(id){ return (document.getElementById(id).value||'').trim(); }
+function fill(s){ var v=V(); return s.replace(/\{(\w+)\}/g,function(m,k){ return v[k]!==undefined?v[k]:m; }); }
+function esc(s){ return s.replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
+
+function paint(){
+  document.getElementById('tpls').innerHTML = TPL.map(function(x){
+    var body=fill(x.b);
+    // Highlight anything still unfilled so you can't send a message with [Name] in it.
+    var shown=esc(body).replace(/\[[^\]]+\]/g,function(m){return '<b>'+m+'</b>';});
+    return '<div class="card"><h3>'+esc(x.t)+'</h3><div class="why">'+esc(x.why)+'</div>'+
+           '<pre class="tpl" id="tx_'+x.id+'">'+shown+'</pre>'+
+           '<button class="btn p" onclick="cp(\''+x.id+'\')">Copy</button> '+
+           '<span style="color:var(--t3);font-size:11px">'+body.split(/\s+/).length+' words</span></div>';
+  }).join('');
+}
+function cp(id){
+  var x=TPL.filter(function(t){return t.id===id;})[0];
+  var txt=fill(x.b);
+  navigator.clipboard.writeText(txt).then(function(){ toast('Copied — check for [brackets] before sending'); },
+    function(){ toast('Copy failed — select the text manually'); });
+}
+function toast(m){ var t=document.getElementById('toast'); t.textContent=m; t.classList.add('on');
+  clearTimeout(window._tt); window._tt=setTimeout(function(){t.classList.remove('on');},2400); }
+
+/* ── Tracker. localStorage only — nothing leaves this browser. ── */
+var KEY='jmb_apply_v1', ROWS=[];
+function load(){ try{ ROWS=JSON.parse(localStorage.getItem(KEY))||[]; }catch(e){ ROWS=[]; } }
+function save(){ try{ localStorage.setItem(KEY,JSON.stringify(ROWS)); }catch(e){ toast('Could not save'); } }
+function today(){ return new Date().toISOString().slice(0,10); }
+function plus(d,n){ var t=new Date(d+'T00:00:00'); t.setDate(t.getDate()+n); return t.toISOString().slice(0,10); }
+function addRow(){
+  ROWS.unshift({e:'',b:'OnlineJobs.ph',d:today(),r:'',s:'Applied',f:plus(today(),3),n:''});
+  save(); render(); document.querySelector('#tb input').focus();
+}
+function upd(i,k,v){ ROWS[i][k]=v;
+  // Advancing the status moves the follow-up date with it, so the amber flag stays meaningful.
+  if(k==='s'){ if(v==='Applied') ROWS[i].f=plus(ROWS[i].d||today(),3);
+               else if(v==='Follow-up sent') ROWS[i].f=plus(today(),7);
+               else if(v==='Won'||v==='Closed') ROWS[i].f=''; }
+  save(); render();
+}
+function del(i){ ROWS.splice(i,1); save(); render(); }
+function render(){
+  var f=document.getElementById('filt').value, tb=document.getElementById('tb'), n=0, due=0, won=0, out=[];
+  ROWS.forEach(function(r,i){
+    if(r.s==='Won') won++;
+    var isDue = r.f && r.f<=today() && r.s!=='Won' && r.s!=='Closed';
+    if(isDue) due++;
+    if(f && r.s!==f) return; n++;
+    var sel=['Applied','Follow-up sent','Replied','Interview','Trial','Won','Closed']
+      .map(function(o){return '<option'+(o===r.s?' selected':'')+'>'+o+'</option>';}).join('');
+    var bd=['OnlineJobs.ph','Direct outreach','Referral','Other']
+      .map(function(o){return '<option'+(o===r.b?' selected':'')+'>'+o+'</option>';}).join('');
+    out.push('<tr class="'+(r.s==='Won'?'won':(isDue?'due':''))+'">'+
+      '<td><input value="'+att(r.e)+'" placeholder="employer / post" oninput="upd('+i+',\'e\',this.value)"></td>'+
+      '<td><select onchange="upd('+i+',\'b\',this.value)">'+bd+'</select></td>'+
+      '<td class="hidem"><input type="date" value="'+att(r.d)+'" onchange="upd('+i+',\'d\',this.value)"></td>'+
+      '<td><input value="'+att(r.r)+'" placeholder="—" oninput="upd('+i+',\'r\',this.value)"></td>'+
+      '<td><select onchange="upd('+i+',\'s\',this.value)">'+sel+'</select></td>'+
+      '<td><input type="date" value="'+att(r.f)+'" onchange="upd('+i+',\'f\',this.value)">'+
+        (isDue?' <span class="pill due">DUE</span>':'')+'</td>'+
+      '<td class="hidem"><input value="'+att(r.n)+'" placeholder="—" oninput="upd('+i+',\'n\',this.value)"></td>'+
+      '<td><button class="btn sm" onclick="del('+i+')">✕</button></td></tr>');
+  });
+  tb.innerHTML = out.join('') || '<tr><td colspan="8" style="color:var(--t3);padding:22px;text-align:center">'+
+    'No applications yet. Add one as you send it — logging it after the fact never happens.</td></tr>';
+  document.getElementById('cnt').textContent = n+' shown of '+ROWS.length;
+  document.getElementById('stats').innerHTML =
+    st(ROWS.length,'Sent','var(--t1)')+st(due,'Follow-up due',due?'var(--am)':'var(--t1)')+
+    st(ROWS.filter(function(r){return ['Replied','Interview','Trial'].indexOf(r.s)>=0;}).length,'In play','var(--t1)')+
+    st(won,'Won','var(--gr)')+
+    st(ROWS.length?Math.round(ROWS.filter(function(r){return r.s!=='Applied'&&r.s!=='Closed';}).length/ROWS.length*100)+'%':'—','Reply rate','var(--t1)');
+}
+function st(v,l,c){ return '<div class="st"><b style="color:'+c+'">'+v+'</b><span>'+l+'</span></div>'; }
+function att(s){ return String(s==null?'':s).replace(/"/g,'&quot;'); }
+function exportCsv(){
+  var head=['Employer/post','Board','Applied','Rate quoted','Status','Follow up','Notes'];
+  var rows=ROWS.map(function(r){ return [r.e,r.b,r.d,r.r,r.s,r.f,r.n].map(function(c){
+    return '"'+String(c==null?'':c).replace(/"/g,'""')+'"'; }).join(','); });
+  var blob=new Blob([head.join(',')+'\n'+rows.join('\n')],{type:'text/csv'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='jmb-applications-'+today()+'.csv'; a.click();
+}
+
+document.querySelectorAll('.tab').forEach(function(b){
+  b.onclick=function(){
+    document.querySelectorAll('.tab').forEach(function(x){x.classList.remove('on');});
+    document.querySelectorAll('.pane').forEach(function(x){x.classList.remove('on');});
+    b.classList.add('on'); document.getElementById(b.dataset.p).classList.add('on');
+  };
+});
+['v_name','v_role','v_acc','v_rate','v_date'].forEach(function(id){
+  document.getElementById(id).addEventListener('input',paint);
+  document.getElementById(id).addEventListener('change',paint);
+});
+load(); paint(); render();
+</script>
+</body>
+</html>
