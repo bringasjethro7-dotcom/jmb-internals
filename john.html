@@ -130,6 +130,18 @@ function smartPoll(){
 /* ── VA view tabs: '👤 My accounts' (default) · '🌐 All' · one tab per VA ── */
 var FILTER=(function(){ try{ return sessionStorage.getItem('dc_va_'+PROJECT)||'mine'; }catch(e){ return 'mine'; } })();
 function ownerOf(r){ return String(r.assigned_to||r.created_by||'').toLowerCase(); }
+/* Everyone who has ever created, been assigned, or marked work on this board. Used to keep the
+   VA pill list scoped to this project instead of the whole company directory. */
+var SEEN={};
+function noteSeen(){
+  ROWS.forEach(function(r){
+    [r.assigned_to, r.created_by].forEach(function(v){ v=String(v||'').toLowerCase(); if(v) SEEN[v]=1; });
+  });
+  var me=String((USER&&USER.id)||'').toLowerCase(); if(me) SEEN[me]=1;
+  try{ var prev=JSON.parse(sessionStorage.getItem('dc_seen_'+PROJECT)||'{}');
+       Object.keys(prev).forEach(function(k){ SEEN[k]=1; });
+       sessionStorage.setItem('dc_seen_'+PROJECT, JSON.stringify(SEEN)); }catch(e){}
+}
 function filterRows(){ if(FILTER==='all') return ROWS; var t=(FILTER==='mine')?String((USER&&USER.id)||'').toLowerCase():FILTER; return ROWS.filter(function(r){ return ownerOf(r)===t; }); }
 function setFilter(f){ FILTER=f; try{ sessionStorage.setItem('dc_va_'+PROJECT,f); }catch(e){} render(); }
 function renderTabs(){
@@ -140,6 +152,12 @@ function renderTabs(){
     return '<button onclick="setFilter(\''+val+'\')" style="border:1px solid '+(on?'#0f766e':'var(--line)')+';background:'+(on?'rgba(16,185,129,.12)':'var(--card)')+';color:'+(on?'#0f766e':'var(--ink2)')+';border-radius:100px;padding:6px 13px;font:800 12px \'Manrope\',sans-serif;cursor:pointer;white-space:nowrap;">'+label+(n!=null?(' · '+n):'')+'</button>'; }
   var html=[ pill('mine','👤 My accounts', by[mine]||0), pill('all','🌐 All', ROWS.length) ];
   Object.keys(by).sort(function(a,b){ return by[b]-by[a]; }).forEach(function(k){ if(k===mine||k==='—') return; html.push(pill(k, esc(vaName(k)), by[k])); });
+  /* Anyone on the roster who works this board but owns nothing yet still gets a pill, at 0.
+     Without this a new VA is invisible to everyone including themselves, which is exactly
+     what made the tool look like it had one user. */
+  Object.keys(NAMES).sort(function(a,b){ return String(NAMES[a]).localeCompare(String(NAMES[b])); })
+    .forEach(function(k){ if(k===mine||by[k]!=null) return;
+      if(SEEN[k]) html.push(pill(k, esc(vaName(k)), 0)); });
   host.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap;">'+html.join('')+'</div>';
 }
 /* Names + shift assignments: hydrate instantly from the last good copy, then refresh from the
@@ -175,6 +193,36 @@ async function loadNames(){
     _nmTry=(typeof _nmTry==='number'?_nmTry:0)+1;
     var wait=Math.min(300000, 30000*Math.pow(2,_nmTry-1)) + Math.random()*10000;   // 30s→60s→…→5min + jitter
     setTimeout(loadNames, wait);
+  }
+}
+/* Owner picker on every account. Lists the whole roster, so a brand-new VA can be given work
+   on their first day rather than waiting for someone to create accounts under their name. */
+function assignSel(r){
+  var cur=String(r.assigned_to||r.created_by||'').toLowerCase();
+  var ids=Object.keys(NAMES).sort(function(a,b){ return String(NAMES[a]).localeCompare(String(NAMES[b])); });
+  if(cur && ids.indexOf(cur)<0) ids.unshift(cur);
+  if(!ids.length) return esc(vaName(cur));
+  return '<select onchange="assignTo(\''+r.id+'\',this.value)" title="Who owns this account" '+
+    'style="border:1px solid var(--line);background:var(--card);color:var(--ink2);border-radius:7px;'+
+    'padding:2px 5px;font:700 11px \'Manrope\',sans-serif;cursor:pointer;max-width:170px;">'+
+    ids.map(function(k){ return '<option value="'+esc(k)+'"'+(k===cur?' selected':'')+'>'+esc(vaName(k))+'</option>'; }).join('')+
+    '</select>';
+}
+async function assignTo(id,to){
+  if(!id||!to) return;
+  var row=null; ROWS.forEach(function(r){ if(r.id===id) row=r; });
+  var was=row?String(row.assigned_to||row.created_by||''):'';
+  if(row) row.assigned_to=to;                       // optimistic — the pills move immediately
+  SEEN[String(to).toLowerCase()]=1; render();
+  try{
+    var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&assigned_to='+encodeURIComponent(to)
+      +'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
+    var d=await r.json();
+    if(!d||!d.ok) throw new Error((d&&d.error)||'assign');
+    cacheRows(); toast('Assigned to '+vaName(to));
+  }catch(e){
+    if(row) row.assigned_to=was;                    // put it back rather than lie about the owner
+    render(); alert('Could not reassign — try again.');
   }
 }
 function delBtn(id){ return '<button onclick="delAcct(\''+id+'\')" title="Delete (wrong entry)" style="border:1px solid rgba(239,68,68,.3);background:#fff;color:#b91c1c;border-radius:8px;padding:5px 8px;font-size:10.5px;font-weight:800;cursor:pointer;">🗑</button>'; }
@@ -508,7 +556,7 @@ function start(){ try{ fetch(API+'?action=tool_used&employee_id='+encodeURICompo
 async function load(){
   try{
     var d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
-    if(!d||!d.ok) throw new Error((d&&d.error)||'load'); ROWS=d.rows||[]; cacheRows(); render();
+    if(!d||!d.ok) throw new Error((d&&d.error)||'load'); ROWS=d.rows||[]; noteSeen(); cacheRows(); render();
   }catch(e){ $('grid').innerHTML='<div class="muted">Could not load — redeploy the Apps Script (pa_list).</div>'; }
 }
 function render(){
@@ -536,7 +584,7 @@ function render(){
   sorted.forEach(function(r){
     var g=grpJ(r); if(g!==lastG){ out.push('<div class="sect"><b>'+g+'</b><span>'+gcnt[g]+'</span><i></i></div>'); lastG=g; }
     var done=markOk(r.meta&&r.meta.last, r.assigned_to||r.created_by);
-    var who='<div class="meta1">'+esc(vaName(r.assigned_to||r.created_by))+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+'</div>';
+    var who='<div class="meta1">'+assignSel(r)+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+'</div>';
     if(r.status==='suspended'){ out.push('<div class="acct susp"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#ef444414;color:#b91c1c;border:1px solid #ef44442e">⛔ Suspended</span>'+kmenu([['↩ Reinstate',"setStatus('"+r.id+"','active')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+'</div>'); return; }
     out.push('<div class="acct'+(done?' done-today':'')+'"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#0f141910;color:#0f1419;border:1px solid #0f141926">Day '+r.day+'</span>'+kmenu([['⛔ Suspended',"setStatus('"+r.id+"','suspended')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+
       '<details class="planbox"'+(done?'':' open')+'><summary>📋 Day '+r.day+' plan</summary><div>'+planFor(r.day)+'</div></details>'+
