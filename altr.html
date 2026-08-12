@@ -300,6 +300,7 @@ button.promosel.has{border-color:rgba(20,184,166,.5);color:var(--o3)}
   .lwc-leg .lgi i{ width:10px; height:10px; border-radius:50%; display:inline-block; box-shadow:0 0 8px currentColor; }
   .lwc-leg .lgi b{ color:#e8edf4; font-variant-numeric:tabular-nums; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <style id="altr-premium">
 /* ========================================================================
@@ -1405,6 +1406,46 @@ function filterAccounts(kind, accts, map, ff, q){
    Boxes stay freely clickable all shift; Record Day is what refuses. The board is built around
    rapid ticking and gating each cell would wreck it. */
 var APROOF={ imgs:[], ctx:null, busy:false };
+
+/* ── PROOF STORAGE: straight to Supabase, not through Apps Script ──────────────────────────
+   Apps Script runs ONE execution at a time for the whole deployment, so every screenshot
+   upload queued behind every timer heartbeat and board load from every VA. Storage has no
+   such queue — uploads go browser to storage in parallel and Apps Script only records the URL.
+   Falls back to the Apps Script upload if storage is unavailable, so a VA is never blocked. */
+var PSUPA_URL='https://rvyrnkjqxnijxydloujk.supabase.co';
+var PSUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2eXJua2pxeG5panh5ZGxvdWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NzAwODQsImV4cCI6MjA5NzE0NjA4NH0.SwkSkmbeWrhm5PZZDSZ1Z4hbjpQ0L2CRtuKQmpHshBE';
+var PSUPA_BUCKET='proof';
+var _psb=null;
+function psb(){
+  if(_psb) return _psb;
+  var Lib=window.supabase||window.Supabase;
+  if(!Lib||!Lib.createClient) return null;
+  try{ _psb=Lib.createClient(PSUPA_URL,PSUPA_KEY); }catch(e){ _psb=null; }
+  return _psb;
+}
+function _dataUrlToBlob(d){
+  var m=/^data:([^;]+);base64,(.*)$/.exec(d); if(!m) return null;
+  var bin=atob(m[2]), a=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i);
+  return new Blob([a],{type:m[1]});
+}
+async function psUpload(dataUrl, emp, task){
+  var sb=psb(); if(!sb) throw new Error('no client');
+  var blob=_dataUrlToBlob(dataUrl); if(!blob) throw new Error('bad image');
+  var d=new Date(), ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  /* Uploads on some tools start at CAPTURE, before the proof panel has set its task — so the
+     task name can legitimately be empty here. Fall back to the project rather than the useless
+     literal "task", which is what the first batch of files ended up named. */
+  var label = String(task || ('ALTR') || 'proof');
+  var safe = label.replace(/[^A-Za-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40) || 'proof';
+  var path=(emp||'unknown')+'/'+ym+'/'+safe+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+'.jpg';
+  var up=await sb.storage.from(PSUPA_BUCKET).upload(path, blob, { contentType:'image/jpeg', upsert:false });
+  if(up.error) throw up.error;
+  var u=sb.storage.from(PSUPA_BUCKET).getPublicUrl(path).data.publicUrl;
+  if(!u) throw new Error('no url');
+  return u;
+}
+
 /* ── BACKGROUND PROOF UPLOAD ────────────────────────────────────────────────────────────
    Same fix as the other tools: each screenshot goes to Drive the moment it is attached,
    rather than all of them in one POST when the VA presses Save. The wait moves off the
@@ -1415,15 +1456,19 @@ function pupKey(d){ return d.length+'|'+d.slice(-24); }
 function pupStart(dataUrl, task){
   var k=pupKey(dataUrl);
   if(PUP.q[k]) return PUP.q[k];
-  var st={ state:'up', id:null };
-  st.p = fetch(PORTAL_EXEC, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ action:'proof_img',
-        employee_id:(USER&&USER.employee_id)||'', task:task||'',
-        date:(typeof aBizDay==='function'?aBizDay():''), image:dataUrl }) })
-    .then(function(r){ return r.json(); })
-    .then(function(d){ if(d&&d.ok&&d.id){ st.state='done'; st.id=d.id; } else st.state='fail';
-                       pupPaint(); return st; })
-    .catch(function(){ st.state='fail'; pupPaint(); return st; });
+  var st={ state:'up', id:null, url:null };
+  var emp=(USER&&USER.employee_id)||'';
+  st.p = psUpload(dataUrl, emp, task)
+    .then(function(u){ st.state='done'; st.url=u; pupPaint(); return st; })
+    .catch(function(){
+      return fetch(PORTAL_EXEC, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body: JSON.stringify({ action:'proof_img', employee_id:emp, task:task||'',
+            date:(typeof aBizDay==='function'?aBizDay():''), image:dataUrl }) })
+        .then(function(r){ return r.json(); })
+        .then(function(d){ if(d&&d.ok&&d.id){ st.state='done'; st.id=d.id; } else st.state='fail';
+                           pupPaint(); return st; })
+        .catch(function(){ st.state='fail'; pupPaint(); return st; });
+    });
   PUP.q[k]=st; pupPaint(); return st;
 }
 function pupPaint(){
@@ -1437,15 +1482,18 @@ function pupPaint(){
   el.style.color = fail ? '#b91c1c' : (up ? '#b45309' : '#047857');
 }
 /* Null on any miss, so the caller falls back to the inline path rather than losing proof. */
-async function pupIds(task){
-  var out=[];
+async function pupRefs(task){
+  var urls=[], ids=[];
   for(var i=0;i<APROOF.imgs.length;i++){
     var d=APROOF.imgs[i], k=pupKey(d), st=PUP.q[k];
     if(!st || st.state==='fail'){ delete PUP.q[k]; st=pupStart(d,task); }
     var r=await st.p;
-    if(r && r.state==='done' && r.id) out.push(r.id); else return null;
+    if(!r || r.state!=='done') return null;
+    if(r.url) urls.push(r.url); else if(r.id) ids.push(r.id); else return null;
   }
-  return out;
+  if(urls.length===APROOF.imgs.length) return { urls:urls };
+  if(ids.length===APROOF.imgs.length)  return { ids:ids };
+  return null;
 }
 var ATRAY={};                                  // key -> [dataURL]  (kind|phone|user|acct|handle)
 var APROOF_MAX=6;
@@ -1525,7 +1573,7 @@ function aProofCompress(file){
   return new Promise(function(res,rej){
     var fr=new FileReader();
     fr.onload=function(){ var im=new Image();
-      im.onload=function(){ var max=1200,w=im.width,h=im.height;
+      im.onload=function(){ var max=1000,w=im.width,h=im.height;
         if(w>max||h>max){ var r=Math.min(max/w,max/h); w=Math.round(w*r); h=Math.round(h*r); }
         var c=document.createElement('canvas'); c.width=w; c.height=h;
         c.getContext('2d').drawImage(im,0,0,w,h); res(c.toDataURL('image/jpeg',0.62)); };
@@ -1550,8 +1598,9 @@ async function aProofSave(){
       project:'ALTR', task:(c.kind==='post'?'Vysor IG Posting':'Content Sourcing'),
       account:c.a.handle, date:aBizDay(), outputs:1,
       note:'P'+c.a.phone+' U'+c.a.user+' A'+c.a.acct };
-    var _ids=await pupIds(body.task);
-    if(_ids && _ids.length===APROOF.imgs.length){ body.ids=_ids; }
+    var _ref=await pupRefs(body.task);
+    if(_ref && _ref.urls){ body.urls=_ref.urls; }
+    else if(_ref && _ref.ids){ body.ids=_ref.ids; }
     else { body.images=APROOF.imgs; }   // fall back to inline rather than lose the proof
     var r=await fetch(PORTAL_EXEC, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) });
     var d=await r.json();

@@ -780,7 +780,11 @@ async function psUpload(dataUrl, emp, task){
   var sb=psb(); if(!sb) throw new Error('no client');
   var blob=_dataUrlToBlob(dataUrl); if(!blob) throw new Error('bad image');
   var d=new Date(), ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
-  var safe=String(task||'task').replace(/[^A-Za-z0-9]+/g,'-').slice(0,40);
+  /* Uploads on some tools start at CAPTURE, before the proof panel has set its task — so the
+     task name can legitimately be empty here. Fall back to the project rather than the useless
+     literal "task", which is what the first batch of files ended up named. */
+  var label = String(task || (typeof PROJECT!=='undefined' ? PROJECT : '') || 'proof');
+  var safe = label.replace(/[^A-Za-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40) || 'proof';
   var path=(emp||'unknown')+'/'+ym+'/'+safe+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+'.jpg';
   var up=await sb.storage.from(PSUPA_BUCKET).upload(path, blob, { contentType:'image/jpeg', upsert:false });
   if(up.error) throw up.error;
