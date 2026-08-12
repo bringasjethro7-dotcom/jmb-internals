@@ -46,6 +46,9 @@ th{text-align:left;color:var(--t3);font-size:10.5px;text-transform:uppercase;let
 td{padding:6px 8px;border-bottom:1px solid rgba(15,23,42,.06);vertical-align:middle}
 tr.due{background:#fffaeb}
 tr.won{background:#ecfdf5}
+/* Waiting on you — distinct from amber "they owe you a reply". These are yours to unblock. */
+tr.todo{background:#eef4ff}
+.pill.todo{background:#c7d7fe;color:#1e3a8a}
 td input,td select{padding:5px 7px;font-size:12.5px;border-color:transparent;background:transparent}
 td input:focus,td select:focus{background:#fff;border-color:rgba(234,88,12,.65)}
 .pill{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;letter-spacing:.4px}
@@ -62,7 +65,8 @@ td input:focus,td select:focus{background:#fff;border-color:rgba(234,88,12,.65)}
   padding:10px 13px;font-size:12.5px;color:#7f1d1d;margin-bottom:13px}
 .warn b{color:var(--rd)}
 .file{display:flex;align-items:center;gap:11px;background:var(--card2);border:1px solid var(--line);
-  border-radius:10px;padding:11px 13px;margin-bottom:8px}
+  border-radius:10px;padding:11px 13px;margin-bottom:8px;text-decoration:none;color:inherit}
+a.file:hover{background:#fff;border-color:rgba(234,88,12,.45);box-shadow:0 2px 8px rgba(15,23,42,.08)}
 .file b{font-size:13px}.file span{font-size:11.5px;color:var(--t3);display:block}
 .file .ic{width:34px;height:34px;border-radius:8px;background:#ffe8d6;color:var(--o2);
   display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;flex:0 0 34px}
@@ -81,12 +85,14 @@ td input:focus,td select:focus{background:#fff;border-color:rgba(234,88,12,.65)}
 <body>
 <div class="wrap">
   <h1>Application Kit</h1>
-  <div class="sub">Reddit &amp; IG Reels account management — proposals, resume, and where every application stands.</div>
+  <div class="sub">Reddit &amp; IG Reels posting roles — application messages, resume, and where every application stands.</div>
 
   <div class="tabs">
-    <button class="tab on" data-p="p1">Proposals</button>
+    <button class="tab on" data-p="p1">Applications</button>
     <button class="tab" data-p="p2">Tracker</button>
     <button class="tab" data-p="p3">Answers</button>
+    <button class="tab" data-p="p6">Video script</button>
+    <button class="tab" data-p="p5">Profile</button>
     <button class="tab" data-p="p4">Resume &amp; files</button>
   </div>
 
@@ -106,7 +112,7 @@ td input:focus,td select:focus{background:#fff;border-color:rgba(234,88,12,.65)}
       </div>
     </div>
 
-    <div class="note">Under 200 words, one ask per message, and never account-farming mechanics in a public post — it reads as risk to the client and draws the wrong attention.</div>
+    <div class="note">Apply like a normal applicant — but one who obviously knows the work. Under 200 words, one ask, and let the SOP-level specifics do the convincing. Never spell out account-farming mechanics in a public application; it reads as risk to the employer.</div>
 
     <div id="tpls"></div>
   </div>
@@ -120,7 +126,8 @@ td input:focus,td select:focus{background:#fff;border-color:rgba(234,88,12,.65)}
       <button class="btn" onclick="exportCsv()">Export CSV</button>
       <select id="filt" onchange="render()" style="width:auto">
         <option value="">All statuses</option>
-        <option>Applied</option><option>Follow-up sent</option><option>Replied</option>
+        <option>Applied</option><option>Needs video</option><option>Needs assessment</option>
+        <option>Needs test task</option><option>Follow-up sent</option><option>Replied</option>
         <option>Interview</option><option>Trial</option><option>Won</option><option>Closed</option>
       </select>
       <span style="color:var(--t3);font-size:11.5px" id="cnt"></span>
@@ -139,18 +146,103 @@ td input:focus,td select:focus{background:#fff;border-color:rgba(234,88,12,.65)}
     <div class="card">
       <h3>The five questions you will get</h3>
       <div class="why">Have these ready. The ban question is the one you win on.</div>
-      <div class="qa"><b>"What is your rate?"</b><p>Give a range with a reason attached, never a bare number. <i>"Depends on accounts and daily volume — for [N] accounts at [X] posts a day I'd be around [rate]. Happy to price a test week lower so you can judge before committing."</i></p></div>
-      <div class="qa"><b>"How many accounts can you handle?"</b><p>Honest and specific. Overcommitting is how the relationship dies in month two. Say what one person carries properly, and that you scale with vetted specialists under the same SOP past that point.</p></div>
+      <div class="qa"><b>"What is your rate?"</b><p>Give a number with a reason attached. <i>"Depends on accounts and daily volume — for [N] accounts at [X] posts a day I'd be around [rate]. Happy to start with a paid test so you can see the work first."</i></p></div>
+      <div class="qa"><b>"How many accounts can you handle?"</b><p>Honest and specific. Overcommitting is how you lose the role in month two. Say what you can genuinely carry at their quality bar, and ask what daily volume per account looks like before committing to a number.</p></div>
       <div class="qa"><b>"Can you work US hours?"</b><p>Yes — name the hours in <i>their</i> timezone, not yours.</p></div>
-      <div class="qa"><b>"How do I know the work is being done?"</b><p>Your strongest ground. Screenshot on every task, daily log per account, checklist scoring on a review cycle. Offer to show the reporting format.</p></div>
-      <div class="qa"><b>"What happens if an account gets banned?"</b><p>Never claim it won't. <i>"It happens to everyone in this niche. The difference is you hear about it from me the same day, the account comes out of rotation immediately, and a replacement or warm-up starts rather than the schedule quietly draining."</i> Honesty here reads as experience, because it is.</p></div>
+      <div class="qa"><b>"How do I know the work is being done?"</b><p>Your strongest ground. A screenshot on every task and a daily sheet per account. Offer to show the format — most applicants have nothing to show here.</p></div>
+      <div class="qa"><b>"What happens if an account gets banned?"</b><p>Never claim it won't. <i>"It happens to everyone in this niche. The difference is you hear about it from me the same day, the account comes out of rotation instead of quietly draining the schedule."</i> Honesty here reads as experience, because it is.</p></div>
     </div>
     <div class="card">
       <h3>What not to do</h3>
       <div class="qa"><b>Don't open with "hardworking and passionate."</b><p>It's what every other applicant writes, and it signals you have nothing concrete to lead with.</p></div>
-      <div class="qa"><b>Don't attach the spec portfolio.</b><p>Every metric in it is stamped SAMPLE. A buyer who reads that label then has reason to re-examine everything else you sent.</p></div>
+      <div class="qa"><b>Don't attach the spec portfolio.</b><p>Every metric in it is stamped SAMPLE. An employer who reads that label then has reason to re-examine everything else you sent.</p></div>
       <div class="qa"><b>Don't follow up more than twice.</b><p>Two is persistence. Four is a reason not to hire you.</p></div>
-      <div class="qa"><b>Don't invent history.</b><p>Buyers in this niche ask for handles and references as a matter of course. A backstory that collapses costs the client, the platform reputation, and every referral behind it.</p></div>
+      <div class="qa"><b>Don't invent history.</b><p>Employers in this niche ask for handles and references as a matter of course. A backstory that collapses costs you the role and your standing on the board.</p></div>
+    </div>
+  </div>
+
+
+
+  <!-- ══════════ VIDEO SCRIPT ══════════ -->
+  <div class="pane" id="p6">
+    <div class="note">When a posting asks for a video, mark that row <b>Needs video</b> in the Tracker and press 📄 — it lands here with the role filled in. One recording per posting beats one generic recording for all of them, and it takes the same four minutes.</div>
+    <div class="card">
+      <h3>Script for this posting</h3>
+      <div class="why">Written to be spoken. Glance and talk — do not read it word for word, it shows.</div>
+      <div class="vars">
+        <div><label>Role (from the tracker row)</label><input id="v_role_mirror" placeholder="Reddit Manager" oninput="document.getElementById('v_role').value=this.value;buildScript(null)"></div>
+        <div><label>Emphasis</label><select id="scr-kind" onchange="buildScript(null)">
+          <option value="general">General social media</option>
+          <option value="reddit">Reddit</option>
+          <option value="ig">Instagram Reels</option>
+          <option value="multi">Multi-platform</option>
+        </select></div>
+      </div>
+      <pre class="tpl" id="scr-out" style="margin-top:10px"></pre>
+      <button class="btn p" onclick="cpEl('scr-out')">Copy script</button>
+      <span style="color:var(--t3);font-size:11px;margin-left:8px" id="scr-words"></span>
+      <div class="why" style="margin-top:10px">Good light facing you, quiet room, phone or laptop camera is fine. Look at the lens, not the screen. Two or three takes — pick the one where you sound relaxed rather than perfect.</div>
+    </div>
+    <div class="card">
+      <h3>After you record</h3>
+      <div class="why">Upload the video wherever the posting asks, send the application, then set that tracker row back to <b>Applied</b>. The follow-up date reschedules itself to three days out.</div>
+    </div>
+  </div>
+
+  <!-- ══════════ PROFILE ══════════ -->
+  <div class="pane" id="p5">
+    <div class="note">Fill this once. Every form answer I give comes from here, so nothing contradicts across applications. Saved in this browser only — <b>nothing is sent anywhere</b>, and do not put passwords here.</div>
+    <div class="rowbar">
+      <button class="btn p" onclick="pfSave()">Save profile</button>
+      <button class="btn" onclick="pfCopy()">Copy as text</button>
+      <span style="color:var(--t3);font-size:11.5px" id="pf-stat"></span>
+    </div>
+<div class="card"><h3>IDENTITY</h3><div class="vars">
+    <div><label>Full legal name (as on ID)</label><input id="pf_name" placeholder="Jethro Bringas"></div>
+    <div><label>Date of birth</label><input id="pf_dob" placeholder="1997-01-01"></div>
+    <div><label>Complete address</label><input id="pf_addr" placeholder="151 Brgy. Lucong, Mabitac, Laguna, PH"></div>
+    <div><label>Phone</label><input id="pf_phone" placeholder="+63 950 845 0178"></div>
+    <div><label>Email</label><input id="pf_email" placeholder="bringasjethro7@gmail.com"></div>
+    <div><label>Skype / WhatsApp / Telegram</label><input id="pf_msg" placeholder=""></div>
+    </div></div>
+    <div class="card"><h3>AVAILABILITY & RATE</h3><div class="vars">
+    <div><label>Hours available (US Eastern)</label><input id="pf_hours_et" placeholder="e.g. 9pm - 6am ET"></div>
+    <div><label>Hours available (US Pacific)</label><input id="pf_hours_pt" placeholder="e.g. 6pm - 3am PT"></div>
+    <div><label>Rate — hourly</label><input id="pf_rate_hr" placeholder="e.g. $5"></div>
+    <div><label>Rate — monthly</label><input id="pf_rate_mo" placeholder="e.g. $700"></div>
+    <div><label>Earliest start date</label><input id="pf_start" placeholder=""></div>
+    <div><label>Full-time or part-time</label><input id="pf_ft" placeholder="Full-time"></div>
+    </div></div>
+    <div class="card"><h3>SETUP</h3><div class="vars">
+    <div><label>Laptop / specs</label><input id="pf_laptop" placeholder="e.g. MacBook Air M1, 8GB"></div>
+    <div><label>Internet speed</label><input id="pf_net" placeholder="e.g. 100 Mbps fiber"></div>
+    <div><label>Backup connection</label><input id="pf_backup" placeholder="e.g. mobile hotspot, 50 Mbps"></div>
+    <div><label>Headset / quiet space / other</label><input id="pf_extra" placeholder=""></div>
+    </div></div>
+    <div class="card"><h3>CREDENTIALS</h3><div class="vars">
+    <div><label>Education</label><input id="pf_edu" placeholder="BS Accountancy — University of Rizal System (2015-2019)"></div>
+    <div><label>Certifications</label><input id="pf_certs" placeholder="VA / Social Media Marketing (2023)"></div>
+    <div><label>ID numbers they may ask for</label><input id="pf_ids" placeholder=""></div>
+    </div></div>
+    <div class="card"><h3>LIMITS — what you will refuse</h3><div class="vars">
+    <div><label>Walk away below</label><input id="pf_minrate" placeholder="e.g. $4/hr"></div>
+    <div><label>Shifts you cannot take</label><input id="pf_noshift" placeholder=""></div>
+    <div><label>Work you will not take</label><input id="pf_nowork" placeholder=""></div>
+    </div></div>
+    <div class="card">
+      <h3>Intro video script — 45 seconds</h3>
+      <div class="why">Most posts that ask for a video just want to hear you speak English and sound like a real person. Say it once, use the same recording for every application. Do not read it word for word — glance and talk.</div>
+      <pre class="tpl" id="vid-script">Hi, I'm Jethro, from Laguna in the Philippines.
+
+I do daily social media posting for creator accounts — mostly Reddit and Instagram. On Reddit that means posting to the right subreddits on a set schedule, seeding comments, and handling DMs. On Instagram it's a story, a feed post and a trial reel per account, every day.
+
+The part I care most about is keeping accounts alive. I work to written rules — at least four hours between posts on the same account, join the subreddit before posting in it, never the same caption or image twice in a day. Most bans in this work are self-inflicted, and that discipline is what prevents them.
+
+I screenshot every task I do and keep a daily sheet, so you always know what went out and from which account without having to ask.
+
+I'm available full-time on your hours. Thanks for watching.</pre>
+      <button class="btn p" onclick="cpEl('vid-script')">Copy script</button>
+      <div class="why" style="margin-top:9px">Recording notes: good light facing you, quiet room, phone or laptop camera is fine. Look at the lens, not the screen. Two or three takes is normal — pick the one where you sound relaxed rather than perfect.</div>
     </div>
   </div>
 
@@ -158,11 +250,12 @@ td input:focus,td select:focus{background:#fff;border-color:rgba(234,88,12,.65)}
   <div class="pane" id="p4">
     <div class="card">
       <h3>Send these</h3>
-      <div class="why">Paths are relative to the Portal folder. Open from your machine if the links don't resolve here.</div>
-      <div class="file"><div class="ic">PDF</div><div><b>JMB_Resume_SMM_Reddit_IG.pdf</b><span>The one you attach. Send this, not the DOCX.</span></div></div>
-      <div class="file"><div class="ic">DOC</div><div><b>JMB_Resume_SMM_Reddit_IG.docx</b><span>Editable master. Update here, re-export the PDF.</span></div></div>
-      <div class="file"><div class="ic">MD</div><div><b>JMB_Proposal_Kit_OnlineJobsPH.md</b><span>Full written kit — same templates as the Proposals tab.</span></div></div>
-      <div class="file"><div class="ic">IMG</div><div><b>Reporting sample screenshot</b><span>To create: a daily log with client names and account handles removed.</span></div></div>
+      <div class="why">Click to download. Files live in <code>internals_site/files/</code> — upload that folder with the site or the links will 404.</div>
+      <a class="file" href="files/JMB_Resume_SMM_Reddit_IG.pdf" download><div class="ic">PDF</div><div><b>Resume — Reddit &amp; IG Reels</b><span>Applicant version. Attach this one, not the DOCX.</span></div></a>
+      <a class="file" href="files/JMB_Resume_SMM_Reddit_IG.docx" download><div class="ic">DOC</div><div><b>Resume — editable master</b><span>Update here, re-export the PDF.</span></div></a>
+      <a class="file" href="files/JMB_Proposal_Kit_OnlineJobsPH.md" download><div class="ic">MD</div><div><b>Application kit (written)</b><span>Same messages as the Applications tab, in one document.</span></div></a>
+      <a class="file" href="files/JMB_Rate_Card_and_Capacity.xlsx" download><div class="ic">XLS</div><div><b>Rate card &amp; capacity model</b><span>Pricing, margin floor, and what the bench can absorb.</span></div></a>
+      <div class="file"><div class="ic">IMG</div><div><b>Reporting sample screenshot</b><span>Still to create: a daily log with client names and handles removed.</span></div></div>
     </div>
     <div class="card">
       <h3>Open item on the resume</h3>
@@ -177,27 +270,27 @@ td input:focus,td select:focus{background:#fff;border-color:rgba(234,88,12,.65)}
 /* ── Templates. {name} etc. are filled from the vars bar at send time. ───────────
    Kept as data rather than markup so a wording change happens in one place. */
 var TPL=[
- {id:'base',t:'Base — general Reddit + IG post',
-  why:'Use when the post asks for both platforms, or is vague about which.',
-  b:"Hi {name},\n\nI manage Reddit and Instagram promotion for creator accounts — currently nine client programmes running daily.\n\nThe part most people skip: every posting task in my workflow carries a screenshot before it counts as done, and accounts get scored against a written checklist on a review cycle. So you wouldn't be taking my word for what went out. You'd see it.\n\nOn Reddit I run to strict cadence rules — minimum 4 hours between posts, joined the subreddit before posting or commenting, no duplicate image or caption in a day. That discipline is usually the difference between an account that lasts and one that gets restricted in week two.\n\nHappy to run a paid test week on {acc} accounts so you can judge the reporting before committing to anything.\n\n— Jethro"},
+ {id:'base',t:'General — Reddit + IG posting role',
+  why:'When the post wants both platforms, or is vague about which.',
+  b:"Hi {name},\n\nI'm applying for the {role} role. Daily Reddit and Instagram posting for creator accounts is what I already do, so I'd start knowing the workflow rather than learning it.\n\nOn Reddit I keep to the rules that actually keep accounts alive — at least 4 hours between posts on the same account, joining the subreddit before posting or commenting in it, and no duplicate image or caption in the same day. On Instagram I run the full daily cycle per account: story, feed post and trial reel, with rotating hashtags, trending audio and a text overlay.\n\nI screenshot every task and keep a daily sheet of what posted from which account, so you know where things stand without asking.\n\nAvailable full-time and able to work US hours. Resume attached.\n\nThank you,\nJethro"},
  {id:'reddit',t:'Reddit only',
   why:'Opens with a question. Employers reply to questions more than to pitches.',
-  b:"Hi {name},\n\nI run Reddit promotion programmes for creator accounts — posting, comment seeding, DM outreach per SOP, and warm-up phases before an account carries promotional posts.\n\nWhat I'd want to know first: how many accounts, what phase each one is in, and whether you already have subreddit targets or want me to build the list.\n\nThe way I work, every post is screenshot-evidenced and every account is tracked through its own lifecycle stage, so restricted accounts get pulled and reported the same day rather than quietly draining your schedule.\n\nCadence rules I hold to: 4-hour minimum between posts, subreddit joined before posting or commenting, no duplicate image or caption same day, no repeat commenting in the same subreddit same day.\n\nCan I run a paid test week on {acc} accounts?\n\n— Jethro"},
- {id:'ig',t:'IG Reels only',
-  why:'Leads on ban prevention, which is the IG client’s actual fear.',
-  b:"Hi {name},\n\nI manage daily Instagram Reels programmes for creator accounts — story, feed post and trial reel per account per day, with rotating hashtags, trending audio, text overlay and link-in-bio CTA.\n\nTwo things that matter more than they sound: content assigned 1-to-1 per account so the same clip never goes out twice, and a compliance pass on every piece so nothing crosses Instagram's line. Bans in this niche are usually self-inflicted, and both of those are why.\n\nYou'd get a daily sheet showing what posted per account, plus anything that broke — flagged accounts, missing content, failed logins. You hear about problems from me rather than from a drop in your numbers.\n\nWould a paid test week on {acc} accounts be useful?\n\n— Jethro"},
- {id:'full',t:'Full management — multi-platform',
-  why:'For bigger operations. Sells the SOP, which is what they actually lack.',
-  b:"Hi {name},\n\nI manage multi-platform promotion for creator accounts — Reddit, Instagram, X and Snapchat — and I build the SOPs and quality control behind them, not just the posting.\n\nCurrently nine client programmes run through a system I designed: live time tracking, mandatory screenshot proof on every task, and automated review of those screenshots against a written checklist per account.\n\nFor a multi-platform setup I'd start by writing the SOP — account list, content source, posting rules, escalation path — before the first post goes out. Undocumented rules get followed inconsistently, which is where most of these operations quietly fail.\n\nOpen to a call this week, or a paid test on a subset of accounts.\n\n— Jethro"},
- {id:'trial',t:'Trial offer — price-sensitive posts',
-  why:'Skips the pitch entirely. Best reply rate when the post is competing on rate.',
-  b:"Hi {name},\n\nRather than pitch, a straight offer: give me {acc} accounts for one paid week. At the end you get a daily log of every post with screenshots, a written note of anything that broke, and a recommendation on what your cadence should actually be.\n\nIf the reporting isn't clearly better than what you have now, we stop there and you've lost one week.\n\nI run Reddit and IG posting programmes daily and hold to strict cadence rules — 4-hour post intervals, subreddit joined before posting, no duplicate captions same day — because account survival is worth more to you than volume.\n\n— Jethro"},
+  b:"Hi {name},\n\nI'd like to apply for the {role} role. Reddit posting for creator accounts is what I do daily.\n\nA question so I can answer properly: how many accounts would I be handling, and are the target subreddits already set or would I be finding them?\n\nThe rules I work to without being reminded — 4 hours minimum between posts on the same account, join the subreddit before posting or commenting, no duplicate image or caption in a day, no repeat commenting in the same subreddit the same day. I've also run account warm-up before an account starts carrying promotional posts, and handled DM outreach per SOP.\n\nEvery task gets a screenshot and goes into a daily sheet. If an account gets restricted, you hear it from me that day.\n\nAvailable full-time, US hours. Resume attached.\n\nThank you,\nJethro"},
+ {id:'ig',t:'Instagram Reels only',
+  why:"Leads on ban prevention — the IG employer's real worry.",
+  b:"Hi {name},\n\nI'm applying for the {role} role. I run daily Instagram posting for creator accounts — story, feed post and trial reel per account, with captions, rotating hashtags, trending audio, text overlay and link-in-bio CTA.\n\nTwo habits I bring: content tracked one-to-one per account so the same clip never goes out twice, and a check on every piece before it posts so nothing crosses Instagram's line. Most bans in this niche are self-inflicted and those two are why.\n\nI'm used to scheduling across time zones to set slots, and to working several accounts from one device setup. Everything goes into a daily sheet with screenshots.\n\nAvailable full-time and able to work US hours. Resume attached.\n\nThank you,\nJethro"},
+ {id:'multi',t:'Multi-platform / full-time VA',
+  why:'For posts wanting one person across several platforms.',
+  b:"Hi {name},\n\nI'm applying for the {role} role. I've worked creator accounts across Reddit, Instagram, X and Snapchat, so a multi-platform setup is familiar rather than new.\n\nReddit: posting, comment seeding, DM outreach per SOP, warm-up phases. Instagram: daily story, feed and trial reel with captions and audio. X: profile warm-up, pinned content, daily follow routines. Snapchat: account setup with AdsPower, VPS, proxies and SMSPool verification.\n\nThe first thing I'd ask for is your posting rules written down — accounts, cadence, and what to do when something breaks. Undocumented rules get followed inconsistently, and that's usually where these setups start losing accounts.\n\nFull-time, US hours. Resume attached.\n\nThank you,\nJethro"},
+ {id:'trial',t:'Offer a paid test task',
+  why:'Normal on this board and the fastest way past a crowded post.',
+  b:"Hi {name},\n\nI'm applying for the {role} role, and rather than just make claims — happy to do a paid test on {acc} accounts for a few days so you can see the work before deciding.\n\nYou'd get the posts done to your cadence, a screenshot of every task, and a daily sheet showing what went out from which account plus anything that went wrong.\n\nI do Reddit and Instagram posting for creator accounts daily and keep to strict spacing rules — 4 hours between posts, subreddit joined before posting, no duplicate captions in a day — because keeping the account is worth more than the extra post.\n\nAvailable full-time, US hours. Resume attached.\n\nThank you,\nJethro"},
  {id:'f1',t:'Follow-up 1 — send 3 days later',
-  why:'Adds something new (the sample) rather than just nudging.',
-  b:"Hi {name} — following up on my application for the {role} post. Still interested. If it helps, I can send a sample of the daily reporting a client receives so you can see the format before deciding."},
+  why:'Adds something new instead of just nudging.',
+  b:"Hi {name} — following up on my application for the {role} role. Still very interested. If it helps, I can send a sample of the daily sheet I keep so you can see exactly what you'd be getting."},
  {id:'f2',t:'Follow-up 2 — send 7 days after that',
   why:'The graceful exit. Giving them an easy out is what makes people reply.',
-  b:"Hi {name} — last note from me so I'm not a pest. If the role is filled, no problem at all. If you're still looking, I have capacity for {acc} accounts starting {date}."}
+  b:"Hi {name} — last note from me so I'm not a bother. If the role is filled, no problem at all. If you're still looking, I'm available from {date}."}
 ];
 
 function V(){
@@ -232,6 +325,11 @@ function toast(m){ var t=document.getElementById('toast'); t.textContent=m; t.cl
 
 /* ── Tracker. localStorage only — nothing leaves this browser. ── */
 var KEY='jmb_apply_v1', ROWS=[];
+/* Statuses where the ball is in YOUR court, not the employer's. They get their own tint, their
+   own counter, and a follow-up date of today — because a row sitting on you is not "waiting for
+   a reply", it is a task you have not done. */
+var BLOCKED=['Needs video','Needs assessment','Needs test task'];
+var BLOCKED_LABEL={'Needs video':'VIDEO','Needs assessment':'ASSESS','Needs test task':'TEST'};
 function load(){ try{ ROWS=JSON.parse(localStorage.getItem(KEY))||[]; }catch(e){ ROWS=[]; } }
 function save(){ try{ localStorage.setItem(KEY,JSON.stringify(ROWS)); }catch(e){ toast('Could not save'); } }
 function today(){ return new Date().toISOString().slice(0,10); }
@@ -244,7 +342,9 @@ function upd(i,k,v){ ROWS[i][k]=v;
   // Advancing the status moves the follow-up date with it, so the amber flag stays meaningful.
   if(k==='s'){ if(v==='Applied') ROWS[i].f=plus(ROWS[i].d||today(),3);
                else if(v==='Follow-up sent') ROWS[i].f=plus(today(),7);
-               else if(v==='Won'||v==='Closed') ROWS[i].f=''; }
+               else if(v==='Won'||v==='Closed') ROWS[i].f='';
+               /* Blocked on you: due today, because nothing moves until you do it. */
+               else if(BLOCKED.indexOf(v)>=0) ROWS[i].f=today(); }
   save(); render();
 }
 function del(i){ ROWS.splice(i,1); save(); render(); }
@@ -252,23 +352,25 @@ function render(){
   var f=document.getElementById('filt').value, tb=document.getElementById('tb'), n=0, due=0, won=0, out=[];
   ROWS.forEach(function(r,i){
     if(r.s==='Won') won++;
-    var isDue = r.f && r.f<=today() && r.s!=='Won' && r.s!=='Closed';
+    var blocked = BLOCKED.indexOf(r.s)>=0;
+    var isDue = !blocked && r.f && r.f<=today() && r.s!=='Won' && r.s!=='Closed';
     if(isDue) due++;
     if(f && r.s!==f) return; n++;
-    var sel=['Applied','Follow-up sent','Replied','Interview','Trial','Won','Closed']
+    var sel=['Applied','Needs video','Needs assessment','Needs test task','Follow-up sent','Replied','Interview','Trial','Won','Closed']
       .map(function(o){return '<option'+(o===r.s?' selected':'')+'>'+o+'</option>';}).join('');
     var bd=['OnlineJobs.ph','Direct outreach','Referral','Other']
       .map(function(o){return '<option'+(o===r.b?' selected':'')+'>'+o+'</option>';}).join('');
-    out.push('<tr class="'+(r.s==='Won'?'won':(isDue?'due':''))+'">'+
+    out.push('<tr class="'+(r.s==='Won'?'won':(blocked?'todo':(isDue?'due':'')))+'">'+
       '<td><input value="'+att(r.e)+'" placeholder="employer / post" oninput="upd('+i+',\'e\',this.value)"></td>'+
       '<td><select onchange="upd('+i+',\'b\',this.value)">'+bd+'</select></td>'+
       '<td class="hidem"><input type="date" value="'+att(r.d)+'" onchange="upd('+i+',\'d\',this.value)"></td>'+
       '<td><input value="'+att(r.r)+'" placeholder="—" oninput="upd('+i+',\'r\',this.value)"></td>'+
       '<td><select onchange="upd('+i+',\'s\',this.value)">'+sel+'</select></td>'+
       '<td><input type="date" value="'+att(r.f)+'" onchange="upd('+i+',\'f\',this.value)">'+
-        (isDue?' <span class="pill due">DUE</span>':'')+'</td>'+
+        (blocked?(' <span class="pill todo">'+BLOCKED_LABEL[r.s]+'</span>'):(isDue?' <span class="pill due">DUE</span>':''))+'</td>'+
       '<td class="hidem"><input value="'+att(r.n)+'" placeholder="—" oninput="upd('+i+',\'n\',this.value)"></td>'+
-      '<td><button class="btn sm" onclick="del('+i+')">✕</button></td></tr>');
+      '<td>'+(blocked?('<button class="btn sm" title="Open a script for this posting" onclick="scriptFor('+i+')">📄</button> '):'')+
+        '<button class="btn sm" onclick="del('+i+')">✕</button></td></tr>');
   });
   tb.innerHTML = out.join('') || '<tr><td colspan="8" style="color:var(--t3);padding:22px;text-align:center">'+
     'No applications yet. Add one as you send it — logging it after the fact never happens.</td></tr>';
@@ -301,7 +403,84 @@ document.querySelectorAll('.tab').forEach(function(b){
   document.getElementById(id).addEventListener('input',paint);
   document.getElementById(id).addEventListener('change',paint);
 });
-load(); paint(); render();
+
+
+/* ── SCRIPT FOR A SPECIFIC POSTING ────────────────────────────────────────────────────────
+   A generic intro video gets you past a generic post. When an employer asks for a video it is
+   usually because they want to hear you talk about THEIR work — so the script is generated
+   from the role and employer on that tracker row, not from a fixed template.
+   Written to be spoken, not read: short sentences, no clauses to trip over. */
+function scriptFor(i){
+  var r=ROWS[i]; if(!r) return;
+  var el=document.getElementById('v_role'); if(el) el.value = r.e || '';
+  document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('on'); });
+  document.querySelectorAll('.pane').forEach(function(x){ x.classList.remove('on'); });
+  var t=document.querySelector('.tab[data-p="p6"]'); if(t) t.classList.add('on');
+  var p=document.getElementById('p6'); if(p) p.classList.add('on');
+  buildScript(r);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function buildScript(r){
+  var host=document.getElementById('scr-out'); if(!host) return;
+  var role=(r&&r.e)||document.getElementById('v_role').value||'the role';
+  var kind=(document.getElementById('scr-kind')||{}).value||'general';
+  var mid = kind==='reddit'
+    ? "On Reddit I keep to the rules that actually keep accounts alive. At least four hours between posts on the same account. Join the subreddit before posting or commenting in it. Never the same caption or the same image twice in a day. Most bans in this work are self-inflicted, and that discipline is what prevents them."
+    : kind==='ig'
+    ? "On Instagram I run the full daily cycle per account. A story, a feed post, and a trial reel. Rotating hashtags, trending audio, a text overlay. I check every piece before it goes out, because content that crosses the line is what gets accounts restricted."
+    : kind==='multi'
+    ? "I have worked creator accounts across Reddit, Instagram, X and Snapchat. Posting, warm-up phases, DM handling, and account setup. A multi-platform setup is familiar to me rather than new."
+    : "I do daily social media posting for creator accounts, mostly Reddit and Instagram. Posting to a set schedule, seeding comments, and handling the daily engagement.";
+  var txt =
+    "Hi, I'm Jethro, from Laguna in the Philippines.\n\n" +
+    "I'm applying for the " + role + " role.\n\n" +
+    mid + "\n\n" +
+    "I screenshot every task I do and keep a daily sheet, so you always know what went out and from which account without having to ask.\n\n" +
+    "I'm available full-time and can work your hours. Thanks for watching.";
+  host.textContent = txt;
+  var w=document.getElementById('scr-words');
+  if(w){ var n=txt.split(/\s+/).length; w.textContent = n+' words · about '+Math.round(n/2.5)+' seconds spoken'; }
+}
+
+/* ── PROFILE ─────────────────────────────────────────────────────────────────────
+   One source of truth for anything a form asks. Kept in localStorage so it survives
+   restarts; deliberately no password field — credentials do not belong in a page like this. */
+var PF_KEY='jmb_profile_v1';
+var PF_IDS=["pf_name", "pf_dob", "pf_addr", "pf_phone", "pf_email", "pf_msg", "pf_hours_et", "pf_hours_pt", "pf_rate_hr", "pf_rate_mo", "pf_start", "pf_ft", "pf_laptop", "pf_net", "pf_backup", "pf_extra", "pf_edu", "pf_certs", "pf_ids", "pf_minrate", "pf_noshift", "pf_nowork"];
+function pfSave(){
+  var o={}; PF_IDS.forEach(function(k){ var e=document.getElementById(k); if(e) o[k]=e.value; });
+  try{ localStorage.setItem(PF_KEY, JSON.stringify(o));
+       document.getElementById('pf-stat').textContent='Saved '+new Date().toLocaleTimeString(); }
+  catch(e){ document.getElementById('pf-stat').textContent='Could not save'; }
+}
+function pfLoad(){
+  try{ var o=JSON.parse(localStorage.getItem(PF_KEY)||'{}');
+       PF_IDS.forEach(function(k){ var e=document.getElementById(k); if(e&&o[k]!=null) e.value=o[k]; });
+  }catch(e){}
+}
+/* Copies the whole profile as labelled text — the fastest way to hand it to me in chat. */
+function pfCopy(){
+  var out=[];
+  document.querySelectorAll('#p5 .card').forEach(function(c){
+    var h=c.querySelector('h3'); if(!h) return;
+    var lines=[];
+    c.querySelectorAll('.vars > div').forEach(function(d){
+      var l=d.querySelector('label'), i=d.querySelector('input');
+      if(l&&i&&i.value.trim()) lines.push('  '+l.textContent+': '+i.value.trim());
+    });
+    if(lines.length){ out.push(h.textContent); out.push(lines.join('\n')); }
+  });
+  var txt=out.join('\n');
+  if(!txt){ toast('Nothing filled in yet'); return; }
+  navigator.clipboard.writeText(txt).then(function(){ toast('Profile copied — paste it to me in chat'); },
+    function(){ toast('Copy failed'); });
+}
+function cpEl(id){
+  var e=document.getElementById(id); if(!e) return;
+  navigator.clipboard.writeText(e.textContent).then(function(){ toast('Copied'); },function(){ toast('Copy failed'); });
+}
+
+load(); paint(); render(); pfLoad(); try{ buildScript(null); }catch(e){}
 </script>
 </body>
 </html>

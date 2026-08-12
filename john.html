@@ -467,8 +467,9 @@ function pupPaint(){
   keys.forEach(function(k){ var s=PUP.q[k]; if(!s) return;
     if(s.state==='up') up++; else if(s.state==='done') done++; else fail++; });
   el.textContent = fail ? (fail+' failed — they will be retried on save')
-                 : up ? ('Uploading '+up+'…  '+done+' ready')
-                 : done ? (done+' screenshot'+(done>1?'s':'')+' ready') : '';
+                 : up ? ('Uploading '+up+'…  '+done+' attached')
+                 : done ? (done+' screenshot'+(done>1?'s':'')+" attached — nothing is counted until you press Save")
+                 : '';
   el.style.color = fail ? '#b91c1c' : (up ? '#b45309' : '#047857');
 }
 /* Returns the Drive ids for the current selection, waiting only on uploads still running and
@@ -537,7 +538,7 @@ function proofThumb(d){
   w.style.cssText='position:relative;width:74px;height:74px;border-radius:9px;overflow:hidden;border:1px solid #e2e8f0;margin:0 8px 8px 0;';
   w.innerHTML='<img src="'+d+'" style="width:100%;height:100%;object-fit:cover;">'+
     '<button style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;line-height:1;">×</button>';
-  w.querySelector('button').onclick=function(){ var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1); w.remove(); };
+  w.querySelector('button').onclick=function(){ var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1); try{ delete PUP.q[pupKey(d)]; pupPaint(); }catch(_pq){} w.remove(); };
   host.appendChild(w);
 }
 async function proofAdd(files){
@@ -593,6 +594,14 @@ function proofOnly(task, account){
     document.getElementById('proof-thumbs').innerHTML='';
     PROOF.resolve=function(){ resolve(true); };
   });
+}
+/* Count an output with no proof panel. Used when the evidence has already been collected
+   somewhere else in the flow — the four session screenshots — so asking for a fifth would be
+   asking the VA to photograph the same work twice. */
+function countOnly(task,n){
+  return fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)
+    +'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now())
+    .then(function(){ return true; }).catch(function(){ return true; });
 }
 function bump(task,n){
   return new Promise(function(resolve,reject){
@@ -708,7 +717,10 @@ function render(){
           (done
             ? '<div class="btns"><button disabled style="opacity:.55">✓ Done today</button></div>'
             : (sessDone(r)>=JN_SESSIONS
-                ? '<div class="btns"><button class="go" onclick="dayDone(\''+r.id+'\','+r.day+')">✓ Day '+r.day+' done</button></div>'
+                /* Normally unreachable: session 4 completes the day itself. This stays only for a
+                   row whose sessions were all logged before that behaviour existed, so it can
+                   still be closed without a fifth screenshot. */
+                ? '<div class="btns"><button class="go" onclick="dayDone(\''+r.id+'\','+r.day+',true)">✓ Day '+r.day+' done</button></div>'
                 : '')))+
       '</div>');
   });
@@ -766,20 +778,31 @@ async function sessDone_(id, n){
     if(d&&d.ok){
       r0.meta=m;
       var left=JN_SESSIONS-sessDone(r0);
-      toast(left>0 ? ('Session '+n+' logged · '+left+' to go.') : ('All '+JN_SESSIONS+' sessions done — you can finish the day.'));
-      load();
+      if(left>0){
+        toast('Session '+n+' logged · '+left+' to go.');
+        load();
+      } else {
+        /* Session 4 IS the end of the day. Completing it advances the day and counts the
+           output straight away — no extra button, no fifth screenshot. */
+        toast('Session '+n+' logged · finishing day '+r0.day+'…');
+        await dayDone(id, r0.day, true);
+      }
     } else toast('Could not save.');
   }catch(e){ toast('Connection error.'); }
 }
-async function dayDone(id, day){
+async function dayDone(id, day, noProof){
   var r0=ROWS.filter(function(x){return x.id===id;})[0];
   /* Setup days 1-3 have no sessions to finish — the checklist IS the day. Only the follow phase
      is gated on all four. */
   if(r0 && r0.day>3 && sessDone(r0)<JN_SESSIONS){ toast('Finish all '+JN_SESSIONS+' sessions first.'); return; }
   /* The day still counts ONE output. The four sessions carry the evidence; counting each of
      them as output would quadruple everyone's Project John volume overnight and break every
-     comparison against the weeks already recorded. */
-  await bump(day<=3?'Setup Day':'Follow Day',1);   // proof before the day advances
+     comparison against the weeks already recorded.
+     noProof is set when Session 4 finishes the day on its own: four screenshots were already
+     taken, so a fifth proof panel would be photographing the same work again. */
+  var task=(day<=3?'Setup Day':'Follow Day');
+  if(noProof) await countOnly(task,1);
+  else        await bump(task,1);                  // proof before the day advances
 
   try{
     var r0=ROWS.filter(function(x){return x.id===id;})[0];
