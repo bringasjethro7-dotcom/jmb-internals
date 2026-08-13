@@ -121,6 +121,14 @@ a.file:hover{background:#fff;border-color:rgba(234,88,12,.45);box-shadow:0 2px 8
   <div class="pane" id="p2">
     <div class="stat" id="stats"></div>
     <div class="note">Rows turn <b>amber</b> when a follow-up is due. Most replies come from the second message, not the first — this is the whole reason the tracker exists.</div>
+    <div class="rowbar" style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:9px 11px">
+      <span style="font-size:11.5px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.6px">Sync</span>
+      <input id="sync-id" placeholder="Employee ID" style="width:130px"
+        onchange="syncSetId(this.value)" onblur="syncSetId(this.value)">
+      <button class="btn" onclick="syncPull()">Load from server</button>
+      <button class="btn" onclick="syncPush(true)">Save to server</button>
+      <span style="font-size:11.5px;font-weight:700" id="sync-msg"></span>
+    </div>
     <div class="rowbar">
       <button class="btn p" onclick="addRow()">+ Add application</button>
       <button class="btn" onclick="exportCsv()">Export CSV</button>
@@ -329,6 +337,70 @@ function toast(m){ var t=document.getElementById('toast'); t.textContent=m; t.cl
   clearTimeout(window._tt); window._tt=setTimeout(function(){t.classList.remove('on');},2400); }
 
 /* ── Tracker. localStorage only — nothing leaves this browser. ── */
+
+/* ── SYNC ─────────────────────────────────────────────────────────────────────────────────
+   The tracker used to live only in localStorage, so a list built on one MacBook did not exist
+   on the other — and nothing outside that browser could ever see it. It now mirrors to the
+   portal sheet, keyed to your employee ID.
+
+   localStorage stays as the working copy so the tool still functions with no connection; the
+   server is the shared truth. Writes are debounced because the table saves on every keystroke
+   and a request per character would queue behind every other tool in the deployment. */
+var API='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
+var SYNC_ID=(function(){ try{ return localStorage.getItem('jmb_apply_emp')||''; }catch(e){ return ''; } })();
+var _syncT=null, _syncBusy=false;
+
+function syncSetId(v){
+  SYNC_ID=String(v||'').trim().toUpperCase();
+  try{ localStorage.setItem('jmb_apply_emp', SYNC_ID); }catch(e){}
+  var el=document.getElementById('sync-id'); if(el && el.value!==SYNC_ID) el.value=SYNC_ID;
+  if(SYNC_ID) syncPull(true);
+}
+function syncMsg(t, colour){
+  var el=document.getElementById('sync-msg'); if(!el) return;
+  el.textContent=t||''; el.style.color=colour||'var(--t3)';
+}
+/* Pull the server's copy. If the server has nothing and this browser does, the local rows are
+   pushed up instead of being wiped — that is the migration path for a list built before sync
+   existed, and it must never run the other way round. */
+async function syncPull(quiet){
+  if(!SYNC_ID){ syncMsg('Enter your employee ID to sync','var(--am)'); return; }
+  syncMsg('Loading…');
+  try{
+    var r=await fetch(API+'?action=app_list&employee_id='+encodeURIComponent(SYNC_ID)+'&_='+Date.now());
+    var d=await r.json();
+    if(!d||!d.ok) throw new Error((d&&d.error)||'load failed');
+    if(d.rows.length===0 && ROWS.length>0){
+      syncMsg('Server empty — uploading '+ROWS.length+' from this browser…','var(--am)');
+      await syncPush(true);
+      return;
+    }
+    ROWS=d.rows; save(); render();
+    syncMsg(d.rows.length+' applications synced','var(--gr)');
+  }catch(e){
+    syncMsg('Offline — using this browser\'s copy','var(--am)');
+  }
+}
+async function syncPush(force){
+  if(!SYNC_ID || _syncBusy) return;
+  _syncBusy=true; syncMsg('Saving…');
+  try{
+    var r=await fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ action:'app_save', employee_id:SYNC_ID, rows:ROWS }) });
+    var d=await r.json();
+    if(d&&d.ok) syncMsg('Saved · '+d.saved+' applications','var(--gr)');
+    else syncMsg('Not saved: '+((d&&d.error)||'unknown'),'var(--rd)');
+  }catch(e){ syncMsg('Offline — saved in this browser only','var(--am)'); }
+  finally{ _syncBusy=false; }
+}
+/* Every edit already writes localStorage immediately; this only batches the network call. */
+function syncQueue(){
+  if(!SYNC_ID) return;
+  clearTimeout(_syncT);
+  syncMsg('Unsaved changes…','var(--am)');
+  _syncT=setTimeout(function(){ syncPush(); }, 1800);
+}
+
 var KEY='jmb_apply_v1', ROWS=[];
 /* Statuses where the ball is in YOUR court, not the employer's. They get their own tint, their
    own counter, and a follow-up date of today — because a row sitting on you is not "waiting for
@@ -337,11 +409,12 @@ var BLOCKED=['Needs video','Needs assessment','Needs test task'];
 var BLOCKED_LABEL={'Needs video':'VIDEO','Needs assessment':'ASSESS','Needs test task':'TEST'};
 function load(){ try{ ROWS=JSON.parse(localStorage.getItem(KEY))||[]; }catch(e){ ROWS=[]; } }
 function save(){ try{ localStorage.setItem(KEY,JSON.stringify(ROWS)); }catch(e){ toast('Could not save'); } }
+function saveSync(){ save(); syncQueue(); }
 function today(){ return new Date().toISOString().slice(0,10); }
 function plus(d,n){ var t=new Date(d+'T00:00:00'); t.setDate(t.getDate()+n); return t.toISOString().slice(0,10); }
 function addRow(){
-  ROWS.unshift({e:'',b:'OnlineJobs.ph',d:today(),r:'',s:'Applied',f:plus(today(),3),n:''});
-  save(); render(); document.querySelector('#tb input').focus();
+  ROWS.unshift({id:'app-'+Date.now()+'-'+Math.random().toString(36).slice(2,6),e:'',b:'OnlineJobs.ph',d:today(),r:'',s:'Applied',f:plus(today(),3),n:''});
+  saveSync(); render(); document.querySelector('#tb input').focus();
 }
 function upd(i,k,v){ ROWS[i][k]=v;
   // Advancing the status moves the follow-up date with it, so the amber flag stays meaningful.
@@ -350,9 +423,9 @@ function upd(i,k,v){ ROWS[i][k]=v;
                else if(v==='Won'||v==='Closed') ROWS[i].f='';
                /* Blocked on you: due today, because nothing moves until you do it. */
                else if(BLOCKED.indexOf(v)>=0) ROWS[i].f=today(); }
-  save(); render();
+  saveSync(); render();
 }
-function del(i){ ROWS.splice(i,1); save(); render(); }
+function del(i){ ROWS.splice(i,1); saveSync(); render(); }
 /* Pipeline order, not alphabetical. A log read top-to-bottom should walk the application from
    "just sent" through "they owe me a reply" to done — and the two groups that need action today
    (waiting on you, follow-up due) sit at the top where they cannot be scrolled past. */
@@ -572,7 +645,8 @@ function cpEl(id){
   navigator.clipboard.writeText(txt).then(function(){ toast('Copied'); },function(){ toast('Copy failed'); });
 }
 
-load(); paint(); render(); pfLoad(); scLoad(); try{ scPaint(); }catch(e){}
+load(); paint(); render(); pfLoad(); scLoad();
+try{ var _si=document.getElementById('sync-id'); if(_si) _si.value=SYNC_ID; if(SYNC_ID) syncPull(true); else syncMsg('Enter your employee ID to sync across machines','var(--am)'); }catch(e){} try{ scPaint(); }catch(e){}
 </script>
 </body>
 </html>
