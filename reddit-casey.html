@@ -822,8 +822,9 @@ function pupPaint(){
   ((PROOF&&PROOF.imgs)||[]).forEach(function(d){ var s=PUP.q[pupKey(d)]; if(!s) return;
     if(s.state==='up') up++; else if(s.state==='done') done++; else fail++; });
   el.textContent = fail ? (fail+' failed — will retry on save')
-                 : up ? ('Uploading '+up+'…  '+done+' ready')
-                 : done ? (done+' screenshot'+(done>1?'s':'')+' ready') : '';
+                 : up ? ('Uploading '+up+'…  '+done+' attached')
+                 : done ? (done+' screenshot'+(done>1?'s':'')+" attached — nothing is counted until you press Save")
+                 : '';
   el.style.color = fail ? '#b91c1c' : (up ? '#b45309' : '#047857');
 }
 async function pupRefs(ctx){
@@ -963,6 +964,7 @@ function proofThumb(d){
        the panel is reopened. Deleting from one left the shot alive in the other: the count
        still included it, and backing out then reopening brought the deleted picture back. */
     var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1);
+    try{ delete PUP.q[pupKey(d)]; pupPaint(); }catch(_pq){}   // forget the upload so a re-attach really re-uploads
     try{
       var tk=(PROOF.ctx&&PROOF.ctx.key)||'';
       if(tk && SHOTTRAY[tk]){
@@ -1305,6 +1307,25 @@ async function stampSession(id, n){
     var m=Object.assign({}, (r0&&r0.meta)||{}, patch);
     await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now()); }catch(e){}
 }
+
+/* ── WHICH WARM-UP SESSIONS GET QA'd ──
+   Only Comment Farm and NSFW Comments are reviewed. Those are the phases where a VA actually
+   posts comments, which is the thing the Farming checklist judges. Warming is browse/upvote/join
+   only — there was never anything in the checklist a Warming screenshot could answer.
+
+   Warming still BANKS its screenshot. The rule that a counted session can never exist without
+   evidence behind it is what stops sessions being logged that were never worked, and dropping the
+   camera here would have broken it. The screenshot is simply filed under a task name that
+   resolves to no checklist, so no reviewer time is spent on it.
+
+   Productivity is deliberately untouched: bump() below still uses p.task ('Reddit Warmup'), so
+   output numbers, targets and benchmarks are exactly as they were. Only the proof row's label
+   changes. Posting phases are not affected by any of this. */
+var QA_WARMUP_PHASES=['comment','nsfw'];
+function qaProofTask(p, phk){
+  if(p && p.task==='Reddit Warmup' && QA_WARMUP_PHASES.indexOf(phk)<0) return 'Reddit Warmup (Warming)';
+  return p && p.task;
+}
 async function sessionDone(id, phk, n){
   n=(n===2)?2:1;
   var p=phase(phk);
@@ -1325,7 +1346,7 @@ async function sessionDone(id, phk, n){
      5 or 7 on the strong phases — so a Strong account produced 14 units a day while a Warming
      account produced 2, and the two were compared as if they were the same job. Output is now
      the session: 2 sessions per account per day, whatever the phase. */
-  proofOpen({ task:p.task, account:acct, outputs:1, preload:banked, key:'s:'+id+':'+phk+':'+n },
+  proofOpen({ task:qaProofTask(p,phk), account:acct, outputs:1, preload:banked, key:'s:'+id+':'+phk+':'+n },
     async function(){ if(SHOT.clearTray) SHOT.clearTray(id,phk,n); await sessionDoneCounted(id, phk, n); });
 }
 async function sessionDoneCounted(id, phk, n){
