@@ -370,6 +370,8 @@ header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
                title="Test a single VA before spending API calls on the whole team. Re-runs someone already processed."
                style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:600 12px 'Manrope',sans-serif;min-width:230px;">
         <button class="btn" id="f-run" onclick="factoryRun()" title="Runs every VA for the selected week, in one click — or just the VA named in the box" style="background:#7c3aed;color:#fff;padding:9px 18px;">⚙ Run QA — everyone</button>
+        <button class="btn ghost sm" onclick="factoryWho()" title="See exactly which VAs this run will cover, before spending anything">👥 Who runs?</button>
+        <button class="btn ghost sm" onclick="factorySkipTask()" title="Exclude a task from this week's score — keeps the evidence, stops it counting">⊘ Skip a task</button>
         <button class="btn ghost sm" onclick="factoryLoad()">↻ Refresh</button>
         <button class="btn" id="f-approve-all" onclick="factoryApproveAll()" style="background:#0f766e;color:#fff;padding:9px 16px;">✓ Approve all</button>
       </div>
@@ -1067,6 +1069,59 @@ function fRunLabel(){
   if(!b||!sel) return;
   b.textContent = sel.value ? ('⚙ Run QA — '+sel.value) : '⚙ Run QA — everyone';
 }
+/* Preview: who a run would cover. Costs nothing — reads the proof store only. */
+async function factoryWho(){
+  var month=$('f-month').value||curMonth(), week=$('f-week').value||'1';
+  var pj=(($('f-project')||{}).value||'');
+  var prog=$('f-prog'); if(prog) prog.innerHTML='<span style="color:var(--t3);">Checking who has evidence…</span>';
+  try{
+    var d=await (await fetch(PORTAL_URL+'?action=qa_factory_who&month='+encodeURIComponent(month)
+      +'&week='+encodeURIComponent(week)+'&project='+encodeURIComponent(pj)+'&_='+Date.now())).json();
+    if(!d||!d.ok){ toast('Preview failed: '+((d&&d.error)||'unknown')); if(prog) prog.innerHTML=''; return; }
+    function grp(title, arr, colour, showTasks){
+      if(!arr.length) return '';
+      return '<div style="margin-top:8px;"><b style="color:'+colour+';font-size:12px;">'+title+' — '+arr.length+'</b>'+
+        '<div style="margin-top:3px;">'+arr.map(function(r){
+          return '<div style="font-size:11.5px;color:var(--t2);">· '+r.name+' ('+r.employee_id+')'+
+            (showTasks&&r.sessions!==undefined?(' — '+r.sessions+' session(s), '+r.shots+' shot(s)'+
+              (r.tasks&&r.tasks.length?(' · '+r.tasks.join(', ')):'')):'')+'</div>';
+        }).join('')+'</div></div>';
+    }
+    if(prog) prog.innerHTML=
+      '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card);">'+
+      '<b style="font-size:12.5px;">'+d.project+' · '+d.month+' week '+d.week+'  ('+d.from+' → '+d.to+')</b>'+
+      grp('WILL BE SCORED BY THIS RUN', d.will_run, '#7c3aed', true)+
+      grp('ALREADY SCORED — skipped unless you force a re-run', d.already_scored, '#0f766e', true)+
+      grp('NO EVIDENCE THIS WEEK — not part of this run', d.no_evidence, '#b45309', false)+
+      '</div>';
+  }catch(e){ toast('Preview failed: '+e.message); if(prog) prog.innerHTML=''; }
+}
+
+/* Exclude a task from the week's score. The rows keep their screenshots and verdicts; they stop
+   counting and stop being swept up by Approve all. Reversible. */
+async function factorySkipTask(){
+  var month=$('f-month').value||curMonth(), week=$('f-week').value||'1';
+  var pj=(($('f-project')||{}).value||'');
+  var tasks={}; ((FACTORY&&FACTORY.rows)||[]).forEach(function(r){
+    if(String(r.status||'')==='approved') return;
+    tasks[r.task]=(tasks[r.task]||0)+1; });
+  var names=Object.keys(tasks);
+  if(!names.length){ toast('No un-approved results loaded for this week.'); return; }
+  var t=prompt('Exclude which task from week '+week+'?\n\nUn-approved tasks loaded:\n· '+
+               names.map(function(n){ return n+' ('+tasks[n]+' row(s))'; }).join('\n· ')+
+               '\n\nType the task name exactly. This keeps the screenshots — it only stops the task counting.');
+  if(!t) return;
+  t=t.trim();
+  if(!tasks[t]){ if(!confirm('"'+t+'" is not in the loaded list. Try anyway?')) return; }
+  try{
+    var d=await (await fetch(PORTAL_URL+'?action=qa_factory_skip&month='+encodeURIComponent(month)
+      +'&week='+encodeURIComponent(week)+'&task='+encodeURIComponent(t)
+      +'&project='+encodeURIComponent(pj)+'&_='+Date.now())).json();
+    if(d&&d.ok) toast(d.changed+' row(s) excluded from week '+week+'. Approved rows were left alone.');
+    else toast('Skip failed: '+((d&&d.error)||'unknown'));
+    qBust(/qa_factory_list/); factoryLoad();
+  }catch(e){ toast('Skip failed: '+e.message); }
+}
 async function factoryRun(){
   if(FRUNNING) return;
   FRUNNING=true;
@@ -1101,7 +1156,10 @@ async function factoryRun(){
          and an ETA from the average pass time all follow. */
       var vaThis=(d.processed||[]).reduce(function(set,x){ set[x.employee_id]=1; return set; },{});
       Object.keys(vaThis).forEach(function(k){ vaDone[k]=1; });
-      noProof+=((d.no_proof||[]).length);
+      /* Assigned, not accumulated: the server reports the same skipped total on every pass,
+         so adding them up multiplied the figure by the number of passes. */
+      noProof=((d.no_evidence!==undefined)?d.no_evidence:0)+((d.no_proof||[]).length);
+      if(d.stalled && d.stall_note){ toast(d.stall_note); }
       var doneVAs=Object.keys(vaDone).length;
       if(totalVAs==null) totalVAs=doneVAs+(d.remaining||0);
       passMs.push(Date.now()-passStart); passStart=Date.now();
