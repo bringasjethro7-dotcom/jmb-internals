@@ -347,8 +347,10 @@ function toast(m){ var t=document.getElementById('toast'); t.textContent=m; t.cl
    server is the shared truth. Writes are debounced because the table saves on every keystroke
    and a request per character would queue behind every other tool in the deployment. */
 var API='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
-var SYNC_ID=(function(){ try{ return localStorage.getItem('jmb_apply_emp')||''; }catch(e){ return ''; } })();
-var _syncT=null, _syncBusy=false;
+/* This is Jeth's own tool, so the identity is known and defaulted. Leaving it blank meant the
+   tracker sat there doing nothing and looked broken. Editable, in case it ever gets handed over. */
+var SYNC_ID=(function(){ try{ return localStorage.getItem('jmb_apply_emp')||'JMBEAST'; }catch(e){ return 'JMBEAST'; } })();
+var _syncT=null, _syncBusy=false, _pulled=false;
 
 function syncSetId(v){
   SYNC_ID=String(v||'').trim().toUpperCase();
@@ -370,12 +372,14 @@ async function syncPull(quiet){
     var r=await fetch(API+'?action=app_list&employee_id='+encodeURIComponent(SYNC_ID)+'&_='+Date.now());
     var d=await r.json();
     if(!d||!d.ok) throw new Error((d&&d.error)||'load failed');
+    if(d.rows.length===0 && ROWS.length===0){ _pulled=true; syncMsg('Synced · nothing logged yet','var(--t3)'); return; }
     if(d.rows.length===0 && ROWS.length>0){
       syncMsg('Server empty — uploading '+ROWS.length+' from this browser…','var(--am)');
+      _pulled=true;
       await syncPush(true);
       return;
     }
-    ROWS=d.rows; save(); render();
+    ROWS=d.rows; _pulled=true; save(); render();
     syncMsg(d.rows.length+' applications synced','var(--gr)');
   }catch(e){
     syncMsg('Offline — using this browser\'s copy','var(--am)');
@@ -383,6 +387,14 @@ async function syncPull(quiet){
 }
 async function syncPush(force){
   if(!SYNC_ID || _syncBusy) return;
+  /* Refuse to push before the server's copy has been read. Otherwise opening this on the empty
+     MacBook and typing one row would replace the other machine's list with that single row —
+     app_save is a whole-list replace, so there would be nothing to recover. */
+  if(!_pulled){
+    syncMsg('Not saved — load from server first','var(--rd)');
+    if(force) toast('Load from server before saving, or you will overwrite the other machine');
+    return;
+  }
   _syncBusy=true; syncMsg('Saving…');
   try{
     var r=await fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
