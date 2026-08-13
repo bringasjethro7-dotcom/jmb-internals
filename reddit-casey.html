@@ -1308,22 +1308,27 @@ async function stampSession(id, n){
     await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now()); }catch(e){}
 }
 
-/* ── WHICH WARM-UP SESSIONS GET QA'd ──
-   Only Comment Farm and NSFW Comments are reviewed. Those are the phases where a VA actually
-   posts comments, which is the thing the Farming checklist judges. Warming is browse/upvote/join
-   only — there was never anything in the checklist a Warming screenshot could answer.
+/* ── WARM-UP IS THREE DIFFERENT JOBS ──
+   Warming, Comment Farm and NSFW share one output label but not one SOP. Warming browses,
+   searches, upvotes and joins and posts NO comments. Comment Farm does all that plus 2 SFW
+   comments. NSFW comments and replies but has no joining step. Graded against a single
+   comment-based checklist, Warming could only ever score partial or fail — which is exactly what
+   happened in week 2 of August 2026.
 
-   Warming still BANKS its screenshot. The rule that a counted session can never exist without
-   evidence behind it is what stops sessions being logged that were never worked, and dropping the
-   camera here would have broken it. The screenshot is simply filed under a task name that
-   resolves to no checklist, so no reviewer time is spent on it.
+   Each phase now carries its own proof label, so each is graded on its own criteria. The bare
+   "Reddit Warmup" label is left to mean one thing only: sessions logged BEFORE this split, where
+   the phase was never recorded and cannot be recovered. That legacy label maps to a deliberately
+   tolerant checklist so nobody is failed retrospectively for work their phase never required.
 
-   Productivity is deliberately untouched: bump() below still uses p.task ('Reddit Warmup'), so
-   output numbers, targets and benchmarks are exactly as they were. Only the proof row's label
-   changes. Posting phases are not affected by any of this. */
-var QA_WARMUP_PHASES=['comment','nsfw'];
+   Productivity is untouched — bump() still uses p.task ('Reddit Warmup') for all three, so output
+   numbers, targets and benchmarks are unchanged. Only the proof row's label differs. */
+var QA_WARMUP_LABEL={
+  warming:'Reddit Warmup (Warming)',
+  comment:'Reddit Warmup (Comment Farm)',
+  nsfw:   'Reddit Warmup (NSFW)'
+};
 function qaProofTask(p, phk){
-  if(p && p.task==='Reddit Warmup' && QA_WARMUP_PHASES.indexOf(phk)<0) return 'Reddit Warmup (Warming)';
+  if(p && p.task==='Reddit Warmup' && QA_WARMUP_LABEL[phk]) return QA_WARMUP_LABEL[phk];
   return p && p.task;
 }
 async function sessionDone(id, phk, n){
