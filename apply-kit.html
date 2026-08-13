@@ -165,27 +165,32 @@ a.file:hover{background:#fff;border-color:rgba(234,88,12,.45);box-shadow:0 2px 8
 
   <!-- ══════════ VIDEO SCRIPT ══════════ -->
   <div class="pane" id="p6">
-    <div class="note">When a posting asks for a video, mark that row <b>Needs video</b> in the Tracker and press 📄 — it lands here with the role filled in. One recording per posting beats one generic recording for all of them, and it takes the same four minutes.</div>
+    <div class="note">One script per application, saved against that posting. Write your own or paste one in — <b>nothing here is overwritten unless you say so</b>. Mark a row <b>Needs video</b> in the Tracker and press 📄 to land here with that application selected.</div>
     <div class="card">
-      <h3>Script for this posting</h3>
-      <div class="why">Written to be spoken. Glance and talk — do not read it word for word, it shows.</div>
-      <div class="vars">
-        <div><label>Role (from the tracker row)</label><input id="v_role_mirror" placeholder="Reddit Manager" oninput="document.getElementById('v_role').value=this.value;buildScript(null)"></div>
-        <div><label>Emphasis</label><select id="scr-kind" onchange="buildScript(null)">
+      <h3>Script <span id="sc-for" style="font-weight:600;color:var(--t3);font-size:12.5px"></span></h3>
+      <div class="why">Written to be spoken. Glance and talk — reading it word for word shows on camera.</div>
+      <textarea id="sc-text" rows="14" placeholder="Paste or write the script for this application…&#10;&#10;Your AI wrote something better for this employer? Paste it here — it stays attached to this application and is never regenerated over."
+        oninput="scCount()" onchange="scStore()" onblur="scStore()"
+        style="width:100%;line-height:1.65;font-size:13.5px;resize:vertical"></textarea>
+      <div class="rowbar" style="margin-top:9px">
+        <button class="btn p" onclick="scStore();cpEl('sc-text')">Copy script</button>
+        <button class="btn" onclick="scStore()">Save</button>
+        <button class="btn" onclick="scGenerate()">Generate a starting point</button>
+        <select id="scr-kind" style="width:auto">
           <option value="general">General social media</option>
           <option value="reddit">Reddit</option>
           <option value="ig">Instagram Reels</option>
           <option value="multi">Multi-platform</option>
-        </select></div>
+        </select>
+        <button class="btn" onclick="scClear()">Clear</button>
+        <span style="color:var(--t3);font-size:11px" id="sc-words"></span>
+        <span style="color:var(--gr);font-size:11px;font-weight:700" id="sc-saved"></span>
       </div>
-      <pre class="tpl" id="scr-out" style="margin-top:10px"></pre>
-      <button class="btn p" onclick="cpEl('scr-out')">Copy script</button>
-      <span style="color:var(--t3);font-size:11px;margin-left:8px" id="scr-words"></span>
-      <div class="why" style="margin-top:10px">Good light facing you, quiet room, phone or laptop camera is fine. Look at the lens, not the screen. Two or three takes — pick the one where you sound relaxed rather than perfect.</div>
+      <div class="why" style="margin-top:10px">Good light facing you, quiet room, phone or laptop camera is fine. Look at the lens, not the screen. Two or three takes — keep the one where you sound relaxed rather than perfect.</div>
     </div>
     <div class="card">
       <h3>After you record</h3>
-      <div class="why">Upload the video wherever the posting asks, send the application, then set that tracker row back to <b>Applied</b>. The follow-up date reschedules itself to three days out.</div>
+      <div class="why">Upload wherever the posting asks, send the application, then set that row back to <b>Applied</b> — the follow-up reschedules itself three days out.</div>
     </div>
   </div>
 
@@ -348,14 +353,57 @@ function upd(i,k,v){ ROWS[i][k]=v;
   save(); render();
 }
 function del(i){ ROWS.splice(i,1); save(); render(); }
+/* Pipeline order, not alphabetical. A log read top-to-bottom should walk the application from
+   "just sent" through "they owe me a reply" to done — and the two groups that need action today
+   (waiting on you, follow-up due) sit at the top where they cannot be scrolled past. */
+var STATUS_ORDER=['Needs video','Needs assessment','Needs test task','Applied','Follow-up sent',
+                  'Replied','Interview','Trial','Won','Closed'];
+var GROUP_NOTE={
+  'Needs video':'You owe them a recording before this moves.',
+  'Needs assessment':'They have asked you to sit something.',
+  'Needs test task':'A paid or unpaid task is outstanding.',
+  'Applied':'Sent. Nothing to do until the follow-up date.',
+  'Follow-up sent':'One nudge in. One more, then let it go.',
+  'Replied':'They answered — answer back today.',
+  'Interview':'Scheduled. Prepare from the Answers tab.',
+  'Trial':'Working a paid test. Deliver the reporting.',
+  'Won':'Signed.',
+  'Closed':'Filled or dead. Kept for the record.'
+};
 function render(){
   var f=document.getElementById('filt').value, tb=document.getElementById('tb'), n=0, due=0, won=0, out=[];
+  /* Bucket first so each status renders as its own block with a header and a count. */
+  var buckets={}, order=[];
   ROWS.forEach(function(r,i){
+    var st=r.s||'Applied';
+    if(!buckets[st]){ buckets[st]=[]; order.push(st); }
+    buckets[st].push(i);
+  });
+  var sorted=STATUS_ORDER.filter(function(x){ return buckets[x]; })
+    .concat(order.filter(function(x){ return STATUS_ORDER.indexOf(x)<0; }));   // anything unexpected still shows
+  var seq=[];
+  sorted.forEach(function(st){ buckets[st].forEach(function(i){ seq.push(i); }); });
+  var lastGroup=null;
+  seq.forEach(function(i){
+    var r=ROWS[i];
     if(r.s==='Won') won++;
     var blocked = BLOCKED.indexOf(r.s)>=0;
     var isDue = !blocked && r.f && r.f<=today() && r.s!=='Won' && r.s!=='Closed';
     if(isDue) due++;
     if(f && r.s!==f) return; n++;
+    /* Group header row, emitted the first time a status appears in the sequence. */
+    if(r.s!==lastGroup){
+      lastGroup=r.s;
+      var cnt=buckets[r.s].filter(function(j){ return !f || ROWS[j].s===f; }).length;
+      var blocked2=BLOCKED.indexOf(r.s)>=0;
+      var tint = r.s==='Won' ? '#ecfdf5' : (blocked2 ? '#eef4ff' : (r.s==='Closed' ? '#f8fafc' : '#fff7ed'));
+      var ink  = r.s==='Won' ? '#047857' : (blocked2 ? '#1e40af' : (r.s==='Closed' ? '#64748b' : '#9a3412'));
+      out.push('<tr><td colspan="8" style="background:'+tint+';padding:9px 10px;border-top:1px solid rgba(15,23,42,.10)">'
+        +'<b style="color:'+ink+';font-size:11.5px;letter-spacing:.06em;text-transform:uppercase">'+esc2(r.s)+'</b>'
+        +'<span style="color:'+ink+';opacity:.75;font-size:11.5px;font-weight:700;margin-left:7px">'+cnt+'</span>'
+        +'<span style="color:var(--t3);font-size:11.5px;margin-left:10px">'+esc2(GROUP_NOTE[r.s]||'')+'</span>'
+        +'</td></tr>');
+    }
     var sel=['Applied','Needs video','Needs assessment','Needs test task','Follow-up sent','Replied','Interview','Trial','Won','Closed']
       .map(function(o){return '<option'+(o===r.s?' selected':'')+'>'+o+'</option>';}).join('');
     var bd=['OnlineJobs.ph','Direct outreach','Referral','Other']
@@ -383,6 +431,7 @@ function render(){
 }
 function st(v,l,c){ return '<div class="st"><b style="color:'+c+'">'+v+'</b><span>'+l+'</span></div>'; }
 function att(s){ return String(s==null?'':s).replace(/"/g,'&quot;'); }
+function esc2(s){ return String(s==null?'':s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
 function exportCsv(){
   var head=['Employer/post','Board','Applied','Rate quoted','Status','Follow up','Notes'];
   var rows=ROWS.map(function(r){ return [r.e,r.b,r.d,r.r,r.s,r.f,r.n].map(function(c){
@@ -405,23 +454,62 @@ document.querySelectorAll('.tab').forEach(function(b){
 });
 
 
-/* ── SCRIPT FOR A SPECIFIC POSTING ────────────────────────────────────────────────────────
-   A generic intro video gets you past a generic post. When an employer asks for a video it is
-   usually because they want to hear you talk about THEIR work — so the script is generated
-   from the role and employer on that tracker row, not from a fixed template.
-   Written to be spoken, not read: short sentences, no clauses to trip over. */
+
+/* ── SCRIPT LIBRARY ───────────────────────────────────────────────────────────────────────
+   The generated script is a starting point, not the answer. Every posting is different and the
+   scripts that win are written for that employer — so this stores one script PER tracker row,
+   editable, and never overwrites what you wrote.
+
+   Paste in whatever your AI produced, edit it here, and it stays attached to that application.
+   Generate only ever fills an EMPTY box, or asks first if there is text in it. */
+var SCRIPTS={}, SCRIPT_KEY='jmb_scripts_v1', SCRIPT_FOR=null;
+function scLoad(){ try{ SCRIPTS=JSON.parse(localStorage.getItem(SCRIPT_KEY)||'{}')||{}; }catch(e){ SCRIPTS={}; } }
+function scSave(){ try{ localStorage.setItem(SCRIPT_KEY, JSON.stringify(SCRIPTS)); }catch(e){ toast('Could not save'); } }
+/* Keyed by employer+role rather than row index — reordering or deleting a row must not
+   silently hand its script to a different application. */
+function scId(r){ return ((r&&r.e)||'').trim().toLowerCase()+'::'+((r&&r.b)||'').trim().toLowerCase(); }
+
 function scriptFor(i){
   var r=ROWS[i]; if(!r) return;
-  var el=document.getElementById('v_role'); if(el) el.value = r.e || '';
+  SCRIPT_FOR=i;
   document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('on'); });
   document.querySelectorAll('.pane').forEach(function(x){ x.classList.remove('on'); });
   var t=document.querySelector('.tab[data-p="p6"]'); if(t) t.classList.add('on');
   var p=document.getElementById('p6'); if(p) p.classList.add('on');
-  buildScript(r);
+  scPaint();
   window.scrollTo({top:0,behavior:'smooth'});
 }
-function buildScript(r){
-  var host=document.getElementById('scr-out'); if(!host) return;
+function scPaint(){
+  var r=(SCRIPT_FOR!=null)?ROWS[SCRIPT_FOR]:null;
+  var who=document.getElementById('sc-for');
+  if(who) who.textContent = r ? (r.e||'(untitled)')+(r.b?(' · '+r.b):'') : 'No application selected — pick one from the Tracker, or write a general script below.';
+  var box=document.getElementById('sc-text'); if(!box) return;
+  var saved = r ? SCRIPTS[scId(r)] : SCRIPTS['__general__'];
+  box.value = saved || '';
+  scCount();
+  var st=document.getElementById('sc-saved');
+  if(st) st.textContent = saved ? 'Saved script loaded' : 'Nothing saved yet for this one';
+}
+function scStore(){
+  var r=(SCRIPT_FOR!=null)?ROWS[SCRIPT_FOR]:null;
+  var box=document.getElementById('sc-text'); if(!box) return;
+  var k = r ? scId(r) : '__general__';
+  if(box.value.trim()) SCRIPTS[k]=box.value; else delete SCRIPTS[k];
+  scSave(); scCount();
+  var st=document.getElementById('sc-saved');
+  if(st){ st.textContent='Saved '+new Date().toLocaleTimeString(); }
+}
+function scCount(){
+  var box=document.getElementById('sc-text'), out=document.getElementById('sc-words'); if(!box||!out) return;
+  var t=box.value.trim();
+  var n=t?t.split(/\s+/).length:0;
+  out.textContent = n ? (n+' words · about '+Math.round(n/2.5)+' seconds spoken') : '';
+}
+/* Generate is a helper, not an owner: it will not quietly replace something you wrote. */
+function scGenerate(){
+  var box=document.getElementById('sc-text'); if(!box) return;
+  if(box.value.trim() && !confirm('Replace the script currently in the box?')) return;
+  var r=(SCRIPT_FOR!=null)?ROWS[SCRIPT_FOR]:null;
   var role=(r&&r.e)||document.getElementById('v_role').value||'the role';
   var kind=(document.getElementById('scr-kind')||{}).value||'general';
   var mid = kind==='reddit'
@@ -431,15 +519,17 @@ function buildScript(r){
     : kind==='multi'
     ? "I have worked creator accounts across Reddit, Instagram, X and Snapchat. Posting, warm-up phases, DM handling, and account setup. A multi-platform setup is familiar to me rather than new."
     : "I do daily social media posting for creator accounts, mostly Reddit and Instagram. Posting to a set schedule, seeding comments, and handling the daily engagement.";
-  var txt =
+  box.value =
     "Hi, I'm Jethro, from Laguna in the Philippines.\n\n" +
-    "I'm applying for the " + role + " role.\n\n" +
-    mid + "\n\n" +
+    "I'm applying for the " + role + " role.\n\n" + mid + "\n\n" +
     "I screenshot every task I do and keep a daily sheet, so you always know what went out and from which account without having to ask.\n\n" +
     "I'm available full-time and can work your hours. Thanks for watching.";
-  host.textContent = txt;
-  var w=document.getElementById('scr-words');
-  if(w){ var n=txt.split(/\s+/).length; w.textContent = n+' words · about '+Math.round(n/2.5)+' seconds spoken'; }
+  scStore();
+}
+function scClear(){
+  var box=document.getElementById('sc-text'); if(!box) return;
+  if(box.value.trim() && !confirm('Clear this script?')) return;
+  box.value=''; scStore();
 }
 
 /* ── PROFILE ─────────────────────────────────────────────────────────────────────
@@ -477,10 +567,12 @@ function pfCopy(){
 }
 function cpEl(id){
   var e=document.getElementById(id); if(!e) return;
-  navigator.clipboard.writeText(e.textContent).then(function(){ toast('Copied'); },function(){ toast('Copy failed'); });
+  var txt = ('value' in e && e.value!=null) ? e.value : e.textContent;   // textarea vs <pre>
+  if(!txt || !txt.trim()){ toast('Nothing to copy'); return; }
+  navigator.clipboard.writeText(txt).then(function(){ toast('Copied'); },function(){ toast('Copy failed'); });
 }
 
-load(); paint(); render(); pfLoad(); try{ buildScript(null); }catch(e){}
+load(); paint(); render(); pfLoad(); scLoad(); try{ scPaint(); }catch(e){}
 </script>
 </body>
 </html>
