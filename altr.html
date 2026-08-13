@@ -1019,6 +1019,10 @@ function firstName(n){ n=String(n||'').trim(); if(n.indexOf(',')>=0) return (n.s
 
 function enterApp(user, admin){
   USER=user; ISADMIN=!!admin;
+  /* USER is known now, so today's tray key resolves — bring back anything attached before a
+     refresh. Must run before the boards draw, or the cameras paint amber for accounts that
+     already have proof. */
+  try{ aurlLoad(); }catch(e){}
   sessionStorage.setItem('altr_user', JSON.stringify({u:user,a:ISADMIN}));
   $('login').style.display='none';
   if(!configured()){ $('setup').style.display='block'; return; }
@@ -1477,8 +1481,9 @@ function pupPaint(){
   (APROOF.imgs||[]).forEach(function(d){ var s=PUP.q[pupKey(d)]; if(!s) return;
     if(s.state==='up') up++; else if(s.state==='done') done++; else fail++; });
   el.textContent = fail ? (fail+' failed — will retry on save')
-                 : up ? ('Uploading '+up+'…  '+done+' ready')
-                 : done ? (done+' screenshot'+(done>1?'s':'')+' ready') : '';
+                 : up ? ('Uploading '+up+'…  '+done+' attached')
+                 : done ? (done+' screenshot'+(done>1?'s':'')+" attached — nothing is counted until you press Save")
+                 : '';
   el.style.color = fail ? '#b91c1c' : (up ? '#b45309' : '#047857');
 }
 /* Null on any miss, so the caller falls back to the inline path rather than losing proof. */
@@ -1495,7 +1500,37 @@ async function pupRefs(task){
   if(ids.length===APROOF.imgs.length)  return { ids:ids };
   return null;
 }
+try{ /* restored after USER is known */ }catch(e){}
 var ATRAY={};                                  // key -> [dataURL]  (kind|phone|user|acct|handle)
+/* ── TRAY SURVIVES A REFRESH ───────────────────────────────────────────────────────────────
+   ATRAY holds dataURLs in memory, so a browser refresh wiped it and every camera went back to
+   amber — a VA could no longer tell which accounts they had already done, and re-attached
+   screenshots for work that was already saved.
+
+   Screenshots now upload to Supabase the moment they are attached, so we persist the returned
+   URL rather than the image. That is a few hundred bytes per account instead of ~70 KB, which
+   is what makes it safe to keep in localStorage without hitting the quota.
+
+   Keyed by employee AND business day: a new shift starts clean, and two people on one machine
+   never see each other's trays. */
+var AURL={};
+function _aurlKey(){ return 'altr_tray_'+String((USER&&USER.employee_id)||'x')+'_'+(typeof aBizDay==='function'?aBizDay():''); }
+function aurlSave(){ try{ localStorage.setItem(_aurlKey(), JSON.stringify(AURL)); }catch(e){} }
+function aurlLoad(){
+  try{
+    var raw=localStorage.getItem(_aurlKey());
+    AURL = raw ? (JSON.parse(raw)||{}) : {};
+    /* Yesterday's trays are dead weight — the day key changed, so drop anything stale. */
+    var keep=_aurlKey();
+    for(var i=localStorage.length-1;i>=0;i--){
+      var k=localStorage.key(i);
+      if(k && k.indexOf('altr_tray_')===0 && k!==keep) localStorage.removeItem(k);
+    }
+  }catch(e){ AURL={}; }
+}
+function aurlAdd(key, url){ if(!url) return; (AURL[key]=AURL[key]||[]); if(AURL[key].indexOf(url)<0) AURL[key].push(url); aurlSave(); }
+function aurlDrop(key, url){ var a=AURL[key]; if(!a) return; var i=a.indexOf(url); if(i>=0) a.splice(i,1); if(!a.length) delete AURL[key]; aurlSave(); }
+function aurlCount(key){ return (AURL[key]||[]).length; }
 var APROOF_MAX=6;
 var PORTAL_EXEC='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
 function aBizDay(){   // JMB business day — 08:00 PHT rollover, same rule as every other tool
@@ -1566,7 +1601,11 @@ function aProofThumb(d){
   var w=document.createElement('div');
   w.style.cssText='position:relative;width:74px;height:74px;border-radius:9px;overflow:hidden;border:1px solid #e2e8f0;';
   w.innerHTML='<img src="'+d+'" style="width:100%;height:100%;object-fit:cover;"><button style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;cursor:pointer;line-height:1;">×</button>';
-  w.querySelector('button').onclick=function(){ var i=APROOF.imgs.indexOf(d); if(i>=0) APROOF.imgs.splice(i,1); w.remove(); };
+  w.querySelector('button').onclick=function(){
+    var i=APROOF.imgs.indexOf(d); if(i>=0) APROOF.imgs.splice(i,1);
+    try{ var st=PUP.q[pupKey(d)]; if(st&&st.url) aurlDrop((APROOF.ctx&&APROOF.ctx.key)||'', st.url);
+         delete PUP.q[pupKey(d)]; pupPaint(); }catch(_pq){}
+    w.remove(); };
   h.appendChild(w);
 }
 function aProofCompress(file){
@@ -1585,7 +1624,11 @@ async function aProofAdd(files){
   for(var i=0;i<files.length;i++){
     if(APROOF.imgs.length>=APROOF_MAX){ toast(APROOF_MAX+' screenshots is the max.'); break; }
     try{ var d=await aProofCompress(files[i]); APROOF.imgs.push(d); aProofThumb(d);
-         pupStart(d, (APROOF.ctx&&APROOF.ctx.kind==='post')?'Vysor IG Posting':'Content Sourcing'); }catch(e){}
+         var _k=(APROOF.ctx&&APROOF.ctx.key)||'';
+         var _st=pupStart(d, (APROOF.ctx&&APROOF.ctx.kind==='post')?'Vysor IG Posting':'Content Sourcing');
+         /* Record the URL the moment storage confirms it, so a refresh keeps the attachment. */
+         if(_st&&_st.p) _st.p.then(function(r){ if(r&&r.url) aurlAdd(_k, r.url); });
+       }catch(e){}
   }
 }
 async function aProofSave(){
@@ -1606,6 +1649,7 @@ async function aProofSave(){
     var d=await r.json();
     if(d&&d.ok){
       ATRAY[c.key]=APROOF.imgs.slice(0);
+      if(body.urls) { AURL[c.key]=body.urls.slice(0); aurlSave(); }   // survives the next refresh
       document.getElementById('aproof-ov').style.display='none';
       toast('📷 proof saved for @'+c.a.handle);
       if(c.kind==='post') renderPosting(); else renderSourcing();
@@ -1614,7 +1658,9 @@ async function aProofSave(){
   btn.disabled=false; btn.textContent='Save proof'; APROOF.busy=false;
 }
 function aProofBtn(kind, a){
-  var has=(ATRAY[aKey(kind,a)]||[]).length;
+  /* Either still in memory this session, or already uploaded and remembered across a refresh. */
+  var k=aKey(kind,a);
+  var has=(ATRAY[k]||[]).length || aurlCount(k);
   return '<button class="kebab" title="'+(has?(has+' screenshot(s) attached'):'Attach the screenshots QA is scored from')+'" '+
     'style="color:'+(has?'#0f766e':'#b45309')+';font-weight:800;" '+
     'onclick="event.stopPropagation();aProofOpen(\''+kind+'\',{phone:\''+escAttr(a.phone)+'\',user:\''+escAttr(a.user)+'\',acct:\''+escAttr(a.acct)+'\',handle:\''+escAttr(a.handle)+'\'})">📷'+(has?('<span style="font-size:10px;margin-left:2px;">'+has+'</span>'):'')+'</button>';
