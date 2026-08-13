@@ -372,6 +372,7 @@ header{box-shadow:0 1px 0 rgba(15,23,42,.06),0 6px 20px -14px rgba(15,23,42,.2)}
         <button class="btn" id="f-run" onclick="factoryRun()" title="Runs every VA for the selected week, in one click — or just the VA named in the box" style="background:#7c3aed;color:#fff;padding:9px 18px;">⚙ Run QA — everyone</button>
         <button class="btn ghost sm" onclick="factoryWho()" title="See exactly which VAs this run will cover, before spending anything">👥 Who runs?</button>
         <button class="btn ghost sm" onclick="factorySkipTask()" title="Exclude a task from this week's score — keeps the evidence, stops it counting">⊘ Skip a task</button>
+        <button class="btn ghost sm" onclick="factoryDedupe()" title="Find rows scored twice for the same VA and task — shows them first, only writes if you confirm">⧉ Find duplicates</button>
         <button class="btn ghost sm" onclick="factoryLoad()">↻ Refresh</button>
         <button class="btn" id="f-approve-all" onclick="factoryApproveAll()" style="background:#0f766e;color:#fff;padding:9px 16px;">✓ Approve all</button>
       </div>
@@ -1145,6 +1146,28 @@ async function factorySkipTask(){
     else toast('Skip failed: '+((d&&d.error)||'unknown'));
     qBust(/qa_factory_list/); factoryLoad();
   }catch(e){ toast('Skip failed: '+e.message); }
+}
+/* Duplicate results double-count in the roll-up. Shows what it would retire before touching
+   anything, then writes only on confirmation. Nothing is deleted and approved rows are safe. */
+async function factoryDedupe(){
+  var month=$('f-month').value||curMonth(), week=$('f-week').value||'1';
+  var prog=$('f-prog'); if(prog) prog.innerHTML='<span style="color:var(--t3);">Looking for duplicates…</span>';
+  try{
+    var u=PORTAL_URL+'?action=qa_factory_dedupe&month='+encodeURIComponent(month)+'&week='+encodeURIComponent(week);
+    var d=await (await fetch(u+'&_='+Date.now())).json();
+    if(!d||!d.ok){ toast('Check failed: '+((d&&d.error)||'unknown')); if(prog) prog.innerHTML=''; return; }
+    if(!d.would_retire){ if(prog) prog.innerHTML='<span style="color:#047857;">No duplicates in week '+week+'.</span>'; return; }
+    if(prog) prog.innerHTML='<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card);">'+
+      '<b style="font-size:12.5px;">'+d.would_retire+' duplicate row(s) across '+d.duplicate_groups+' group(s)</b>'+
+      '<div style="margin-top:5px;">'+d.detail.map(function(x){ return '<div style="font-size:11.5px;color:var(--t2);">· '+x+'</div>'; }).join('')+'</div>'+
+      (d.blocked&&d.blocked.length?('<div style="margin-top:5px;color:#b45309;font-size:11.5px;">'+d.blocked.join('<br>')+'</div>'):'')+
+      '</div>';
+    if(!confirm('Retire '+d.would_retire+' duplicate row(s)?\n\nThe newest score for each VA and task is kept. Nothing is deleted and approved rows are left alone.')) return;
+    var r=await (await fetch(u+'&confirm=RUN&_='+Date.now())).json();
+    if(r&&r.ok) toast(r.retired+' duplicate row(s) retired.');
+    else toast('Failed: '+((r&&r.error)||'unknown'));
+    qBust(/qa_factory_list/); factoryLoad();
+  }catch(e){ toast('Check failed: '+e.message); if(prog) prog.innerHTML=''; }
 }
 async function factoryRun(){
   if(FRUNNING) return;
