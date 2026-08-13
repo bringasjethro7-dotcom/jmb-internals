@@ -1155,13 +1155,23 @@ async function factoryRun(){
   if(btn){ btn.disabled=true; }
   var pass=0, total=0, guard=0;
   var vaDone={}, totalVAs=null, noProof=0, passMs=[], passStart=Date.now();
+  /* ONE VA PER PASS. Measured: a single VA costs ~18s of sheet reads before any API call, and a
+     busy one carries 300+ screenshots across four task groups. Three VAs a pass meant roughly a
+     minute of reads plus a dozen vision calls in one execution, which ran past Apps Script's
+     six-minute ceiling and killed the pass — the "Factory run failed" you saw. The run is
+     resumable and every VA is written as they finish, so more passes cost nothing but time, and
+     each pass gets a fresh six-minute budget.
+
+     PASS_MS is the client's own deadline: a dead execution can leave fetch waiting forever, so
+     the pass is abandoned and retried rather than hanging the UI. */
+  var PASS_MS=300000, batch=1, stalls=0;
   if(prog) prog.innerHTML='<span style="color:var(--t3);">Starting…</span>';
   try{
-    while(guard++ < 60){          // 3 VAs a pass — 60 passes covers ~180, well past the roster
+    while(guard++ < 80){          // 1 VA a pass — 80 passes is well past any roster we have
       if(btn) btn.textContent='⚙ Processing… ('+pass+' done)';
       var _ac=(typeof AbortController!=='undefined')?new AbortController():null;
       var _to=setTimeout(function(){ try{ _ac&&_ac.abort(); }catch(_x){} }, PASS_MS);
-      var r=null, _failed=false;
+      var r=null, d=null, _failed=false, _why='';
       try{
       r=await fetch(PORTAL_URL, { signal:_ac?_ac.signal:undefined, method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
         /* `only` lets you point the whole run at one VA — the sane first move before spending
@@ -1173,22 +1183,30 @@ async function factoryRun(){
                               project:((document.getElementById('f-project')||{}).value||''),
                               only:((document.getElementById('f-only')||{}).value||'').trim(),
                               force:((document.getElementById('f-only')||{}).value||'').trim()?'1':'' }) });
-      }catch(_fe){ _failed=true; }
+        var _txt=await r.text();
+        try{ d=JSON.parse(_txt); }
+        catch(_pe){
+          _failed=true;
+          _why = 'server returned '+r.status+' and not JSON: '+_txt.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,140);
+        }
+      }catch(_fe){
+        _failed=true;
+        _why = (_fe && _fe.name==='AbortError') ? ('no response within '+Math.round(PASS_MS/1000)+'s') : String((_fe&&_fe.message)||_fe);
+      }
       clearTimeout(_to);
       if(_failed){
         stalls++;
         if(batch>1){ batch=1; stalls=0;
-          if(prog) prog.innerHTML='<span style="color:#b45309;">A pass timed out. Narrowing to one VA at a time and resuming…</span>';
+          if(prog) prog.innerHTML='<span style="color:#b45309;">A pass failed ('+_why+'). Narrowing to one VA at a time and resuming…</span>';
           continue; }
         if(stalls>=2){
           if(prog) prog.innerHTML='<span style="color:#b91c1c;">Stopped: two passes in a row timed out on one VA. '+
-            'Everything scored so far is saved. Press <b>\ud83d\udc65 Who runs?</b> to see who is left, then run that VA alone to find the culprit.</span>';
+            'Everything scored so far is saved. Last error: '+_why+'. Press <b>\ud83d\udc65 Who runs?</b> to see who is left, then run that VA alone to find the culprit.</span>';
           toast('Stopped after repeated timeouts \u2014 progress is saved.');
           break; }
-        if(prog) prog.innerHTML='<span style="color:#b45309;">Pass timed out. Retrying\u2026</span>';
+        if(prog) prog.innerHTML='<span style="color:#b45309;">Pass failed ('+_why+'). Retrying\u2026</span>';
         continue;
       }
-      var d=await r.json();
       if(!d||!d.ok){ toast('Factory: '+((d&&d.note)||(d&&d.error)||'unknown error')); break; }
       stalls=0;
       pass+=(d.processed||[]).length;
@@ -1228,7 +1246,7 @@ async function factoryRun(){
     }
     toast('Processing complete — '+pass+' task result(s) across '+Object.keys(vaDone).length+' VA(s).');
     factoryLoad();
-  }catch(e){ toast('Factory run failed.'); }
+  }catch(e){ toast('Factory run failed: '+String((e&&e.message)||e)); }
   if(btn){ btn.disabled=false; btn.textContent='⚙ Run QA — everyone'; }
   FRUNNING=false;
 }
