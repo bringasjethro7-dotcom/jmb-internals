@@ -1159,18 +1159,38 @@ async function factoryRun(){
   try{
     while(guard++ < 60){          // 3 VAs a pass — 60 passes covers ~180, well past the roster
       if(btn) btn.textContent='⚙ Processing… ('+pass+' done)';
-      var r=await fetch(PORTAL_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      var _ac=(typeof AbortController!=='undefined')?new AbortController():null;
+      var _to=setTimeout(function(){ try{ _ac&&_ac.abort(); }catch(_x){} }, PASS_MS);
+      var r=null, _failed=false;
+      try{
+      r=await fetch(PORTAL_URL, { signal:_ac?_ac.signal:undefined, method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
         /* `only` lets you point the whole run at one VA — the sane first move before spending
            API calls on the entire team. Type an employee ID into the box; blank runs everyone.
            `force` re-runs someone already processed, so the same person can be checked again
            while you judge whether the verdicts are trustworthy. */
         body:JSON.stringify({ action:'qa_factory_run', month:month, week:week, confirm:'RUN',
-                              limit:3, criteria_map:fCrit(),
+                              limit:batch, criteria_map:fCrit(),
                               project:((document.getElementById('f-project')||{}).value||''),
                               only:((document.getElementById('f-only')||{}).value||'').trim(),
                               force:((document.getElementById('f-only')||{}).value||'').trim()?'1':'' }) });
+      }catch(_fe){ _failed=true; }
+      clearTimeout(_to);
+      if(_failed){
+        stalls++;
+        if(batch>1){ batch=1; stalls=0;
+          if(prog) prog.innerHTML='<span style="color:#b45309;">A pass timed out. Narrowing to one VA at a time and resuming…</span>';
+          continue; }
+        if(stalls>=2){
+          if(prog) prog.innerHTML='<span style="color:#b91c1c;">Stopped: two passes in a row timed out on one VA. '+
+            'Everything scored so far is saved. Press <b>\ud83d\udc65 Who runs?</b> to see who is left, then run that VA alone to find the culprit.</span>';
+          toast('Stopped after repeated timeouts \u2014 progress is saved.');
+          break; }
+        if(prog) prog.innerHTML='<span style="color:#b45309;">Pass timed out. Retrying\u2026</span>';
+        continue;
+      }
       var d=await r.json();
       if(!d||!d.ok){ toast('Factory: '+((d&&d.note)||(d&&d.error)||'unknown error')); break; }
+      stalls=0;
       pass+=(d.processed||[]).length;
       /* PROGRESS.
          The run already processes everyone in one click — it loops until the server says done —
@@ -1189,7 +1209,7 @@ async function factoryRun(){
       passMs.push(Date.now()-passStart); passStart=Date.now();
       var avg=passMs.reduce(function(a,b){return a+b;},0)/passMs.length;
       var pct=totalVAs? Math.min(100, Math.round(doneVAs/totalVAs*100)) : 0;
-      var etaMs=(d.remaining||0)>0 ? avg*Math.ceil((d.remaining||0)/3) : 0;
+      var etaMs=(d.remaining||0)>0 ? avg*Math.ceil((d.remaining||0)/Math.max(1,batch)) : 0;
       var eta=etaMs>0 ? (etaMs>60000 ? ('~'+Math.ceil(etaMs/60000)+' min left') : ('~'+Math.ceil(etaMs/1000)+'s left')) : 'finishing…';
       if(btn) btn.textContent='⚙ Processing… '+pct+'%';
       if(prog) prog.innerHTML=
