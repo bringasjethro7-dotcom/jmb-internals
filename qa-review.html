@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JMB — QA Review</title>
+<style>
+/* Light theme, matched to qa-computer.html so the two tools feel like one system. */
+:root{--bg:#f4f6fa;--card:#ffffff;--card2:#f1f4f9;--line:rgba(15,23,42,.10);
+ --t1:#0f172a;--t2:#475569;--t3:#94a3b8;
+ --o1:#ff6b1a;--o2:#e83d00;--green:#15803d;--red:#dc2626;--blue:#0284c7;--amber:#b45309;
+ --shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px -12px rgba(15,23,42,.12);}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t1);font:14px/1.55 'Manrope',system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:18px 16px 80px}
+h1{font-size:21px;margin:0 0 2px;letter-spacing:-.4px}
+.sub{color:var(--t2);font-size:12.5px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:14px 16px;margin-bottom:12px;box-shadow:var(--shadow)}
+.btn{background:#fff;border:1px solid rgba(15,23,42,.18);color:var(--t1);padding:7px 14px;border-radius:9px;font:700 12px inherit;cursor:pointer;font-family:inherit}
+.btn:hover{background:#f8fafc}
+.btn.p{background:linear-gradient(135deg,var(--o1),var(--o2));border:none;color:#fff}
+.btn.g{background:var(--green);border:none;color:#fff}
+.btn.sm{padding:5px 10px;font-size:11px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+input,select,textarea{background:#fff;border:1px solid rgba(15,23,42,.16);color:var(--t1);border-radius:8px;padding:7px 9px;font:13px inherit;font-family:inherit}
+label{font-size:10.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.7px;font-weight:800}
+table{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--card);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)}
+th{text-align:left;color:var(--t3);font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;padding:9px 8px;border-bottom:1px solid var(--line);background:#f8fafc;white-space:nowrap}
+td{padding:7px 8px;border-bottom:1px solid rgba(15,23,42,.06);vertical-align:middle}
+.bar{display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px}
+.pill{display:inline-block;font:800 10px inherit;padding:2px 8px;border-radius:20px;letter-spacing:.4px}
+.pill.done{background:#dcfce7;color:#14532d}
+.pill.prog{background:#fef3c7;color:#78350f}
+.pill.none{background:#e2e8f0;color:#334155}
+.acct{border:1px solid var(--line);border-radius:12px;background:var(--card);margin-bottom:14px;box-shadow:var(--shadow);overflow:hidden}
+.acct.done{border-color:rgba(21,128,61,.45)}
+.ahead{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 13px;background:var(--card2);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.ahead b{font-size:13.5px}
+.abody{padding:12px 13px;display:grid;grid-template-columns:1fr 340px;gap:14px}
+@media(max-width:900px){.abody{grid-template-columns:1fr}}
+.dayblk{margin-bottom:12px}
+.dayblk h4{margin:0 0 6px;font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.7px}
+.shots{display:flex;gap:7px;flex-wrap:wrap}
+.shots img{width:118px;height:118px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in;background:#f1f5f9}
+.crit{border:1px solid var(--line);border-radius:10px;padding:10px 11px;background:#fbfdff;max-height:520px;overflow:auto}
+.crit h4{margin:0 0 8px;font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.7px}
+.citem{padding:7px 0;border-bottom:1px dashed rgba(15,23,42,.09)}
+.citem:last-child{border-bottom:none}
+.ctext{font-size:12px;line-height:1.45;margin-bottom:5px}
+.ch{display:flex;gap:5px}
+.ch button{flex:1;padding:4px 0;border-radius:7px;border:1px solid rgba(15,23,42,.16);background:#fff;font:800 10.5px inherit;cursor:pointer;color:var(--t2)}
+.ch button.on.pass{background:var(--green);border-color:var(--green);color:#fff}
+.ch button.on.fail{background:var(--red);border-color:var(--red);color:#fff}
+.ch button.on.na{background:#64748b;border-color:#64748b;color:#fff}
+.note{background:#fff7ed;border:1px solid rgba(234,88,12,.28);border-radius:10px;padding:10px 13px;font-size:12.5px;color:#7c2d12;margin-bottom:12px}
+.warn{background:#fef2f2;border:1px solid rgba(220,38,38,.28);border-radius:10px;padding:10px 13px;font-size:12.5px;color:#7f1d1d;margin-bottom:12px}
+.grid-mode .shots img{width:86px;height:86px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:9px 18px;border-radius:10px;font:700 12.5px inherit;opacity:0;pointer-events:none;transition:.2s;z-index:60}
+.toast.on{opacity:1}
+#lb{position:fixed;inset:0;background:rgba(15,23,42,.92);display:none;align-items:center;justify-content:center;z-index:80;cursor:zoom-out}
+#lb img{max-width:94vw;max-height:92vh;border-radius:8px}
+.stat{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:9px;margin-bottom:12px}
+.st{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:10px 12px;box-shadow:var(--shadow)}
+.st b{display:block;font-size:20px;line-height:1.15}
+.st span{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ── SIGN IN ── -->
+  <div id="signin" class="card" style="max-width:380px;margin:60px auto;">
+    <h1>QA Review</h1>
+    <div class="sub">Sign in with your Employee ID and PIN.</div>
+    <div style="display:grid;gap:9px;">
+      <input id="si-id" placeholder="Employee ID (or ADMIN)">
+      <input id="si-pin" type="password" placeholder="PIN / password">
+      <button class="btn p" id="si-btn" onclick="signIn()">Sign in</button>
+      <div id="si-err" style="display:none;color:var(--red);font-size:12px;"></div>
+    </div>
+  </div>
+
+  <!-- ── APP ── -->
+  <div id="app" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+      <div>
+        <h1>QA Review</h1>
+        <div class="sub">Human review of the screenshots your teammates actually submitted — the full checklist, per account.</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:12px;color:var(--t2);" id="who"></div>
+        <button class="btn sm" onclick="signOut()" style="margin-top:5px;">Sign out</button>
+      </div>
+    </div>
+
+    <div class="bar">
+      <div><label>Month</label><br><input type="month" id="f-month" onchange="reload()"></div>
+      <div><label>Week</label><br><select id="f-week" onchange="reload()"><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+      <button class="btn" id="tab-mine" onclick="setTab('mine')">My review</button>
+      <button class="btn" id="tab-board" onclick="setTab('board')" style="display:none;">Assignment board</button>
+    </div>
+
+    <div id="pane-board" style="display:none;"></div>
+    <div id="pane-mine"></div>
+  </div>
+</div>
+
+<div id="lb" onclick="this.style.display='none'"><img id="lb-img" src=""></div>
+<div class="toast" id="toast"></div>
+
+<script>
+var PORTAL_URL = "https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec";
+var ADMIN_PASS = "jmb-admin";
+var USER=null, ISADMIN=false, TAB='mine', UNITS=[], BOARD=null;
+function $(id){ return document.getElementById(id); }
+function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('on'); setTimeout(function(){ t.classList.remove('on'); },2200); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function curMonth(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2); }
+
+/* Proof arrives either as a Supabase URL (current) or a Drive file id (older rows). Both have to
+   render, or a reviewer looking at an older week sees empty boxes and marks work as missing. */
+function imgSrc(u){
+  u=String(u||'');
+  if(/^https?:\/\//i.test(u)) return u;
+  return 'https://drive.google.com/thumbnail?id='+encodeURIComponent(u)+'&sz=w1000';
+}
+function zoom(u){ $('lb-img').src=imgSrc(u); $('lb').style.display='flex'; }
+
+/* ── SIGN IN ─────────────────────────────────────────────────────────────────────────────── */
+async function signIn(){
+  var id=($('si-id').value||'').trim(), pin=($('si-pin').value||'').trim();
+  var err=$('si-err'); err.style.display='none';
+  if(!id||!pin){ err.style.display='block'; err.textContent='Enter your ID and PIN.'; return; }
+  if(id.toUpperCase()==='ADMIN'){
+    if(pin===ADMIN_PASS){ USER={id:'ADMIN',name:'Admin'}; ISADMIN=true; start(); }
+    else { err.style.display='block'; err.textContent='Incorrect admin password.'; }
+    return;
+  }
+  var b=$('si-btn'); b.disabled=true; b.textContent='Checking…';
+  try{
+    var d=await (await fetch(PORTAL_URL+'?id='+encodeURIComponent(id)+'&pin='+encodeURIComponent(pin)+'&_='+Date.now())).json();
+    b.disabled=false; b.textContent='Sign in';
+    if(!d||d.error){ err.style.display='block'; err.textContent=(d&&d.error==='WRONG_PIN')?'Incorrect PIN.':'Employee not found.'; return; }
+    USER={ id:d.employee_id, name:d.full_name||d.employee_id }; ISADMIN=false;
+    start();
+  }catch(e){ b.disabled=false; b.textContent='Sign in'; err.style.display='block'; err.textContent='Network error — try again.'; }
+}
+function signOut(){ location.reload(); }
+function start(){
+  $('signin').style.display='none'; $('app').style.display='block';
+  $('who').textContent=USER.name+' · '+USER.id;
+  $('f-month').value=curMonth();
+  if(ISADMIN){ $('tab-board').style.display=''; setTab('board'); }
+  else setTab('mine');
+}
+function setTab(t){ TAB=t;
+  $('pane-board').style.display=(t==='board')?'block':'none';
+  $('pane-mine').style.display=(t==='mine')?'block':'none';
+  reload();
+}
+function reload(){ VIEW_EMP=''; if(TAB==='board') loadBoard(); else loadMine(); }
+
+/* ── ADMIN: PLAN AND ASSIGN ──────────────────────────────────────────────────────────────── */
+async function loadBoard(){
+  var p=$('pane-board'); p.innerHTML='<div class="card">Loading…</div>';
+  var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
+  try{
+    var d=await (await fetch(PORTAL_URL+'?action=qa_review_board&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&_='+Date.now())).json();
+    if(!d||!d.ok){ p.innerHTML='<div class="warn">'+esc((d&&d.error)||'Could not load')+'</div>'; return; }
+    BOARD=d;
+    var done=d.rows.filter(function(r){return r.complete;}).length;
+    var assigned=d.rows.filter(function(r){return r.reviewer_id;}).length;
+    var opts=d.reviewers.map(function(r){ return '<option value="'+esc(r.employee_id)+'">'+esc(r.name)+' ('+esc(r.employee_id)+')</option>'; }).join('');
+    var h='';
+    h+='<div class="note"><b>You assign every reviewer by hand.</b> One reviewer takes one VA for the whole week, so they see that person\'s pattern rather than scattered accounts. Rotating the pairings yourself each week is what stops a comfortable pairing settling in. A VA can never be assigned to themselves.</div>';
+    h+='<div class="stat">'+
+       '<div class="st"><b>'+d.rows.length+'</b><span>VAs planned</span></div>'+
+       '<div class="st"><b>'+assigned+'</b><span>assigned</span></div>'+
+       '<div class="st"><b>'+done+'</b><span>submitted</span></div>'+
+       '<div class="st"><b>'+d.rows.reduce(function(n,r){return n+r.units;},0)+'</b><span>accounts to check</span></div>'+
+       '<div class="st"><b>'+d.rows.reduce(function(n,r){return n+r.shots;},0)+'</b><span>screenshots</span></div></div>';
+    h+='<div class="bar"><button class="btn" onclick="planWeek(1)">Preview plan</button>'+
+       '<button class="btn p" onclick="planWeek(0)">Build / rebuild plan</button>'+
+       '<span style="font-size:11.5px;color:var(--t3);">Rebuilding replaces unstarted work. Submitted reviews are never discarded.</span></div>';
+    if(!d.rows.length){ h+='<div class="card">No plan for this week yet. Press <b>Build / rebuild plan</b>.</div>'; p.innerHTML=h; return; }
+    h+='<table><tr><th>VA</th><th>Tasks</th><th>Accounts</th><th>Shots</th><th>Reviewer</th><th>Progress</th><th>Score</th></tr>';
+    d.rows.forEach(function(r){
+      var pillCls=r.complete?'done':(r.done?'prog':'none');
+      var pillTxt=r.complete?'submitted':(r.done?(r.done+'/'+r.units):'not started');
+      h+='<tr>'+
+        '<td><b>'+esc(r.name)+'</b><br><span style="color:var(--t3);font-size:11px;">'+esc(r.employee_id)+'</span></td>'+
+        '<td style="font-size:11px;color:var(--t2);">'+esc((r.tasks||[]).join(', '))+'</td>'+
+        '<td>'+r.units+'</td><td>'+r.shots+'</td>'+
+        '<td><select onchange="assign(\''+esc(r.employee_id)+'\',this.value)" '+(r.complete?'disabled':'')+' style="min-width:170px;">'+
+          '<option value="">— unassigned —</option>'+opts+'</select></td>'+
+        '<td><span class="pill '+pillCls+'">'+pillTxt+'</span></td>'+
+        '<td><b>'+(r.score===''?'—':r.score)+'</b></td></tr>';
+    });
+    h+='</table>';
+    p.innerHTML=h;
+    // reflect existing assignments in the dropdowns
+    d.rows.forEach(function(r,i){
+      var sel=p.querySelectorAll('select')[i];
+      if(sel && r.reviewer_id) sel.value=r.reviewer_id;
+    });
+  }catch(e){ p.innerHTML='<div class="warn">'+esc(e.message)+'</div>'; }
+}
+
+async function planWeek(dry){
+  var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
+  if(!dry && !confirm('Build the plan for '+m+' week '+w+'?\n\nThis replaces any unstarted plan for the week. Reviews already submitted are kept.')) return;
+  var p=$('pane-board'); var old=p.innerHTML;
+  p.innerHTML='<div class="card">Sampling the week…</div>';
+  try{
+    var body={ action:'qa_review_plan', month:m, week:w };
+    if(!dry) body.confirm='RUN';
+    var d=await (await fetch(PORTAL_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)})).json();
+    if(!d||!d.ok){ p.innerHTML='<div class="warn">'+esc((d&&d.error)||'Plan failed')+'</div>'; return; }
+    var h='<div class="card"><b>'+(d.dry?'Preview — nothing written':'Plan built')+'</b> · '+esc(d.from)+' → '+esc(d.to)+
+          '<div style="font-size:12px;color:var(--t2);margin-top:4px;">'+d.vas+' VAs · '+d.units+' accounts · '+d.shots+
+          ' screenshots · '+d.minutes_per_va+' min budget each</div>'+
+          '<table style="margin-top:9px;"><tr><th>VA</th><th>Tasks</th><th>Accounts</th><th>Screenshots</th><th>~min</th></tr>'+
+          d.summary.map(function(s){ return '<tr><td>'+esc(s.name)+' <span style="color:var(--t3);font-size:11px;">'+esc(s.employee_id)+'</span></td><td>'+s.tasks+'</td><td>'+s.units+'</td><td>'+s.shots+' <span style="color:var(--t3);">of '+s.of_total+'</span></td><td>'+s.minutes+'</td></tr>'; }).join('')+
+          '</table></div>';
+    p.innerHTML=h+'<div class="bar"><button class="btn" onclick="loadBoard()">← Back to board</button>'+
+      (d.dry?'<button class="btn p" onclick="planWeek(0)">Build this plan</button>':'')+'</div>';
+  }catch(e){ p.innerHTML='<div class="warn">'+esc(e.message)+'</div>'; }
+}
+
+async function assign(emp, rev){
+  var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
+  try{
+    var d=await (await fetch(PORTAL_URL+'?action=qa_review_assign&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+
+      '&employee_id='+encodeURIComponent(emp)+'&reviewer_id='+encodeURIComponent(rev)+'&_='+Date.now())).json();
+    if(d&&d.ok) toast(rev?(d.reviewer+' assigned to '+emp+' ('+d.units+' accounts)'):('Unassigned '+emp));
+    else toast('Failed: '+((d&&d.message)||(d&&d.error)||'unknown'));
+    loadBoard();
+  }catch(e){ toast('Failed: '+e.message); }
+}
+
+/* ── REVIEWER ────────────────────────────────────────────────────────────────────────────── */
+async function loadMine(){
+  var p=$('pane-mine'); var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
+  /* An admin has no assignment of their own, so they choose whose review to open. Without this
+     the request went out with a blank employee id and simply failed. */
+  if(ISADMIN && !VIEW_EMP){
+    p.innerHTML='<div class="card">Loading…</div>';
+    try{
+      var b=await (await fetch(PORTAL_URL+'?action=qa_review_board&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&_='+Date.now())).json();
+      var rows=(b&&b.rows)||[];
+      if(!rows.length){ p.innerHTML='<div class="card">No plan for this week yet — build one on the assignment board.</div>'; return; }
+      p.innerHTML='<div class="card"><b>Open a review</b><div class="sub" style="margin:4px 0 9px;">Admins can read any review. Reviewers see only their own.</div>'+
+        '<select id="adm-va" style="min-width:260px;">'+rows.map(function(r){
+          return '<option value="'+esc(r.employee_id)+'">'+esc(r.name)+' ('+esc(r.employee_id)+') — '+r.units+' accounts'+(r.reviewer?(' · reviewer: '+esc(r.reviewer)):' · unassigned')+'</option>';
+        }).join('')+'</select> <button class="btn p" onclick="VIEW_EMP=$(\'adm-va\').value; loadMine();">Open</button></div>';
+      return;
+    }catch(e){ p.innerHTML='<div class="warn">'+esc(e.message)+'</div>'; return; }
+  }
+  p.innerHTML='<div class="card">Loading review…</div>';
+  var q=ISADMIN ? ('&employee_id='+encodeURIComponent(VIEW_EMP)) : ('&reviewer_id='+encodeURIComponent(USER.id));
+  try{
+    var d=await (await fetch(PORTAL_URL+'?action=qa_review_list&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+q+'&_='+Date.now())).json();
+    if(!d||!d.ok){ p.innerHTML='<div class="warn">'+esc((d&&d.error)||'Could not load')+'</div>'; return; }
+    UNITS=d.rows||[];
+    if(!UNITS.length){ p.innerHTML='<div class="card">Nothing assigned to you for '+esc(m)+' week '+esc(w)+'.</div>'; return; }
+    renderMine();
+  }catch(e){ p.innerHTML='<div class="warn">'+esc(e.message)+'</div>'; }
+}
+var VIEW_EMP='';   // admin only: whose review is open
+
+function unitDone(u){
+  var c=(u.criteria||[]).length;
+  if(!c) return false;
+  var n=0; (u.criteria||[]).forEach(function(cr){ if(u.verdicts && u.verdicts[cr]) n++; });
+  return n>=c;
+}
+function renderMine(){
+  var p=$('pane-mine');
+  var va=UNITS[0];
+  var doneN=UNITS.filter(unitDone).length;
+  var submitted=UNITS.every(function(u){ return u.status==='submitted'; });
+  var totalShots=UNITS.reduce(function(n,u){ return n+(u.shots||0); },0);
+  var h='';
+  h+='<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">'+
+     '<div><b style="font-size:15px;">Reviewing '+esc(va.full_name)+'</b> <span style="color:var(--t3);">'+esc(va.employee_id)+'</span>'+
+     '<div style="font-size:12px;color:var(--t2);margin-top:2px;">'+UNITS.length+' accounts · '+totalShots+' screenshots · '+doneN+' of '+UNITS.length+' checked</div></div>'+
+     '<div>'+(ISADMIN?'<button class="btn sm" onclick="VIEW_EMP=\'\'; loadMine();" style="margin-right:6px;">Change VA</button>':'')+
+     (submitted?'<span class="pill done">submitted</span>':
+       '<button class="btn g" onclick="submitAll()" '+(doneN<UNITS.length?'disabled':'')+'>Submit review</button>')+'</div></div></div>';
+  if(!submitted && doneN<UNITS.length)
+    h+='<div class="note">Every account has to be checked before you can submit. A part-finished review would score this VA on whichever accounts happened to be opened, which is worse than no score at all.</div>';
+
+  var lastTask='';
+  UNITS.forEach(function(u,i){
+    if(u.task!==lastTask){ h+='<h3 style="margin:16px 0 8px;font-size:14px;">'+esc(u.project)+' · '+esc(u.task)+'</h3>'; lastTask=u.task; }
+    var isDone=unitDone(u);
+    h+='<div class="acct'+(isDone?' done':'')+(u.mode==='grid'?' grid-mode':'')+'" id="u-'+esc(u.id)+'">'+
+       '<div class="ahead"><b>'+esc(u.account)+'</b>'+
+       '<span style="font-size:11.5px;color:var(--t2);">'+esc((u.days||[]).join(' · '))+' — '+u.shots+' screenshot(s)</span>'+
+       '<span class="pill '+(isDone?'done':'none')+'" id="p-'+esc(u.id)+'">'+(isDone?'checked':'not checked')+'</span></div>'+
+       '<div class="abody"><div>';
+    (u.blocks||[]).forEach(function(b){
+      h+='<div class="dayblk"><h4>'+esc(b.day)+' — '+(b.urls||[]).length+' screenshot(s)</h4><div class="shots">'+
+         (b.urls||[]).map(function(x){ return '<img loading="lazy" src="'+esc(imgSrc(x))+'" onclick="zoom(\''+esc(x)+'\')">'; }).join('')+
+         '</div></div>';
+    });
+    h+='</div><div class="crit"><h4>Checklist — '+(u.criteria||[]).length+' criteria</h4>';
+    if(!(u.criteria||[]).length)
+      h+='<div style="font-size:12px;color:var(--red);">No checklist is mapped for this task. Tell the admin — this account cannot be scored.</div>';
+    (u.criteria||[]).forEach(function(cr,ci){
+      var v=(u.verdicts||{})[cr]||'';
+      h+='<div class="citem"><div class="ctext">'+esc(cr)+'</div><div class="ch">'+
+        ['pass','fail','na'].map(function(k){
+          return '<button class="'+k+(v===k?' on':'')+'" onclick="setV(\''+esc(u.id)+'\','+ci+',\''+k+'\')">'+(k==='na'?'N/A':k.toUpperCase())+'</button>';
+        }).join('')+'</div></div>';
+    });
+    h+='<div style="margin-top:9px;"><label>Notes</label><textarea id="n-'+esc(u.id)+'" rows="2" style="width:100%;margin-top:3px;" placeholder="Anything the checklist does not cover" onchange="saveUnit(\''+esc(u.id)+'\')">'+esc(u.notes||'')+'</textarea></div>';
+    h+='</div></div></div>';
+  });
+  p.innerHTML=h;
+}
+
+function setV(id, ci, val){
+  var u=UNITS.filter(function(x){ return x.id===id; })[0]; if(!u) return;
+  var cr=(u.criteria||[])[ci]; if(!cr) return;
+  u.verdicts=u.verdicts||{};
+  u.verdicts[cr]=(u.verdicts[cr]===val)?'':val;      // click again to clear
+  if(!u.verdicts[cr]) delete u.verdicts[cr];
+  // repaint just this account's buttons and pill, so the page doesn't jump while reviewing
+  var card=$('u-'+id); if(card){
+    var items=card.querySelectorAll('.citem');
+    if(items[ci]) items[ci].querySelectorAll('button').forEach(function(b){
+      var k=b.className.replace(/ on/,'').trim();
+      b.className=k+((u.verdicts[cr]===k)?' on':'');
+    });
+    var pill=$('p-'+id), d=unitDone(u);
+    if(pill){ pill.className='pill '+(d?'done':'none'); pill.textContent=d?'checked':'not checked'; }
+    card.className='acct'+(d?' done':'')+(u.mode==='grid'?' grid-mode':'');
+  }
+  saveUnit(id);
+  refreshHeader();
+}
+function refreshHeader(){
+  var doneN=UNITS.filter(unitDone).length;
+  var hdr=document.querySelector('#pane-mine .card b'); if(!hdr) return;
+  var line=hdr.parentNode.querySelector('div'); if(line)
+    line.textContent=UNITS.length+' accounts · '+UNITS.reduce(function(n,u){return n+(u.shots||0);},0)+' screenshots · '+doneN+' of '+UNITS.length+' checked';
+  var btn=document.querySelector('#pane-mine .btn.g'); if(btn) btn.disabled=(doneN<UNITS.length);
+}
+
+var SAVET={};
+function saveUnit(id){
+  clearTimeout(SAVET[id]);
+  SAVET[id]=setTimeout(async function(){
+    var u=UNITS.filter(function(x){ return x.id===id; })[0]; if(!u) return;
+    var nEl=$('n-'+id);
+    try{
+      var d=await (await fetch(PORTAL_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body:JSON.stringify({ action:'qa_review_save', id:id, verdicts:u.verdicts||{}, notes:nEl?nEl.value:'' })})).json();
+      if(!d||!d.ok) toast('Not saved: '+((d&&d.error)||'unknown'));
+    }catch(e){ toast('Not saved — check your connection'); }
+  }, 700);
+}
+
+async function submitAll(){
+  var va=UNITS[0]; if(!va) return;
+  if(!confirm('Submit the review for '+va.full_name+'?\n\nThis writes their week QA score and cannot be edited afterwards.')) return;
+  var btn=document.querySelector('#pane-mine .btn.g'); if(btn){ btn.disabled=true; btn.textContent='Submitting…'; }
+  try{
+    var d=await (await fetch(PORTAL_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({ action:'qa_review_submit', month:$('f-month').value, week:$('f-week').value,
+                            employee_id:va.employee_id, by:USER.name })})).json();
+    if(d&&d.ok){ toast('Submitted — '+va.full_name+' scored '+d.score); loadMine(); }
+    else if(d&&d.error==='INCOMPLETE'){ toast(d.remaining+' account(s) still unchecked'); if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
+    else { toast('Failed: '+((d&&d.error)||'unknown')); if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
+  }catch(e){ toast('Failed: '+e.message); if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
+}
+</script>
+</body>
+</html>
