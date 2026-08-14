@@ -253,6 +253,15 @@ td{padding:11px 12px;border-bottom:1px solid rgba(15,23,42,.05)}
 .assignrow{display:flex;gap:7px;margin-top:auto}
 .assignrow select{flex:1;min-width:0;font-size:12.5px;padding:8px 9px}
 .empty{text-align:center;padding:52px 20px;background:var(--card);border:1px dashed var(--line2);border-radius:var(--r)}
+
+/* ── the dwell timer on each account ───────────────────────────────────────────────────── */
+.timer{display:flex;align-items:center;gap:7px;font:800 10.5px 'Manrope';letter-spacing:.4px;
+  padding:4px 10px;border-radius:999px;background:var(--card);border:1px solid var(--line2);color:var(--t3)}
+.timer.ok{background:var(--greenSoft);border-color:rgba(15,143,95,.3);color:#075f43}
+.timer .tbar{width:44px;height:4px;border-radius:99px;background:rgba(15,23,42,.1);overflow:hidden}
+.timer .tbar i{display:block;height:100%;background:var(--o1);border-radius:99px;transition:width .4s}
+.timer.ok .tbar i{background:var(--green)}
+.acct.rushed{border-color:rgba(180,83,9,.45);box-shadow:0 0 0 3px rgba(180,83,9,.08),var(--sh2)}
 </style>
 </head>
 <body>
@@ -564,12 +573,14 @@ var ALL_UNITS=[];  // everything assigned to this reviewer, across every VA they
 var MY_VA='';      // the VA currently open
 var LBSETS={};     // account id -> every screenshot in it, for arrow-key navigation
 
-function unitDone(u){
-  var c=(u.criteria||[]).length;
-  if(!c) return false;
+function checksDone(u){
+  var c=(u.criteria||[]).length; if(!c) return false;
   var n=0; (u.criteria||[]).forEach(function(cr){ if(u.verdicts && u.verdicts[cr]) n++; });
   return n>=c;
 }
+/* An account counts as reviewed only when every criterion is answered AND the minimum time has
+   been spent on it. Either alone is easy to fake; together they are not. */
+function unitDone(u){ return checksDone(u) && timeOk(u); }
 /* One VA is reviewed by exactly one reviewer, but a reviewer may hold several VAs. So the
    reviewer's queue is grouped by person and reviewed one person at a time — mixing two VAs into
    one list would also have meant Submit finishing only the first of them. */
@@ -605,8 +616,12 @@ function renderMine(){
      '<div>'+(ISADMIN?'<button class="btn sm" onclick="VIEW_EMP=\'\'; loadMine();" style="margin-right:6px;">Change VA</button>':'')+
      (submitted?'<span class="pill done">submitted</span>':
        '<button class="btn g" onclick="submitAll()" '+(doneN<UNITS.length?'disabled':'')+'>Submit review</button>')+'</div></div></div>';
-  if(!submitted && doneN<UNITS.length)
-    h+='<div class="note">Every account has to be checked before you can submit. A part-finished review would score this VA on whichever accounts happened to be opened, which is worse than no score at all.</div>';
+  if(!submitted && doneN<UNITS.length){
+    var rushed=UNITS.filter(function(u){ return checksDone(u) && !timeOk(u); }).length;
+    h+='<div class="note">Every account has to be checked before you can submit. A part-finished review would score this VA on whichever accounts happened to be opened, which is worse than no score at all.'+
+       (rushed?('<br><br><b>'+rushed+' account'+(rushed>1?'s were':' was')+' marked faster than the screenshots could be read.</b> Those need a proper look before this can be submitted — the timer on each card shows how much longer.'):'')+
+       '</div>';
+  }
 
   var lastTask='';
   UNITS.forEach(function(u,i){
@@ -615,6 +630,7 @@ function renderMine(){
     h+='<div class="acct'+(isDone?' done':'')+(u.mode==='grid'?' grid-mode':'')+'" id="u-'+esc(u.id)+'">'+
        '<div class="ahead"><b>'+esc(u.account)+'</b>'+
        '<span style="font-size:11.5px;color:var(--t2);">'+esc((u.days||[]).join(' · '))+' — '+u.shots+' screenshot(s)</span>'+
+       '<span class="timer" id="t-'+esc(u.id)+'"></span>'+
        '<span class="pill '+(isDone?'done':'none')+'" id="p-'+esc(u.id)+'">'+(isDone?'checked':'not checked')+'</span></div>'+
        '<div class="abody"><div>';
     /* One flat list per account so the arrows can walk the whole account, not just one day. */
@@ -641,6 +657,8 @@ function renderMine(){
     h+='</div></div></div>';
   });
   p.innerHTML=h;
+  watchDwell();
+  UNITS.forEach(paintTimer);
   paintDock();
   if(!CUR_UNIT){ var f=UNITS.filter(function(u){ return !unitDone(u); })[0]; if(f) focusUnit(f.id,0); }
 }
@@ -753,6 +771,57 @@ function paintDock(){
   $('dk-submit').disabled=(done<tot);
 }
 
+
+/* ── DWELL TIME ────────────────────────────────────────────────────────────────────────────
+   A reviewer can tick forty checks in ninety seconds and the verdicts alone would never show it.
+   Each account carries a minimum — a few seconds per screenshot — and Submit is refused below it.
+
+   Seconds are only counted when all three are true: the tab is visible, the account is actually
+   on screen, and there has been mouse or keyboard activity in the last minute. Leaving the page
+   open in a background tab therefore earns nothing. */
+var DWELL={}, LAST_ACT=Date.now(), VISIBLE_UNITS={};
+['mousemove','keydown','click','scroll','wheel','touchstart'].forEach(function(ev){
+  document.addEventListener(ev, function(){ LAST_ACT=Date.now(); }, {passive:true});
+});
+var DOBS=null;
+function watchDwell(){
+  if(DOBS) DOBS.disconnect();
+  VISIBLE_UNITS={};
+  DOBS=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){
+      var id=(en.target.id||'').replace(/^u-/,'');
+      if(en.isIntersecting && en.intersectionRatio>0.35) VISIBLE_UNITS[id]=1; else delete VISIBLE_UNITS[id];
+    });
+  }, {threshold:[0,0.35,1]});
+  document.querySelectorAll('.acct').forEach(function(el){ DOBS.observe(el); });
+}
+setInterval(function(){
+  if(document.hidden) return;
+  if(Date.now()-LAST_ACT > 60000) return;          // idle — not reviewing
+  var ids=Object.keys(VISIBLE_UNITS);
+  if(!ids.length) return;
+  /* Credit the account you are working in, not every one that happens to be on screen. */
+  var id=(CUR_UNIT && VISIBLE_UNITS[CUR_UNIT]) ? CUR_UNIT : ids[0];
+  var u=UNITS.filter(function(x){ return x.id===id; })[0]; if(!u) return;
+  if(u.status==='submitted') return;
+  DWELL[id]=(DWELL[id]||0)+1;
+  u.seconds=(u.seconds||0)+1;
+  paintTimer(u);
+  if(u.seconds%12===0) saveUnit(id);               // persist periodically, not every tick
+}, 1000);
+function minSec(u){ return u.min_seconds || Math.max(15,(u.shots||0)*4); }
+function timeOk(u){ return (u.seconds||0) >= minSec(u); }
+function paintTimer(u){
+  var el=$('t-'+u.id); if(!el) return;
+  var need=minSec(u), have=Math.min(need, u.seconds||0), pct=Math.round(have/need*100);
+  el.className='timer'+(timeOk(u)?' ok':'');
+  el.innerHTML='<span class="tbar"><i style="width:'+pct+'%"></i></span>'+
+               (timeOk(u)?'REVIEWED':(Math.max(0,need-(u.seconds||0))+'s MORE'));
+  var card=$('u-'+u.id);
+  if(card) card.className='acct'+(unitDone(u)?' done':'')+((u.mode==='grid')?' grid-mode':'')+
+    ((!timeOk(u) && checksDone(u))?' rushed':'');
+}
+
 var SAVET={};
 function saveUnit(id){
   clearTimeout(SAVET[id]);
@@ -761,7 +830,8 @@ function saveUnit(id){
     var nEl=$('n-'+id);
     try{
       var d=await (await fetch(PORTAL_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body:JSON.stringify({ action:'qa_review_save', id:id, verdicts:u.verdicts||{}, notes:nEl?nEl.value:'' })})).json();
+        body:JSON.stringify({ action:'qa_review_save', id:id, verdicts:u.verdicts||{},
+                              seconds:u.seconds||0, notes:nEl?nEl.value:'' })})).json();
       if(!d||!d.ok) toast('Not saved: '+((d&&d.error)||'unknown'));
     }catch(e){ toast('Not saved — check your connection'); }
   }, 700);
@@ -777,6 +847,7 @@ async function submitAll(){
                             employee_id:va.employee_id, by:USER.name })})).json();
     if(d&&d.ok){ toast('Submitted — '+va.full_name+' scored '+d.score); CUR_UNIT=''; loadMine(); }
     else if(d&&d.error==='INCOMPLETE'){ toast(d.remaining+' account(s) still unchecked'); if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
+    else if(d&&d.error==='TOO_FAST'){ toast(d.rushed+' account(s) reviewed too quickly — look again'); if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
     else { toast('Failed: '+((d&&d.error)||'unknown')); if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
   }catch(e){ toast('Failed: '+e.message); if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
 }
