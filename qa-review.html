@@ -542,7 +542,8 @@ function renderBoard(){
     '<div class="st"><b>'+d.rows.reduce(function(n,r){return n+r.shots;},0)+'</b><span>screenshots</span></div></div>';
 
   h+='<div class="bar"><button class="btn" onclick="planWeek(1)">Preview plan</button>'+
-     '<button class="btn" onclick="planWeek(0)">Rebuild plan</button>';
+     '<button class="btn" onclick="planWeek(0)">Rebuild plan</button>'+
+     '<button class="btn" onclick="notifyAll()" title="Send each reviewer a message with a direct link to their review">Notify reviewers</button>';
   if(uncovered.length) h+='<span class="tag" style="background:var(--redSoft);color:#991b1b;">'+
      uncovered.length+' VA'+(uncovered.length>1?'s':'')+' still need a reviewer: '+
      esc(uncovered.slice(0,3).map(function(r){ return r.name; }).join(', '))+(uncovered.length>3?' …':'')+'</span>';
@@ -589,6 +590,23 @@ function renderBoard(){
   });
   h+='</div>';
   p.innerHTML=h;
+}
+/* Shows who would be messaged before sending, so a re-send is never a surprise round of pings. */
+async function notifyAll(){
+  var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
+  var u=PORTAL_URL+'?action=qa2_notify&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w);
+  try{
+    var d=await (await fetch(u+'&_='+Date.now())).json();
+    if(!d||!d.ok){ toast('Failed: '+((d&&d.error)||'unknown')); return; }
+    if(!d.reviewers){ toast('Nobody to notify — everyone has finished, or nothing is assigned.'); return; }
+    var lines=d.sent.map(function(x){ return '· '+x.reviewer+' → '+x.vas.join(', ')+' ('+x.accounts+' accounts)'; }).join('\n');
+    if(!confirm('Send '+d.reviewers+' notification(s)?\n\n'+lines+
+                (d.skipped.length?('\n\nSkipped:\n'+d.skipped.map(function(x){ return '· '+x; }).join('\n')):'')+
+                '\n\nEach message links straight to their review.')) return;
+    var r=await (await fetch(u+'&confirm=RUN&_='+Date.now())).json();
+    if(r&&r.ok) toast(r.reviewers+' reviewer(s) notified');
+    else toast('Failed: '+((r&&r.error)||'unknown'));
+  }catch(e){ toast('Failed: '+e.message); }
 }
 function openReview(id){
   TAB='mine'; VIEW_EMP=id; CUR_UNIT='';
