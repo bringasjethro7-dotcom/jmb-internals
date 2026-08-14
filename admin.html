@@ -1099,7 +1099,9 @@ body{background-attachment:initial !important}
           <button class="bsm" id="sc-cert-btn" onclick="openCertPicker()" style="color:#a16207;border-color:rgba(202,138,4,.35);">🏅 Certificates &amp; Awards</button>
           <button class="bsm" id="sc-integrity-btn" onclick="openIntegrityCheck()" style="color:#b91c1c;border-color:rgba(185,28,28,.35);" title="Scan for coordinated or padded output">🔎 Integrity Check</button>
           <button class="bsm" id="sc-inno-btn" onclick="openInnoReview()" style="color:#7c3aed;border-color:rgba(124,58,237,.35);" title="Review and grade this month's innovation ideas">💡 Innovation Ideas</button>
-          <button class="bsm" id="sc-qar-btn" onclick="openQaChain()" style="color:#15803d;border-color:rgba(21,128,61,.35);" title="Peer → Lead → Manager QA review chain">🔗 QA Chain</button>
+          <!-- QA Chain button removed. The peer → lead → manager review chain was retired when QA
+               moved to the screenshot Factory with a single admin approval; the screen behind
+               this opened a queue nobody works and offered actions that write to a dead flow. -->
           <button class="bsm" onclick="openScorecardForm()" style="color:var(--o3);border-color:rgba(255,107,26,.3);">+ Add / Edit</button>
         </div>
       </div>
@@ -1116,8 +1118,8 @@ body{background-attachment:initial !important}
       <div class="card" style="padding:0;margin-bottom:14px;overflow:hidden;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 16px;cursor:pointer;" onclick="toggleCfPanel()">
           <div style="font-size:13px;color:var(--t1);">
-            <b>Client Feedback links</b> <span style="color:var(--t3);font-size:11px;">· CSAT 1–10 · one rating per project each month</span>
-            <div style="font-size:11px;color:var(--t3);margin-top:3px;">Share each project's link with the client. Their rating becomes the Client Feedback score (10%) for everyone on that project.</div>
+            <b>Client Feedback links</b> <span style="color:var(--t3);font-size:11px;">· legacy · stopped scoring Aug 2026</span>
+            <div style="font-size:11px;color:var(--t3);margin-top:3px;">These client ratings fed the old Client Feedback 5%. From August 2026 that slot is the <b>Reviewer Grade</b>, computed automatically from QA peer reviews — client ratings still record here but no longer reach the scorecard.</div>
           </div>
           <button class="bsm" id="cf-panel-toggle" style="white-space:nowrap;" onclick="event.stopPropagation();toggleCfPanel()">Manage</button>
         </div>
@@ -1137,10 +1139,11 @@ body{background-attachment:initial !important}
             <th>Assessment</th>
             <th>Team Sales</th>
             <th>Demerit</th>
-            <th>Client FB</th>
+            <th>Reviewer Grade</th>
+            <th>Innovation</th>
             <th>Overall</th>
           </tr></thead>
-          <tbody id="sc-body"><tr><td colspan="10" class="es">Loading…</td></tr></tbody>
+          <tbody id="sc-body"><tr><td colspan="11" class="es">Loading…</td></tr></tbody>
         </table>
       </div>
 
@@ -1172,8 +1175,14 @@ body{background-attachment:initial !important}
           </div>
           <div class="m2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
             <div>
-              <label style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:4px;">Client Feedback (0–100)</label>
-              <input type="number" id="sc-form-csat" class="sinp" min="0" max="100" step="1" placeholder="from client link" style="width:100%;" />
+              <label style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:4px;">Reviewer Grade (auto)</label>
+              <!-- Read-only since Aug 2026: this 5% is the reviewer grade, computed weekly from how
+                   the person reviews colleagues (accuracy vs the AI re-check, upheld disputes,
+                   engagement, time) and averaged over the month. It is deliberately not editable
+                   here — a hand-typed number would silently overwrite a measured one, and the
+                   pre-Aug months this box used to serve are settled. Manage it from QA Review →
+                   Results. -->
+              <input type="number" id="sc-form-csat" class="sinp" min="0" max="100" step="1" placeholder="auto — from QA Review" style="width:100%;" disabled title="Computed from their weekly reviewing. See QA Review → Results." />
               <p style="font-size:10px;color:var(--t3);margin:4px 0 0;">Override only — normally set by the client's rating link (10% weight)</p>
             </div>
             <div>
@@ -1547,19 +1556,58 @@ const API  = "https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJ
 // Never use for writes (set_/save_/resolve_/record_/purge_/otp_ …) — those stay on fetch().
 var _jCache={}, _jInflight={};
 function _jKey(u){ return String(u).replace(/[?&]_=\d+/,''); }
-function _jText(url,tries,timeout,delay){
-  tries=tries||1; delay=delay||400;
+/* ═══ AFX FETCH CHAIN — priority gate → dedupe → SWR cache → stale fallback → health HUD ═══
+   Every admin read flows through a 5-slot concurrency gate with 3 priority lanes:
+     P0 user actions · P1 visible panel loads (default) · P2 background revalidations/polls.
+   Panel storms can no longer fire 20 parallel requests that starve the VAs' backend slots —
+   reads queue politely, retries re-enter the queue (never hold a slot), and every request
+   feeds the health chip (bottom-right) so fetch trouble is VISIBLE before anyone reports it. */
+/* max:2, not 5. Firing five at once at a backend that executes ONE AT A TIME does not make
+   anything faster — it just builds a five-deep queue where the last arrival waits for four full
+   round-trips before it starts, then times out. Two keeps the pipe busy while a slow call is in
+   flight without stacking a queue behind it. Throughput is set by the server; concurrency here
+   only decides how many callers are left waiting. */
+var _afx={ max:2, active:0, q:[[],[],[]], ok:0, fail:0, ms:0, n:0, lastErr:0, degraded:0 };
+function _afxPump(){
+  while(_afx.active<_afx.max){
+    var job=_afx.q[0].shift()||_afx.q[1].shift()||_afx.q[2].shift();
+    if(!job) return;
+    _afx.active++; job();
+  }
+}
+function _afxRun(fn, pri){
   return new Promise(function(res,rej){
-    var ctrl=window.AbortController?new AbortController():null;
-    var to=setTimeout(function(){ try{ ctrl&&ctrl.abort(); }catch(e){} }, timeout||15000);
-    fetch(url, ctrl?{signal:ctrl.signal}:undefined)
-      .then(function(r){ return r.text(); })
-      .then(function(t){ clearTimeout(to); res(t); })
-      .catch(function(e){ clearTimeout(to);
-        // retry with exponential backoff (helps flaky Apps Script / mobile connections)
-        if(tries>1){ setTimeout(function(){ _jText(url,tries-1,timeout,Math.min(delay*2,4000)).then(res,rej); }, delay); }
+    _afx.q[Math.max(0,Math.min(2,(pri==null?1:pri)))].push(function(){
+      fn().then(function(v){ _afx.active--; _afxPump(); res(v); },
+                function(e){ _afx.active--; _afxPump(); rej(e); });
+    });
+    _afxPump();
+  });
+}
+function _jText(url,tries,timeout,delay,pri){
+  tries=tries||1; delay=delay||400;
+  function attempt(){
+    return _afxRun(function(){
+      return new Promise(function(res,rej){
+        var t0=Date.now();
+        var ctrl=window.AbortController?new AbortController():null;
+        var to=setTimeout(function(){ try{ ctrl&&ctrl.abort(); }catch(e){} }, timeout||20000);
+        fetch(url, ctrl?{signal:ctrl.signal}:undefined)
+          .then(function(r){ return r.text(); })
+          .then(function(t){ clearTimeout(to);
+            if(!_jIsJson(t)){ _afx.fail++; _afx.lastErr=Date.now(); rej(new Error('Server busy — Google returned an error page. Retrying…')); return; }
+            _afx.ok++; _afx.ms+=(Date.now()-t0); _afx.n++; res(t); })
+          .catch(function(e){ clearTimeout(to); _afx.fail++; _afx.lastErr=Date.now(); rej(e); });
+      });
+    }, pri);
+  }
+  return new Promise(function(res,rej){
+    (function go(left,d){
+      attempt().then(res, function(e){
+        if(left>1) setTimeout(function(){ go(left-1, Math.min(d*2,8000)); }, d+Math.random()*400);   // jittered backoff — no thundering herd
         else rej(e);
       });
+    })(tries, delay);
   });
 }
 // Per-endpoint default client TTLs — how long a repeat read is served instantly from memory.
@@ -1568,24 +1616,48 @@ var _jTTL={ get_all_employees:45000, admin_bootstrap:8000, get_tracker_projects:
   get_notif_templates:120000, get_worklog:15000, get_attendance:15000, get_all_scorecards:20000,
   get_finalized:30000, get_leave_requests:15000, get_coe_requests:15000, redeem_list:15000,
   lead_demerit_list:15000, get_all_demerit_disputes:15000, get_appeals:15000, payslip_funding:20000,
-  po_progress_all:12000, list_innovations:15000, qa_review_list:15000, get_all_qa_weekly:20000 };
+  po_progress_all:12000, list_innovations:15000, get_all_qa_weekly:20000 };   // qa_review_list dropped with the chain
+// Google sometimes answers with an HTML error page ("Sorry, cannot open the file…") instead of
+// JSON during a hiccup. That is NOT data: never cache it, and treat it as a retryable failure —
+// otherwise one blip gets cached and every panel keeps replaying it for the whole TTL.
+function _jIsJson(t){ var s=String(t||'').trim().charAt(0); return s==='{' || s==='['; }
+/* PER-ENDPOINT TIMEOUTS.
+   Apps Script runs one execution at a time PER USER. The admin dashboard fires a dozen reads,
+   so they queue: the first answers in 3s, the fifth has already waited 30s before it even
+   starts. A flat 15s cap therefore did not measure "is the server slow" — it guaranteed that
+   everything behind the first two heavy calls failed, which is exactly what the HUD showed
+   (OK 2 · Failed 9) and why panels fell back to cached data.
+   These are ceilings, not waits: a fast reply still returns immediately. */
+var _jTO={ get_all_scorecards:120000, get_all_qa_weekly:90000, admin_bootstrap:90000,
+  /* Funding walks 75 days of WorkLog. It is server-cached for 30s, so only the first call
+     after expiry is slow — but that first call was exceeding the 45s default and the panel
+     showed nothing at all rather than a slow number. */
+  payslip_funding:90000, payroll_period:90000,
+  get_worklog:60000, get_attendance:60000, po_progress_all:60000, list_innovations:45000,
+  get_finalized:45000, scorecard_anomalies:120000, early_bird:45000, sales_breakdown:60000 };
 function jGet(url, ttl, timeout){
-  if(ttl==null){ var _act=(String(url).match(/[?&]action=([a-z_]+)/)||[])[1]; ttl=(_act&&_jTTL[_act]!=null)?_jTTL[_act]:1500; }
-  var TO = timeout||15000;   // heavy endpoints can pass a longer timeout
+  var _act=(String(url).match(/[?&]action=([a-z_]+)/)||[])[1];
+  if(ttl==null){ ttl=(_act&&_jTTL[_act]!=null)?_jTTL[_act]:1500; }
+  var TO = timeout || (_act&&_jTO[_act]) || 45000;
   var key=_jKey(url), now=Date.now(), c=_jCache[key];
   if(ttl>0 && c && (now-c.t)<ttl){
-    // Serve from cache. Once it's past half its TTL, refresh in the BACKGROUND so the next read
-    // is instant AND fresh — this never serves data older than the TTL (stale-while-revalidate).
+    // Serve from cache. Once it's past half its TTL, refresh in the BACKGROUND (P2 lane) so the
+    // next read is instant AND fresh — never serves data older than the TTL (stale-while-revalidate).
     if((now-c.t) > ttl/2 && !c.rev){
       c.rev=true;
-      _jText(url,2,TO).then(function(t){ _jCache[key]={t:Date.now(),txt:t}; }, function(){ c.rev=false; });
+      _jText(url,2,TO,400,2).then(function(t){ _jCache[key]={t:Date.now(),txt:t}; }, function(){ c.rev=false; });
     }
     return Promise.resolve(new Response(c.txt));
   }
   if(ttl>0 && _jInflight[key]) return _jInflight[key].then(function(t){ return new Response(t); });
   var p=_jText(url, ttl>0?3:2, TO).then(function(t){ if(ttl>0) _jCache[key]={t:Date.now(),txt:t}; delete _jInflight[key]; return t; }, function(e){ delete _jInflight[key]; throw e; });
   if(ttl>0) _jInflight[key]=p;
-  return p.then(function(t){ return new Response(t); });
+  return p.then(function(t){ return new Response(t); }, function(e){
+    // STALE BEATS BROKEN — if every retry failed but we hold ANY cached copy, serve it and
+    // flag the HUD amber. Panels keep working through server hiccups instead of erroring.
+    if(c && c.txt){ _afx.degraded=Date.now(); return new Response(c.txt); }
+    throw e;
+  });
 }
 function jBust(){ _jCache={}; try{ sessionStorage.removeItem('_jSnap'); }catch(e){} }
 // Persist the hottest GET caches across reloads — the admin shell paints instantly on reopen,
@@ -1599,6 +1671,49 @@ setInterval(function(){ try{
   });
   sessionStorage.setItem('_jSnap', JSON.stringify(keep));
 }catch(e){} }, 12000);
+// ── AFX HEALTH HUD — live fetch-chain status chip (bottom-right) ──
+// green = healthy · amber = queued/slow/serving stale · red = recent failures.
+// Click it for the numbers: in-flight, queued, average latency, ok/fail counts.
+(function(){
+  function mount(){
+    if(document.getElementById('afx-hud')) return;
+    var el=document.createElement('div'); el.id='afx-hud';
+    el.style.cssText='position:fixed;bottom:12px;right:12px;z-index:9999;font:700 10.5px Inter,system-ui,sans-serif;padding:5px 11px;border-radius:100px;background:rgba(15,23,42,.88);color:#fff;display:flex;gap:7px;align-items:center;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.28);opacity:.85;user-select:none;';
+    el.innerHTML='<span id="afx-dot" style="width:8px;height:8px;border-radius:50%;background:#22c55e;display:inline-block;flex:none;"></span><span id="afx-txt">fetch ok</span>';
+    el.title='Fetch chain health — click for details';
+    el.onclick=function(){
+      var queued=_afx.q[0].length+_afx.q[1].length+_afx.q[2].length;
+      var avg=_afx.n?Math.round(_afx.ms/_afx.n):0;
+      alert('AFX fetch chain\n\nIn flight: '+_afx.active+' / '+_afx.max+'\nQueued: '+queued+'\nAvg response: '+(avg/1000).toFixed(1)+'s\nOK: '+_afx.ok+' · Failed: '+_afx.fail+((Date.now()-_afx.degraded)<60000?'\n\n⚠ Serving cached data for some panels (server busy).':''));
+    };
+    document.body.appendChild(el);
+    setInterval(function(){
+      var dot=document.getElementById('afx-dot'), txt=document.getElementById('afx-txt'); if(!dot) return;
+      var queued=_afx.q[0].length+_afx.q[1].length+_afx.q[2].length;
+      var avg=_afx.n?Math.round(_afx.ms/_afx.n):0;
+      var errRecent=(Date.now()-_afx.lastErr)<30000, staleRecent=(Date.now()-_afx.degraded)<60000;
+      var col=errRecent?'#ef4444':(staleRecent||queued>3||avg>7000)?'#f59e0b':'#22c55e';
+      dot.style.background=col;
+      txt.textContent=errRecent?'fetch errors':staleRecent?'stale mode':(queued>0?(_afx.active+'·'+queued+' queued'):('fetch ok'+(avg?' · '+(avg/1000).toFixed(1)+'s':'')));
+    }, 2000);
+  }
+  if(document.body) mount(); else document.addEventListener('DOMContentLoaded', mount);
+})();
+// ── FOCUS BURST — coming back after ≥60s away quietly re-warms the hottest caches (P2 lane)
+var _afxLastFocus=Date.now();
+window.addEventListener('focus', function(){
+  if(Date.now()-_afxLastFocus<60000){ _afxLastFocus=Date.now(); return; }
+  _afxLastFocus=Date.now();
+  try{
+    Object.keys(_jCache).forEach(function(k){
+      if(!/action=(admin_bootstrap|get_all_employees|po_progress_all|get_worklog)/.test(k)) return;
+      var c=_jCache[k]; if(!c||c.rev) return;
+      c.rev=true;
+      _jText(k+(k.indexOf('?')>=0?'&':'?')+'_='+Date.now(),1,20000,400,2)
+        .then(function(t){ _jCache[k]={t:Date.now(),txt:t}; }, function(){ c.rev=false; });
+    });
+  }catch(e){}
+});
 // ── loading-skeleton helpers ──
 function sklBar(w,h){ return '<div class="skl" style="width:'+(w||'100%')+';height:'+(h||14)+'px;margin:7px 0;"></div>'; }
 function sklTableRows(cols,n){ var o=''; n=n||6; for(var i=0;i<n;i++){ o+='<tr>'; for(var c=0;c<cols;c++){ o+='<td>'+sklBar(c===0?'70%':'55%')+'</td>'; } o+='</tr>'; } return o; }   // call after a write to force fresh reads
@@ -1766,7 +1881,7 @@ function salesRecompute(){
 }
 var _salesAllRows=[];
 async function loadSalesData(){
-  var tb=document.getElementById('sales-tbody'); tb.innerHTML='<tr><td colspan="10" class="es">Loading…</td></tr>';
+  var tb=document.getElementById('sales-tbody'); tb.innerHTML='<tr><td colspan="11" class="es">Loading…</td></tr>';
   try{
     var r=await jGet(API+'?action=get_sales&token='+encodeURIComponent(_salesToken())+'&_='+Date.now()); var d=await r.json();
     if(d&&d.error==='LOCKED'){ salesLock(); return; }
@@ -2166,7 +2281,7 @@ function dashAct(btn, url, okMsg){
 }
 function dashRedeem(btn, id, action){
   var it=_dashItem(btn); _dashDim(it);
-  fetch(API+'?action=redeem_resolve&id='+encodeURIComponent(id)+'&action='+action+'&by=Admin&_='+Date.now()).then(function(r){return r.json();}).then(function(d){
+  fetch(API+'?action=redeem_resolve&id='+encodeURIComponent(id)+'&decision='+action+'&by=Admin&_='+Date.now()).then(function(r){return r.json();}).then(function(d){
     if(d && d.ok){ jBust(); if(it) it.remove(); if(typeof toast==='function') toast('Redemption '+(action==='approve'?'approved — points deducted.':'rejected.')); _dashResync(); }
     else { _dashUndim(it); if(typeof toast==='function') toast('Could not '+action+((d&&d.error)?(': '+d.error):'.')); }
   }).catch(function(){ _dashUndim(it); if(typeof toast==='function') toast('Network error.'); });
@@ -2181,10 +2296,13 @@ function dashLeadDem(btn, id, empId, action){
 
 /* ════════ DEMERITS ════════ */
 var DEM_CATALOG={
-  'Attendance':[['Late',0.15],['No-call-no-show',0.75]],
+  'Attendance':[['Late',0.15],['No-call no-show',1.00],['Idle over 90 min in a shift',0.30],['Shift swap without notice',0.15]],
   'Break':[['Short lunch (under 50 min)',0.30],['Over break (lunch over 70 min)',0.30],['No break — 6+ hrs without lunch',0.50],['Unauthorized break',0.30]],
   'Time tracking':[['Super-early task (before 7:15 shift start)',0.15],['Forgot Time In/Out',0.15],['Idle auto-stop',0.15],['Untracked work / no volume',0.15],['Overwork — over 11 productive hrs (no approval)',0.30]],
-  'Conduct':[['Minor policy violation',0.30],['Unprofessional behavior',0.50],['Serious misconduct',0.75]]
+  'Tool discipline':[['Tool not updated — hours with no tool output',0.30],['Backdated bulk entry — output ticked after shift',0.30],['EOD not sent',0.30],['Wrong project tagged',0.15],['Duplicate account entry',0.15]],
+  'Quality':[['Missed peer review deadline',0.30],['Rushed review — well under the target time',0.30],['Falsified QA — audit passed without reviewing the work',0.75]],
+  'Conduct':[['Unresponsive during shift',0.30],['Output leveling / coordination',0.75],['Disrespectful conduct',0.75],['Client contact without approval',0.75],['Minor policy violation',0.30],['Unprofessional behavior',0.50],['Serious misconduct',0.75]],
+  'Integrity':[['Sharing credentials',1.00],['Falsified output',1.00],['Falsified hours',1.00]]
 };
 var DEM_STATE={rows:[],standings:[]};
 function _demEmps(){ return (typeof emps!=='undefined'&&emps&&emps.length)?emps:[]; }
@@ -2253,14 +2371,23 @@ async function demApproveSelected(){
   var ids=Array.prototype.slice.call(document.querySelectorAll('.dm-disp-check:checked')).map(function(c){ return c.value; });
   if(!ids.length){ if(typeof toast==='function') toast('Select at least one dispute first.'); return; }
   if(!confirm('Approve '+ids.length+' dispute'+(ids.length>1?'s':'')+'? This VOIDS the demerit for each (removes it from their score).')) return;
-  var btn=event&&event.target; if(btn){ btn.disabled=true; btn.textContent='Approving…'; }
-  var ok=0, fail=0;
-  for(var i=0;i<ids.length;i++){
-    try{ var r=await fetch(API+'?action=resolve_demerit_dispute&id='+encodeURIComponent(ids[i])+'&status=approved&by=Admin&note='+encodeURIComponent('')+'&_='+Date.now()); var d=await r.json(); if(d&&d.ok) ok++; else fail++; }
-    catch(e){ fail++; }
+  var btn=event&&event.target; if(btn){ btn.disabled=true; btn.textContent='Approving '+ids.length+'…'; }
+  // ONE batched write — the old loop fired N serialized requests and saturated the backend
+  // for minutes (the AFX HUD caught it: 22 failed reads while 37 approvals crawled through).
+  // NO retry on a write: if it times out, refresh and re-select what's still pending.
+  try{
+    var ctl=window.AbortController?new AbortController():null;
+    var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },120000):null;
+    var r=await fetch(API+'?action=resolve_demerit_disputes_batch&ids='+encodeURIComponent(ids.join(','))+'&status=approved&by=Admin&note='+encodeURIComponent('')+'&_='+Date.now(), ctl?{signal:ctl.signal}:undefined);
+    if(tm) clearTimeout(tm);
+    var d=await r.json();
+    jBust();
+    if(d&&d.ok){ if(typeof toast==='function') toast('Approved '+d.done+' dispute'+(d.done!==1?'s':'')+(d.missing?(' · '+d.missing+' not found'):'')+'.'); }
+    else if(typeof toast==='function') toast('Could not approve: '+((d&&d.error)||'error'));
+  }catch(e){
+    jBust();
+    if(typeof toast==='function') toast('Request timed out — refresh below: approvals that went through will show resolved. Re-select only what is still pending.');
   }
-  jBust();
-  if(typeof toast==='function') toast('Approved '+ok+' dispute'+(ok!==1?'s':'')+(fail?(' · '+fail+' failed'):'')+'.');
   loadDemeritDisputes(); loadDemerits();
 }
 async function demResolveDispute(id,status){
@@ -4979,7 +5106,7 @@ async function toggleAssessmentOpen(){
     else toast('Could not update.'); }
   catch(e){ toast('Could not update.'); }
 }
-async function loadAdminScorecard() {
+async function loadAdminScorecard(force) {
   loadAssessmentOpen();
   // Populate employee dropdown
   if (!scAdminEmps.length) {
@@ -5013,7 +5140,7 @@ async function loadAdminScorecard() {
   var month = document.getElementById('sc-month-filter').value;
   var tbody = document.getElementById('sc-body');
   if(!_scSnapPaint()) tbody.innerHTML = sklTableRows(10, 6);   // instant paint from last snapshot, else skeleton
-  await _scRenderRows();     // refresh in the background
+  await _scRenderRows(force);     // refresh in the background (force skips every cache layer)
   startScLive();             // keep the ranking live while this tab is open
   try{ updateFinalizeUI(month); }catch(_f){}   // show whether the selected month is finalized
 }
@@ -5033,7 +5160,7 @@ function _scFilterActive(rows){ var dead=_deactSet(); return (rows||[]).filter(f
 function _scPaint(rows){
   var tbody = document.getElementById('sc-body'); if(!tbody) return;
   rows = _scFilterActive(rows);
-  if(!rows || !rows.length){ tbody.innerHTML = '<tr><td colspan="10" class="es">No scorecards found.</td></tr>'; return; }
+  if(!rows || !rows.length){ tbody.innerHTML = '<tr><td colspan="11" class="es">No scorecards found.</td></tr>'; return; }
   var _ov = function(v){ return (v!==''&&v!=null&&!isNaN(parseFloat(v))) ? parseFloat(v) : -Infinity; };
   rows = rows.slice().sort(function(a,b){ return _ov(b.overall) - _ov(a.overall); });
   var dash = function(v){ return (v!==''&&v!=null&&!isNaN(parseFloat(v))) ? parseFloat(v).toFixed(0) : '—'; };
@@ -5053,6 +5180,7 @@ function _scPaint(rows){
       '<td><span onclick="openSalesBreakdown(\''+_ce(sc.employee_id)+'\')" title="How is this Team Sales score computed?" style="color:#0891b2;font-weight:600;cursor:pointer;border-bottom:1px dashed rgba(8,145,178,.5);">' + dash(sc.team_sales) + '</span></td>' +
       '<td><span style="color:' + demCol + ';font-weight:600;">' + dem + '</span></td>' +
       '<td><span style="color:#0ea5a4;font-weight:600;">' + dash(sc.csat) + '</span></td>' +
+      '<td><span style="color:#a855f7;font-weight:600;">' + dash(sc.innovation) + '</span></td>' +
       '<td><strong style="color:var(--o3);">' + overall + '</strong></td>' +
     '</tr>';
   }).join('');
@@ -5061,20 +5189,28 @@ function _scSnapKey(){ return 'sc_snap_'+(document.getElementById('sc-emp-filter
 function _scSnapPaint(){ try{ var s=JSON.parse(localStorage.getItem(_scSnapKey())||'null'); if(s&&s.rows&&s.rows.length){ _scPaint(s.rows); return true; } }catch(e){} return false; }
 // Fetch through jGet (client cache + stale-while-revalidate + retry), paint, and remember the
 // result so reopening the tab is instant. The 20s poller reuses this with no "Loading" flash.
-async function _scRenderRows() {
+async function _scRenderRows(force) {
   var tbody = document.getElementById('sc-body'); if (!tbody) return;
   var empId = document.getElementById('sc-emp-filter').value;
   var month = document.getElementById('sc-month-filter').value;
   try {
-    var url = API + '?action=get_all_scorecards' + (empId ? '&employee_id=' + empId : '') + (month ? '&month=' + month : '') + '&_=' + Date.now();
-    var res  = await jGet(url, 12000, 120000);   // very long timeout — cold all-employee compute can exceed a minute
+    /* One bundled call for the tab. Falls back to the old endpoint if the bundle is missing,
+       so an un-deployed script still renders the table instead of showing nothing. */
+    var url = API + '?action=' + (empId ? 'get_all_scorecards' : 'scorecard_tab')
+            + (empId ? '&employee_id=' + empId : '')
+            + (month ? '&month=' + month : '') + (force ? '&force=1' : '') + '&_=' + Date.now();
+    var res  = await jGet(url, force?0:12000, 120000);   // force = no client cache either
     var data = await res.json();
-    var rows = data.scorecards || [];
+    /* The bundle nests it one level deeper — scorecard_tab returns { scorecards:{ scorecards:[…] } }
+       because it wraps getAllScorecards' own payload. Handle both shapes so the single-employee
+       path and an un-deployed script still render. */
+    var _sc = data.scorecards;
+    var rows = (_sc && _sc.scorecards) ? _sc.scorecards : (Array.isArray(_sc) ? _sc : []);
     _scPaint(rows);
     try{ localStorage.setItem(_scSnapKey(), JSON.stringify({ rows:rows, ts:Date.now() })); }catch(_e){}
   } catch(e) {
     // keep any already-painted rows (snapshot) on a transient error; only show error on a blank table
-    if(/skl|class="es"|Loading/.test(tbody.innerHTML) || !tbody.children.length){ tbody.innerHTML = '<tr><td colspan="10" class="es">Error loading scorecards.</td></tr>'; }
+    if(/skl|class="es"|Loading/.test(tbody.innerHTML) || !tbody.children.length){ tbody.innerHTML = '<tr><td colspan="11" class="es">Error loading scorecards.</td></tr>'; }
   }
 }
 
@@ -5302,7 +5438,7 @@ async function exportRankingsPptx(){
       {l:'Assess', v:dash(r.assessment),    c:'9333EA'},
       {l:'Sales',  v:dash(r.team_sales),    c:'0891B2'},
       {l:'Demerit',v:dash(r.demerit_score), c:(parseFloat(r.demerit_score)>=100?'16A34A':(dash(r.demerit_score)==='—'?'94A3B8':'DC2626'))},
-      {l:'CSAT',   v:dash(r.csat),          c:'0EA5A4'}
+      {l:'Rev Grade', v:dash(r.csat),       c:'0EA5A4'}
     ]; };
     for(var k=rows.length-1;k>=0;k--){
       var r=rows[k], rank=k+1, rc=rankCol(rank);
@@ -5690,7 +5826,10 @@ function _revNext(){
 // ── Force-refresh all scores (clear server cache + recompute) ──
 async function recomputeScorecards(){
   var btn=document.getElementById('sc-recompute-btn'); var old=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='Recomputing…'; }
-  try{ await fetch(API+'?action=bust_scorecards&_='+Date.now()); try{ jBust(); }catch(_){} await loadAdminScorecard(); if(typeof toast==='function') toast('Scores recomputed — Team Sales refreshed.'); }
+  /* force=1 on the reload as well as busting the version. bust_scorecards bumps sc_ver, but the
+     admin bundle is also held in its own short cache and the client keeps a copy in jGet — an
+     admin pressing Recompute is explicitly asking for fresh numbers, so bypass every layer. */
+  try{ await fetch(API+'?action=bust_scorecards&_='+Date.now()); try{ jBust(); }catch(_){} await loadAdminScorecard(true); if(typeof toast==='function') toast('Scores recomputed — Team Sales refreshed.'); }
   catch(e){ if(typeof toast==='function') toast('Recompute failed — try again.'); }
   finally{ if(btn){ btn.disabled=false; btn.textContent=old||'↻ Recompute'; } }
 }
@@ -5993,91 +6132,11 @@ async function remindInno(){
 }
 /* ════════ QA REVIEW CHAIN — peer → lead → manager ════════ */
 var _QAR={items:[],month:''};
-async function openQaChain(){
-  var btn=document.getElementById('sc-qar-btn'); var old=btn?btn.textContent:'';
-  if(btn){ btn.disabled=true; btn.textContent='Loading…'; }
-  try{
-    var month=(document.getElementById('sc-month-filter')||{}).value||'';
-    var r=await jGet(API+'?action=qa_review_list&month='+encodeURIComponent(month)+'&_='+Date.now(), 3000, 60000);
-    var d=await r.json(); if(!d||!d.ok) throw new Error((d&&d.error)||'redeploy needed');
-    _QAR={items:d.items||[],month:d.month}; _renderQaChain();
-  }catch(e){ alert('Could not load the QA chain: '+(e&&e.message||e)); }
-  finally{ if(btn){ btn.disabled=false; btn.textContent=old||'🔗 QA Chain'; } }
-}
-function _closeQaChain(){ var ov=document.getElementById('qar-modal'); if(ov) ov.remove(); }
-function _renderQaChain(){
-  var ov=document.getElementById('qar-modal'); if(!ov){ ov=document.createElement('div'); ov.id='qar-modal'; document.body.appendChild(ov); }
-  ov.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(10,12,18,.72);display:flex;align-items:center;justify-content:center;padding:20px;';
-  var emplist=(typeof emps!=='undefined'&&emps)?emps.filter(function(e){return e&&e.employee_id;}):[];
-  var opts='<option value="">Contractor…</option>'+emplist.map(function(e){return '<option value="'+_ce(e.employee_id)+'">'+_ce(e.full_name||e.employee_id)+'</option>';}).join('');
-  var rows=(_QAR.items||[]).map(function(it,i){
-    var st=it.mgr_status==='approved'?'<span style="color:#15803d;font-weight:800;">✓ approved · '+it.final_score+'</span>':'<span style="color:#b45309;font-weight:700;">● pending</span>';
-    return '<tr style="border-top:1px solid var(--border);"><td style="padding:5px 6px;">'+_ce(it.name||it.employee_id)+'</td><td style="text-align:center;">W'+it.week+'</td>'+
-      '<td style="text-align:center;">'+(it.peer_score!=null?it.peer_score+(it.peer_name?(' <span style="color:var(--t3);font-size:10px;">('+_ce(it.peer_name)+')</span>'):''):'—')+'</td>'+
-      '<td style="text-align:center;">'+(it.lead_score!=null?it.lead_score:'—')+'</td><td style="text-align:center;">'+st+'</td>'+
-      '<td style="text-align:right;">'+(it.mgr_status!=='approved'?('<button class="bsm" style="padding:3px 9px;font-size:11px;color:#15803d;border-color:rgba(21,128,61,.3);" onclick="qarApprove(\''+encodeURIComponent(it.employee_id)+'\','+it.week+')">Approve</button>'):'')+'</td></tr>';
-  }).join('');
-  ov.innerHTML='<div style="background:var(--card,#fff);border-radius:16px;max-width:760px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 30px 80px -20px rgba(0,0,0,.5);">'+
-    '<div style="position:sticky;top:0;background:var(--card,#fff);border-bottom:1px solid var(--border);padding:15px 20px;display:flex;align-items:center;gap:10px;z-index:2;">'+
-      '<div style="font-size:16px;font-weight:800;">🔗 QA Review Chain — '+_ce(_QAR.month||'')+'</div><span style="flex:1;"></span><button class="bsm" onclick="_closeQaChain()">✕</button></div>'+
-    '<div style="padding:14px 20px;">'+
-      '<div style="font-size:11px;color:var(--t3);margin-bottom:10px;">Every VA · every week: <b>Peer (teammate, 30&nbsp;min) → Team Lead (30&nbsp;min) → Manager approval</b>. Only approved finals reach the scorecard. Missed errors dock the reviewer too.</div>'+
-      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;background:rgba(21,128,61,.05);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;">'+
-        '<select id="qar-emp" class="sinp" style="width:160px;">'+opts+'</select>'+
-        '<select id="qar-week" class="sinp" style="width:70px;"><option value="1">W1</option><option value="2">W2</option><option value="3">W3</option><option value="4">W4</option></select>'+
-        '<select id="qar-stage" class="sinp" style="width:80px;"><option value="peer">Peer</option><option value="lead">Lead</option></select>'+
-        '<select id="qar-rev" class="sinp" style="width:160px;"><option value="">Reviewer…</option>'+opts.replace('Contractor…','Reviewer…')+'</select>'+
-        '<input id="qar-score" class="sinp" type="number" min="0" max="100" placeholder="/100" style="width:70px;">'+
-        '<button class="bsm" onclick="qarSubmit()" style="color:#15803d;border-color:rgba(21,128,61,.3);">Save review</button>'+
-      '</div>'+
-      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;background:rgba(185,28,28,.05);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:12px;">'+
-        '<span style="font-size:11.5px;font-weight:800;color:#b91c1c;">Reviewer missed an error:</span>'+
-        '<select id="qar-pen-rev" class="sinp" style="width:160px;">'+opts.replace('Contractor…','Reviewer…')+'</select>'+
-        '<input id="qar-pen-pts" class="sinp" type="number" min="0.25" max="5" step="0.25" value="1" style="width:65px;" title="demerit points">'+
-        '<button class="bsm" style="color:#b91c1c;border-color:rgba(185,28,28,.3);" onclick="qarPenalize()">⚠ Dock reviewer</button>'+
-      '</div>'+
-      (rows?('<table style="width:100%;border-collapse:collapse;font-size:12px;"><tr style="text-align:left;color:var(--t3);"><th style="padding:4px 6px;">Contractor</th><th style="text-align:center;">Week</th><th style="text-align:center;">Peer</th><th style="text-align:center;">Lead</th><th style="text-align:center;">Status</th><th></th></tr>'+rows+'</table>')
-           :'<div style="color:var(--t3);padding:8px;">No reviews recorded this month yet.</div>')+
-    '</div></div>';
-}
-async function qarSubmit(){
-  var emp=(document.getElementById('qar-emp')||{}).value, wk=(document.getElementById('qar-week')||{}).value, st=(document.getElementById('qar-stage')||{}).value;
-  var rev=(document.getElementById('qar-rev')||{}).value, sc=(document.getElementById('qar-score')||{}).value;
-  if(!emp||!sc){ toast('Pick a contractor and score.'); return; }
-  if(st==='peer'&&!rev){ toast('Peer reviews need the reviewer (a teammate).'); return; }
-  try{
-    var name=''; try{ name=(emps.find(function(e){return e.employee_id===emp;})||{}).full_name||emp; }catch(_e){}
-    var rname=''; try{ rname=(emps.find(function(e){return e.employee_id===rev;})||{}).full_name||rev; }catch(_e){}
-    var r=await fetch(API+'?action=qa_review_submit&employee_id='+encodeURIComponent(emp)+'&full_name='+encodeURIComponent(name)+'&month='+encodeURIComponent(_QAR.month)+'&week='+encodeURIComponent(wk)+'&stage='+encodeURIComponent(st)+'&reviewer_id='+encodeURIComponent(rev)+'&reviewer_name='+encodeURIComponent(rname)+'&score='+encodeURIComponent(sc)+'&_='+Date.now());
-    var d=await r.json();
-    if(d&&d.ok){ toast(st==='peer'?'Peer review saved.':'Lead review saved.'); openQaChain(); }
-    else if(d&&d.error==='SELF_REVIEW') toast('A VA can\'t peer-review their own work.');
-    else toast('Could not save: '+((d&&d.error)||'error'));
-  }catch(e){ toast('Connection error.'); }
-}
-async function qarApprove(empEnc, week){
-  var emp=decodeURIComponent(empEnc);
-  var fin=prompt('Manager approval — final QA score for week '+week+'.\nLeave as-is to accept the Lead\'s score, or type an override:','');
-  if(fin===null) return;
-  try{
-    var r=await fetch(API+'?action=qa_review_approve&employee_id='+encodeURIComponent(emp)+'&month='+encodeURIComponent(_QAR.month)+'&week='+encodeURIComponent(week)+'&final='+encodeURIComponent(fin)+'&_='+Date.now());
-    var d=await r.json();
-    if(d&&d.ok){ toast('Approved — final '+d.final+' pushed to the scorecard.'); openQaChain(); }
-    else toast('Could not approve: '+((d&&d.error)||'error'));
-  }catch(e){ toast('Connection error.'); }
-}
-async function qarPenalize(){
-  var rev=(document.getElementById('qar-pen-rev')||{}).value, pts=(document.getElementById('qar-pen-pts')||{}).value;
-  if(!rev){ toast('Pick the reviewer.'); return; }
-  if(!confirm('Dock this reviewer '+pts+' demerit point(s) for a missed error?')) return;
-  try{
-    var rname=''; try{ rname=(emps.find(function(e){return e.employee_id===rev;})||{}).full_name||rev; }catch(_e){}
-    var r=await fetch(API+'?action=qa_review_penalize&reviewer_id='+encodeURIComponent(rev)+'&reviewer_name='+encodeURIComponent(rname)+'&points='+encodeURIComponent(pts)+'&_='+Date.now());
-    var d=await r.json();
-    if(d&&(d.ok)) toast('Reviewer docked '+pts+' pt(s).');
-    else toast('Could not dock: '+((d&&d.error)||'error'));
-  }catch(e){ toast('Connection error.'); }
-}
+/* The QA review-chain screen (openQaChain / _renderQaChain / qarSubmit / qarApprove /
+   qarShowPairs / qarPenalize) lived here. Removed with the chain itself — QA now comes
+   from the Factory: screenshots are auto-checked and an admin approves the week. Weekly
+   scores are still edited through Add / Edit; nothing else used these. */
+
 function openInnoRubric(){
   var ov=document.getElementById('inno-rubric'); if(!ov){ ov=document.createElement('div'); ov.id='inno-rubric'; document.body.appendChild(ov); }
   ov.style.cssText='position:fixed;inset:0;z-index:100001;background:rgba(10,12,18,.72);display:flex;align-items:center;justify-content:center;padding:20px;';
@@ -6487,7 +6546,7 @@ async function loadRedemptions(){
 async function resolveRedeem(id, action){
   if(!confirm((action==='approve'?'Approve':'Reject')+' this redemption?'+(action==='approve'?' Points will be deducted from the contractor.':''))) return;
   try{
-    var r=await fetch(API+'?action=redeem_resolve&id='+encodeURIComponent(id)+'&action='+action+'&by=Admin&_='+Date.now());
+    var r=await fetch(API+'?action=redeem_resolve&id='+encodeURIComponent(id)+'&decision='+action+'&by=Admin&_='+Date.now());
     var d=await r.json();
     if(d&&d.ok){ loadRedemptions(); }
     else { alert('Could not '+action+((d&&d.error)?(': '+d.error):'.')); }
