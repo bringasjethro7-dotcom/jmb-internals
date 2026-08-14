@@ -262,6 +262,21 @@ td{padding:11px 12px;border-bottom:1px solid rgba(15,23,42,.05)}
 .timer .tbar i{display:block;height:100%;background:var(--o1);border-radius:99px;transition:width .4s}
 .timer.ok .tbar i{background:var(--green)}
 .acct.rushed{border-color:rgba(180,83,9,.45);box-shadow:0 0 0 3px rgba(180,83,9,.08),var(--sh2)}
+
+/* ── start gate and locked accounts ────────────────────────────────────────────────────── */
+.gate{background:linear-gradient(135deg,var(--ink),var(--ink3));color:#fff;border-radius:var(--r);
+  padding:34px 30px;text-align:center;box-shadow:var(--sh3);margin-bottom:16px;position:relative;overflow:hidden}
+.gate:before{content:'';position:absolute;inset:0;background:radial-gradient(600px 200px at 50% -30%,rgba(255,122,26,.3),transparent 70%)}
+.gate .in{position:relative}
+.gate h2{margin:0 0 6px;font-size:22px;font-weight:800;letter-spacing:-.5px}
+.gate p{margin:0 auto 18px;color:rgba(255,255,255,.68);font-size:13.5px;max-width:520px;line-height:1.6}
+.gate .facts{display:flex;gap:26px;justify-content:center;flex-wrap:wrap;margin:18px 0 22px}
+.gate .facts div b{display:block;font-size:24px;font-weight:800;letter-spacing:-.6px}
+.gate .facts div span{font-size:10px;text-transform:uppercase;letter-spacing:.9px;color:rgba(255,255,255,.5);font-weight:700}
+.acct.locked{opacity:.72}
+.acct.locked .ch button{cursor:not-allowed}
+.lockbar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 16px;
+  background:var(--greenSoft);border-top:1px solid rgba(15,143,95,.25);flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -601,7 +616,27 @@ function renderMine(){
   var doneN=UNITS.filter(unitDone).length;
   var submitted=UNITS.every(function(u){ return u.status==='submitted'; });
   var totalShots=UNITS.reduce(function(n,u){ return n+(u.shots||0); },0);
+  var started=UNITS.some(function(u){ return u.started_at; });
   var h='';
+  if(!started && !submitted){
+    var shots=UNITS.reduce(function(n,u){ return n+(u.shots||0); },0);
+    var mins=Math.max(1, Math.round(UNITS.reduce(function(n,u){ return n+minSec(u); },0)/60));
+    p.innerHTML='<div class="gate"><div class="in">'+
+      '<div class="av" style="width:52px;height:52px;font-size:18px;margin:0 auto 14px;">'+esc(initials(va.full_name))+'</div>'+
+      '<h2>Review '+esc(va.full_name)+'</h2>'+
+      '<p>You will see every screenshot they submitted for the accounts below, grouped by day, with the full checklist beside them.</p>'+
+      '<div class="facts">'+
+        '<div><b>'+UNITS.length+'</b><span>accounts</span></div>'+
+        '<div><b>'+shots+'</b><span>screenshots</span></div>'+
+        '<div><b>'+mins+'m+</b><span>minimum time</span></div>'+
+      '</div>'+
+      '<p style="color:rgba(255,255,255,.8);font-size:12.5px;">Once you mark an account reviewed it <b>locks</b> and cannot be changed. '+
+      'Take the time to look properly — the score goes on this person\'s record.</p>'+
+      '<button class="btn p" style="padding:12px 34px;font-size:14px;" onclick="startReview()">Start review</button>'+
+      '</div></div>';
+    $('dock').style.display='none';
+    return;
+  }
   if(vas.length>1){
     h+='<div class="vtabs">'+vas.map(function(v){
       var d=v.units.filter(unitDone).length, fin=v.units.every(function(u){ return u.status==='submitted'; });
@@ -626,7 +661,7 @@ function renderMine(){
   var lastTask='';
   UNITS.forEach(function(u,i){
     if(u.task!==lastTask){ h+='<h3 style="margin:16px 0 8px;font-size:14px;">'+esc(u.project)+' · '+esc(u.task)+'</h3>'; lastTask=u.task; }
-    var isDone=unitDone(u);
+    var isDone=unitDone(u), locked=(u.status==='locked'||u.status==='submitted');
     h+='<div class="acct'+(isDone?' done':'')+(u.mode==='grid'?' grid-mode':'')+'" id="u-'+esc(u.id)+'">'+
        '<div class="ahead"><b>'+esc(u.account)+'</b>'+
        '<span style="font-size:11.5px;color:var(--t2);">'+esc((u.days||[]).join(' · '))+' — '+u.shots+' screenshot(s)</span>'+
@@ -650,11 +685,20 @@ function renderMine(){
       var v=(u.verdicts||{})[cr]||'';
       h+='<div class="citem"><div class="ctext">'+esc(cr)+'</div><div class="ch">'+
         ['pass','fail','na'].map(function(k){
-          return '<button class="'+k+(v===k?' on':'')+'" onclick="focusUnit(\''+esc(u.id)+'\','+ci+');setV(\''+esc(u.id)+'\','+ci+',\''+k+'\')">'+(k==='na'?'N/A':k.toUpperCase())+'</button>';
+          return '<button class="'+k+(v===k?' on':'')+'"'+(locked?' disabled':'')+' onclick="focusUnit(\''+esc(u.id)+'\','+ci+');setV(\''+esc(u.id)+'\','+ci+',\''+k+'\')">'+(k==='na'?'N/A':k.toUpperCase())+'</button>';
         }).join('')+'</div></div>';
     });
-    h+='<div style="margin-top:9px;"><label>Notes</label><textarea id="n-'+esc(u.id)+'" rows="2" style="width:100%;margin-top:3px;" placeholder="Anything the checklist does not cover" onchange="saveUnit(\''+esc(u.id)+'\')">'+esc(u.notes||'')+'</textarea></div>';
-    h+='</div></div></div>';
+    h+='<div style="margin-top:9px;"><label>Notes</label><textarea id="n-'+esc(u.id)+'" rows="2" style="width:100%;margin-top:3px;" placeholder="Anything the checklist does not cover"'+
+       (locked?' disabled':'')+' onchange="saveUnit(\''+esc(u.id)+'\')">'+esc(u.notes||'')+'</textarea></div>';
+    h+='</div></div>';
+    h+= locked
+      ? '<div class="lockbar"><b style="font-size:12.5px;color:#075f43;">Reviewed and locked</b>'+
+        '<span style="font-size:11.5px;color:var(--t2);">'+(u.verdicts?Object.keys(u.verdicts).length:0)+' criteria answered · '+(u.seconds||0)+'s spent</span>'+
+        (ISADMIN?'<button class="btn sm" onclick="unlockUnit(\''+esc(u.id)+'\')">Reopen (admin)</button>':'')+'</div>'
+      : '<div class="lockbar" style="background:var(--card2);border-top-color:var(--line);">'+
+        '<span style="font-size:11.5px;color:var(--t2);">Locks when marked — check before you do.</span>'+
+        '<button class="btn g" '+((checksDone(u)&&timeOk(u))?'':'disabled')+' onclick="lockUnit(\''+esc(u.id)+'\')">Mark reviewed</button></div>';
+    h+='</div>';
   });
   p.innerHTML=h;
   watchDwell();
@@ -665,6 +709,7 @@ function renderMine(){
 
 function setV(id, ci, val){
   var u=UNITS.filter(function(x){ return x.id===id; })[0]; if(!u) return;
+  if(u.status==='locked'||u.status==='submitted'){ toast('This account is locked'); return; }
   var cr=(u.criteria||[])[ci]; if(!cr) return;
   u.verdicts=u.verdicts||{};
   u.verdicts[cr]=(u.verdicts[cr]===val)?'':val;      // click again to clear
@@ -680,6 +725,14 @@ function setV(id, ci, val){
     if(pill){ pill.className='pill '+(d?'done':'none'); pill.textContent=d?'checked':'not checked'; }
     card.className='acct'+(d?' done':'')+(u.mode==='grid'?' grid-mode':'');
   }
+  /* Verdicts entered within two seconds of the previous one on the same account. A handful is
+     normal when several criteria are obvious from the same image; a run of them is not. */
+  var now=Date.now();
+  if(LASTV[id] && (now-LASTV[id])<2000){
+    BURSTS[id]=(BURSTS[id]||0)+1;
+    if(u) u.bursts=Math.max(u.bursts||0, BURSTS[id]);
+  }
+  LASTV[id]=now;
   saveUnit(id);
   refreshHeader();
   paintDock();
@@ -699,14 +752,25 @@ function refreshHeader(){
 var LB=[], LBI=0;
 function zoom(u, list, i, cap){
   LB=list||[u]; LBI=(i==null?0:i);
-  $('lb').style.display='flex'; lbPaint(cap);
+  $('lb').style.display='flex'; lbPaint(cap); markOpened();
+}
+/* Distinct screenshots opened, per account — reopening the same one does not count twice. */
+var SEENSHOT={};
+function markOpened(){
+  var id=CUR_UNIT||Object.keys(VISIBLE_UNITS)[0]; if(!id) return;
+  var it=LB[LBI]; var key=id+'|'+(typeof it==='string'?it:(it&&it.u));
+  if(SEENSHOT[key]) return;
+  SEENSHOT[key]=1;
+  OPENED[id]=(OPENED[id]||0)+1;
+  var u=UNITS.filter(function(x){ return x.id===id; })[0];
+  if(u){ u.opened=Math.max(u.opened||0, OPENED[id]); paintTimer(u); saveUnit(id); }
 }
 function lbPaint(cap){
   var it=LB[LBI]; if(!it) return;
   $('lb-img').src=imgSrc(typeof it==='string'?it:it.u);
   $('lb-cap').textContent=(cap||(typeof it==='object'?it.cap:''))+'  ·  '+(LBI+1)+' of '+LB.length;
 }
-function lbStep(d){ if(!LB.length) return; LBI=(LBI+d+LB.length)%LB.length; lbPaint(); }
+function lbStep(d){ if(!LB.length) return; LBI=(LBI+d+LB.length)%LB.length; lbPaint(); markOpened(); }
 document.addEventListener('keydown', function(e){
   if($('lb').style.display==='flex'){
     if(e.key==='Escape'){ $('lb').style.display='none'; e.preventDefault(); }
@@ -779,9 +843,29 @@ function paintDock(){
    Seconds are only counted when all three are true: the tab is visible, the account is actually
    on screen, and there has been mouse or keyboard activity in the last minute. Leaving the page
    open in a background tab therefore earns nothing. */
+/* ── ENGAGEMENT ──
+   Time alone can be waited out. These record whether the evidence was actually worked through:
+   which screenshots were opened full size, scrolling and clicking while the account was on screen,
+   and verdicts entered within two seconds of the last (rattling through).
+
+   Shown to the reviewer, not just recorded about them — the panel on each account displays their
+   own figures. Measuring how somebody works and hiding it from them is a different thing. */
+var OPENED={}, EVENTS={}, BURSTS={}, LASTV={};
+function bumpEvent(){
+  var id=(CUR_UNIT && VISIBLE_UNITS[CUR_UNIT]) ? CUR_UNIT : Object.keys(VISIBLE_UNITS)[0];
+  if(!id) return;
+  EVENTS[id]=(EVENTS[id]||0)+1;
+  var u=UNITS.filter(function(x){ return x.id===id; })[0];
+  if(u) u.events=Math.max(u.events||0, EVENTS[id]);
+}
 var DWELL={}, LAST_ACT=Date.now(), VISIBLE_UNITS={};
 ['mousemove','keydown','click','scroll','wheel','touchstart'].forEach(function(ev){
   document.addEventListener(ev, function(){ LAST_ACT=Date.now(); }, {passive:true});
+});
+/* Deliberate actions only — mousemove is excluded, since wiggling a mouse is exactly the thing
+   this is meant to see through. */
+['scroll','click','keydown','wheel'].forEach(function(ev){
+  document.addEventListener(ev, bumpEvent, {passive:true});
 });
 var DOBS=null;
 function watchDwell(){
@@ -816,10 +900,42 @@ function paintTimer(u){
   var need=minSec(u), have=Math.min(need, u.seconds||0), pct=Math.round(have/need*100);
   el.className='timer'+(timeOk(u)?' ok':'');
   el.innerHTML='<span class="tbar"><i style="width:'+pct+'%"></i></span>'+
-               (timeOk(u)?'REVIEWED':(Math.max(0,need-(u.seconds||0))+'s MORE'));
+               (timeOk(u)?'REVIEWED':(Math.max(0,need-(u.seconds||0))+'s MORE'))+
+               '<span style="margin-left:9px;color:var(--t3);font-weight:600;">'+
+                 (u.opened||0)+'/'+(u.shots||0)+' opened</span>';
   var card=$('u-'+u.id);
   if(card) card.className='acct'+(unitDone(u)?' done':'')+((u.mode==='grid')?' grid-mode':'')+
     ((!timeOk(u) && checksDone(u))?' rushed':'');
+}
+
+/* Start is an explicit act: it stamps the clock server-side, so a reviewer cannot answer the
+   checklist first and start the timer afterwards. */
+async function startReview(){
+  var va=UNITS[0]; if(!va) return;
+  try{
+    var d=await (await fetch(PORTAL_URL+'?action=qa2_start&month='+encodeURIComponent($('f-month').value)+
+      '&week='+encodeURIComponent($('f-week').value)+'&employee_id='+encodeURIComponent(va.employee_id)+
+      (ISADMIN?'':('&reviewer_id='+encodeURIComponent(USER.id)))+'&_='+Date.now())).json();
+    if(d&&d.ok){ ALL_UNITS.forEach(function(u){ if(u.employee_id===va.employee_id && !u.started_at) u.started_at=d.at; });
+      CUR_UNIT=''; renderMine(); watchDwell(); }
+    else toast('Could not start: '+((d&&d.error)||'unknown'));
+  }catch(e){ toast('Could not start: '+e.message); }
+}
+
+/* Marking an account reviewed locks it. Deliberate, and only once the checks are complete and the
+   minimum time is met — both are re-checked on the server. */
+async function lockUnit(id){
+  var u=UNITS.filter(function(x){ return x.id===id; })[0]; if(!u) return;
+  if(!checksDone(u)){ toast('Answer every criterion first'); return; }
+  if(!timeOk(u)){ toast('Spend a little longer on this account'); return; }
+  if(!confirm('Mark '+u.account+' as reviewed?\n\nIt locks and cannot be changed afterwards.')) return;
+  try{
+    var d=await (await fetch(PORTAL_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({ action:'qa2_save', id:id, lock:'1', verdicts:u.verdicts||{},
+                            seconds:u.seconds||0, notes:($('n-'+id)||{}).value||'' })})).json();
+    if(d&&d.ok){ u.status='locked'; toast('Locked — '+u.account); renderMine(); }
+    else toast('Not locked: '+((d&&d.message)||(d&&d.error)||'unknown'));
+  }catch(e){ toast('Not locked: '+e.message); }
 }
 
 var SAVET={};
@@ -831,10 +947,23 @@ function saveUnit(id){
     try{
       var d=await (await fetch(PORTAL_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
         body:JSON.stringify({ action:'qa2_save', id:id, verdicts:u.verdicts||{},
-                              seconds:u.seconds||0, notes:nEl?nEl.value:'' })})).json();
+                              seconds:u.seconds||0, opened:u.opened||0, events:u.events||0,
+                              bursts:u.bursts||0, notes:nEl?nEl.value:'' })})).json();
       if(!d||!d.ok) toast('Not saved: '+((d&&d.error)||'unknown'));
     }catch(e){ toast('Not saved — check your connection'); }
   }, 700);
+}
+
+async function unlockUnit(id){
+  if(!ISADMIN) return;
+  if(!confirm('Reopen this account for editing?')) return;
+  try{
+    var u=UNITS.filter(function(x){ return x.id===id; })[0];
+    var d=await (await fetch(PORTAL_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({ action:'qa2_save', id:id, unlock:'1', verdicts:(u&&u.verdicts)||{}, seconds:(u&&u.seconds)||0 })})).json();
+    if(d&&d.ok){ if(u) u.status='in_progress'; toast('Reopened'); renderMine(); }
+    else toast('Failed: '+((d&&d.error)||'unknown'));
+  }catch(e){ toast('Failed: '+e.message); }
 }
 
 async function submitAll(){
