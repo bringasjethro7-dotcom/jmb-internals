@@ -261,9 +261,16 @@ function renderByVA(segs, doneFn, activeFn, amFn){
     var cmTot=Object.keys(cmAll).length, cmDone=Object.keys(cmSeen).length;
     var onBoard=actRows.length+cmTot;
     var done=tagged+cmDone;
+    /* Warming is its own lane. It uses the same marker the account card writes (meta.wl via
+       wuDone) and the same markOk shift window, so the bar resets at 8 AM / 8 PM exactly like
+       the posting one and cannot be inflated by yesterday's work. */
+    var wuRows=rows.filter(function(r){ return String(r.status||'').toLowerCase()==='warmup'; });
+    var wuTot=wuRows.length;
+    var wuDoneN=wuRows.filter(function(r){ return markOk(r.meta&&r.meta.wl, r.assigned_to||r.created_by); }).length;
     // Label the unit by whichever lane they're in, so the row reads honestly.
     var unit=(actRows.length&&cmTot)?'on board':(cmTot?'models':'on board');
-    return { k:k, i:i, done:done, tot:onBoard, pct:onBoard?Math.round(done/onBoard*100):0, n:onBoard, unit:unit };
+    return { k:k, i:i, done:done, tot:onBoard, pct:onBoard?Math.round(done/onBoard*100):0, n:onBoard, unit:unit,
+             wDone:wuDoneN, wTot:wuTot, wPct:wuTot?Math.round(wuDoneN/wuTot*100):0 };
   }).sort(function(a,b){
     if(a.k===mine) return -1; if(b.k===mine) return 1;    // you first
     return b.pct-a.pct || b.n-a.n;                        // then highest completion
@@ -288,16 +295,33 @@ function renderByVA(segs, doneFn, activeFn, amFn){
             (me?'<span style="font-size:10px;color:#0f766e;font-weight:800;">you</span>':'')+
             '<span style="font-size:11px;color:var(--ink3);font-weight:700;">'+o.n+' '+(o.unit||'on board')+'</span>'+
           '</div>'+
-          '<div class="pvbar" style="margin-top:7px;background:#eef1f5;border-radius:999px;overflow:hidden;">'+
-            '<i style="width:'+Math.min(100,o.pct)+'%;background:linear-gradient(90deg,#fb7185,#e11d48);border-radius:999px;"></i>'+
-          '</div>'+
-        '</div>'+
-        '<div class="pvpct" style="color:#e11d48;">'+
-          '<span style="font-size:17px;font-weight:800;">'+o.done+' / '+o.tot+'</span><br>'+
-          '<span style="font-size:12.5px;">'+o.pct+'% today</span>'+
+          /* Two lanes, same shape. The label sits above its own bar so a glance tells you which
+             number belongs to which job — one unlabelled bar could only ever mean one thing. */
+          pvLane('📮 Posting', o.done, o.tot, o.pct,
+                 'linear-gradient(90deg,#fb7185,#e11d48)', '#eef1f5', '#e11d48')+
+          /* Warming only appears for VAs who actually hold warm-up accounts. An empty 0 / 0 bar
+             on a posting-only VA reads as failure rather than "not their job". */
+          (o.wTot ? pvLane('🔥 Warming Up Accounts', o.wDone, o.wTot, o.wPct,
+                 'linear-gradient(90deg,#FFB35C,#F0781E)', '#F7E9DC', '#F0781E') : '')+
         '</div>'+
       '</div>';
     }).join('')+'</div>';
+}
+/* One progress lane: bold label, pill bar, and the count right-aligned beside it. Both lanes go
+   through here so they cannot drift apart as either is edited. */
+function pvLane(label, done, tot, pct, fill, track, colour){
+  return '<div style="display:flex;align-items:center;gap:12px;margin-top:8px;">'+
+    '<div style="flex:1;min-width:0;">'+
+      '<div style="font-size:11px;font-weight:800;color:'+colour+';margin-bottom:4px;letter-spacing:.2px;">'+label+'</div>'+
+      '<div class="pvbar" style="background:'+track+';border-radius:999px;overflow:hidden;">'+
+        '<i style="width:'+Math.min(100,pct)+'%;background:'+fill+';border-radius:999px;"></i>'+
+      '</div>'+
+    '</div>'+
+    '<div class="pvpct" style="color:'+colour+';flex:none;text-align:right;">'+
+      '<span style="font-size:17px;font-weight:800;">'+done+' / '+tot+'</span><br>'+
+      '<span style="font-size:12.5px;">'+pct+'% today</span>'+
+    '</div>'+
+  '</div>';
 }
 function wuPlan(d){
   if(d<=3) return 'Warm-up D'+d+' (1–3): observe only — scroll 15–25 min, like 5–12, NO follows/comments/posts.';
@@ -469,8 +493,9 @@ function pupPaint(){
   keys.forEach(function(k){ var s=PUP.q[k]; if(!s) return;
     if(s.state==='up') up++; else if(s.state==='done') done++; else fail++; });
   el.textContent = fail ? (fail+' failed — they will be retried on save')
-                 : up ? ('Uploading '+up+'…  '+done+' ready')
-                 : done ? (done+' screenshot'+(done>1?'s':'')+' ready') : '';
+                 : up ? ('Uploading '+up+'…  '+done+' attached')
+                 : done ? (done+' screenshot'+(done>1?'s':'')+" attached — nothing is counted until you press Save")
+                 : '';
   el.style.color = fail ? '#b91c1c' : (up ? '#b45309' : '#047857');
 }
 /* Returns the Drive ids for the current selection, waiting only on uploads still running and
@@ -540,7 +565,7 @@ function proofThumb(d){
   w.style.cssText='position:relative;width:74px;height:74px;border-radius:9px;overflow:hidden;border:1px solid #e2e8f0;margin:0 8px 8px 0;';
   w.innerHTML='<img src="'+d+'" style="width:100%;height:100%;object-fit:cover;">'+
     '<button style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;line-height:1;">×</button>';
-  w.querySelector('button').onclick=function(){ var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1); w.remove(); };
+  w.querySelector('button').onclick=function(){ var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1); try{ delete PUP.q[pupKey(d)]; pupPaint(); }catch(_pq){} w.remove(); };
   host.appendChild(w);
 }
 async function proofAdd(files){
