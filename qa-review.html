@@ -694,7 +694,10 @@ var MY_VA='';      // the VA currently open
 var LBSETS={};     // account id -> every screenshot in it, for arrow-key navigation
 
 function checksDone(u){
-  var c=(u.criteria||[]).length; if(!c) return false;
+  /* An account whose task has no checklist mapped cannot be answered at all. Treating it as
+     unfinished blocked the whole review on something the reviewer has no way to fix — it is
+     flagged in red on the card instead, for the admin to map. */
+  var c=(u.criteria||[]).length; if(!c) return true;
   var n=0; (u.criteria||[]).forEach(function(cr){ if(u.verdicts && u.verdicts[cr]) n++; });
   return n>=c;
 }
@@ -1051,7 +1054,9 @@ async function lockUnit(id){
                             seconds:u.seconds||0, notes:($('n-'+id)||{}).value||'' })})).json();
     if(d&&d.ok){ u.status='locked'; toast('Locked — '+u.account); renderMine(); }
     else toast('Not locked: '+((d&&d.message)||(d&&d.error)||'unknown'));
-  }catch(e){ toast('Not locked: '+e.message); }
+  }catch(e){
+    toast('Not locked — the server did not respond properly. Nothing was lost; try again in a moment.');
+  }
 }
 
 var SAVET={};
@@ -1066,7 +1071,19 @@ function saveUnit(id){
                               seconds:u.seconds||0, opened:u.opened||0, events:u.events||0,
                               bursts:u.bursts||0, notes:nEl?nEl.value:'' })})).json();
       if(!d||!d.ok) toast('Not saved: '+((d&&d.error)||'unknown'));
-    }catch(e){ toast('Not saved — check your connection'); }
+    }catch(e){
+      /* A server that answers with an HTML error page fails at .json(), which is not a
+         connectivity problem — telling the reviewer to check their internet sent them looking in
+         the wrong place. Retry once, then say what it actually was. */
+      try{
+        await new Promise(function(r){ setTimeout(r,1200); });
+        var d2=await (await fetch(PORTAL_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+          body:JSON.stringify({ action:'qa2_save', id:id, verdicts:u.verdicts||{}, seconds:u.seconds||0,
+            opened:u.opened||0, events:u.events||0, bursts:u.bursts||0, notes:nEl?nEl.value:'' })})).json();
+        if(d2&&d2.ok) return;
+      }catch(_e2){}
+      toast('Not saved — the server did not respond properly. Your answers are still on screen; try again in a moment.');
+    }
   }, 700);
 }
 
@@ -1091,7 +1108,10 @@ async function submitAll(){
       body:JSON.stringify({ action:'qa2_submit', month:$('f-month').value, week:$('f-week').value,
                             employee_id:va.employee_id, by:USER.name })})).json();
     if(d&&d.ok){ toast('Submitted — '+va.full_name+' scored '+d.score); CUR_UNIT=''; loadMine(); }
-    else if(d&&d.error==='INCOMPLETE'){ toast(d.remaining+' account(s) still unchecked'); if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
+    else if(d&&d.error==='INCOMPLETE'){
+      toast((d.examples&&d.examples[0]) ? ('Still unchecked — '+d.examples[0]) : (d.remaining+' account(s) still unchecked'));
+      if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
+    else if(d&&d.error==='NOTHING_SCOREABLE'){ alert(d.message); if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
     else if(d&&d.error==='TOO_FAST'){ toast(d.rushed+' account(s) reviewed too quickly — look again'); if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
     else { toast('Failed: '+((d&&d.error)||'unknown')); if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
   }catch(e){ toast('Failed: '+e.message); if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
