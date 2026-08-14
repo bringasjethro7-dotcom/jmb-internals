@@ -450,11 +450,24 @@ function acceptAgreement(){
   $('agree').style.display='none';
   reload();
 }
+/* A notification links straight here with the period attached, so tapping it lands on the right
+   week rather than defaulting to today — a review assigned near a month boundary would otherwise
+   open on an empty period and look broken. */
+function applyUrlParams(){
+  try{
+    var q=new URLSearchParams(location.search);
+    var m=q.get('month'), w=q.get('week'), va=q.get('va');
+    if(m && /^\d{4}-\d{2}$/.test(m)) $('f-month').value=m;
+    if(w && /^[1-4]$/.test(w)) $('f-week').value=w;
+    if(va && ISADMIN) VIEW_EMP=va;
+  }catch(e){}
+}
 function start(){
   $('signin').style.display='none'; $('app').style.display='block';
   $('who').innerHTML=esc(USER.name)+'<small>'+esc(USER.id)+'</small>';
   $('who-av').textContent=initials(USER.name);
   $('f-month').value=curMonth();
+  applyUrlParams();
   if(ISADMIN){ $('tab-board').style.display=''; setTab('board'); }
   else { setTab('mine'); if(needAgreement()) showAgreement(); }
 }
