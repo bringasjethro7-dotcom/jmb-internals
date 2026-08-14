@@ -333,10 +333,12 @@ td{padding:11px 12px;border-bottom:1px solid rgba(15,23,42,.05)}
       <div class="seg" style="margin-left:auto;">
         <button id="tab-mine" onclick="setTab('mine')">My review</button>
         <button id="tab-board" onclick="setTab('board')" style="display:none;">Assignment board</button>
+        <button id="tab-results" onclick="setTab('results')" style="display:none;">Results</button>
       </div>
     </div>
 
     <div id="pane-board" style="display:none;"></div>
+    <div id="pane-results" style="display:none;"></div>
     <div id="pane-mine"></div>
   </div>
 </div>
@@ -468,24 +470,126 @@ function start(){
   $('who-av').textContent=initials(USER.name);
   $('f-month').value=curMonth();
   applyUrlParams();
-  if(ISADMIN){ $('tab-board').style.display=''; setTab('board'); }
+  if(ISADMIN){ $('tab-board').style.display=''; $('tab-results').style.display=''; setTab('board'); }
   else { setTab('mine'); if(needAgreement()) showAgreement(); }
 }
 function setTab(t){ TAB=t;
   $('pane-board').style.display=(t==='board')?'block':'none';
   $('pane-mine').style.display=(t==='mine')?'block':'none';
+  $('pane-results').style.display=(t==='results')?'block':'none';
   $('tab-mine').className=(t==='mine')?'on':'';
   $('tab-board').className=(t==='board')?'on':'';
+  $('tab-results').className=(t==='results')?'on':'';
   reload();
 }
 function reload(){
   VIEW_EMP='';
   if(needAgreement()){ showAgreement(); return; }   // nothing loads until it is read
-  if(TAB==='board') loadBoard(); else loadMine();
+  if(TAB==='board') loadBoard();
+  else if(TAB==='results') loadResults();
+  else loadMine();
 }
 
 /* ── ADMIN: PLAN AND ASSIGN ──────────────────────────────────────────────────────────────── */
 var SEL_VA='', SEL_REV='';
+/* ── RESULTS ─────────────────────────────────────────────────────────────────────────────────
+   The admin's answer to three questions in one screen: what did everyone score, can the
+   reviewers themselves be trusted, and is anything disputed. Scores here are already on the
+   scorecard — this is where they get inspected, challenged, and explained. */
+async function loadResults(){
+  var p=$('pane-results'); p.innerHTML='<div class="card">Loading results…</div>';
+  var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
+  try{
+    var qs='month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&_='+Date.now();
+    var rs=await Promise.all([
+      fetch(PORTAL_URL+'?action=qa2_results&'+qs).then(function(r){return r.json();}),
+      fetch(PORTAL_URL+'?action=qa2_grades&month='+encodeURIComponent(m)+'&_='+Date.now()).then(function(r){return r.json();}),
+      fetch(PORTAL_URL+'?action=qa2_disputes&'+qs).then(function(r){return r.json();})
+    ]);
+    var R=rs[0], G=rs[1], D=rs[2];
+    if(!R||!R.ok){ p.innerHTML='<div class="warn">'+esc((R&&R.error)||'Could not load results')+'</div>'; return; }
+    var h='';
+
+    // ── disputes first: they are the thing waiting on the admin ──
+    var open=(D&&D.rows||[]).filter(function(x){ return x.status==='open'; });
+    if(open.length){
+      h+='<div class="card" style="border-color:rgba(220,38,38,.35);">'
+        +'<h3 style="margin:0 0 10px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--red);font-weight:800;">'
+        +open.length+' dispute'+(open.length>1?'s':'')+' waiting on you</h3>';
+      open.forEach(function(d){
+        h+='<div style="border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-bottom:9px;">'
+          +'<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">'
+          +'<div><b style="font-size:13.5px;">'+esc(d.name)+'</b> disputes <b>'+esc(d.criterion)+'</b>'
+          +'<div style="font-size:11.5px;color:var(--t3);margin-top:2px;">'+esc(d.task)+' · '+esc(d.account||'')+' · reviewed by '+esc(d.reviewer||'—')+'</div>'
+          +'<div style="font-size:12.5px;color:var(--t2);margin-top:6px;">“'+esc(d.reason)+'”</div></div>'
+          +'<div style="display:flex;gap:7px;align-items:flex-start;flex-wrap:wrap;">'
+          +'<button class="btn g sm" onclick="resolveDispute(\''+esc(d.id)+'\',\'upheld\')">Uphold — VA is right</button>'
+          +'<button class="btn sm" onclick="resolveDispute(\''+esc(d.id)+'\',\'rejected\')">Reject — finding stands</button>'
+          +'</div></div></div>';
+      });
+      h+='<div style="font-size:11.5px;color:var(--t3);">Upholding flips that criterion to pass and rewrites the week score. Either way the VA is told.</div></div>';
+    }
+
+    // ── per-VA scores ──
+    h+='<div class="card"><h3 style="margin:0 0 10px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--t3);font-weight:800;">Scores — week '+esc(w)+'</h3>'
+      +'<table><tr><th>VA</th><th>Score</th><th>Checks</th><th>Findings</th><th>Reviewer</th><th>Min</th><th>Engage</th><th>Status</th><th></th></tr>';
+    (R.rows||[]).forEach(function(r){
+      var sc=(r.score===''||r.score==null)?'—':r.score;
+      h+='<tr><td><b>'+esc(r.name)+'</b><br><span style="color:var(--t3);font-size:11px;">'+esc(r.employee_id)+'</span></td>'
+        +'<td><b style="font-size:15px;color:'+(sc==='—'?'var(--t3)':(sc>=85?'var(--green)':(sc>=70?'var(--amber)':'var(--red)')))+';">'+sc+'</b></td>'
+        +'<td style="font-size:12px;">'+r.passed+' / '+r.total+'</td>'
+        +'<td>'+((r.fails||[]).length||'—')+(r.open_disputes?(' <span class="tag" style="background:var(--redSoft);color:#991b1b;">'+r.open_disputes+' disputed</span>'):'')+'</td>'
+        +'<td style="font-size:12px;">'+esc(r.reviewer||'—')+'</td>'
+        +'<td style="font-size:12px;">'+(r.minutes||'—')+'</td>'
+        +'<td style="font-size:12px;">'+(r.engage===''?'—':r.engage+'%')+'</td>'
+        +'<td>'+(r.complete?'<span class="pill done">submitted</span>':'<span class="pill none">'+r.submitted+'/'+r.units+'</span>')+'</td>'
+        +'<td>'+(r.complete?('<button class="btn sm" onclick="emailFindings(\''+esc(r.employee_id)+'\',\''+esc(r.name)+'\','+((r.fails||[]).length)+')">Email findings</button>'):'')+'</td></tr>';
+    });
+    h+='</table><div style="font-size:11.5px;color:var(--t3);margin-top:8px;">The findings email lists only what failed, with a dispute link on every item.</div></div>';
+
+    // ── reviewer grades ──
+    var gr=(G&&G.rows)||[];
+    h+='<div class="card"><h3 style="margin:0 0 10px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--t3);font-weight:800;">Reviewer grades — '+esc(m)+'</h3>';
+    if(!gr.length){ h+='<div style="color:var(--t3);font-size:13px;">No submitted reviews yet this month.</div>'; }
+    else{
+      h+='<table><tr><th>Reviewer</th><th>Grade</th><th>Accuracy</th><th>Missed</th><th>Upheld disputes</th><th>Engage</th><th>VAs</th><th>Min</th></tr>';
+      gr.forEach(function(g){
+        h+='<tr><td><b>'+esc(g.reviewer)+'</b>'+(g.provisional?' <span class="tag" style="background:#eef1f6;color:#475569;">PROVISIONAL</span>':'')+'</td>'
+          +'<td><b style="font-size:15px;">'+(g.grade===''?'—':g.grade)+'</b></td>'
+          +'<td style="font-size:12px;">'+(g.accuracy===''?('<span style="color:var(--t3);">no audit yet</span>'):g.accuracy+'%')+'</td>'
+          +'<td style="font-size:12px;">'+(g.missed||0)+'</td>'
+          +'<td style="font-size:12px;">'+(g.upheld_disputes||0)+(g.open_disputes?(' <span style="color:var(--t3);">(+'+g.open_disputes+' open)</span>'):'')+'</td>'
+          +'<td style="font-size:12px;">'+(g.engage===''?'—':g.engage+'%')+'</td>'
+          +'<td style="font-size:12px;">'+g.vas+'</td><td style="font-size:12px;">'+g.minutes+'</td></tr>';
+      });
+      h+='</table><div style="font-size:11.5px;color:var(--t3);margin-top:8px;">Accuracy 45 · upheld disputes 25 · engagement 20 · time 10. Open disputes count for nothing until ruled on. Grades are provisional under '+((G&&G.min_reviews)||3)+' reviews.</div>';
+    }
+    h+='</div>';
+    p.innerHTML=h;
+  }catch(e){ p.innerHTML='<div class="warn">'+esc(e.message)+'</div>'; }
+}
+async function resolveDispute(id, outcome){
+  var word=(outcome==='upheld')?'UPHOLD this dispute? The finding flips to pass and the week score is rewritten.':'REJECT this dispute? The original finding stands.';
+  var note='';
+  if(outcome==='rejected'){ note=prompt(word+'\n\nOptional: a sentence for the VA on why.')||''; if(note===null) return; }
+  else if(!confirm(word)) return;
+  try{
+    var d=await (await fetch(PORTAL_URL+'?action=qa2_resolve&id='+encodeURIComponent(id)+'&outcome='+encodeURIComponent(outcome)
+      +'&by='+encodeURIComponent(USER.name)+'&note='+encodeURIComponent(note)+'&_='+Date.now())).json();
+    if(d&&d.ok) toast(outcome==='upheld'?('Upheld'+(d.score!==''?(' — score now '+d.score):'')):'Rejected — finding stands');
+    else toast('Failed: '+((d&&d.error)||'unknown'));
+    loadResults();
+  }catch(e){ toast('Failed: '+e.message); }
+}
+async function emailFindings(emp, name, nFails){
+  if(!confirm('Email '+name+' their review?\n\n'+(nFails?('It lists their '+nFails+' finding(s), each with a dispute link.'):'They passed everything — it says so.'))) return;
+  try{
+    var d=await (await fetch(PORTAL_URL+'?action=qa2_email&month='+encodeURIComponent($('f-month').value)
+      +'&week='+encodeURIComponent($('f-week').value)+'&employee_id='+encodeURIComponent(emp)+'&confirm=RUN&_='+Date.now())).json();
+    if(d&&d.ok) toast('Sent to '+d.to);
+    else toast('Not sent: '+((d&&d.message)||(d&&d.error)||'unknown'));
+  }catch(e){ toast('Not sent: '+e.message); }
+}
 async function loadBoard(){
   var p=$('pane-board');
   p.innerHTML='<div class="stat">'+Array(5).join('x').split('x').map(function(){ return '<div class="st"><div class="sk" style="height:26px;width:52px;margin-bottom:6px;"></div><div class="sk" style="height:9px;width:78px;"></div></div>'; }).join('')+'</div>'+
