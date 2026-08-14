@@ -191,7 +191,7 @@ function setTab(t){ TAB=t;
 function reload(){ VIEW_EMP=''; if(TAB==='board') loadBoard(); else loadMine(); }
 
 /* ── ADMIN: PLAN AND ASSIGN ──────────────────────────────────────────────────────────────── */
-var SEL_VA='';
+var SEL_VA='', SEL_REV='';
 async function loadBoard(){
   var p=$('pane-board'); p.innerHTML='<div class="card">Loading…</div>';
   var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
@@ -205,34 +205,39 @@ async function loadBoard(){
         '<button class="btn p" onclick="planWeek(0)">Build plan</button></div>';
       return;
     }
-    if(!SEL_VA || !d.rows.filter(function(r){return r.employee_id===SEL_VA;}).length) SEL_VA=d.rows[0].employee_id;
+    if(!SEL_REV && (d.reviewers||[]).length) SEL_REV=d.reviewers[0].employee_id;
     renderBoard();
   }catch(e){ p.innerHTML='<div class="warn">'+esc(e.message)+'</div>'; }
 }
-function vaState(r){ return r.complete?'sb':(r.reviewer_id?'as':'na'); }
-/* Which reviewers are already spoken for. Choosing from a plain list of names gave no clue that
-   someone had already been given a VA, so the same person could quietly be handed three reviews
-   while others had none — and there was no way to see it until the week went wrong. */
+
+/* WHO IS REVIEWING WHOM.
+   The board is organised around the REVIEWER, because that is the decision being made: you are
+   handing people out to reviewers, not the other way round. A reviewer is red until they have
+   somebody to review, green once they do, blue when they have finished. */
 function reviewerLoad(){
   var load={};
   (BOARD.rows||[]).forEach(function(r){
     if(!r.reviewer_id) return;
-    (load[r.reviewer_id]=load[r.reviewer_id]||[]).push({ name:r.name, id:r.employee_id, done:r.complete });
+    (load[r.reviewer_id]=load[r.reviewer_id]||[]).push({ name:r.name, id:r.employee_id, done:r.complete, units:r.units, doneN:r.done });
   });
   return load;
 }
-function vaTag(r){ return r.complete?'SUBMITTED':(r.reviewer_id?'ASSIGNED':'NEEDS REVIEWER'); }
+function revState(a){ if(!a || !a.length) return 'na'; return a.every(function(x){ return x.done; })?'sb':'as'; }
+function revTag(a){ if(!a || !a.length) return 'NO ONE ASSIGNED'; return a.every(function(x){ return x.done; })?'FINISHED':'REVIEWING'; }
+function vaState(r){ return r.complete?'sb':(r.reviewer_id?'as':'na'); }
+function vaTag(r){ return r.complete?'REVIEWED':(r.reviewer_id?'COVERED':'NOT COVERED'); }
 
 function renderBoard(){
-  var d=BOARD, p=$('pane-board');
-  var na=d.rows.filter(function(r){ return !r.reviewer_id && !r.complete; }).length;
-  var as=d.rows.filter(function(r){ return r.reviewer_id && !r.complete; }).length;
-  var sb=d.rows.filter(function(r){ return r.complete; }).length;
+  var d=BOARD, p=$('pane-board'), load=reviewerLoad();
+  var revs=(d.reviewers||[]);
+  var withWork=revs.filter(function(x){ return (load[x.employee_id]||[]).length; }).length;
+  var idle=revs.length-withWork;
+  var uncovered=d.rows.filter(function(r){ return !r.reviewer_id; }).length;
 
   var h='<div class="stat">'+
-    '<div class="st"><b style="color:var(--red);">'+na+'</b><span>need a reviewer</span></div>'+
-    '<div class="st"><b style="color:var(--green);">'+as+'</b><span>assigned</span></div>'+
-    '<div class="st"><b style="color:var(--blue);">'+sb+'</b><span>submitted</span></div>'+
+    '<div class="st"><b style="color:var(--red);">'+idle+'</b><span>reviewers with no one</span></div>'+
+    '<div class="st"><b style="color:var(--green);">'+withWork+'</b><span>reviewers assigned</span></div>'+
+    '<div class="st"><b style="color:'+(uncovered?'var(--amber)':'var(--t1)')+';">'+uncovered+'</b><span>VAs not covered</span></div>'+
     '<div class="st"><b>'+d.rows.reduce(function(n,r){return n+r.units;},0)+'</b><span>accounts</span></div>'+
     '<div class="st"><b>'+d.rows.reduce(function(n,r){return n+r.shots;},0)+'</b><span>screenshots</span></div></div>';
 
@@ -240,75 +245,70 @@ function renderBoard(){
      '<button class="btn" onclick="planWeek(0)">Rebuild plan</button>'+
      '<span style="font-size:11.5px;color:var(--t3);">Rebuilding replaces unstarted work. Submitted reviews are kept.</span></div>';
 
-  h+='<div class="bwrap"><div><div class="side"><h3>VAs this week — '+d.rows.length+'</h3><div class="sidelist">';
-  d.rows.forEach(function(r){
-    var st=vaState(r);
-    h+='<div class="vrow '+st+(r.employee_id===SEL_VA?' sel':'')+'" onclick="SEL_VA=\''+esc(r.employee_id)+'\';renderBoard();">'+
-       '<span class="dot"></span><span class="nm"><b>'+esc(r.name)+'</b>'+
-       '<span>'+esc(r.employee_id)+' · '+r.units+' accounts'+(r.reviewer?(' · '+esc(r.reviewer)):'')+'</span></span>'+
-       '<span class="tag">'+vaTag(r)+'</span></div>';
+  // ── LEFT: reviewers, the thing you are assigning ──
+  h+='<div class="bwrap"><div><div class="side"><h3>Reviewers — '+revs.length+'</h3><div class="sidelist">';
+  revs.slice().sort(function(a,b){
+    var A=(load[a.employee_id]||[]).length?1:0, B=(load[b.employee_id]||[]).length?1:0;
+    return A-B || String(a.name).localeCompare(String(b.name));   // unassigned first
+  }).forEach(function(x){
+    var a=load[x.employee_id]||[], st=revState(a);
+    h+='<div class="vrow '+st+(x.employee_id===SEL_REV?' sel':'')+'" onclick="SEL_REV=\''+esc(x.employee_id)+'\';renderBoard();">'+
+       '<span class="dot"></span><span class="nm"><b>'+esc(x.name)+'</b>'+
+       '<span>'+(a.length?('reviewing '+esc(a.map(function(y){ return y.name; }).join(', '))):esc(x.employee_id)+' · free')+'</span></span>'+
+       '<span class="tag">'+revTag(a)+'</span></div>';
   });
   h+='</div><div class="legend">'+
-     '<span><i style="background:var(--red);"></i>needs a reviewer</span>'+
-     '<span><i style="background:var(--green);"></i>assigned</span>'+
-     '<span><i style="background:var(--blue);"></i>submitted</span></div></div>';
+     '<span><i style="background:var(--red);"></i>no one assigned</span>'+
+     '<span><i style="background:var(--green);"></i>reviewing</span>'+
+     '<span><i style="background:var(--blue);"></i>finished</span></div></div>';
 
-  /* Second list: the people, not the work. Answers "who have I already used this week?" — the
-     question the VA list cannot answer. */
-  var load=reviewerLoad();
-  var free=[], busy=[];
-  (d.reviewers||[]).forEach(function(x){
-    var a=load[x.employee_id]||[];
-    if(a.length) busy.push({ x:x, a:a }); else free.push(x);
-  });
+  // ── LEFT, below: coverage of the VAs, for reference ──
   h+='<div class="side" style="margin-top:12px;position:static;max-height:none;">'+
-     '<h3>Reviewers — '+busy.length+' assigned, '+free.length+' free</h3><div class="sidelist">';
-  busy.forEach(function(b){
-    var allDone=b.a.every(function(y){ return y.done; });
-    h+='<div class="vrow '+(allDone?'sb':'as')+'"><span class="dot"></span><span class="nm">'+
-       '<b>'+esc(b.x.name)+'</b><span>reviewing '+esc(b.a.map(function(y){ return y.name; }).join(', '))+'</span></span>'+
-       '<span class="tag">'+(allDone?'DONE':'BUSY')+'</span></div>';
+     '<h3>VAs to be reviewed — '+d.rows.length+'</h3><div class="sidelist">';
+  d.rows.slice().sort(function(a,b){ return (a.reviewer_id?1:0)-(b.reviewer_id?1:0); }).forEach(function(r){
+    h+='<div class="vrow '+vaState(r)+'" style="cursor:default;"><span class="dot"></span>'+
+       '<span class="nm"><b>'+esc(r.name)+'</b><span>'+r.units+' accounts'+
+       (r.reviewer?(' · '+esc(r.reviewer)):'')+'</span></span>'+
+       '<span class="tag">'+vaTag(r)+'</span></div>';
   });
-  free.forEach(function(x){
-    h+='<div class="vrow na"><span class="dot"></span><span class="nm"><b>'+esc(x.name)+'</b>'+
-       '<span>'+esc(x.employee_id)+'</span></span><span class="tag">FREE</span></div>';
-  });
-  h+='</div></div>';
+  h+='</div></div></div>';
 
-  h+='</div>';   // close the side column (VA list + reviewer list)
-
-  // ── detail panel for the selected VA ──
-  var r=d.rows.filter(function(x){ return x.employee_id===SEL_VA; })[0]||d.rows[0];
-  var load=reviewerLoad();
-  var opts=d.reviewers.filter(function(x){ return x.employee_id!==r.employee_id; })
-    .map(function(x){
-      var mine=(load[x.employee_id]||[]).filter(function(a){ return a.id!==r.employee_id; });
-      var tail = mine.length ? ('  — already reviewing '+mine.map(function(a){ return a.name; }).join(', '))
-                             : '  — free';
-      return '<option value="'+esc(x.employee_id)+'"'+(x.employee_id===r.reviewer_id?' selected':'')+'>'+
-             esc(x.name)+' ('+esc(x.employee_id)+')'+esc(tail)+'</option>';
-    }).join('');
+  // ── RIGHT: assign a VA to the selected reviewer ──
+  var rv=revs.filter(function(x){ return x.employee_id===SEL_REV; })[0]||revs[0];
+  var mine=load[rv.employee_id]||[];
   h+='<div class="detail">'+
      '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start;">'+
-       '<div><b style="font-size:16px;">'+esc(r.name)+'</b> <span style="color:var(--t3);">'+esc(r.employee_id)+'</span>'+
-       '<div style="font-size:12px;color:var(--t2);margin-top:3px;">'+r.units+' accounts · '+r.shots+' screenshots</div>'+
-       '<div style="font-size:11.5px;color:var(--t3);margin-top:2px;">'+esc((r.tasks||[]).join(' · '))+'</div></div>'+
-       '<span class="tag vrow '+vaState(r)+'" style="border:none;padding:3px 9px;border-radius:20px;">'+vaTag(r)+'</span>'+
+       '<div><b style="font-size:16px;">'+esc(rv.name)+'</b> <span style="color:var(--t3);">'+esc(rv.employee_id)+'</span>'+
+       '<div style="font-size:12px;color:var(--t2);margin-top:3px;">'+
+         (mine.length?('Reviewing '+esc(mine.map(function(y){ return y.name+' ('+y.doneN+'/'+y.units+' checked)'; }).join(', '))):'No one assigned yet')+
+       '</div></div>'+
+       '<span class="tag vrow '+revState(mine)+'" style="border:none;padding:3px 9px;border-radius:20px;">'+revTag(mine)+'</span>'+
      '</div>';
-  if(r.complete){
-    h+='<div class="note" style="margin-top:12px;"><b>Review submitted.</b> Score '+r.score+'. '+
-       'Reviewer: '+esc(r.reviewer||'—')+'. A finished review cannot be reassigned — that would discard their judgement.</div>';
-  } else {
-    h+='<div style="margin-top:14px;"><label>Reviewer</label><div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">'+
-       '<select id="rv-sel" style="min-width:250px;"><option value="">— none —</option>'+opts+'</select>'+
-       '<button class="btn p" onclick="assign(\''+esc(r.employee_id)+'\',$(\'rv-sel\').value)">Save reviewer</button>'+
-       (r.reviewer_id?'<button class="btn" onclick="assign(\''+esc(r.employee_id)+'\',\'\')">Clear</button>':'')+
-       '</div>'+
-       '<div style="font-size:11.5px;color:var(--t3);margin-top:6px;">'+esc(r.name)+' is not in this list — nobody can review their own work.</div>'+
-       (r.done?('<div style="font-size:12px;color:var(--amber);margin-top:8px;">'+r.done+' of '+r.units+' accounts already checked. Reassigning keeps the work done so far.</div>'):'')+
-       '</div>';
+
+  var opts=d.rows.filter(function(r){ return r.employee_id!==rv.employee_id && !r.complete; })
+    .map(function(r){
+      var tail = r.reviewer_id ? ('  — already with '+r.reviewer) : '  — not covered';
+      return '<option value="'+esc(r.employee_id)+'">'+esc(r.name)+' ('+r.units+' accounts)'+esc(tail)+'</option>';
+    }).join('');
+  h+='<div style="margin-top:14px;"><label>Give this reviewer a VA</label>'+
+     '<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">'+
+     '<select id="va-sel" style="min-width:280px;">'+(opts||'<option value="">— everyone is reviewed —</option>')+'</select>'+
+     '<button class="btn p" onclick="assign($(\'va-sel\').value, \''+esc(rv.employee_id)+'\')">Assign</button>'+
+     '</div>'+
+     '<div style="font-size:11.5px;color:var(--t3);margin-top:6px;">'+esc(rv.name)+' cannot appear in this list — nobody reviews their own work.</div></div>';
+
+  if(mine.length){
+    h+='<div style="margin-top:14px;"><label>Currently assigned</label>';
+    mine.forEach(function(y){
+      h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-top:6px;flex-wrap:wrap;">'+
+         '<span><b>'+esc(y.name)+'</b> <span style="color:var(--t3);font-size:11.5px;">'+y.doneN+' of '+y.units+' accounts checked</span></span>'+
+         '<span>'+(y.done?'<span class="tag" style="background:#e0f2fe;color:#075985;padding:2px 8px;border-radius:20px;">SUBMITTED</span>'
+                          :'<button class="btn sm" onclick="assign(\''+esc(y.id)+'\',\'\')">Unassign</button>')+
+         ' <button class="btn sm" onclick="TAB=\'mine\';VIEW_EMP=\''+esc(y.id)+'\';$(\'pane-board\').style.display=\'none\';$(\'pane-mine\').style.display=\'block\';loadMine();">Open</button></span>'+
+         '</div>';
+    });
+    h+='</div>';
   }
-  h+='<div style="margin-top:14px;"><button class="btn sm" onclick="TAB=\'mine\';VIEW_EMP=\''+esc(r.employee_id)+'\';$(\'pane-board\').style.display=\'none\';$(\'pane-mine\').style.display=\'block\';loadMine();">Open this review</button></div>';
   h+='</div></div>';
   p.innerHTML=h;
 }
