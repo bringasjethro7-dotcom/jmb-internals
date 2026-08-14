@@ -394,7 +394,7 @@ async function loadBoard(){
              '<div class="sk" style="height:38px;"></div><div class="sk" style="height:34px;"></div></div>'; }).join('')+'</div>';
   var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
   try{
-    var d=await (await fetch(PORTAL_URL+'?action=qa_review_board&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&_='+Date.now())).json();
+    var d=await (await fetch(PORTAL_URL+'?action=qa2_board&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&_='+Date.now())).json();
     if(!d||!d.ok){ p.innerHTML='<div class="warn">'+esc((d&&d.error)||'Could not load')+'</div>'; return; }
     BOARD=d;
     if(!d.rows.length){
@@ -501,7 +501,7 @@ async function planWeek(dry){
   var p=$('pane-board'); var old=p.innerHTML;
   p.innerHTML='<div class="card">Sampling the week…</div>';
   try{
-    var body={ action:'qa_review_plan', month:m, week:w };
+    var body={ action:'qa2_plan', month:m, week:w };
     if(!dry) body.confirm='RUN';
     var d=await (await fetch(PORTAL_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)})).json();
     if(!d||!d.ok){ p.innerHTML='<div class="warn">'+esc((d&&d.error)||'Plan failed')+'</div>'; return; }
@@ -528,7 +528,7 @@ async function assign(emp, rev){
   }catch(_e){}
   var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
   try{
-    var d=await (await fetch(PORTAL_URL+'?action=qa_review_assign&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+
+    var d=await (await fetch(PORTAL_URL+'?action=qa2_assign&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+
       '&employee_id='+encodeURIComponent(emp)+'&reviewer_id='+encodeURIComponent(rev)+'&_='+Date.now())).json();
     if(d&&d.ok) toast(rev?(d.reviewer+' assigned to '+emp+' ('+d.units+' accounts)'):('Unassigned '+emp));
     else toast('Failed: '+((d&&d.message)||(d&&d.error)||'unknown'));
@@ -544,7 +544,7 @@ async function loadMine(){
   if(ISADMIN && !VIEW_EMP){
     p.innerHTML='<div class="card">Loading…</div>';
     try{
-      var b=await (await fetch(PORTAL_URL+'?action=qa_review_board&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&_='+Date.now())).json();
+      var b=await (await fetch(PORTAL_URL+'?action=qa2_board&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&_='+Date.now())).json();
       var rows=(b&&b.rows)||[];
       if(!rows.length){ p.innerHTML='<div class="card">No plan for this week yet — build one on the assignment board.</div>'; return; }
       p.innerHTML='<div class="card"><b>Open a review</b><div class="sub" style="margin:4px 0 9px;">Admins can read any review. Reviewers see only their own.</div>'+
@@ -557,7 +557,7 @@ async function loadMine(){
   p.innerHTML='<div class="card">Loading review…</div>';
   var q=ISADMIN ? ('&employee_id='+encodeURIComponent(VIEW_EMP)) : ('&reviewer_id='+encodeURIComponent(USER.id));
   try{
-    var d=await (await fetch(PORTAL_URL+'?action=qa_review_list&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+q+'&_='+Date.now())).json();
+    var d=await (await fetch(PORTAL_URL+'?action=qa2_list&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+q+'&_='+Date.now())).json();
     if(!d||!d.ok){ p.innerHTML='<div class="warn">'+esc((d&&d.error)||'Could not load')+'</div>'; return; }
     ALL_UNITS=d.rows||[];
     if(!ALL_UNITS.length){ p.innerHTML='<div class="card" style="text-align:center;padding:44px 20px;">'+
@@ -830,7 +830,7 @@ function saveUnit(id){
     var nEl=$('n-'+id);
     try{
       var d=await (await fetch(PORTAL_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body:JSON.stringify({ action:'qa_review_save', id:id, verdicts:u.verdicts||{},
+        body:JSON.stringify({ action:'qa2_save', id:id, verdicts:u.verdicts||{},
                               seconds:u.seconds||0, notes:nEl?nEl.value:'' })})).json();
       if(!d||!d.ok) toast('Not saved: '+((d&&d.error)||'unknown'));
     }catch(e){ toast('Not saved — check your connection'); }
@@ -843,7 +843,7 @@ async function submitAll(){
   var btn=document.querySelector('#pane-mine .btn.g'); if(btn){ btn.disabled=true; btn.textContent='Submitting…'; }
   try{
     var d=await (await fetch(PORTAL_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body:JSON.stringify({ action:'qa_review_submit', month:$('f-month').value, week:$('f-week').value,
+      body:JSON.stringify({ action:'qa2_submit', month:$('f-month').value, week:$('f-week').value,
                             employee_id:va.employee_id, by:USER.name })})).json();
     if(d&&d.ok){ toast('Submitted — '+va.full_name+' scored '+d.score); CUR_UNIT=''; loadMine(); }
     else if(d&&d.error==='INCOMPLETE'){ toast(d.remaining+' account(s) still unchecked'); if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
