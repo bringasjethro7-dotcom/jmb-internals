@@ -976,12 +976,17 @@ var DOBS=null;
 function watchDwell(){
   if(DOBS) DOBS.disconnect();
   VISIBLE_UNITS={};
+  /* Measure how much of the SCREEN the card fills, not how much of the CARD is on screen. An
+     account with 167 screenshots is many times taller than the viewport, so its intersection
+     ratio can never approach 0.35 — those cards were silently excluded and their clock never
+     started, which is exactly the account a reviewer needs most time on. */
   DOBS=new IntersectionObserver(function(entries){
     entries.forEach(function(en){
       var id=(en.target.id||'').replace(/^u-/,'');
-      if(en.isIntersecting && en.intersectionRatio>0.35) VISIBLE_UNITS[id]=1; else delete VISIBLE_UNITS[id];
+      var vis=en.isIntersecting ? ((en.intersectionRect&&en.intersectionRect.height)||0) : 0;
+      if(vis>80) VISIBLE_UNITS[id]=vis; else delete VISIBLE_UNITS[id];
     });
-  }, {threshold:[0,0.35,1]});
+  }, {threshold:[0,0.05,0.15,0.35,0.6,1]});
   document.querySelectorAll('.acct').forEach(function(el){ DOBS.observe(el); });
 }
 setInterval(function(){
@@ -990,7 +995,9 @@ setInterval(function(){
   var ids=Object.keys(VISIBLE_UNITS);
   if(!ids.length) return;
   /* Credit the account you are working in, not every one that happens to be on screen. */
-  var id=(CUR_UNIT && VISIBLE_UNITS[CUR_UNIT]) ? CUR_UNIT : ids[0];
+  /* Credit the account being worked on; otherwise whichever fills most of the screen. */
+  var id=(CUR_UNIT && VISIBLE_UNITS[CUR_UNIT]) ? CUR_UNIT
+        : ids.sort(function(a,b){ return (VISIBLE_UNITS[b]||0)-(VISIBLE_UNITS[a]||0); })[0];
   var u=UNITS.filter(function(x){ return x.id===id; })[0]; if(!u) return;
   if(u.status==='submitted') return;
   DWELL[id]=(DWELL[id]||0)+1;
@@ -998,7 +1005,11 @@ setInterval(function(){
   paintTimer(u);
   if(u.seconds%12===0) saveUnit(id);               // persist periodically, not every tick
 }, 1000);
-function minSec(u){ return u.min_seconds || Math.max(15,(u.shots||0)*4); }
+/* Capped at three minutes per account. Four seconds a screenshot is fair for a normal account of
+   4-24 images; 167 of them would demand eleven minutes on one card, which stops proving attention
+   and just blocks the work. Total effort is governed by the whole-review budget. */
+var MIN_SEC_CAP=180;
+function minSec(u){ return Math.min(MIN_SEC_CAP, u.min_seconds || Math.max(15,(u.shots||0)*4)); }
 function timeOk(u){ return (u.seconds||0) >= minSec(u); }
 function paintTimer(u){
   var el=$('t-'+u.id); if(!el) return;
