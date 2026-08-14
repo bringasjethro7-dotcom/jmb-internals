@@ -59,6 +59,34 @@ td{padding:7px 8px;border-bottom:1px solid rgba(15,23,42,.06);vertical-align:mid
 .toast.on{opacity:1}
 #lb{position:fixed;inset:0;background:rgba(15,23,42,.92);display:none;align-items:center;justify-content:center;z-index:80;cursor:zoom-out}
 #lb img{max-width:94vw;max-height:92vh;border-radius:8px}
+
+/* ── ASSIGNMENT SIDE BOARD ──
+   A dropdown per table row made it impossible to see, at a glance, who still needs a reviewer.
+   The list is now the primary view: colour tells you the state, the panel beside it does the
+   assigning. Colour is never the only signal — every row is labelled too, because a board that
+   only works if you can distinguish red from green is a board that fails somebody. */
+.bwrap{display:grid;grid-template-columns:320px 1fr;gap:14px;align-items:start}
+@media(max-width:860px){.bwrap{grid-template-columns:1fr}}
+.side{background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:var(--shadow);overflow:hidden;position:sticky;top:12px;max-height:78vh;display:flex;flex-direction:column}
+.side h3{margin:0;padding:11px 13px;font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:var(--t3);border-bottom:1px solid var(--line);background:#f8fafc}
+.sidelist{overflow:auto}
+.vrow{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid rgba(15,23,42,.06);cursor:pointer;border-left:4px solid transparent}
+.vrow:hover{background:#f8fafc}
+.vrow.sel{background:#fff7ed;border-left-color:var(--o1)}
+.vrow .dot{width:9px;height:9px;border-radius:50%;flex:0 0 9px}
+.vrow.na .dot{background:var(--red)}      /* no reviewer yet */
+.vrow.as .dot{background:var(--green)}    /* reviewer assigned */
+.vrow.sb .dot{background:var(--blue)}     /* review submitted */
+.vrow .nm{flex:1;min-width:0}
+.vrow .nm b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vrow .nm span{font-size:10.5px;color:var(--t3)}
+.vrow .tag{font:800 9.5px inherit;padding:2px 7px;border-radius:20px;white-space:nowrap}
+.vrow.na .tag{background:#fee2e2;color:#991b1b}
+.vrow.as .tag{background:#dcfce7;color:#14532d}
+.vrow.sb .tag{background:#e0f2fe;color:#075985}
+.legend{display:flex;gap:12px;padding:9px 13px;border-top:1px solid var(--line);background:#f8fafc;font-size:10.5px;color:var(--t2);flex-wrap:wrap}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.detail{background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:var(--shadow);padding:15px 17px}
 .stat{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:9px;margin-bottom:12px}
 .st{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:10px 12px;box-shadow:var(--shadow)}
 .st b{display:block;font-size:20px;line-height:1.15}
@@ -163,6 +191,7 @@ function setTab(t){ TAB=t;
 function reload(){ VIEW_EMP=''; if(TAB==='board') loadBoard(); else loadMine(); }
 
 /* ── ADMIN: PLAN AND ASSIGN ──────────────────────────────────────────────────────────────── */
+var SEL_VA='';
 async function loadBoard(){
   var p=$('pane-board'); p.innerHTML='<div class="card">Loading…</div>';
   var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
@@ -170,42 +199,118 @@ async function loadBoard(){
     var d=await (await fetch(PORTAL_URL+'?action=qa_review_board&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&_='+Date.now())).json();
     if(!d||!d.ok){ p.innerHTML='<div class="warn">'+esc((d&&d.error)||'Could not load')+'</div>'; return; }
     BOARD=d;
-    var done=d.rows.filter(function(r){return r.complete;}).length;
-    var assigned=d.rows.filter(function(r){return r.reviewer_id;}).length;
-    var opts=d.reviewers.map(function(r){ return '<option value="'+esc(r.employee_id)+'">'+esc(r.name)+' ('+esc(r.employee_id)+')</option>'; }).join('');
-    var h='';
-    h+='<div class="note"><b>You assign every reviewer by hand.</b> One reviewer takes one VA for the whole week, so they see that person\'s pattern rather than scattered accounts. Rotating the pairings yourself each week is what stops a comfortable pairing settling in. A VA can never be assigned to themselves.</div>';
-    h+='<div class="stat">'+
-       '<div class="st"><b>'+d.rows.length+'</b><span>VAs planned</span></div>'+
-       '<div class="st"><b>'+assigned+'</b><span>assigned</span></div>'+
-       '<div class="st"><b>'+done+'</b><span>submitted</span></div>'+
-       '<div class="st"><b>'+d.rows.reduce(function(n,r){return n+r.units;},0)+'</b><span>accounts to check</span></div>'+
-       '<div class="st"><b>'+d.rows.reduce(function(n,r){return n+r.shots;},0)+'</b><span>screenshots</span></div></div>';
-    h+='<div class="bar"><button class="btn" onclick="planWeek(1)">Preview plan</button>'+
-       '<button class="btn p" onclick="planWeek(0)">Build / rebuild plan</button>'+
-       '<span style="font-size:11.5px;color:var(--t3);">Rebuilding replaces unstarted work. Submitted reviews are never discarded.</span></div>';
-    if(!d.rows.length){ h+='<div class="card">No plan for this week yet. Press <b>Build / rebuild plan</b>.</div>'; p.innerHTML=h; return; }
-    h+='<table><tr><th>VA</th><th>Tasks</th><th>Accounts</th><th>Shots</th><th>Reviewer</th><th>Progress</th><th>Score</th></tr>';
-    d.rows.forEach(function(r){
-      var pillCls=r.complete?'done':(r.done?'prog':'none');
-      var pillTxt=r.complete?'submitted':(r.done?(r.done+'/'+r.units):'not started');
-      h+='<tr>'+
-        '<td><b>'+esc(r.name)+'</b><br><span style="color:var(--t3);font-size:11px;">'+esc(r.employee_id)+'</span></td>'+
-        '<td style="font-size:11px;color:var(--t2);">'+esc((r.tasks||[]).join(', '))+'</td>'+
-        '<td>'+r.units+'</td><td>'+r.shots+'</td>'+
-        '<td><select onchange="assign(\''+esc(r.employee_id)+'\',this.value)" '+(r.complete?'disabled':'')+' style="min-width:170px;">'+
-          '<option value="">— unassigned —</option>'+opts+'</select></td>'+
-        '<td><span class="pill '+pillCls+'">'+pillTxt+'</span></td>'+
-        '<td><b>'+(r.score===''?'—':r.score)+'</b></td></tr>';
-    });
-    h+='</table>';
-    p.innerHTML=h;
-    // reflect existing assignments in the dropdowns
-    d.rows.forEach(function(r,i){
-      var sel=p.querySelectorAll('select')[i];
-      if(sel && r.reviewer_id) sel.value=r.reviewer_id;
-    });
+    if(!d.rows.length){
+      p.innerHTML='<div class="note"><b>No plan for this week yet.</b> Build one and every VA with work will appear here.</div>'+
+        '<div class="bar"><button class="btn" onclick="planWeek(1)">Preview plan</button>'+
+        '<button class="btn p" onclick="planWeek(0)">Build plan</button></div>';
+      return;
+    }
+    if(!SEL_VA || !d.rows.filter(function(r){return r.employee_id===SEL_VA;}).length) SEL_VA=d.rows[0].employee_id;
+    renderBoard();
   }catch(e){ p.innerHTML='<div class="warn">'+esc(e.message)+'</div>'; }
+}
+function vaState(r){ return r.complete?'sb':(r.reviewer_id?'as':'na'); }
+/* Which reviewers are already spoken for. Choosing from a plain list of names gave no clue that
+   someone had already been given a VA, so the same person could quietly be handed three reviews
+   while others had none — and there was no way to see it until the week went wrong. */
+function reviewerLoad(){
+  var load={};
+  (BOARD.rows||[]).forEach(function(r){
+    if(!r.reviewer_id) return;
+    (load[r.reviewer_id]=load[r.reviewer_id]||[]).push({ name:r.name, id:r.employee_id, done:r.complete });
+  });
+  return load;
+}
+function vaTag(r){ return r.complete?'SUBMITTED':(r.reviewer_id?'ASSIGNED':'NEEDS REVIEWER'); }
+
+function renderBoard(){
+  var d=BOARD, p=$('pane-board');
+  var na=d.rows.filter(function(r){ return !r.reviewer_id && !r.complete; }).length;
+  var as=d.rows.filter(function(r){ return r.reviewer_id && !r.complete; }).length;
+  var sb=d.rows.filter(function(r){ return r.complete; }).length;
+
+  var h='<div class="stat">'+
+    '<div class="st"><b style="color:var(--red);">'+na+'</b><span>need a reviewer</span></div>'+
+    '<div class="st"><b style="color:var(--green);">'+as+'</b><span>assigned</span></div>'+
+    '<div class="st"><b style="color:var(--blue);">'+sb+'</b><span>submitted</span></div>'+
+    '<div class="st"><b>'+d.rows.reduce(function(n,r){return n+r.units;},0)+'</b><span>accounts</span></div>'+
+    '<div class="st"><b>'+d.rows.reduce(function(n,r){return n+r.shots;},0)+'</b><span>screenshots</span></div></div>';
+
+  h+='<div class="bar"><button class="btn" onclick="planWeek(1)">Preview plan</button>'+
+     '<button class="btn" onclick="planWeek(0)">Rebuild plan</button>'+
+     '<span style="font-size:11.5px;color:var(--t3);">Rebuilding replaces unstarted work. Submitted reviews are kept.</span></div>';
+
+  h+='<div class="bwrap"><div><div class="side"><h3>VAs this week — '+d.rows.length+'</h3><div class="sidelist">';
+  d.rows.forEach(function(r){
+    var st=vaState(r);
+    h+='<div class="vrow '+st+(r.employee_id===SEL_VA?' sel':'')+'" onclick="SEL_VA=\''+esc(r.employee_id)+'\';renderBoard();">'+
+       '<span class="dot"></span><span class="nm"><b>'+esc(r.name)+'</b>'+
+       '<span>'+esc(r.employee_id)+' · '+r.units+' accounts'+(r.reviewer?(' · '+esc(r.reviewer)):'')+'</span></span>'+
+       '<span class="tag">'+vaTag(r)+'</span></div>';
+  });
+  h+='</div><div class="legend">'+
+     '<span><i style="background:var(--red);"></i>needs a reviewer</span>'+
+     '<span><i style="background:var(--green);"></i>assigned</span>'+
+     '<span><i style="background:var(--blue);"></i>submitted</span></div></div>';
+
+  /* Second list: the people, not the work. Answers "who have I already used this week?" — the
+     question the VA list cannot answer. */
+  var load=reviewerLoad();
+  var free=[], busy=[];
+  (d.reviewers||[]).forEach(function(x){
+    var a=load[x.employee_id]||[];
+    if(a.length) busy.push({ x:x, a:a }); else free.push(x);
+  });
+  h+='<div class="side" style="margin-top:12px;position:static;max-height:none;">'+
+     '<h3>Reviewers — '+busy.length+' assigned, '+free.length+' free</h3><div class="sidelist">';
+  busy.forEach(function(b){
+    var allDone=b.a.every(function(y){ return y.done; });
+    h+='<div class="vrow '+(allDone?'sb':'as')+'"><span class="dot"></span><span class="nm">'+
+       '<b>'+esc(b.x.name)+'</b><span>reviewing '+esc(b.a.map(function(y){ return y.name; }).join(', '))+'</span></span>'+
+       '<span class="tag">'+(allDone?'DONE':'BUSY')+'</span></div>';
+  });
+  free.forEach(function(x){
+    h+='<div class="vrow na"><span class="dot"></span><span class="nm"><b>'+esc(x.name)+'</b>'+
+       '<span>'+esc(x.employee_id)+'</span></span><span class="tag">FREE</span></div>';
+  });
+  h+='</div></div>';
+
+  h+='</div>';   // close the side column (VA list + reviewer list)
+
+  // ── detail panel for the selected VA ──
+  var r=d.rows.filter(function(x){ return x.employee_id===SEL_VA; })[0]||d.rows[0];
+  var load=reviewerLoad();
+  var opts=d.reviewers.filter(function(x){ return x.employee_id!==r.employee_id; })
+    .map(function(x){
+      var mine=(load[x.employee_id]||[]).filter(function(a){ return a.id!==r.employee_id; });
+      var tail = mine.length ? ('  — already reviewing '+mine.map(function(a){ return a.name; }).join(', '))
+                             : '  — free';
+      return '<option value="'+esc(x.employee_id)+'"'+(x.employee_id===r.reviewer_id?' selected':'')+'>'+
+             esc(x.name)+' ('+esc(x.employee_id)+')'+esc(tail)+'</option>';
+    }).join('');
+  h+='<div class="detail">'+
+     '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-start;">'+
+       '<div><b style="font-size:16px;">'+esc(r.name)+'</b> <span style="color:var(--t3);">'+esc(r.employee_id)+'</span>'+
+       '<div style="font-size:12px;color:var(--t2);margin-top:3px;">'+r.units+' accounts · '+r.shots+' screenshots</div>'+
+       '<div style="font-size:11.5px;color:var(--t3);margin-top:2px;">'+esc((r.tasks||[]).join(' · '))+'</div></div>'+
+       '<span class="tag vrow '+vaState(r)+'" style="border:none;padding:3px 9px;border-radius:20px;">'+vaTag(r)+'</span>'+
+     '</div>';
+  if(r.complete){
+    h+='<div class="note" style="margin-top:12px;"><b>Review submitted.</b> Score '+r.score+'. '+
+       'Reviewer: '+esc(r.reviewer||'—')+'. A finished review cannot be reassigned — that would discard their judgement.</div>';
+  } else {
+    h+='<div style="margin-top:14px;"><label>Reviewer</label><div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">'+
+       '<select id="rv-sel" style="min-width:250px;"><option value="">— none —</option>'+opts+'</select>'+
+       '<button class="btn p" onclick="assign(\''+esc(r.employee_id)+'\',$(\'rv-sel\').value)">Save reviewer</button>'+
+       (r.reviewer_id?'<button class="btn" onclick="assign(\''+esc(r.employee_id)+'\',\'\')">Clear</button>':'')+
+       '</div>'+
+       '<div style="font-size:11.5px;color:var(--t3);margin-top:6px;">'+esc(r.name)+' is not in this list — nobody can review their own work.</div>'+
+       (r.done?('<div style="font-size:12px;color:var(--amber);margin-top:8px;">'+r.done+' of '+r.units+' accounts already checked. Reassigning keeps the work done so far.</div>'):'')+
+       '</div>';
+  }
+  h+='<div style="margin-top:14px;"><button class="btn sm" onclick="TAB=\'mine\';VIEW_EMP=\''+esc(r.employee_id)+'\';$(\'pane-board\').style.display=\'none\';$(\'pane-mine\').style.display=\'block\';loadMine();">Open this review</button></div>';
+  h+='</div></div>';
+  p.innerHTML=h;
 }
 
 async function planWeek(dry){
