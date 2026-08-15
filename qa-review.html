@@ -545,7 +545,11 @@ async function loadResults(){
         +'<td>'+(r.complete?'<span class="pill done">submitted</span>':'<span class="pill none">'+r.submitted+'/'+r.units+'</span>')+'</td>'
         +'<td>'+(r.complete?('<button class="btn sm" onclick="emailFindings(\''+esc(r.employee_id)+'\',\''+esc(r.name)+'\','+((r.fails||[]).length)+')">Email findings</button>'):'')+'</td></tr>';
     });
-    h+='</table><div style="font-size:11.5px;color:var(--t3);margin-top:8px;">The findings email lists only what failed, with a dispute link on every item.</div></div>';
+    h+='</table>'
+      +'<div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap;">'
+      +'<button class="btn p" onclick="emailAll()">Email all findings</button>'
+      +'<span style="font-size:11.5px;color:var(--t3);">One email per submitted review — only what failed, with a dispute link on every item. Shows you the list before sending.</span>'
+      +'</div></div>';
 
     // ── reviewer grades ──
     var gr=(G&&G.rows)||[];
@@ -567,6 +571,24 @@ async function loadResults(){
     h+='</div>';
     p.innerHTML=h;
   }catch(e){ p.innerHTML='<div class="warn">'+esc(e.message)+'</div>'; }
+}
+/* Everyone at once. Dry first — the exact list of who gets what, and who is skipped and why —
+   then send on confirmation. A batch that quietly drops people is how someone never learns
+   their score, so skips are shown, not swallowed. */
+async function emailAll(){
+  var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
+  var u=PORTAL_URL+'?action=qa2_email_all&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w);
+  try{
+    var d=await (await fetch(u+'&_='+Date.now())).json();
+    if(!d||!d.ok){ toast('Failed: '+((d&&d.error)||'unknown')); return; }
+    if(!d.sent_count){ toast('Nobody to email — no submitted reviews'+(d.skipped.length?(' ('+d.skipped.length+' skipped)'):'')); return; }
+    var lines=d.sent.map(function(x){ return '· '+x.name+' — '+x.score+' ('+x.findings+' finding'+(x.findings===1?'':'s')+') → '+x.to; }).join('\n');
+    var skips=d.skipped.length?('\n\nSkipped:\n'+d.skipped.map(function(x){ return '· '+x.name+' — '+x.why; }).join('\n')):'';
+    if(!confirm('Send '+d.sent_count+' email(s)?\n\n'+lines+skips)) return;
+    var r=await (await fetch(u+'&confirm=RUN&_='+Date.now())).json();
+    if(r&&r.ok) toast(r.sent_count+' email(s) sent'+(r.skipped.length?(' · '+r.skipped.length+' skipped'):''));
+    else toast('Failed: '+((r&&r.error)||'unknown'));
+  }catch(e){ toast('Failed: '+e.message); }
 }
 async function resolveDispute(id, outcome){
   var word=(outcome==='upheld')?'UPHOLD this dispute? The finding flips to pass and the week score is rewritten.':'REJECT this dispute? The original finding stands.';
