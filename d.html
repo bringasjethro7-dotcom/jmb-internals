@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>JMB Virtuals — opening your dispute…</title>
+<style>
+body{margin:0;display:grid;place-items:center;min-height:100vh;background:#f4f6fa;
+  font:15px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#0f172a}
+.card{background:#fff;border:1px solid rgba(15,23,42,.1);border-radius:14px;padding:26px 30px;
+  max-width:380px;text-align:center;box-shadow:0 8px 30px -12px rgba(15,23,42,.2)}
+.spin{width:26px;height:26px;border:3px solid #e2e8f0;border-top-color:#ea580c;border-radius:50%;
+  margin:0 auto 14px;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+a{color:#ea580c}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="spin"></div>
+  <b>Opening your dispute…</b>
+  <p id="msg" style="color:#475569;font-size:13px;">One moment.</p>
+</div>
+<script>
+/* ── WHY THIS PAGE EXISTS ──
+   The QA findings emails link every Dispute button here rather than straight at the Apps Script
+   exec URL. Links to script.google.com/macros are a pattern phishing kits abuse, and Gmail
+   weighs them against a message — mail that is otherwise fine gets rejected or spam-foldered
+   for carrying them. A link on the company's own domain carries none of that weight; this page
+   simply forwards the token to the real dispute form.
+   Only the fixed dispute action is ever opened — a link cannot be crafted to send someone to an
+   arbitrary action or site from here. */
+var EXEC='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
+try{
+  var q=new URLSearchParams(location.search);
+  var token=q.get('t')||'', i=q.get('i')||'0';
+  if(!/^qd-[A-Za-z0-9_-]+$/.test(token)) throw new Error('bad token');
+  if(!/^\d{1,3}$/.test(i)) throw new Error('bad index');
+  location.replace(EXEC+'?action=qa2_dispute_page&token='+encodeURIComponent(token)+'&i='+encodeURIComponent(i));
+}catch(e){
+  document.getElementById('msg').innerHTML='This link looks incomplete. Open the email again and tap the Dispute button, or contact the admin.';
+  document.querySelector('.spin').style.display='none';
+}
+</script>
+</body>
+</html>
