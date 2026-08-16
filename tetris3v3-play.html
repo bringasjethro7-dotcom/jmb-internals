@@ -59,6 +59,16 @@
 
   #sc-done{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px}
   #sc-done .big{font-family:var(--disp);font-size:26px;font-weight:800;color:var(--o1)}
+  /* combo-scaled garbage shake */
+  #board.quake{animation:pq .24s ease}
+  @keyframes pq{0%,100%{transform:none}30%{transform:translate(-2px,1px)}70%{transform:translate(2px,-1px)}}
+  #board.quake-big{animation:pqB .38s cubic-bezier(.36,.07,.19,.97)}
+  @keyframes pqB{0%,100%{transform:none}15%{transform:translate(-5px,2px) rotate(-.4deg)}35%{transform:translate(5px,-2px) rotate(.4deg)}55%{transform:translate(-4px,2px)}75%{transform:translate(3px,-1px)}}
+  #board.quake-huge{animation:pqH .55s cubic-bezier(.36,.07,.19,.97)}
+  @keyframes pqH{0%,100%{transform:none}10%{transform:translate(-9px,4px) rotate(-.9deg)}25%{transform:translate(9px,-4px) rotate(.9deg)}40%{transform:translate(-8px,4px)}55%{transform:translate(7px,-3px)}70%{transform:translate(-5px,2px)}85%{transform:translate(3px,-2px)}}
+  #board.quake-mega{animation:pqM .72s cubic-bezier(.36,.07,.19,.97)}
+  @keyframes pqM{0%,100%{transform:none}8%{transform:translate(-14px,7px) rotate(-1.5deg)}20%{transform:translate(14px,-7px) rotate(1.5deg)}32%{transform:translate(-12px,6px) rotate(-1.2deg)}45%{transform:translate(11px,-5px) rotate(1deg)}58%{transform:translate(-8px,4px)}72%{transform:translate(6px,-3px)}86%{transform:translate(-3px,2px)}}
+  @media(prefers-reduced-motion:reduce){#board.quake,#board.quake-big,#board.quake-huge,#board.quake-mega{animation:none}}
 </style>
 </head>
 <body>
@@ -166,7 +176,15 @@ function clearLines(){ var n=0, ys=[]; for(var y=H-1;y>=0;y--){ var full=true; f
   if(n){ lines+=n; score+=[0,100,300,500,800][n]||0; dropMs=Math.max(120, 800-Math.floor(lines/10)*70); flash={t0:Date.now(),ys:ys}; try{ sfxClear(n); }catch(e){} } return n; }
 function addGarbage(g){ var hole=Math.floor(Math.random()*W), lost=false;
   for(var i=0;i<g;i++){ var top=board.shift(); if(top.some(function(v){return v;})) lost=true; var row=new Array(W).fill(8); row[hole]=0; board.push(row); }
+  boardQuake(g);   // the board rocks — harder the bigger the dump
   if(lost || (cur && collide(cur.m,cur.x,cur.y))) topOut(); }
+/* Combo-scaled screen shake: the more garbage lands at once, the harder your board rocks. */
+function boardQuake(g){ try{
+  var b=document.getElementById('board'); if(!b) return;
+  var cls=(g>=6)?'quake-mega':(g>=4)?'quake-huge':(g>=2)?'quake-big':'quake';
+  b.classList.remove('quake','quake-big','quake-huge','quake-mega'); void b.offsetWidth; b.classList.add(cls);
+  setTimeout(function(){ b.classList.remove('quake','quake-big','quake-huge','quake-mega'); },760);
+}catch(e){} }
 function lockPiece(){ merge(); sfx('sfxLock'); var n=clearLines();
   if(n>0){ var atk=ATK[n]||0; if(atk>0){ var cancel=Math.min(atk,pendingGarbage); pendingGarbage-=cancel; var send=atk-cancel; if(send>0){ bc('attack',{id:ID,side:side,n:send}); sfx('sfxAttack'); } } }
   else if(pendingGarbage>0){ var g=Math.min(pendingGarbage,6); pendingGarbage-=g; addGarbage(g); }
