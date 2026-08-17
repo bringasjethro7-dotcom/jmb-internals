@@ -11,7 +11,7 @@
     --morn:#f9b625;--night:#8a97ff;--card:rgba(255,255,255,.06);--line:rgba(255,255,255,.12);
     --green:#34d399;--red:#f87171;--sans:'Manrope',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;--disp:'Sora','Manrope',sans-serif;}
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%}
+  html,body{height:100%;overscroll-behavior:none}
   body{font-family:var(--sans);color:var(--ink);min-height:100vh;
     background:radial-gradient(900px 500px at 15% -10%,rgba(245,158,11,.14),transparent 55%),
       radial-gradient(900px 500px at 90% 110%,rgba(124,140,255,.16),transparent 58%),
@@ -42,6 +42,8 @@
   .pill.morn{color:var(--morn);background:rgba(249,182,37,.14)} .pill.night{color:var(--night);background:rgba(138,151,255,.16)}
   .pill svg{width:18px;height:18px}
   .tbmeta{flex:1;min-width:0;font-size:12.5px;color:var(--ink2);font-weight:700}
+  .cdot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);flex-shrink:0;transition:.3s}
+  .cdot.off{background:var(--red);box-shadow:0 0 8px var(--red);animation:tp .8s ease infinite}
   .editbtn{background:none;border:1px solid var(--line);color:var(--ink3);border-radius:10px;padding:8px 11px;font:700 12px var(--sans);cursor:pointer;flex-shrink:0}
 
   .waitwrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px;padding:6px}
@@ -84,15 +86,26 @@
   .q-anim .aopt:nth-child(1){animation-delay:.04s}.q-anim .aopt:nth-child(2){animation-delay:.1s}.q-anim .aopt:nth-child(3){animation-delay:.16s}.q-anim .aopt:nth-child(4){animation-delay:.22s}
   .aopt.sel{animation:pop .3s ease}.aopt.wrong{animation:shake .5s ease}
   #muteBtn{position:fixed;top:10px;right:10px;z-index:50;background:var(--card);border:1px solid var(--line);color:var(--ink3);font:700 11px var(--sans);padding:7px 11px;border-radius:99px;cursor:pointer}
+  .brand{background:linear-gradient(100deg,#fff 30%,#ffd97a 45%,#fff 60%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:brsheen 3.5s linear infinite}
+  .brand em{-webkit-text-fill-color:var(--o1)}
+  @keyframes brsheen{to{background-position:250% 0}}
+  .pickbanner{position:relative}
+  .pickbanner.on::before,.pickbanner.on::after{content:"";position:absolute;inset:-2px;border-radius:18px;border:2px solid currentColor;opacity:0;animation:ringOut 1.6s ease-out infinite}
+  .pickbanner.on::after{animation-delay:.8s}
+  @keyframes ringOut{0%{opacity:.7;transform:scale(1)}100%{opacity:0;transform:scale(1.12)}}
+  body.hot{animation:hotPulse .9s ease infinite}
+  @keyframes hotPulse{0%,100%{box-shadow:inset 0 0 0 0 rgba(248,113,113,0)}50%{box-shadow:inset 0 0 0 6px rgba(248,113,113,.45)}}
+  .miniconf{position:fixed;top:-4vh;border-radius:2px;pointer-events:none;z-index:99;animation:mcFall linear forwards}
+  @keyframes mcFall{to{transform:translateY(110vh) rotate(620deg);opacity:.9}}
 </style>
 </head>
 <body>
 <button id="muteBtn" onclick="toggleMute()">♪ Sound</button>
 <div class="wrap">
   <div class="brand">JMB <em>Quiz Bee</em></div>
-  <div class="sub" id="subline">Podium device</div>
+  <div class="sub" id="subline">Player device</div>
 
-  <!-- SETUP: side (if not from QR) + roster -->
+  <!-- SETUP: side (if not from QR) + your name -->
   <div class="scene active" id="sc-setup">
     <div id="pick-side" style="display:none">
       <label>Room code</label>
@@ -103,10 +116,10 @@
         <button class="sbtn night" id="sb-night" onclick="pickShift('night')"><span id="ic-night"></span>Night</button>
       </div>
     </div>
-    <label id="rosterlbl">Your shift's players — one name per line</label>
-    <textarea id="roster" placeholder="Juan Dela Cruz&#10;Maria Santos&#10;Pedro Reyes&#10;…"></textarea>
-    <div class="hint" id="rostercount">0 players</div>
-    <button class="go" id="goBtn" onclick="doConnect()">Connect podium</button>
+    <label id="rosterlbl">Your name</label>
+    <input id="pname" maxlength="24" placeholder="e.g. Maria S." autocomplete="off">
+    <div class="hint">Everyone answers every question — your shift scores its <b>average</b>. Every answer counts!</div>
+    <button class="go" id="goBtn" onclick="doConnect()">Join the Quiz Bee</button>
     <div class="err" id="err"></div>
   </div>
 
@@ -115,13 +128,14 @@
     <div class="topbar">
       <span class="pill" id="pill"></span>
       <span class="tbmeta" id="tbmeta">—</span>
+      <span class="cdot" id="cdot" title="connection"></span>
       <button class="editbtn" onclick="editRoster()">Edit list</button>
     </div>
 
     <div class="waitwrap" id="ct-wait">
-      <div class="pickbanner" id="pickbanner"><div class="lab" id="pb-lab">Stepping up</div><div class="nm" id="pb-nm"></div></div>
-      <div class="wbig" id="w-title">You're the <span id="w-side"></span> podium ✓</div>
-      <div class="wsub">When your player is called, they step up and answer here. Get ready…</div>
+      <div class="pickbanner on" id="pickbanner" style="display:block"><div class="lab" id="pb-lab">You're in</div><div class="nm" id="pb-nm">🎤</div></div>
+      <div class="wbig" id="w-title">Fighting for <span id="w-side"></span> ✓</div>
+      <div class="wsub">Every question comes to this phone. Answer fast — the whole shift's average decides the score, and the fastest correct answer in the room earns a bonus.</div>
       <div class="pulse">Waiting for the host<span class="d">.</span><span class="d">.</span><span class="d">.</span></div>
     </div>
 
@@ -134,7 +148,7 @@
     </div>
 
     <div class="scene" id="ct-end">
-      <div class="endwrap"><div class="big">That's a wrap! 🏆</div><div class="wsub">Check the TV for the winning shift and the MVP.</div></div>
+      <div class="endwrap"><div class="big">That's a wrap! 🏆</div><div class="wsub">Eyes on the TV — winning shift and MVP incoming…</div></div>
     </div>
   </div>
 </div>
@@ -164,70 +178,100 @@ function sfxTick(){ tone(1400,0,.05,'square',.14); }
 function sfxFanfare(){ [[261.63,0],[329.63,.12],[392,.24],[523.25,.36],[392,.5],[523.25,.62]].forEach(function(p){ tone(p[0],p[1],.4,'triangle',.32); }); }
 function toggleMute(){ _muted=!_muted; el('muteBtn').textContent=_muted?'♪ Muted':'♪ Sound'; el('muteBtn').style.opacity=_muted?'.5':'1'; }
 
-/* State */
-var side=null, ROOM='', supa=null, ch=null, joined=false, roster=[];
+/* State — one phone = ONE PLAYER */
+var side=null, ROOM='', supa=null, ch=null, joined=false, myName='', hbT=null;
+var PID=(function(){ try{ var p=localStorage.getItem('qb_pid'); if(p) return p; p='P'+Math.random().toString(36).slice(2,10); localStorage.setItem('qb_pid',p); return p; }catch(e){ return 'P'+Math.random().toString(36).slice(2,10); } })();
 var curQ=null, myChoice=null, locked=false, qtimer=null, tleft=15, revealedQi=-1, qStart=0;
 
 /* Read room + side from the QR link */
 (function(){ try{ var q=location.search;
   var r=q.match(/room=([A-Za-z0-9]{4})/); if(r) ROOM=r[1].toUpperCase();
-  var s=q.match(/side=(morn|night)/); if(s) side=s[1];
+  var s2=q.match(/side=(morn|night)/); if(s2) side=s2[1];
 }catch(e){} })();
 
 function LT(i){ return String.fromCharCode(65+i); }
 function pickShift(x){ side=x; el('sb-morn').classList.toggle('on',x==='morn'); el('sb-night').classList.toggle('on',x==='night'); }
-function parseRoster(){ return (el('roster').value||'').split(/[\n,]/).map(function(n){return n.trim();}).filter(Boolean); }
-el('roster').addEventListener('input',function(){ var n=parseRoster().length; el('rostercount').textContent=n+' player'+(n===1?'':'s'); });
 
 function initSetup(){
-  if(side){ el('pick-side').style.display='none'; el('subline').textContent=(side==='morn'?'Morning podium':'Night podium'); document.body.classList.add(side); }
+  if(side){ el('pick-side').style.display='none'; el('subline').textContent=(side==='morn'?'Morning player':'Night player'); document.body.classList.add(side); }
   else { el('pick-side').style.display='block'; if(ROOM) el('in-room').value=ROOM; }
+  try{ var nm=localStorage.getItem('qb_name'); if(nm) el('pname').value=nm; }catch(e){}
 }
 initSetup();
 
 function doConnect(){
   if(!side){ side=null; if(el('sb-morn').classList.contains('on')) side='morn'; else if(el('sb-night').classList.contains('on')) side='night'; }
-  if(!side){ el('err').textContent='Pick this device\'s shift first.'; return; }
+  if(!side){ el('err').textContent='Pick your shift first.'; return; }
   if(!ROOM){ ROOM=(el('in-room').value||'').trim().toUpperCase(); }
   if(ROOM.length!==4){ el('err').textContent='Enter the 4-letter room code from the TV.'; return; }
-  roster=parseRoster();
-  if(!roster.length){ el('err').textContent='Add at least one player name.'; return; }
+  myName=(el('pname').value||'').trim();
+  if(!myName){ el('err').textContent='Type your name so the MVP board knows you.'; return; }
+  try{ localStorage.setItem('qb_name',myName); }catch(e){}
   AC(); sfxTap(); el('goBtn').disabled=true; el('err').textContent='Connecting…'; document.body.classList.add(side);
-  if(ch){ enterGame(); return; }     // already connected → just resubmit roster
+  if(ch){ sendJoin(); enterGame(); return; }
   try{ supa=window.supabase.createClient(SUPA_URL,SUPA_KEY);
-    ch=supa.channel('quizbee-'+ROOM,{config:{broadcast:{self:false}}});
-    ch.on('broadcast',{event:'host'},function(){ if(!joined){ joined=true; enterGame(); } });
-    ch.on('broadcast',{event:'pick'},function(m){ onPick(m.payload||{}); });
-    ch.on('broadcast',{event:'q'},function(m){ onQ(m.payload||{}); });
-    ch.on('broadcast',{event:'reveal'},function(m){ onReveal(m.payload||{}); });
-    ch.on('broadcast',{event:'ended'},function(){ onEnded(); });
-    ch.on('broadcast',{event:'reset'},function(){ onReset(); });
-    ch.subscribe(function(st){ if(st==='SUBSCRIBED'){ sendJoin(); sendRoster(); setTimeout(function(){ if(!joined){ joined=true; enterGame(); } },2500); } });
+    buildChannel();
+    if(hbT) clearInterval(hbT); hbT=setInterval(function(){ if(_chOk) bc('hb',{pid:PID}); },10000);
+    wakeLock(); startWatchdog();
+    setTimeout(function(){ if(!joined){ joined=true; enterGame(); } },2500);
   }catch(e){ el('err').textContent='Connection failed. Check your internet and retry.'; el('goBtn').disabled=false; }
 }
 function bc(ev,p){ try{ if(ch) ch.send({type:'broadcast',event:ev,payload:p||{}}); }catch(e){} }
-function sendJoin(){ bc('join',{side:side}); }
-function sendRoster(){ bc('roster',{side:side,names:roster}); }
+function sendJoin(){ bc('pjoin',{pid:PID,side:side,name:myName}); }
 
-function showScene(id){ ['sc-setup','sc-game'].forEach(function(s){ el(s).classList.toggle('active',s===id); }); }
-function showContent(id){ ['ct-wait','ct-q','ct-end'].forEach(function(s){ el(s).style.display=(s===id?'flex':'none'); el(s).classList.toggle('active',s===id); }); }
+/* ══ STAY-ALIVE — nobody vanishes from the game ══
+   Phones sleep, browsers freeze background tabs, wifi blips. Three defenses:
+   1. a screen WAKE LOCK so the phone never sleeps mid-game;
+   2. a connection WATCHDOG that silently rebuilds the channel and re-joins;
+   3. a RESYNC ask — after any recovery the host resends the current question
+      with the remaining time, so the player lands back inside the round. */
+var _wake=null, _chOk=false, _wdT=null;
+function wakeLock(){ try{ if(navigator.wakeLock && navigator.wakeLock.request){
+  navigator.wakeLock.request('screen').then(function(w){ _wake=w; w.addEventListener('release',function(){ _wake=null; }); }).catch(function(){}); } }catch(e){} }
+function connDot(ok){ _chOk=ok; var d=el('cdot'); if(d) d.classList.toggle('off',!ok); }
+function buildChannel(){
+  try{ if(ch){ try{ supa.removeChannel(ch); }catch(e){} ch=null; } }catch(e){}
+  ch=supa.channel('quizbee-'+ROOM,{config:{broadcast:{self:false}}});
+  ch.on('broadcast',{event:'host'},function(){ if(!joined){ joined=true; enterGame(); } });
+  ch.on('broadcast',{event:'q'},function(m){ onQ(m.payload||{}); });
+  ch.on('broadcast',{event:'reveal'},function(m){ onReveal(m.payload||{}); });
+  ch.on('broadcast',{event:'ended'},function(){ onEnded(); });
+  ch.on('broadcast',{event:'reset'},function(){ onReset(); });
+  ch.subscribe(function(st){
+    if(st==='SUBSCRIBED'){ connDot(true); sendJoin(); bc('resync',{pid:PID}); }
+    else if(st==='CLOSED'||st==='CHANNEL_ERROR'||st==='TIMED_OUT'){ connDot(false); }
+  });
+}
+function reconnect(){ if(!supa||!ROOM) return; connDot(false); try{ buildChannel(); }catch(e){} }
+function startWatchdog(){ if(_wdT) clearInterval(_wdT);
+  _wdT=setInterval(function(){ if(!joined) return;
+    if(!navigator.onLine){ connDot(false); return; }
+    var st=null; try{ st=ch&&ch.state; }catch(e){}
+    if(st!=='joined'&&st!=='joining'){ reconnect(); }
+  },8000); }
+document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible' && joined){
+  wakeLock(); try{ AC(); }catch(e){} reconnect(); } });
+window.addEventListener('online',function(){ if(joined) reconnect(); });
+window.addEventListener('pageshow',function(){ if(joined) reconnect(); });
+window.addEventListener('beforeunload',function(e){ if(joined){ e.preventDefault(); e.returnValue='The Quiz Bee is live — leave?'; return e.returnValue; } });
+
+function showScene(id){ ['sc-setup','sc-game'].forEach(function(s2){ el(s2).classList.toggle('active',s2===id); }); }
+function showContent(id){ ['ct-wait','ct-q','ct-end'].forEach(function(s2){ el(s2).style.display=(s2===id?'flex':'none'); el(s2).classList.toggle('active',s2===id); }); }
 
 function enterGame(){ el('goBtn').disabled=false; el('err').textContent='';
   el('pill').className='pill '+side; el('pill').innerHTML=(side==='morn'?SUN:MOON)+(side==='morn'?'Morning':'Night');
-  el('tbmeta').textContent=roster.length+' player'+(roster.length===1?'':'s')+' · Room '+ROOM;
-  el('w-side').textContent=(side==='morn'?'Morning':'Night');
-  showScene('sc-game'); showContent('ct-wait'); }
-function editRoster(){ el('goBtn').textContent='Update & reconnect'; showScene('sc-setup'); }
+  el('tbmeta').textContent=myName+' · Room '+ROOM;
+  el('w-side').textContent=(side==='morn'?'MORNING':'NIGHT');
+  el('pb-nm').textContent='🎤 '+myName;
+  showScene('sc-game'); showContent('ct-wait'); sfxPing(); }
+function editRoster(){ el('goBtn').textContent='Update & rejoin'; showScene('sc-setup'); }
 
-/* who steps up this round */
-function onPick(p){ if(!p) return; var banner=el('pickbanner');
-  if(p.final){ banner.className='pickbanner on'; el('pb-lab').textContent='Final round'; el('pb-nm').textContent='👥 Whole team — decide together!'; }
-  else { var nm=(side==='morn'?p.morn:p.night); if(nm){ banner.className='pickbanner on'; el('pb-lab').textContent='Step up & answer'; el('pb-nm').textContent='🎤 '+nm; } else { banner.className='pickbanner'; } }
-  showContent('ct-wait'); sfxPing(); vib([30,50,90]); }
-
-function onQ(p){ if(!p||p.qi==null) return; curQ=p; myChoice=null; locked=false; revealedQi=-1; qStart=Date.now();
+function onQ(p){ if(!p||p.qi==null) return;
+  if(p.rsfor && p.rsfor!==PID) return;                        // a resync addressed to someone else
+  if(curQ && curQ.qi===p.qi && (locked||myChoice!=null||revealedQi===p.qi)) return;   // already played this one
+  curQ=p; myChoice=null; locked=false; revealedQi=-1; qStart=Date.now();
   el('q-tag').textContent=(p.diff?p.diff+' · ':'')+(p.pts||1)+' pt'+((p.pts||1)>1?'s':'')+' · '+(p.tag||'');
-  el('q-who').textContent = p.final ? '👥 Whole team decides' : ((side==='morn'?p.morn:p.night) ? ('🎤 '+(side==='morn'?p.morn:p.night)+' answering') : '');
+  el('q-who').textContent='🎤 '+myName+' — your answer counts!';
   el('q-text').textContent=p.q; el('q-result').textContent=''; el('q-result').className='result';
   var opts=p.o||[];
   el('q-opts').innerHTML=opts.map(function(o,i){ return '<button class="aopt" id="a-'+i+'" onclick="answer('+i+')"><span class="lt">'+LT(i)+'</span><span>'+esc(o)+'</span></button>'; }).join('');
@@ -235,23 +279,27 @@ function onQ(p){ if(!p||p.qi==null) return; curQ=p; myChoice=null; locked=false;
   startT(p.dur||15); }
 function startT(d){ tleft=d; el('q-timer').textContent=tleft; el('q-timer').classList.remove('low'); clearInterval(qtimer);
   qtimer=setInterval(function(){ tleft--; el('q-timer').textContent=Math.max(0,tleft); if(tleft<=5) el('q-timer').classList.add('low');
+    document.body.classList.toggle('hot', tleft<=5 && tleft>0 && !locked);
     if(tleft<=3&&tleft>0){ sfxTick(); vib(25); }
-    if(tleft<=0){ clearInterval(qtimer); lockAll(); if(myChoice==null){ el('q-result').className='result wait'; el('q-result').textContent="Time's up — waiting for reveal…"; } } },1000); }
-function answer(i){ if(locked||!curQ) return; myChoice=i; locked=true; sfxTap(); var t=Date.now()-qStart;
+    if(tleft<=0){ clearInterval(qtimer); lockAll(); document.body.classList.remove('hot'); if(myChoice==null){ el('q-result').className='result wait'; el('q-result').textContent="Time's up — waiting for reveal…"; } } },1000); }
+function answer(i){ if(locked||!curQ) return; myChoice=i; locked=true; sfxTap(); document.body.classList.remove('hot'); var t=Date.now()-qStart;
   for(var k=0;k<(curQ.o||[]).length;k++){ var b=el('a-'+k); if(!b) continue; b.classList.add('lock'); if(k===i) b.classList.add('sel'); else b.classList.add('fade'); }
   el('q-result').className='result wait'; el('q-result').textContent='Locked in ✓  ('+(t/1000).toFixed(1)+'s)';
-  bc('answer',{side:side,qi:curQ.qi,choice:i,t:t}); }
+  bc('answer',{pid:PID,side:side,name:myName,qi:curQ.qi,choice:i,t:t}); }
 function lockAll(){ locked=true; for(var k=0;k<(curQ&&curQ.o?curQ.o.length:0);k++){ var b=el('a-'+k); if(b) b.classList.add('lock'); } }
 
-function onReveal(p){ if(!curQ||p==null||p.qi!==curQ.qi||revealedQi===p.qi) return; revealedQi=p.qi; clearInterval(qtimer); lockAll(); var c=p.correct;
+function onReveal(p){ if(!curQ||p==null||p.qi!==curQ.qi||revealedQi===p.qi) return; revealedQi=p.qi; clearInterval(qtimer); lockAll(); document.body.classList.remove('hot'); var c=p.correct;
   for(var k=0;k<(curQ.o||[]).length;k++){ var b=el('a-'+k); if(!b) continue; b.classList.remove('fade','sel');
     if(k===c) b.classList.add('correct'); else if(k===myChoice) b.classList.add('wrong'); else b.classList.add('fade'); }
-  if(myChoice===c){ sfxCorrect(); el('q-result').className='result win'; el('q-result').textContent='Correct! ✓'; }
+  if(myChoice===c){ sfxCorrect(); el('q-result').className='result win'; el('q-result').textContent='Correct! ✓';
+    var cols=(side==='morn')?['#f9b625','#ffd97a','#fff']:['#8a97ff','#c3caff','#fff'];
+    for(var mc=0;mc<40;mc++){ (function(mc){ setTimeout(function(){ var d=document.createElement('div'); d.className='miniconf';
+      d.style.left=(Math.random()*100)+'vw'; d.style.width='8px'; d.style.height='13px'; d.style.background=cols[mc%cols.length];
+      d.style.animationDuration=(1.6+Math.random()*1.4)+'s'; document.body.appendChild(d); setTimeout(function(){d.remove();},3200); }, mc*18); })(mc); } }
   else if(myChoice==null){ sfxWrong(); el('q-result').className='result lose'; el('q-result').textContent='No answer'; }
-  else{ sfxWrong(); el('q-result').className='result lose'; el('q-result').textContent='Not this time'; }
-  el('pickbanner').className='pickbanner'; }
+  else{ sfxWrong(); el('q-result').className='result lose'; el('q-result').textContent='Not this time'; } }
 function onEnded(){ clearInterval(qtimer); showContent('ct-end'); sfxFanfare(); vib([40,60,40,60,120]); }
-function onReset(){ curQ=null; myChoice=null; locked=false; el('pickbanner').className='pickbanner'; showContent('ct-wait'); }
+function onReset(){ curQ=null; myChoice=null; locked=false; showContent('ct-wait'); }
 </script>
 </body>
 </html>
