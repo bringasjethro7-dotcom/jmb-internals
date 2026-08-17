@@ -367,8 +367,9 @@ function pupPaint(){
   keys.forEach(function(k){ var s=PUP.q[k]; if(!s) return;
     if(s.state==='up') up++; else if(s.state==='done') done++; else fail++; });
   el.textContent = fail ? (fail+' failed — they will be retried on save')
-                 : up ? ('Uploading '+up+'…  '+done+' ready')
-                 : done ? (done+' screenshot'+(done>1?'s':'')+' ready') : '';
+                 : up ? ('Uploading '+up+'…  '+done+' attached')
+                 : done ? (done+' screenshot'+(done>1?'s':'')+" attached — nothing is counted until you press Save")
+                 : '';
   el.style.color = fail ? '#b91c1c' : (up ? '#b45309' : '#047857');
 }
 /* Returns the Drive ids for the current selection, waiting only on uploads still running and
@@ -437,7 +438,7 @@ function proofThumb(d){
   w.style.cssText='position:relative;width:74px;height:74px;border-radius:9px;overflow:hidden;border:1px solid #e2e8f0;margin:0 8px 8px 0;';
   w.innerHTML='<img src="'+d+'" style="width:100%;height:100%;object-fit:cover;">'+
     '<button style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;line-height:1;">×</button>';
-  w.querySelector('button').onclick=function(){ var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1); w.remove(); };
+  w.querySelector('button').onclick=function(){ var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1); try{ delete PUP.q[pupKey(d)]; pupPaint(); }catch(_pq){} w.remove(); };
   host.appendChild(w);
 }
 async function proofAdd(files){
@@ -633,6 +634,9 @@ function render(){
       }
       out.push('<div class="acct'+(full?' done-today':'')+'">'+
         '<div class="hd"><b>@'+esc(a.handle)+'</b>'+
+          (mCar(r)
+            ?'<span class="ph2" onclick="mCarToggle(\''+a.handle+'\')" title="Click to switch to No Carousel" style="background:#0ea5e914;color:#0369a1;border:1px solid #0ea5e93e;cursor:pointer;">🖼 With Carousel</span>'
+            :'<span class="ph2" onclick="mCarToggle(\''+a.handle+'\')" title="Click to switch to With Carousel" style="background:#64748b14;color:#64748b;border:1px solid #64748b2e;cursor:pointer;">No Carousel</span>')+
           '<span class="ph2" style="background:#8b5cf614;color:#6d28d9;border:1px solid #8b5cf62e">'+esc(a.niche)+'</span>'+
           '<span class="ph2" style="background:#0f141910;color:#0f1419;border:1px solid #0f141926">'+rd+'/'+a.reels+' reels'+(a.trials?(' · '+td+'/'+a.trials+' trials'):'')+'</span>'+
         '</div>'+
@@ -679,6 +683,22 @@ async function mPost(handle, kind, n){
     if(r){ d=await (await fetch(API+'?action=pa_update&id='+encodeURIComponent(r.id)+'&meta='+encodeURIComponent(JSON.stringify(meta))+'&_='+Date.now())).json(); }
     else { d=await (await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(handle)+'&status=active&meta='+encodeURIComponent(JSON.stringify(meta))+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now())).json(); }
     if(d&&d.ok){ toast('+1 '+(kind==='reel'?'Reel':'Trial Reel')+' · @'+handle); load(); }
+    else toast('Could not save.');
+  }catch(e){ toast('Connection error.'); }
+}
+/* CAROUSEL FLAG — a property of the ACCOUNT (does its content plan include carousels?),
+   not of the shift: stored plain in meta.car and never windowed by markOk. */
+function mCar(r){ return !!(((r&&r.meta)||{}).car); }
+async function mCarToggle(handle){
+  var r=mRow(handle);
+  var on=!mCar(r);
+  var meta=Object.assign({}, (r&&r.meta)||{});
+  if(on) meta.car=1; else delete meta.car;
+  try{
+    var d;
+    if(r){ d=await (await fetch(API+'?action=pa_update&id='+encodeURIComponent(r.id)+'&meta='+encodeURIComponent(JSON.stringify(meta))+'&_='+Date.now())).json(); }
+    else { d=await (await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(handle)+'&status=active&meta='+encodeURIComponent(JSON.stringify(meta))+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now())).json(); }
+    if(d&&d.ok){ toast('@'+handle+' → '+(on?'🖼 With Carousel':'No Carousel')); load(); }
     else toast('Could not save.');
   }catch(e){ toast('Connection error.'); }
 }

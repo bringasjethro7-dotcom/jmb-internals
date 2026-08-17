@@ -303,7 +303,7 @@ var PLANS={
  1:_jList(['Scroll 2 minutes','Repost (no follow)','Normal post','Scroll 20 seconds','Repost','Normal post']),
  2:_jList(['Scroll 2 minutes','Change profile name to a random <b>female name</b> (not username)','Follow 1 random page','Repost from homepage','Normal post','Scroll 20 seconds','Repost from homepage','Normal post']),
  3:_jList(['Change profile photo and header (<b>never reuse media</b>)','Scroll 1 minute','Follow 5 target accounts','Repost from homepage','Normal post','Follow 5 target accounts']),
- 4:'<b>25 follows</b> split across opens: 5 / 10 / 10',
+ 4:'<b>25 follows</b> split across opens: 5 / 10 / 10 · <b>3 sessions today</b> — the day completes after Session 3',
  5:'Scroll 1 min · <b>30–45 follows</b> (randomize!) in 4–5 opens: 10 / 10 / 15 / rest',
  6:'<b>35–50 follows daily</b> (randomize total, batches & scroll time; client error → smaller batches)'
 };
@@ -732,7 +732,7 @@ function render(){
         : '<div class="btns">'+sessBtns(r)+'</div>'+
           (done
             ? '<div class="btns"><button disabled style="opacity:.55">✓ Done today</button></div>'
-            : (sessDone(r)>=JN_SESSIONS
+            : (sessDone(r)>=jnSess(r)
                 /* Normally unreachable: session 4 completes the day itself. This stays only for a
                    row whose sessions were all logged before that behaviour existed, so it can
                    still be closed without a fifth screenshot. */
@@ -764,12 +764,15 @@ async function addAcct(){
    so, it is finished when the sessions exist. Session marks are stamped with the shift key, so
    they reset when the shift does — the same rule the day mark already used. */
 var JN_SESSIONS=4;
+/* Sessions required for THIS account's day. Day 4's plan is "25 follows: 5 / 10 / 10" —
+   three opens — so Day 4 completes after SESSION 3. Every later follow day keeps four. */
+function jnSess(r){ return (r && r.day===4) ? 3 : JN_SESSIONS; }
 function sessMark(r,n){ return ((r&&r.meta)||{})['s'+n]; }
 function sessOk(r,n){ return markOk(sessMark(r,n), r.assigned_to||r.created_by); }
-function sessDone(r){ var c=0; for(var i=1;i<=JN_SESSIONS;i++) if(sessOk(r,i)) c++; return c; }
+function sessDone(r){ var c=0; for(var i=1;i<=jnSess(r);i++) if(sessOk(r,i)) c++; return c; }
 function sessBtns(r){
   var out=[];
-  for(var i=1;i<=JN_SESSIONS;i++){
+  for(var i=1;i<=jnSess(r);i++){
     var ok=sessOk(r,i);
     // sessions run in order, so a missed one can't be papered over by doing the next
     var next=(!ok && sessDone(r)===(i-1));
@@ -793,13 +796,14 @@ async function sessDone_(id, n){
     var d=await rr.json();
     if(d&&d.ok){
       r0.meta=m;
-      var left=JN_SESSIONS-sessDone(r0);
+      var left=jnSess(r0)-sessDone(r0);
       if(left>0){
         toast('Session '+n+' logged · '+left+' to go.');
         load();
       } else {
-        /* Session 4 IS the end of the day. Completing it advances the day and counts the
-           output straight away — no extra button, no fifth screenshot. */
+        /* The FINAL session (3 on Day 4, 4 on later days) IS the end of the day. Completing
+           it advances the day and counts the output straight away — no extra button, no
+           extra screenshot. */
         toast('Session '+n+' logged · finishing day '+r0.day+'…');
         await dayDone(id, r0.day, true);
       }
@@ -810,7 +814,7 @@ async function dayDone(id, day, noProof){
   var r0=ROWS.filter(function(x){return x.id===id;})[0];
   /* Setup days 1-3 have no sessions to finish — the checklist IS the day. Only the follow phase
      is gated on all four. */
-  if(r0 && r0.day>3 && sessDone(r0)<JN_SESSIONS){ toast('Finish all '+JN_SESSIONS+' sessions first.'); return; }
+  if(r0 && r0.day>3 && sessDone(r0)<jnSess(r0)){ toast('Finish all '+jnSess(r0)+' sessions first.'); return; }
   /* The day still counts ONE output. The four sessions carry the evidence; counting each of
      them as output would quadruple everyone's Project John volume overnight and break every
      comparison against the weeks already recorded.

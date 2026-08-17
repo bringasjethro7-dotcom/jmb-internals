@@ -45,6 +45,8 @@
   .ticks button{flex:1;border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 4px;font-size:11.5px;font-weight:800;cursor:pointer;color:var(--ink2)}
   .ticks button.on{border-color:rgba(16,185,129,.55);color:#0f766e;background:rgba(16,185,129,.1);cursor:default}
   .ticks button.na{opacity:.4;cursor:not-allowed}
+  .ticks button.navl{background:#eef1f5;border-color:#cbd5e1;color:#64748b;cursor:pointer;opacity:.85}
+  .ticks button.navl:hover{opacity:1;border-color:#94a3b8}
   .btns{display:flex;gap:5px;flex-wrap:wrap}
   .btns button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 9px;font-size:10.5px;font-weight:800;cursor:pointer;color:var(--ink2)}
   .btns button.go{border-color:rgba(16,185,129,.5);color:#0f766e;background:rgba(16,185,129,.08)}
@@ -248,7 +250,10 @@ function renderByVA(segs, doneFn, activeFn, amFn){
     // accounts; Content Management VAs own 'cmodel' rows only — counting them against the
     // posting rule left them at 0/0 with an empty bar even on a full shift.
     // Rule 1: an ACTIVE account counts ONCE when its unlock tagging is complete for the shift.
-    var actRows=rows.filter(function(r){ return ['active','warmup'].indexOf(String(r.status||'').toLowerCase())>=0; });
+    // Warm-up accounts are EXCLUDED here — an account in warm-up isn't posting yet, so it
+    // belongs only to the 🔥 Warming lane below. Counting it here inflated the Posting
+    // denominator (the "0/27" complaint) with accounts that had nothing to post.
+    var actRows=rows.filter(function(r){ return String(r.status||'').toLowerCase()==='active'; });
     var tagged=actRows.filter(function(r){ return fullDone(r); }).length;
     // Rule 3: UNIQUE models updated this shift — repeat updates on the same model don't add.
     var cmRows=rows.filter(function(r){ return String(r.status||'').toLowerCase()==='cmodel'; });
@@ -781,7 +786,35 @@ async function cmSet(nm, k){
     toast('Connection error.');
   }
 }
-function fullDone(r){ var t=T(r); return t.s && t.f && (!isK(r) || t.rl); }
+/* Per-account CONTENT AVAILABILITY — meta.na = {s:1,f:1,rl:1} marks "nothing to post" for
+   that type. An unavailable type can't be expected, so it drops out of fullDone entirely. */
+function NA(r){ return (r.meta&&r.meta.na)||{}; }
+function fullDone(r){ var t=T(r), na=NA(r);
+  var needS=!na.s, needF=!na.f, needR=isK(r)&&!na.rl;
+  if(!needS && !needF && !needR) return false;              // nothing available ≠ fully posted
+  return (!needS||t.s) && (!needF||t.f) && (!needR||t.rl); }
+async function toggleNA(id, key){
+  var r=row(id); if(!r) return;
+  var na=Object.assign({}, NA(r));
+  var names={s:'Story', f:'Feed Post', rl:'Reel'};
+  if(na[key]){ delete na[key]; }
+  else {
+    if(!confirm('Mark '+names[key]+' on @'+r.handle+' as NOT AVAILABLE?\n\nIt will stop being expected for this account until you toggle it back.')) return;
+    na[key]=1;
+  }
+  var meta=Object.assign({}, r.meta||{}, {na:na});
+  var d=await saveMeta(r, meta);
+  if(d&&d.ok){ toast(na[key]?(names[key]+' marked not available 🔒'):(names[key]+' available again ✓')); load(); }
+  else toast('Could not save.');
+}
+/* One pill, two jobs: an open pill still runs the normal tick (posted + proof) — or, if
+   there was nothing to post, flips to Not available. A locked pill flips back on click. */
+function pillClick(id, key){
+  var r=row(id); if(!r) return;
+  var names={s:'Story', f:'Feed', rl:'Reel'};
+  if(confirm(names[key]+' on @'+r.handle+':\n\nOK — I posted it (counts as output, needs a screenshot)\nCancel — mark it "Not available" instead')){ tick(id, key); }
+  else { toggleNA(id, key); }
+}
 /* ══ TAG PROGRESS (Auditing + Content Management tabs) ══
    Counts Story / Feed / Reel tags across ACTIVE accounts only. Suspended, on hold,
    flagged/resting and reserved accounts are excluded from BOTH sides of the fraction, so the
@@ -847,10 +880,11 @@ function render(){
   if(VIEW==='audit'){ renderAudit(); renderTagProgress('tagprog-audit'); return; }
   if(VIEW==='cm'){ renderCM(); renderTagProgress('tagprog-cm'); return; }
   var act=ROWS.filter(function(r){return ['active','warmup'].indexOf(r.status)>=0;});
-  var done=act.filter(fullDone).length;
+  var postRows=ROWS.filter(function(r){return r.status==='active';});      // posting fraction = active only
+  var done=postRows.filter(fullDone).length;
   $('stats').innerHTML=
     '<div class="stat"><b>'+act.length+'</b><span>Accounts</span></div>'+
-    '<div class="stat"><b style="color:#0f766e">'+done+' / '+act.length+'</b><span>Fully posted today</span></div>'+
+    '<div class="stat"><b style="color:#0f766e">'+done+' / '+postRows.length+'</b><span>Fully posted today</span></div>'+
     '<div class="stat"><b style="color:#f59e0b">'+ROWS.filter(function(r){return r.status==='warmup';}).length+'</b><span>Warming up</span></div>'+
     '<div class="stat"><b style="color:#c2410c">'+ROWS.filter(function(r){return r.status==='flagged'||r.status==='rest';}).length+'</b><span>Flagged / resting</span></div>'+
     '<div class="stat"><b style="color:#1d4ed8">'+ROWS.filter(function(r){return r.status==='onhold';}).length+'</b><span>⏸ On hold</span></div>'+
@@ -900,13 +934,23 @@ function render(){
     menu.push('---'); menu.push(['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']);
     out.push('<div class="acct'+(fullDone(r)?' done':'')+'"><div class="hd"><b>'+esc(r.handle)+'</b>'+kchip+kmenu(menu)+'</div>'+who+
       segType(r)+
-      '<div class="ticks">'+
-        '<button class="'+(t.s?'on':'')+'" '+(t.s?'disabled':'')+' onclick="tick(\''+r.id+'\',\'s\')">'+(t.s?'✓ ':'')+'Story</button>'+
-        '<button class="'+(t.f?'on':'')+'" '+(t.f?'disabled':'')+' onclick="tick(\''+r.id+'\',\'f\')">'+(t.f?'✓ ':'')+'Feed</button>'+
-        (isK(r)?('<button class="'+(t.rl?'on':'')+'" '+(t.rl?'disabled':'')+' onclick="tick(\''+r.id+'\',\'rl\')">'+(t.rl?'✓ ':'')+'Reel</button>')
-               :'<button class="na" disabled title="Unlocks at 1,000 followers">Reel 🔒</button>')+
-      '</div></div>');
+      (function(){
+        var na=NA(r);
+        function pill(key, lbl, naLbl){
+          if(t[key]) return '<button class="on" disabled>✓ '+lbl+'</button>';
+          if(na[key]) return '<button class="navl" onclick="toggleNA(\''+r.id+'\',\''+key+'\')" title="Click to make it available again">🔒 '+naLbl+'</button>';
+          return '<button onclick="pillClick(\''+r.id+'\',\''+key+'\')">'+lbl+'</button>';
+        }
+        return '<div class="ticks">'+
+          pill('s','Story','No Story Available')+
+          pill('f','Feed','No Post Available')+
+          (isK(r)?pill('rl','Reel','Reel')
+                 :'<button class="na" disabled title="Unlocks at 1,000 followers">Reel 🔒</button>')+
+        '</div>';
+      })()+
+      '</div>');
   });
+  out.push('<div class="muted" style="margin-top:10px;font-size:11.5px;">💡 Click any pill to toggle it between Available and Not available.</div>');
   $('grid').innerHTML=out.join('');
 }
 async function addAcct(){
