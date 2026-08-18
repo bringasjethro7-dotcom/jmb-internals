@@ -760,15 +760,27 @@ async function addAcct(){
    image and QA had one session to sample per account. Four sessions each carrying their own
    proof gives the auto-check four times the evidence and reflects how the work is actually
    done — spread across the shift, not in one sitting.
-   Day done stays locked until all four are in: an account is not finished because someone says
-   so, it is finished when the sessions exist. Session marks are stamped with the shift key, so
-   they reset when the shift does — the same rule the day mark already used. */
+   Day done stays locked until all required sessions are in: an account is not finished because
+   someone says so, it is finished when the sessions exist. Session marks PERSIST across days
+   until the day completes (see sessOk) — only the day-done mark itself resets per shift. */
 var JN_SESSIONS=4;
 /* Sessions required for THIS account's day. Day 4's plan is "25 follows: 5 / 10 / 10" —
    three opens — so Day 4 completes after SESSION 3. Every later follow day keeps four. */
 function jnSess(r){ return (r && r.day===4) ? 3 : JN_SESSIONS; }
 function sessMark(r,n){ return ((r&&r.meta)||{})['s'+n]; }
-function sessOk(r,n){ return markOk(sessMark(r,n), r.assigned_to||r.created_by); }
+/* SESSIONS DO NOT RESET DAILY (unlike every other lane in this tool). A session mark stays
+   valid across days until the account COMPLETES its required sessions — finishing the day
+   clears the marks, and only then does the account start over at Session 1.
+   Legacy guard: before this change, dayDone never cleared marks, so completed days left
+   stale s-marks behind. A mark dated on-or-before the last day-completion belongs to that
+   finished day and is ignored. This also auto-restores yesterday's partial progress: an
+   account that logged S1 on Aug 17 opens on S2 today, exactly where it left off. */
+function sessOk(r,n){
+  var m=sessMark(r,n); if(!m) return false;
+  var last=((r&&r.meta)||{}).last;
+  if(last && String(m).slice(0,10)<=String(last).slice(0,10)) return false;   // consumed by a completed day
+  return true;
+}
 function sessDone(r){ var c=0; for(var i=1;i<=jnSess(r);i++) if(sessOk(r,i)) c++; return c; }
 function sessBtns(r){
   var out=[];
@@ -826,7 +838,10 @@ async function dayDone(id, day, noProof){
 
   try{
     var r0=ROWS.filter(function(x){return x.id===id;})[0];
-    var meta=JSON.stringify(Object.assign({}, (r0&&r0.meta)||{}, {last:vaKeyOf(USER.id)}));
+    /* The finished day consumes its sessions — clear the marks so the next day starts at S1. */
+    var _m=Object.assign({}, (r0&&r0.meta)||{}, {last:vaKeyOf(USER.id)});
+    for(var _si=1;_si<=JN_SESSIONS;_si++) delete _m['s'+_si];
+    var meta=JSON.stringify(_m);
     var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&day='+(day+1)+'&meta='+encodeURIComponent(meta)+'&_='+Date.now());
     var d=await r.json();
     if(d&&d.ok){ toast('Day '+day+' complete · +1 '+(day<=3?'Setup Day':'Follow Day')+' ✅'); load(); }
