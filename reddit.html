@@ -235,8 +235,107 @@ function cvAssignAll(){
   if(!ids.length){ toast('Nothing left to assign for this VA.'); return; }
   setCover(ids, to);
 }
+/* ── PERMANENT TRANSFER (boss-only) ──
+   For when a VA leaves the project for good. Unlike shift cover, ownership itself moves:
+   assigned_to is rewritten on the sheet through the same pa_update the phase buttons use, an
+   audit tag is appended to the row's notes, and any live cover on the moved rows is lifted so
+   they land on the new owner's board immediately. EVERYTHING transfers, banned rows included —
+   the departing VA is gone, so even dead accounts need a new person answerable for them.
+   The receiver list is the full employee directory, not just current holders: a brand-new VA
+   with zero accounts is exactly who these usually go to. */
+var CV_MODE='cover';
+function cvMode(m){ CV_MODE=m; CV_FROM=''; renderTabs(); }
+function modeTabs(){
+  function t(v,l){ var on=(CV_MODE===v);
+    return '<button onclick="cvMode(\''+v+'\')" style="border:1px solid '+(on?'#0f766e':'var(--line)')+';background:'+(on?'rgba(16,185,129,.12)':'var(--card)')+';color:'+(on?'#0f766e':'var(--ink2)')+';border-radius:100px;padding:5px 12px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">'+l+'</button>'; }
+  return '<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">'+t('cover','🔁 Cover — today only')+t('xfer','📌 Transfer — permanent')+'</div>';
+}
+function xfSelected(){ var out=[]; document.querySelectorAll('.xfchk:checked').forEach(function(x){ out.push(x.value); }); return out; }
+function xfGo(){ if(!CV_FROM){ toast('Pick the departing VA first.'); return; } paTransfer(xfSelected(), document.getElementById('xf-to').value); }
+function xfGoAll(){
+  if(!CV_FROM){ toast('Pick the departing VA first.'); return; }
+  var to=document.getElementById('xf-to').value;
+  var ids=ROWS.filter(function(r){ return ownerOf(r)===CV_FROM; }).map(function(r){ return r.id; });
+  if(!ids.length){ toast('No accounts left for this VA.'); return; }
+  paTransfer(ids, to);
+}
+async function paTransfer(ids, to){
+  to=String(to||'').toLowerCase();
+  if(!ids||!ids.length){ toast('Pick at least one account.'); return; }
+  if(!to){ toast('Pick who receives the accounts.'); return; }
+  if(to===CV_FROM){ toast('That is the same VA.'); return; }
+  if(!confirm('PERMANENTLY transfer '+ids.length+' account(s)\n\n'+vaName(CV_FROM)+' → '+vaName(to)+'\n\nOwnership moves for good — this is NOT a one-day cover. Outputs already counted are not affected. Continue?')) return;
+  var ok=0, fail=0;
+  /* Small batches: one pa_update per row, five in flight, so a 50-account resignation is ~10
+     quick waves instead of one giant burst the Apps Script quota can drop halfway through. */
+  for(var i=0;i<ids.length;i+=5){
+    await Promise.all(ids.slice(i,i+5).map(async function(id){
+      try{
+        var r0=row(id)||{};
+        var note=String(r0.notes||''); note=(note?note+' ':'')+'[transferred '+(ownerOf(r0)||'?')+' → '+to+' '+today()+']';
+        var d=await (await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)
+          +'&assigned_to='+encodeURIComponent(to)
+          +'&notes='+encodeURIComponent(note)+'&_='+Date.now())).json();
+        if(d&&d.ok){ ok++; r0.assigned_to=to; r0.notes=note; } else fail++;
+      }catch(e){ fail++; }
+    }));
+  }
+  /* A live cover on a moved row would keep routing today's work by the OLD arrangement — lift it. */
+  var covered=ids.filter(function(id){ return COVER[String(id)]; });
+  if(covered.length){ try{
+    var d2=await (await fetch(API+'?action=cover_set&project='+encodeURIComponent(PROJECT)
+      +'&ids='+encodeURIComponent(covered.join(','))+'&to=&by='+encodeURIComponent(USER.id)+'&_='+Date.now())).json();
+    if(d2&&d2.ok) COVER=d2.cover||{};
+  }catch(e){} }
+  toast(fail? (ok+' transferred · '+fail+' FAILED — reload and retry those')
+            : (ok+' account(s) now permanently with '+vaName(to)));
+  render();
+}
+function xferBar(){
+  var ids={}; ROWS.forEach(function(r){ var o=ownerOf(r); if(o) ids[o]=1; });
+  var holders=Object.keys(ids).sort(function(a,b){ return vaName(a).localeCompare(vaName(b)); });
+  var dir={}; Object.keys(NAMES||{}).forEach(function(k){ dir[k]=1; }); holders.forEach(function(k){ dir[k]=1; });
+  var rcv=Object.keys(dir).sort(function(a,b){ return vaName(a).localeCompare(vaName(b)); });
+  var opt=function(ks,sel){ return '<option value="">— pick —</option>'+ks.map(function(k){
+    return '<option value="'+esc(k)+'"'+(sel===k?' selected':'')+'>'+esc(vaName(k))+'</option>'; }).join(''); };
+  var mine=CV_FROM?ROWS.filter(function(r){ return ownerOf(r)===CV_FROM; }):[];
+  var picker='';
+  if(CV_FROM){
+    picker='<div style="margin-top:8px;font-size:11.5px;color:var(--ink3);font-weight:800;">'+
+        mine.length+' account'+(mine.length===1?'':'s')+' to move — all pre-ticked, banned included; untick anything staying behind</div>'+
+      '<div style="margin-top:6px;max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;">'+
+      (mine.length? mine.map(function(r){
+        var st=String(r.status||'').toLowerCase();
+        var dead=(st==='banned'||st==='tempban');
+        return '<label style="display:flex;gap:8px;align-items:center;padding:3px 2px;font-size:12px;'+(dead?'opacity:.6;':'')+'">'+
+          '<input type="checkbox" class="xfchk" value="'+esc(r.id)+'" checked>'+
+          '<span style="flex:1;">'+esc(r.handle)+'</span>'+
+          '<span style="color:var(--ink3);font-size:11px;">'+esc((phaseMeta(r.status)||{}).n||r.status||'')+'</span>'+
+        '</label>'; }).join('')
+        : '<div class="muted" style="font-size:12px;">No accounts for this VA.</div>')+
+      '</div>'+
+      (mine.length?('<div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap;">'+
+        '<button onclick="document.querySelectorAll(\'.xfchk\').forEach(function(x){x.checked=true;})" style="border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 11px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Tick all</button>'+
+        '<button onclick="document.querySelectorAll(\'.xfchk\').forEach(function(x){x.checked=false;})" style="border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 11px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Clear</button>'+
+        '<button onclick="xfGo()" style="border:1px solid #9a3412;background:#9a3412;color:#fff;border-radius:9px;padding:6px 13px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Transfer ticked → permanent</button>'+
+      '</div>'):'');
+  }
+  return '<div style="background:var(--card);border:1px solid #fdba74;border-radius:12px;padding:10px 12px;margin:0 0 12px;">'+
+    modeTabs()+
+    '<div style="font:800 12px \'Manrope\',sans-serif;color:#9a3412;margin-bottom:7px;">📌 Permanent transfer — for a VA leaving the project. Ownership moves for good, output history stays where it was earned.</div>'+
+    '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'+
+      '<span style="font-size:11.5px;color:var(--ink3);font-weight:800;">Departing VA</span>'+
+      '<select onchange="cvSetFrom(this.value)" style="padding:7px 9px;border:1px solid var(--line);border-radius:9px;font:700 12px inherit;">'+opt(holders,CV_FROM)+'</select>'+
+      '<span style="font-size:11.5px;color:var(--ink3);font-weight:800;">transfer to</span>'+
+      '<select id="xf-to" style="padding:7px 9px;border:1px solid var(--line);border-radius:9px;font:700 12px inherit;">'+opt(rcv,'')+'</select>'+
+      '<button onclick="xfGoAll()" style="border:1px solid #9a3412;background:var(--card);color:#9a3412;border-radius:9px;padding:6px 11px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Transfer ALL</button>'+
+    '</div>'+
+    picker+
+  '</div>';
+}
 function coverBar(){
   if(!isBoss()) return '';
+  if(CV_MODE==='xfer') return xferBar();
   var ids={}; ROWS.forEach(function(r){ var o=ownerOf(r); if(o) ids[o]=1; });
   var list=Object.keys(ids).sort(function(a,b){ return vaName(a).localeCompare(vaName(b)); });
   var opt=function(sel){ return '<option value="">— pick —</option>'+list.map(function(k){
@@ -304,6 +403,7 @@ function coverBar(){
   }
 
   return '<div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 12px;">'+
+    modeTabs()+
     '<div style="font:800 12px \'Manrope\',sans-serif;color:var(--ink2);margin-bottom:7px;">🔁 Shift cover — today only · split accounts across as many VAs as you need</div>'+
     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'+
       '<span style="font-size:11.5px;color:var(--ink3);font-weight:800;">Absent VA</span>'+
