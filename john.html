@@ -48,6 +48,8 @@
   .sect span{font-size:11px;color:var(--ink3);font-weight:800}
   .sect i{flex:1;height:1px;background:var(--line)}
   .ph2{font-size:10px;font-weight:900;border-radius:100px;padding:3px 9px;white-space:nowrap}
+  .xbtn{border:1px solid #0f141926;background:#0f1419;color:#fff;border-radius:8px;padding:2px 9px;font:800 11px 'Manrope',sans-serif;cursor:pointer;line-height:1.5;flex:none}
+  .xbtn:hover{background:#26303a}
   .meta1{font-size:10.5px;color:var(--ink3);margin-top:4px}
   .planbox{margin:8px 0 2px}
   .planbox summary{list-style:none;cursor:pointer;font-size:11px;font-weight:800;color:var(--ink3)}
@@ -717,8 +719,8 @@ function render(){
     var g=grpJ(r); if(g!==lastG){ out.push('<div class="sect"><b>'+g+'</b><span>'+gcnt[g]+'</span><i></i></div>'); lastG=g; }
     var done=markOk(r.meta&&r.meta.last, r.assigned_to||r.created_by);
     var who='<div class="meta1">'+assignSel(r)+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+'</div>';
-    if(r.status==='suspended'){ out.push('<div class="acct susp"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#ef444414;color:#b91c1c;border:1px solid #ef44442e">⛔ Suspended</span>'+kmenu([['↩ Reinstate',"setStatus('"+r.id+"','active')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+'</div>'); return; }
-    out.push('<div class="acct'+(done?' done-today':'')+'"><div class="hd"><b>'+esc(r.handle)+'</b><span class="ph2" style="background:#0f141910;color:#0f1419;border:1px solid #0f141926">Day '+r.day+'</span>'+kmenu([['⛔ Suspended',"setStatus('"+r.id+"','suspended')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+
+    if(r.status==='suspended'){ out.push('<div class="acct susp"><div class="hd"><b>'+esc(r.handle)+'</b><button class="xbtn" onclick="openX(\''+esc(r.id)+'\')" title="Open this account on X — check it live">𝕏</button><span class="ph2" style="background:#ef444414;color:#b91c1c;border:1px solid #ef44442e">⛔ Suspended</span>'+kmenu([['↩ Reinstate',"setStatus('"+r.id+"','active')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+'</div>'); return; }
+    out.push('<div class="acct'+(done?' done-today':'')+'"><div class="hd"><b>'+esc(r.handle)+'</b><button class="xbtn" onclick="openX(\''+esc(r.id)+'\')" title="Open this account on X — check it live">𝕏</button><span class="ph2" style="background:#0f141910;color:#0f1419;border:1px solid #0f141926">Day '+r.day+'</span>'+kmenu([['⛔ Suspended',"setStatus('"+r.id+"','suspended')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+
       '<details class="planbox"'+(done?'':' open')+'><summary>📋 Day '+r.day+' plan</summary><div>'+planFor(r.day)+'</div></details>'+
       /* SETUP (days 1-3) has no sessions — it is a checklist you work once, so a single action
          completes the day. FOLLOW phase (day 4+) keeps the four sessions, and the day-done button
@@ -741,6 +743,22 @@ function render(){
       '</div>');
   });
   $('grid').innerHTML=out.join('');
+}
+/* ── OPEN ON X — on-platform health check ──
+   X refuses to render inside an iframe (frame-ancestors), so a true in-page side panel would
+   just show a blank box. Instead ONE named popup is parked on the right side of the screen and
+   every 𝕏 click retargets it: board on the left, live X profile on the right, and clicking
+   through accounts swaps the same window instead of spawning one per account. */
+function openX(id){
+  var r=(ROWS||[]).filter(function(x){ return String(x.id)===String(id); })[0];
+  var h=String((r&&r.handle)||'').trim().replace(/^@+/,'').replace(/\s.*$/,'');
+  if(!h){ toast('No handle on this row.'); return; }
+  var W=Math.max(430, Math.floor(screen.width*0.42));
+  var H=Math.floor((screen.availHeight||screen.height)*0.92);
+  var L=Math.max(0, screen.width-W-8), T=Math.max(0, Math.floor(((screen.availHeight||screen.height)-H)/2));
+  var url='https://x.com/'+encodeURIComponent(h);
+  var w=window.open(url,'jn_xside','width='+W+',height='+H+',left='+L+',top='+T);
+  if(w && w.focus) w.focus(); else if(!w) window.open(url,'_blank');   // popup blocked → plain tab
 }
 async function addAcct(){
   var u=$('jn-user').value.trim(); if(!u){ toast('Type the account handle.'); return; }
