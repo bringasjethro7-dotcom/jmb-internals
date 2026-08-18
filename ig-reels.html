@@ -789,7 +789,24 @@ async function cmSet(nm, k){
 /* Per-account CONTENT AVAILABILITY — meta.na = {s:1,f:1,rl:1} marks "nothing to post" for
    that type. An unavailable type can't be expected, so it drops out of fullDone entirely. */
 function NA(r){ return (r.meta&&r.meta.na)||{}; }
+/* HAMTO'S INNOVATION (90/100, implemented) — "No Content Available" for the DAY. When there is
+   simply nothing to post for an account, the VA marks it: the account is skipped for today,
+   counts toward the progress bar as checked (they DID check it), and the mark resets with the
+   shift, so tomorrow the account is expected again. No output is counted — nothing was posted. */
+function ncToday(r){ return markOk(r.meta&&r.meta.nc, r.assigned_to||r.created_by); }
+async function ncMark(id){
+  var r=row(id); if(!r) return;
+  if(!confirm('Mark @'+r.handle+' as NO CONTENT AVAILABLE for today?\n\nIt counts as checked on your progress bar and resets tomorrow. No output is counted.')) return;
+  var meta=Object.assign({}, r.meta||{}, {nc:vaKeyOf(USER.id)});
+  var d=await saveMeta(r, meta); if(d&&d.ok){ toast('@'+r.handle+' — no content today, counted as checked.'); load(); } else toast('Could not save.');
+}
+async function ncUnmark(id){
+  var r=row(id); if(!r) return;
+  var meta=Object.assign({}, r.meta||{}); delete meta.nc;
+  var d=await saveMeta(r, meta); if(d&&d.ok){ toast('@'+r.handle+' — back to normal posting today.'); load(); } else toast('Could not save.');
+}
 function fullDone(r){ var t=T(r), na=NA(r);
+  if(ncToday(r)) return true;                               // no content today = checked, not missed
   var needS=!na.s, needF=!na.f, needR=isK(r)&&!na.rl;
   if(!needS && !needF && !needR) return false;              // nothing available ≠ fully posted
   return (!needS||t.s) && (!needF||t.f) && (!needR||t.rl); }
@@ -926,13 +943,19 @@ function render(){
     if(r.status==='warmup'){ out.push('<div class="acct"><div class="hd"><b>'+esc(r.handle)+'</b>'+kchip+'<span class="ph2" style="background:#f59e0b14;color:#b45309;border:1px solid #f59e0b2e">Day '+(r.day||1)+'/14</span>'+kmenu([['⛔ Suspended',"setStatus('"+r.id+"','suspended')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+
       '<details class="planbox" open><summary>📋 Warm-up plan</summary><div>'+wuPlan(r.day||1)+'</div></details>'+
       '<div class="btns"><button class="go" onclick="wuDone(\''+r.id+'\','+(r.day||1)+')">✓ Warm-up day '+(r.day||1)+' done</button></div></div>'); return; }
-    var menu=[]; if(!isK(r)) menu.push(['🎉 Hit 1,000 followers',"mark1k('"+r.id+"')"]);
+    var menu=[];
+    menu.push(ncToday(r)?['↩ Content available again — resume today',"ncUnmark('"+r.id+"')"]
+                        :['🚫 No Content Available (today)',"ncMark('"+r.id+"')"]);
+    if(!isK(r)) menu.push(['🎉 Hit 1,000 followers',"mark1k('"+r.id+"')"]);
     menu.push(['⚑ Flagged',"setStatus('"+r.id+"','flagged')"]);
     menu.push(['⏸ On Hold',"setStatus('"+r.id+"','onhold')"]);
     menu.push(['🔖 Reserved',"setStatus('"+r.id+"','reserved')"]);
     menu.push(['⛔ Suspended',"setStatus('"+r.id+"','suspended')"]);
     menu.push('---'); menu.push(['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']);
-    out.push('<div class="acct'+(fullDone(r)?' done':'')+'"><div class="hd"><b>'+esc(r.handle)+'</b>'+kchip+kmenu(menu)+'</div>'+who+
+    out.push('<div class="acct'+(fullDone(r)?' done':'')+'"><div class="hd"><b>'+esc(r.handle)+'</b>'+kchip+
+      (ncToday(r)?'<span class="ph2" style="background:#64748b14;color:#475569;border:1px solid #64748b2e">🚫 No content today</span>':'')+
+      kmenu(menu)+'</div>'+who+
+      (ncToday(r)?'<div class="meta1" style="color:#475569;font-weight:700;">Skipped for today — counted as checked on your bar. Resets next shift.</div>':'')+
       segType(r)+
       (function(){
         var na=NA(r);
