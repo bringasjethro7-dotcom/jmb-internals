@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JMB — Reddit Casey Tool</title>
+<title>JMB — Reddit MeG Agency Tool</title>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@700;800&display=swap" rel="stylesheet">
 <style>
   :root{--bg:#f6f7fb;--card:#fff;--ink:#171a21;--ink2:#5b6470;--ink3:#8a93a3;--line:#e5e8ef;--or:#ff4500;--or2:#c93400;--ok:#10b981;--warn:#f59e0b;--bad:#ef4444;--rec:#0ea5e9;}
@@ -86,14 +86,14 @@
 </head>
 <body>
 <div id="signin">
-  <div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:800"><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:linear-gradient(135deg,#ff4500,#b91c1c);box-shadow:0 0 10px rgba(255,69,0,.5);"></span> JMB <em style="font-style:normal;color:var(--or)">Reddit Casey</em> Tool</div>
+  <div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:800"><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:linear-gradient(135deg,#ff4500,#b91c1c);box-shadow:0 0 10px rgba(255,69,0,.5);"></span> JMB <em style="font-style:normal;color:var(--or)">Reddit MeG</em> Tool</div>
   <div style="font-size:12.5px;color:var(--ink2);margin-top:6px">Sign in with your Employee ID + PIN</div>
   <input id="si-id" placeholder="Employee ID"><input id="si-pin" type="password" placeholder="PIN">
   <button onclick="signIn()" id="si-btn">Sign in</button><div id="si-err"></div>
 </div>
 
 <div class="wrap" id="app" style="display:none">
-  <h1><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:linear-gradient(135deg,#ff4500,#b91c1c);box-shadow:0 0 12px rgba(255,69,0,.5);"></span> JMB <em>Reddit Casey</em> <span style="font-size:12px;color:var(--ink3);font-weight:600" id="who"></span></h1>
+  <h1><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:linear-gradient(135deg,#ff4500,#b91c1c);box-shadow:0 0 12px rgba(255,69,0,.5);"></span> JMB <em>Reddit MeG</em> <span style="font-size:12px;color:var(--ink3);font-weight:600" id="who"></span></h1>
   <div class="sub">Accounts climb the ladder: <b>Creation (4d) → Warming (1d) → Comment Farming (until 50 karma, max check at 7d) → NSFW (client updates) → Day 1 (1d) → Early → +DMs → Medium → Strong → Super Strong</b>. Work each card's session checklist and tick — sessions, posts, and DMs are all <b>counted automatically</b>. Rotate subreddits, captions & photos — never repeat back-to-back.</div>
   <div class="top" id="stats"></div>
   <div class="addbox">
@@ -118,7 +118,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 var API='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
-var PROJECT='Reddit - Casey';
+var PROJECT='Reddit - MeG';
 var USER=null, ROWS=[], NAMES={}, SHIFTOF={}, PHOTOOF={};
 var SI=function(p,w){ return '<svg width="'+(w||14)+'" height="'+(w||14)+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">'+p+'</svg>'; };
 var IC={
@@ -1308,11 +1308,11 @@ async function signIn(){
     catch(_e1){ if(btn) btn.textContent='Still signing in… (server is busy)'; await new Promise(function(r){setTimeout(r,2000);}); d=await _siFetch(); }
     if(!d||d.error){ _done(); err.style.display='block'; err.textContent=(d&&d.error==='WRONG_PIN')?'Incorrect PIN.':'Employee not found.'; return; }
     USER={ id:d.employee_id, name:d.full_name||d.employee_id };
-    try{ sessionStorage.setItem('redditcasey_user', JSON.stringify(USER)); }catch(e){}
+    try{ sessionStorage.setItem('redditmeg_user', JSON.stringify(USER)); }catch(e){}
     _done(); start();
   }catch(e){ _done(); err.style.display='block'; err.textContent='Server is busy right now — wait a minute and try again.'; }
 }
-function start(){ try{ fetch(API+'?action=tool_used&employee_id='+encodeURIComponent(USER.id)+'&tool=reddit-casey&_='+Date.now()); }catch(_tu){} $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name;
+function start(){ try{ fetch(API+'?action=tool_used&employee_id='+encodeURIComponent(USER.id)+'&tool=reddit-meg&_='+Date.now()); }catch(_tu){} $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name;
   try{ $('ra-cdate').value=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){}
   loadNames();
   var ps=$('ra-phase'); if(ps && !ps.options.length){ ps.innerHTML=PH.map(function(p){ return '<option value="'+p.k+'">'+p.n+'</option>'; }).join(''); }
@@ -1474,9 +1474,13 @@ async function addAcct(){
     if(d&&d.ok){
       $('ra-user').value=''; if($('ra-new')) $('ra-new').checked=false;
       if(isNew){
-        /* NO CREDIT ON ADD — see reddit.html. Counting at add time both skipped the screenshot
-           gate and rendered the card into the disabled "Done — counted" state, making the 📷
-           button unreachable. Proof first, then DONE counts it. */
+        /* NO CREDIT ON ADD. This used to bump the count and stamp cdone the moment the
+           username was typed, which counted an output nobody had evidenced and rendered the
+           card straight into the disabled "Done — counted" state — so the 📷 proof gate was
+           never reachable and creations could be counted by typing a name.
+           The account now lands unproven: attach the screenshot of the created account, then
+           DONE counts it through proofOpen(). Same-day creations are not lost — the card sits
+           in Newly Created until the VA finishes it. */
         toast('Added to Newly Created · screenshot the account, then hit DONE to count it');
       } else {
         toast('Added → '+(phase(phk)||{n:phk}).n+' (existing account seeded)');
@@ -1542,6 +1546,9 @@ function sessBtns(r, phk, gainTxt){
 async function newDone(id){
   var r0=row(id); if(!r0) return;
   if(r0.meta&&r0.meta.cdone){ toast('Already counted.'); return; }
+  // PROOF FIRST. These accounts are private, so the screenshot is the only thing a reviewer
+  // can ever check. The output is counted inside the callback — if the upload fails, nothing
+  // is counted, and the VA is told so rather than silently losing the evidence.
   var banked=SHOTTRAY['c:'+id]||[];
   if(!banked.length){ toast('Screenshot the created account first — tap 📷.'); return; }
   proofOpen({ task:'Reddit Account Creation', account:(r0.handle||r0.name||''), outputs:1, preload:banked, key:'c:'+id },
@@ -1599,9 +1606,11 @@ async function sessionDone(id, phk, n){
   var p=phase(phk);
   var r0=row(id)||{};
   var acct=(r0.handle||r0.name||'');
+  // belt and braces — the button is locked, but never trust the button alone
   if(!(SHOT.trayFor?SHOT.trayFor(id,phk,n):[]).length){
     toast('Attach proof first — tap 📷 to capture your window.'); return;
   }
+  // Comment farming (warm-up) and posting both need evidence — same reason as creation.
   if(phk==='recovery'){
     proofOpen({ task:'Reddit Warmup', account:acct, outputs:1, preload:(SHOT.trayFor?SHOT.trayFor(id,phk,n):[]), key:'s:'+id+':'+phk+':'+n },
       async function(){ if(SHOT.clearTray) SHOT.clearTray(id,phk,n); await bump('Reddit Warmup',1); await stampSession(id,n);
@@ -1678,7 +1687,7 @@ async function setPhase(id, st){
     var d=await r.json(); if(d&&d.ok){ toast('Updated.'); load(); } else toast('Could not update.');
   }catch(e){ toast('Connection error.'); }
 }
-(function(){ var u=null; try{ u=JSON.parse(sessionStorage.getItem('redditcasey_user')||'null'); }catch(e){}
+(function(){ var u=null; try{ u=JSON.parse(sessionStorage.getItem('redditmeg_user')||'null'); }catch(e){}
   if(u&&u.id){ USER=u; start(); } else { $('si-id').focus(); $('si-pin').addEventListener('keydown',function(e){ if(e.key==='Enter') signIn(); }); } })();
 </script>
 

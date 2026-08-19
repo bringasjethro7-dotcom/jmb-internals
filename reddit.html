@@ -251,6 +251,8 @@ function modeTabs(){
   return '<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;">'+t('cover','🔁 Cover — today only')+t('xfer','📌 Transfer — permanent')+'</div>';
 }
 function xfSelected(){ var out=[]; document.querySelectorAll('.xfchk:checked').forEach(function(x){ out.push(x.value); }); return out; }
+function xfGroup(st,on){ document.querySelectorAll('.xfchk[data-st="'+st+'"]').forEach(function(x){ x.checked=on; }); xfCount(); }
+function xfCount(){ var el=document.getElementById('xf-cnt'); if(el) el.textContent=xfSelected().length+' ticked'; }
 function xfGo(){ if(!CV_FROM){ toast('Pick the departing VA first.'); return; } paTransfer(xfSelected(), document.getElementById('xf-to').value); }
 function xfGoAll(){
   if(!CV_FROM){ toast('Pick the departing VA first.'); return; }
@@ -301,23 +303,37 @@ function xferBar(){
   var mine=CV_FROM?ROWS.filter(function(r){ return ownerOf(r)===CV_FROM; }):[];
   var picker='';
   if(CV_FROM){
+    /* GROUPED BY STATUS, one-click per group. "Send all Creation accounts" is a single tick on
+       the group header — and dead accounts (banned / temp-banned) start UNTICKED, because
+       transferring those is the exception and unticking fifty of them by hand was the pain. */
+    var GORD=['new','creation','warming','comment','nsfw','day1','early','earlydm','medium','strong','superstrong','recovery','tempban','banned'];
+    var GLBL={'new':'Newly created','creation':'Creation standby','recovery':'Spam Recovery','tempban':'Temp banned','banned':'Banned'};
+    var groups={}; mine.forEach(function(r){ var k=String(r.status||'').toLowerCase()||'other'; (groups[k]=groups[k]||[]).push(r); });
+    var gkeys=Object.keys(groups).sort(function(a,b){ var ia=GORD.indexOf(a), ib=GORD.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib); });
     picker='<div style="margin-top:8px;font-size:11.5px;color:var(--ink3);font-weight:800;">'+
-        mine.length+' account'+(mine.length===1?'':'s')+' to move — all pre-ticked, banned included; untick anything staying behind</div>'+
-      '<div style="margin-top:6px;max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;">'+
-      (mine.length? mine.map(function(r){
-        var st=String(r.status||'').toLowerCase();
-        var dead=(st==='banned'||st==='tempban');
-        return '<label style="display:flex;gap:8px;align-items:center;padding:3px 2px;font-size:12px;'+(dead?'opacity:.6;':'')+'">'+
-          '<input type="checkbox" class="xfchk" value="'+esc(r.id)+'" checked>'+
-          '<span style="flex:1;">'+esc(r.handle)+'</span>'+
-          '<span style="color:var(--ink3);font-size:11px;">'+esc((phaseMeta(r.status)||{}).n||r.status||'')+'</span>'+
-        '</label>'; }).join('')
+        mine.length+' account'+(mine.length===1?'':'s')+' — healthy statuses pre-ticked; banned & temp-banned start unticked. Tick a group header to move that whole status in one click.</div>'+
+      '<div style="margin-top:6px;max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;">'+
+      (mine.length? gkeys.map(function(k){
+        var rs=groups[k], dead=(k==='banned'||k==='tempban');
+        var label=GLBL[k]||(phaseMeta(k)||{}).n||k;
+        return '<label style="display:flex;gap:8px;align-items:center;padding:5px 2px 3px;border-top:1px solid var(--line);margin-top:4px;cursor:pointer;">'+
+            '<input type="checkbox"'+(dead?'':' checked')+' onchange="xfGroup(\''+k+'\',this.checked)">'+
+            '<b style="flex:1;font-size:12px;'+(dead?'color:#b45309;':'')+'">'+esc(label)+' · '+rs.length+'</b>'+
+            '<span style="color:var(--ink3);font-size:10.5px;">tick = whole group</span>'+
+          '</label>'+
+          rs.map(function(r){
+            return '<label style="display:flex;gap:8px;align-items:center;padding:2px 2px 2px 20px;font-size:12px;'+(dead?'opacity:.6;':'')+'">'+
+              '<input type="checkbox" class="xfchk" data-st="'+esc(k)+'" value="'+esc(r.id)+'"'+(dead?'':' checked')+' onchange="xfCount()">'+
+              '<span style="flex:1;">'+esc(r.handle)+'</span>'+
+            '</label>'; }).join('');
+        }).join('')
         : '<div class="muted" style="font-size:12px;">No accounts for this VA.</div>')+
       '</div>'+
-      (mine.length?('<div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap;">'+
-        '<button onclick="document.querySelectorAll(\'.xfchk\').forEach(function(x){x.checked=true;})" style="border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 11px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Tick all</button>'+
-        '<button onclick="document.querySelectorAll(\'.xfchk\').forEach(function(x){x.checked=false;})" style="border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 11px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Clear</button>'+
+      (mine.length?('<div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap;align-items:center;">'+
+        '<button onclick="document.querySelectorAll(\'.xfchk\').forEach(function(x){x.checked=true;});xfCount()" style="border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 11px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Tick all</button>'+
+        '<button onclick="document.querySelectorAll(\'.xfchk\').forEach(function(x){x.checked=false;});xfCount()" style="border:1px solid var(--line);background:var(--card);border-radius:9px;padding:6px 11px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Clear</button>'+
         '<button onclick="xfGo()" style="border:1px solid #9a3412;background:#9a3412;color:#fff;border-radius:9px;padding:6px 13px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">Transfer ticked → permanent</button>'+
+        '<span id="xf-cnt" style="font-size:11.5px;color:var(--ink3);font-weight:800;"></span>'+
       '</div>'):'');
   }
   return '<div style="background:var(--card);border:1px solid #fdba74;border-radius:12px;padding:10px 12px;margin:0 0 12px;">'+
@@ -1139,16 +1155,37 @@ async function viewSession(id, phk, n, saved){
   }
   toast('Loading screenshots…');
   try{
+    /* Only SESSION proofs may answer for "Session 1 / Session 2". Creation and DM proofs for
+       the same handle used to land in this list, so the Session 1 button could open — and let
+       you "replace" inside — the CREATION row, while the wrong session photo sat untouched.
+       That is why replacing after save looked broken. */
+    var SESSIONISH=function(x){ var t=String(x.task||'').toLowerCase();
+      return t.indexOf('creation')<0 && t.indexOf('dm replies')<0; };
+    var byAcct=function(items){ return (items||[]).filter(function(x){
+      return String(x.account||'').toLowerCase()===String(acct).toLowerCase() && (x.urls||[]).length && SESSIONISH(x); }); };
     var ow=String(r0.assigned_to||r0.created_by||USER.id||'');
     var day=(typeof today==='function')?today():'';
     var r=await fetch(API+'?action=proof_list&employee_id='+encodeURIComponent(ow)+'&from='+day+'&to='+day+'&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
     var d=await r.json();
-    var mine=((d&&d.items)||[]).filter(function(x){ return String(x.account||'').toLowerCase()===String(acct).toLowerCase() && (x.urls||[]).length; });
+    var mine=byAcct(d&&d.items);
+    if(!mine.length){
+      /* Nothing under the owner today — the proof may be from an earlier day, or saved by a
+         stand-in during a cover. Widen to the last 7 days across EVERYONE, then use the most
+         recent day that has session proofs for this handle. */
+      var d0=new Date(Date.now()-6*86400000), p2=function(v){return String(v).padStart(2,'0');};
+      var from=d0.getFullYear()+'-'+p2(d0.getMonth()+1)+'-'+p2(d0.getDate());
+      var r2=await fetch(API+'?action=proof_list&from='+from+'&to='+day+'&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
+      var d2=await r2.json();
+      var all=byAcct(d2&&d2.items);
+      if(all.length){ var last=all.map(function(x){return String(x.date||'');}).sort().pop();
+        mine=all.filter(function(x){ return String(x.date||'')===last; }); }
+    }
     mine.sort(function(a,b){ return String(a.at).localeCompare(String(b.at)); });   // session order
     var pick=mine[n-1]||mine[mine.length-1];
-    if(!pick){ toast('No saved screenshots found for this session today.'); return; }
-    VS={ mode:'saved', key:null, imgs:pick.urls.slice(), i:0, rowId:pick.id,
-         title:'@'+acct+' · Session '+n+' · saved', busy:false, id:id, phk:phk, n:n };
+    if(!pick){ toast('No saved screenshots found for this session.'); return; }
+    var saver=String(pick.employee_id||'').toLowerCase(), me=String((USER&&USER.id)||'').toLowerCase();
+    VS={ mode:'saved', key:null, imgs:pick.urls.slice(), i:0, rowId:pick.id, saver:saver,
+         title:'@'+acct+' · Session '+n+' · saved'+((saver&&saver!==me)?(' by '+(typeof vaName==='function'?vaName(saver):saver)):''), busy:false, id:id, phk:phk, n:n };
     vsRender();
   }catch(e){ toast('Could not load the screenshots — try again.'); }
 }
@@ -1223,6 +1260,7 @@ async function vsReplace(how){
         body:JSON.stringify({ action:'proof_replace', employee_id:emp, id:VS.rowId, index:VS.i, url:url }) });
       var d=await r.json();
       if(d&&d.ok){ VS.imgs=d.urls.slice(); toast('Photo '+(VS.i+1)+' replaced — saved.'); }
+      else if(d&&d.error==='NOT_YOURS'){ toast('Only '+((VS.saver&&typeof vaName==='function')?vaName(VS.saver):'the person who saved this proof')+' — or admin — can replace this photo.'); }
       else { toast('Replace failed: '+((d&&d.error)||'unknown')+' — nothing changed.'); }
     }
   }catch(e){ toast('Replace failed — nothing changed.'); }
@@ -1575,7 +1613,7 @@ async function sessionDone(id, phk, n){
   // Comment farming (warm-up) and posting both need evidence — same reason as creation.
   if(phk==='recovery'){
     proofOpen({ task:'Reddit Warmup', account:acct, outputs:1, preload:(SHOT.trayFor?SHOT.trayFor(id,phk,n):[]), key:'s:'+id+':'+phk+':'+n },
-      async function(){ await bump('Reddit Warmup',1); await stampSession(id,n);
+      async function(){ if(SHOT.clearTray) SHOT.clearTray(id,phk,n); await bump('Reddit Warmup',1); await stampSession(id,n);
         toast('+1 recovery session · '+n+'/2'+(n===2?' — day complete!':'')); load(); });
     return;
   }

@@ -545,7 +545,14 @@ body::after{ background:radial-gradient(40% 40% at 30% 32%, rgba(255,138,74,.18)
 <script>
 /* ====== CONFIG — edit these freely ====== */
 var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec";
-var ADMIN_PASS = "JMBeast_020298";   // sign in as "ADMIN" + this password (same as the admin panel)
+/* ── ADMIN SIGN-IN — verified SERVER-SIDE, no password in this file ──
+   These pages live in a public repo and anyone can view-source the live site, so the
+   admin password must never appear here. The portal Apps Script checks it against a
+   Script Property (ADMIN_PASS) and answers yes/no. */
+async function verifyAdminPass(p){
+  try{ var r=await fetch('https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec?action=verify_admin&pass='+encodeURIComponent(p)+'&_='+Date.now()); var d=await r.json(); return !!(d&&d.ok); }
+  catch(e){ return false; }
+}
 var LOGO = document.querySelector('link[rel="icon"]').href;
 
 var QUICK_LINKS = [
@@ -569,6 +576,7 @@ var TOOLS = [
   { kind:'auto', title:'Productivity Hub + 🗄 Data Center', sub:'Outputs from each tool × hours from the portal (admin)', url:'prod-hub2.html', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l3-4 3 2 4-6"/></svg>' },
   { kind:'auto', proj:true, title:'Reddit Altz Tool', sub:'Strength ladder · warming → posting → super strong · spam recovery', url:'reddit.html', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/><path d="M9 17c1.5 1 4.5 1 6 0"/></svg>' },
   { kind:'auto', proj:true, title:'Reddit Casey Tool', sub:'Casey accounts · same ladder, separate board & outputs', url:'reddit-casey.html', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/><path d="M9 17c1.5 1 4.5 1 6 0"/></svg>' },
+  { kind:'auto', proj:true, title:'Reddit MeG Agency Tool', sub:'MeG accounts · same ladder, separate board & outputs', url:'reddit-meg.html', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/><path d="M9 17c1.5 1 4.5 1 6 0"/></svg>' },
   { kind:'auto', proj:true, title:'Ember Tool', sub:'Snapchat VPS ops · stock → setup → live · bans tracked', url:'ember.html', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 1 7 7v5a4 4 0 0 1-8 2 4 4 0 0 1-8-2V9a7 7 0 0 1 7-7z"/><circle cx="9" cy="10" r="1"/><circle cx="15" cy="10" r="1"/></svg>' },
   { kind:'auto', proj:true, title:'Project John — X', sub:'X warm-up day tracker · setup days → follow days', url:'john.html', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l16 16M20 4L4 20"/></svg>' },
   { kind:'auto', proj:true, title:'NewFans — Wallpost', sub:'Content runway per model · schedule · client alerts', url:'newfans.html', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>' },
@@ -803,7 +811,7 @@ async function doLogin(){
   if(!id||!pin){ err.textContent='Enter your contractor ID and PIN.'; err.style.display='block'; return; }
   // Admin shortcut: sign in with "ADMIN" + the admin password
   if(id.toUpperCase()==='ADMIN'){
-    if(pin===ADMIN_PASS){
+    if(await verifyAdminPass(pin)){
       var au={ full_name:'Admin (JMB Virtuals)', employee_id:'ADMIN', position:'Administrator', department:'Management', photo:'' };
       sessionStorage.setItem('internals_user', JSON.stringify(au));
       enterApp(au);
