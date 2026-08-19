@@ -98,32 +98,36 @@ select.ctl{background:var(--card);border:1px solid var(--line2);border-radius:9p
 .kpi b{display:block;font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--kc,var(--t1));font-variant-numeric:tabular-nums}
 .kpi span{font-size:11px;color:var(--t3);font-weight:500}
 
-/* grid of account cards */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(252px,1fr));gap:10px}
-.tile{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:13px 15px 11px;cursor:pointer;
-  position:relative;transition:border-color .12s, box-shadow .12s}
-.tile:hover{border-color:var(--line2);box-shadow:0 4px 14px rgba(16,24,40,.07)}
-.tile::before{content:'';position:absolute;left:-1px;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;background:var(--pc)}
-.t-top{display:flex;align-items:center;gap:7px}
-.t-plat{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--pc)}
-.t-fresh{margin-left:auto;font-size:10.5px;color:var(--t3);font-weight:500}
-.t-fresh.ok{color:var(--up)}
-.t-handle{font-weight:700;font-size:14.5px;margin-top:5px;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.t-sub{font-size:11.5px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.t-mid{display:flex;align-items:flex-end;gap:9px;margin-top:10px}
-.t-num{font-size:20px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
-.t-num small{font-size:10px;color:var(--t3);display:block;font-weight:500;letter-spacing:.02em;margin-top:3px;text-transform:uppercase}
-.delta{font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;margin-left:auto;font-variant-numeric:tabular-nums}
+/* vertical account list — one row per account, built for scanning down a column of numbers */
+.lst{width:100%;border-collapse:separate;border-spacing:0;background:var(--card);
+  border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.lst th{text-align:left;font-size:10.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;
+  font-weight:600;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--bg);white-space:nowrap}
+.lst th.r, .lst td.r{text-align:right}
+.lst td{padding:9px 14px;border-bottom:1px solid var(--line);vertical-align:middle;font-size:13px}
+.lst tbody tr:last-child td{border-bottom:none}
+.lst tbody tr{cursor:pointer}
+.lst tbody tr:hover td{background:linear-gradient(var(--tint),var(--tint)),var(--card)}
+.pdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:1px}
+.l-plat{font-size:11px;font-weight:600;color:var(--t2);white-space:nowrap}
+.l-handle{font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.l-tool{font-size:11px;color:var(--t3);white-space:nowrap}
+.l-owner{font-size:12px;color:var(--t2);white-space:nowrap}
+.l-num{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.l-num small{font-size:10px;color:var(--t3);font-weight:500;margin-left:4px;text-transform:uppercase}
+.l-fresh{font-size:11px;color:var(--t3);white-space:nowrap}
+.l-fresh.ok{color:var(--up)}
+.delta{font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:6px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .delta.up{color:var(--up);background:var(--up-bg)}
 .delta.dn{color:var(--dn);background:var(--dn-bg)}
 .delta.flat{color:var(--t3);background:var(--bg)}
-.spark{margin-top:9px;height:32px;width:100%}
-.t-foot{display:flex;gap:7px;align-items:center;margin-top:8px}
-.spill{font-size:10px;font-weight:600;letter-spacing:.03em;padding:2.5px 8px;border-radius:6px;text-transform:capitalize}
-.t-owner{font-size:11px;color:var(--t3);margin-left:auto}
-.mv{font-size:10px;font-weight:700;letter-spacing:.04em;padding:2.5px 7px;border-radius:6px;text-transform:uppercase}
+.spark{height:26px;width:104px;display:block}
+.spill{font-size:10.5px;font-weight:600;letter-spacing:.02em;padding:2.5px 9px;border-radius:6px;text-transform:capitalize;white-space:nowrap}
+.mv{font-size:9.5px;font-weight:700;letter-spacing:.04em;padding:2px 6px;border-radius:5px;text-transform:uppercase;margin-left:7px}
 .mv.up{color:var(--up);background:var(--up-bg)}
 .mv.dn{color:var(--dn);background:var(--dn-bg)}
+@media(max-width:1100px){ .hide-md{display:none} }
+@media(max-width:760px){ .hide-sm{display:none} }
 
 /* drawer */
 #drawer{position:fixed;top:0;right:-470px;bottom:0;width:min(440px,96vw);z-index:40;
@@ -208,10 +212,11 @@ select.ctl{background:var(--card);border:1px solid var(--line2);border-radius:9p
         <option value="">Include inactive</option>
       </select>
       <button class="ib" id="scrape-btn" style="display:none" onclick="scrapeVisible()">Scrape visible</button>
+      <button class="ib" id="scrape-all-btn" onclick="scrapeAllIG()">Scrape all IG</button>
       <button class="ib" onclick="loadAll(true)" title="Refresh">Refresh</button>
     </div>
     <div class="kpis" id="kpis"></div>
-    <div class="grid" id="grid"></div>
+    <div id="grid"></div>
     <div class="empty" id="empty" style="display:none">No accounts match this view.</div>
   </div>
 </div>
@@ -432,7 +437,12 @@ function render(){
     kpi(fallers,'Falling · 7d', fallers?'var(--dn)':'var(--t3)')+
     kpi(deadN,'Inactive / banned', deadN?'var(--dn)':'var(--t3)');
   var g=document.getElementById('grid');
-  g.innerHTML=rows.map(tile).join('');
+  g.innerHTML=rows.length
+    ? '<table class="lst"><thead><tr>'+
+        '<th>Platform</th><th>Account</th><th class="hide-sm">Handler</th><th>Status</th>'+
+        '<th class="r">Number</th><th class="r">7d change</th><th class="hide-md">Trend · 15d</th><th class="hide-md">Updated</th>'+
+      '</tr></thead><tbody>'+rows.map(rowHtml).join('')+'</tbody></table>'
+    : '';
   document.getElementById('empty').style.display=rows.length?'none':'block';
   window._lastRows=rows;
   var sb=document.getElementById('scrape-btn');
@@ -440,28 +450,29 @@ function render(){
 }
 function kpi(v,l,c){ return '<div class="kpi" style="--kc:'+c+'"><b>'+v+'</b><span>'+l+'</span></div>'; }
 function fmtN(n){ if(n==null) return '—'; if(n>=1000000) return (n/1000000).toFixed(1)+'M'; if(n>=10000) return (n/1000).toFixed(1)+'k'; return String(n); }
-function tile(a){
+function rowHtml(a){
   var p=PLATS[a.plat]||PLAT_FB;
   var n=numOf(a), d=deltaOf(a);
   var dHtml=d
     ? '<span class="delta '+(d.abs>0?'up':(d.abs<0?'dn':'flat'))+'">'+(d.abs>0?'▲':(d.abs<0?'▼':'—'))+' '+(Math.abs(d.pct)>=1?Math.abs(d.pct).toFixed(0)+'%':Math.abs(d.abs))+'</span>'
-    : '<span class="delta flat">— 7d</span>';
+    : '<span class="delta flat">—</span>';
   var st=String(a.status||'').toLowerCase();
   var sc=STATUS_COLORS[st]||'#059669';
-  var owner=DATA.names[a.owner]||a.owner||'';
+  var owner=DATA.names[a.owner]||a.owner||'—';
   var fresh=freshOf(a);
-  return '<div class="tile" style="--pc:'+p.c+'" onclick="openDrawer(\''+esc(a.key)+'\')">'+
-    '<div class="t-top"><span class="t-plat">'+p.n+'</span>'+moveTag(a)+'<span class="t-fresh'+(fresh==='updated today'||fresh==='auto'?' ok':'')+'">'+fresh+'</span></div>'+
-    '<div class="t-handle">'+esc(a.handle)+'</div>'+
-    '<div class="t-sub">'+esc(a.tool)+(owner?(' · '+esc(owner.split(',')[0])):'')+'</div>'+
-    '<div class="t-mid"><div class="t-num">'+fmtN(n.v)+'<small>'+n.label+'</small></div>'+dHtml+'</div>'+
-    sparkSvg(seriesOf(a), p.hex)+
-    '<div class="t-foot"><span class="spill" style="color:'+sc+';background:'+sc+'14">'+esc(a.status||'—')+'</span>'+
-      (a.day?('<span class="t-owner">day '+a.day+'</span>'):'')+'</div>'+
-  '</div>';
+  return '<tr onclick="openDrawer(\''+esc(a.key)+'\')">'+
+    '<td class="l-plat"><span class="pdot" style="background:'+p.hex+'"></span>'+p.n+'</td>'+
+    '<td><div class="l-handle">'+esc(a.handle)+moveTag(a)+'</div><div class="l-tool">'+esc(a.tool)+(a.day?(' · day '+a.day):'')+'</div></td>'+
+    '<td class="l-owner hide-sm">'+esc(owner.split(',')[0])+'</td>'+
+    '<td><span class="spill" style="color:'+sc+';background:'+sc+'14">'+esc(a.status||'—')+'</span></td>'+
+    '<td class="r"><span class="l-num">'+fmtN(n.v)+'<small>'+n.label+'</small></span></td>'+
+    '<td class="r">'+dHtml+'</td>'+
+    '<td class="hide-md">'+sparkSvg(seriesOf(a), p.hex)+'</td>'+
+    '<td class="l-fresh hide-md'+(fresh==='updated today'||fresh==='auto'?' ok':'')+'">'+fresh+'</td>'+
+  '</tr>';
 }
 function sparkSvg(s, color){
-  if(!s || s.length<2) return '<svg class="spark" viewBox="0 0 100 32" preserveAspectRatio="none"><line x1="0" y1="28" x2="100" y2="28" stroke="#e6e8ee" stroke-width="1.5" stroke-dasharray="3 4"/></svg>';
+  if(!s || s.length<2) return '<svg class="spark" viewBox="0 0 100 32" preserveAspectRatio="none"><line x1="0" y1="26" x2="100" y2="26" stroke="#e6e8ee" stroke-width="1.5" stroke-dasharray="3 4"/></svg>';
   var vs=s.map(function(x){return x.v;});
   var mn=Math.min.apply(null,vs), mx=Math.max.apply(null,vs);
   var span=(mx-mn)||1;
@@ -589,22 +600,40 @@ async function scrapeOne(a){
     return { count:c, following:fw };
   }catch(e){ return null; }
 }
-var _bulkBusy=false;
-async function scrapeVisible(){
+var _bulkBusy=false, _bulkCancel=false;
+async function _scrapeRun(rows, label){
   if(_bulkBusy){ toast('A scrape run is already going.'); return; }
-  var rows=(window._lastRows||[]).filter(function(a){ return a.plat==='ig'||a.plat==='altr'; }).slice(0,30);
-  if(!rows.length){ toast('No IG accounts in this view.'); return; }
-  _bulkBusy=true;
+  if(!rows.length){ toast('No IG accounts to scrape here.'); return; }
+  _bulkBusy=true; _bulkCancel=false;
+  var btn=document.getElementById('scrape-all-btn');
   var ok=0, fail=0;
   for(var i=0;i<rows.length;i++){
-    toast('Scraping '+(i+1)+' of '+rows.length+' — '+rows[i].handle);
+    if(_bulkCancel) break;
+    if(btn) btn.textContent='Stop ('+(i+1)+'/'+rows.length+')';
+    toast(label+' '+(i+1)+' of '+rows.length+' — '+rows[i].handle);
     var d=await scrapeOne(rows[i]);
     if(d) ok++; else fail++;
-    render();
+    if(i%5===4) render();                                   // repaint every few pulls, not every one
     await new Promise(function(r){ setTimeout(r,1600); });
   }
   _bulkBusy=false;
-  toast('Done — '+ok+' pulled'+(fail?(' · '+fail+' unreadable (private or rate-limited)'):'')+'.');
+  if(btn) btn.textContent='Scrape all IG';
+  render();
+  toast((_bulkCancel?'Stopped — ':'Done — ')+ok+' pulled'+(fail?(' · '+fail+' unreadable (private or rate-limited)'):'')+'.');
+}
+async function scrapeVisible(){
+  _scrapeRun((window._lastRows||[]).filter(function(a){ return a.plat==='ig'||a.plat==='altr'; }).slice(0,30), 'Scraping');
+}
+/* ONE BUTTON, EVERY INSTAGRAM — Dream IRL, Moma AND the whole ALTR board in a single queue.
+   Runs at 1.6s per account (the scraping API rate-limits hard), so ~350 accounts is roughly
+   ten minutes; the button turns into a live counter and clicking it again stops the run. */
+async function scrapeAllIG(){
+  if(_bulkBusy){ _bulkCancel=true; toast('Stopping after the current account…'); return; }
+  var rows=DATA.accounts.filter(function(a){ return (a.plat==='ig'||a.plat==='altr') && !isDead(a); });
+  if(!rows.length){ toast('No IG accounts loaded.'); return; }
+  var mins=Math.max(1, Math.round(rows.length*1.6/60));
+  if(!confirm('Scrape ALL Instagram accounts?\n\n'+rows.length+' accounts (Dream IRL + Moma + ALTR) · about '+mins+' minute'+(mins>1?'s':'')+' · uses the RapidAPI quota.\n\nYou can stop anytime by clicking the button again.')) return;
+  _scrapeRun(rows, 'Scraping all IG');
 }
 
 /* ── misc ── */
