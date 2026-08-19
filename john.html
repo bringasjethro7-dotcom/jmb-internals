@@ -812,9 +812,33 @@ function sessBtns(r){
   }
   return out.join('');
 }
+/* ── DAILY NUMBERS GATE (Account Center feed) ──
+   Before the first session/tick of the business day on an account, the VA records what the
+   platform shows right now (X follower count). One prompt per account per day; the number lands in the
+   account's meta, where the Account Center and its 6 AM snapshot read it — trend lines build
+   without anyone filling a separate sheet. Cancelling the prompt cancels the session. */
+async function metricGate(r, kind, label){
+  try{
+    if(!r || !r.id) return true;
+    var m=(r&&r.meta)||{};
+    var day=today();
+    if(String(m.mday||'')===day) return true;
+    var cur=(kind==='karma')?(m.karma!=null?m.karma:''):(m.fol!=null?m.fol:'');
+    var v=prompt('📊 Daily check-in — current '+label+' for '+(r.handle||'this account')+'?\n(type exactly what the platform shows right now)', cur);
+    if(v===null){ toast('Log today’s '+label+' first — then the session unlocks.'); return false; }
+    v=parseInt(String(v).replace(/[^0-9]/g,''),10);
+    if(isNaN(v)){ toast('Numbers only — try again.'); return false; }
+    var m2={}; for(var k in m) m2[k]=m[k];
+    m2.mday=day; if(kind==='karma') m2.karma=v; else m2.fol=v;
+    var d=await (await fetch(API+'?action=pa_update&id='+encodeURIComponent(r.id)+'&meta='+encodeURIComponent(JSON.stringify(m2))+'&_='+Date.now())).json();
+    if(d&&d.ok){ r.meta=m2; toast('📌 '+label+' logged for today — thank you!'); return true; }
+    toast('Could not save the number — try again.'); return false;
+  }catch(e){ return false; }
+}
 async function sessDone_(id, n){
   var r0=ROWS.filter(function(x){return x.id===id;})[0]; if(!r0) return;
   if(sessOk(r0,n)){ toast('Session '+n+' is already logged.'); return; }
+  if(!(await metricGate(r0,'fol','followers'))) return;
   /* Proof first. bump() rejects when the VA backs out of the screenshot, which stops the
      session being marked — the same ordering every other tool now uses. */
   try{ await proofOnly((r0.day<=3?'Setup Day':'Follow Day')+' — Session '+n, r0.handle); }

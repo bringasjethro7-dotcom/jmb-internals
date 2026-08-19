@@ -1601,10 +1601,34 @@ function qaProofTask(p, phk){
   if(p && p.task==='Reddit Warmup' && QA_WARMUP_LABEL[phk]) return QA_WARMUP_LABEL[phk];
   return p && p.task;
 }
+/* ── DAILY NUMBERS GATE (Account Center feed) ──
+   Before the first session/tick of the business day on an account, the VA records what the
+   platform shows right now (Reddit karma). One prompt per account per day; the number lands in the
+   account's meta, where the Account Center and its 6 AM snapshot read it — trend lines build
+   without anyone filling a separate sheet. Cancelling the prompt cancels the session. */
+async function metricGate(r, kind, label){
+  try{
+    if(!r || !r.id) return true;
+    var m=(r&&r.meta)||{};
+    var day=today();
+    if(String(m.mday||'')===day) return true;
+    var cur=(kind==='karma')?(m.karma!=null?m.karma:''):(m.fol!=null?m.fol:'');
+    var v=prompt('📊 Daily check-in — current '+label+' for '+(r.handle||'this account')+'?\n(type exactly what the platform shows right now)', cur);
+    if(v===null){ toast('Log today’s '+label+' first — then the session unlocks.'); return false; }
+    v=parseInt(String(v).replace(/[^0-9]/g,''),10);
+    if(isNaN(v)){ toast('Numbers only — try again.'); return false; }
+    var m2={}; for(var k in m) m2[k]=m[k];
+    m2.mday=day; if(kind==='karma') m2.karma=v; else m2.fol=v;
+    var d=await (await fetch(API+'?action=pa_update&id='+encodeURIComponent(r.id)+'&meta='+encodeURIComponent(JSON.stringify(m2))+'&_='+Date.now())).json();
+    if(d&&d.ok){ r.meta=m2; toast('📌 '+label+' logged for today — thank you!'); return true; }
+    toast('Could not save the number — try again.'); return false;
+  }catch(e){ return false; }
+}
 async function sessionDone(id, phk, n){
   n=(n===2)?2:1;
   var p=phase(phk);
   var r0=row(id)||{};
+  if(!(await metricGate(r0,'karma','karma'))) return;
   var acct=(r0.handle||r0.name||'');
   // belt and braces — the button is locked, but never trust the button alone
   if(!(SHOT.trayFor?SHOT.trayFor(id,phk,n):[]).length){

@@ -446,8 +446,9 @@ function pupPaint(){
   keys.forEach(function(k){ var s=PUP.q[k]; if(!s) return;
     if(s.state==='up') up++; else if(s.state==='done') done++; else fail++; });
   el.textContent = fail ? (fail+' failed — they will be retried on save')
-                 : up ? ('Uploading '+up+'…  '+done+' ready')
-                 : done ? (done+' screenshot'+(done>1?'s':'')+' ready') : '';
+                 : up ? ('Uploading '+up+'…  '+done+' attached')
+                 : done ? (done+' screenshot'+(done>1?'s':'')+" attached — nothing is counted until you press Save")
+                 : '';
   el.style.color = fail ? '#b91c1c' : (up ? '#b45309' : '#047857');
 }
 /* Returns the Drive ids for the current selection, waiting only on uploads still running and
@@ -517,7 +518,7 @@ function proofThumb(d){
   w.style.cssText='position:relative;width:74px;height:74px;border-radius:9px;overflow:hidden;border:1px solid #e2e8f0;margin:0 8px 8px 0;';
   w.innerHTML='<img src="'+d+'" style="width:100%;height:100%;object-fit:cover;">'+
     '<button style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;line-height:1;">×</button>';
-  w.querySelector('button').onclick=function(){ var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1); w.remove(); };
+  w.querySelector('button').onclick=function(){ var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1); try{ delete PUP.q[pupKey(d)]; pupPaint(); }catch(_pq){} w.remove(); };
   host.appendChild(w);
 }
 async function proofAdd(files){
@@ -681,8 +682,33 @@ async function addAcct(){
     else toast('Could not add.');
   }catch(e){ toast('Connection error.'); }
 }
+/* ── DAILY NUMBERS GATE (Account Center feed) ──
+   Before the first session/tick of the business day on an account, the VA records what the
+   platform shows right now (Snapchat friends count). One prompt per account per day; the number lands in the
+   account's meta, where the Account Center and its 6 AM snapshot read it — trend lines build
+   without anyone filling a separate sheet. Cancelling the prompt cancels the session. */
+async function metricGate(r, kind, label){
+  try{
+    if(!r || !r.id) return true;
+    var m=(r&&r.meta)||{};
+    var day=today();
+    if(String(m.mday||'')===day) return true;
+    var cur=(kind==='karma')?(m.karma!=null?m.karma:''):(m.fol!=null?m.fol:'');
+    var v=prompt('📊 Daily check-in — current '+label+' for '+(r.handle||'this account')+'?\n(type exactly what the platform shows right now)', cur);
+    if(v===null){ toast('Log today’s '+label+' first — then the session unlocks.'); return false; }
+    v=parseInt(String(v).replace(/[^0-9]/g,''),10);
+    if(isNaN(v)){ toast('Numbers only — try again.'); return false; }
+    var m2={}; for(var k in m) m2[k]=m[k];
+    m2.mday=day; if(kind==='karma') m2.karma=v; else m2.fol=v;
+    var d=await (await fetch(API+'?action=pa_update&id='+encodeURIComponent(r.id)+'&meta='+encodeURIComponent(JSON.stringify(m2))+'&_='+Date.now())).json();
+    if(d&&d.ok){ r.meta=m2; toast('📌 '+label+' logged for today — thank you!'); return true; }
+    toast('Could not save the number — try again.'); return false;
+  }catch(e){ return false; }
+}
 async function checkedToday(id){
-  try{ var r0=ROWS.filter(function(x){return x.id===id;})[0]; var m=Object.assign({}, (r0&&r0.meta)||{}, {last:vaKeyOf(USER.id)});
+  var _r0=ROWS.filter(function(x){return x.id===id;})[0];
+  if(!(await metricGate(_r0,'fol','friends'))) return;
+  try{ var r0=_r0; var m=Object.assign({}, (r0&&r0.meta)||{}, {last:vaKeyOf(USER.id)});
     var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now());
     var d=await r.json(); if(d&&d.ok){ toast('Verified running ✓ (VPS check)'); load(); } }catch(e){ toast('Connection error.'); }
 }
