@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JMB — Reddit Altz Tool</title>
+<title>JMB — Reddit Central</title>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@700;800&display=swap" rel="stylesheet">
 <style>
   :root{--bg:#f6f7fb;--card:#fff;--ink:#171a21;--ink2:#5b6470;--ink3:#8a93a3;--line:#e5e8ef;--or:#ff4500;--or2:#c93400;--ok:#10b981;--warn:#f59e0b;--bad:#ef4444;--rec:#0ea5e9;}
@@ -86,14 +86,14 @@
 </head>
 <body>
 <div id="signin">
-  <div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:800"><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:linear-gradient(135deg,#ff4500,#b91c1c);box-shadow:0 0 10px rgba(255,69,0,.5);"></span> JMB <em style="font-style:normal;color:var(--or)">Reddit Altz</em> Tool</div>
+  <div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:800"><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:linear-gradient(135deg,#ff4500,#b91c1c);box-shadow:0 0 10px rgba(255,69,0,.5);"></span> JMB <em style="font-style:normal;color:var(--or)">Reddit Central</em> · Altz + Casey + MeG</div>
   <div style="font-size:12.5px;color:var(--ink2);margin-top:6px">Sign in with your Employee ID + PIN</div>
   <input id="si-id" placeholder="Employee ID"><input id="si-pin" type="password" placeholder="PIN">
   <button onclick="signIn()" id="si-btn">Sign in</button><div id="si-err"></div>
 </div>
 
 <div class="wrap" id="app" style="display:none">
-  <h1><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:linear-gradient(135deg,#ff4500,#b91c1c);box-shadow:0 0 12px rgba(255,69,0,.5);"></span> JMB <em>Reddit Altz</em> <span style="font-size:12px;color:var(--ink3);font-weight:600" id="who"></span></h1>
+  <h1><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:linear-gradient(135deg,#ff4500,#b91c1c);box-shadow:0 0 12px rgba(255,69,0,.5);"></span> JMB <em>Reddit Central</em> <span style="font-size:12px;color:var(--ink3);font-weight:600" id="who"></span></h1>
   <div class="sub">Accounts climb the ladder: <b>Creation (4d) → Warming (1d) → Comment Farming (until 50 karma, max check at 7d) → NSFW (client updates) → Day 1 (1d) → Early → +DMs → Medium → Strong → Super Strong</b>. Work each card's session checklist and tick — sessions, posts, and DMs are all <b>counted automatically</b>. Rotate subreddits, captions & photos — never repeat back-to-back.</div>
   <div class="top" id="stats"></div>
   <div class="addbox">
@@ -105,6 +105,7 @@
   </div>
   <div class="reminder"><b>Every phase, every session:</b> check the profile for post/avatar removals (shadowban) & spam-filter flags, and the inbox for mod messages, warnings, or "unable to post". Spotted one? Hit <b>Spam filter</b> on the card.</div>
   <div id="byva" style="margin-bottom:10px;"></div>
+  <div id="basebar" style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:0 0 10px;"></div>
   <div id="vatabs" style="margin-bottom:12px;"></div>
   <input id="ra-q" placeholder="Search account or VA…" oninput="render()" style="width:100%;max-width:340px;padding:9px 13px;border:1px solid var(--line);border-radius:100px;font:inherit;font-size:13px;background:var(--card);margin-bottom:12px;">
   <div style="margin-bottom:14px;">
@@ -118,7 +119,61 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 var API='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
-var PROJECT='Reddit';
+/* ── REDDIT CENTRAL — one tool, three client bases ──
+   Altz, Casey and MeG were three identical copies of this file drifting apart with every fix.
+   Now one file serves all three boards: PROJECT is dynamic, the base bar switches it live, and
+   every fetch (board, covers, proofs, transfers, counts) already reads PROJECT at call time.
+   Sign in once; the chip bar also shows which bases YOU hold accounts on — the who-works-for-
+   which-client indicator. Old links keep working: ?base=casey / ?base=meg preselect. */
+var BASES=[
+ { id:'Reddit',         n:'Altz',  c:'#ff4500' },
+ { id:'Reddit - Casey', n:'Casey', c:'#0ea5e9' },
+ { id:'Reddit - MeG',   n:'MeG',   c:'#8b5cf6' }
+];
+var PROJECT=(function(){
+  try{
+    var q=(new URLSearchParams(location.search)).get('base');
+    if(q){ for(var i=0;i<BASES.length;i++){ if(BASES[i].n.toLowerCase()===q.toLowerCase()||BASES[i].id.toLowerCase()===q.toLowerCase()){ localStorage.setItem('rdt_base', BASES[i].id); break; } } }
+    var sv=localStorage.getItem('rdt_base');
+    for(var j=0;j<BASES.length;j++){ if(BASES[j].id===sv) return sv; }
+    return 'Reddit';
+  }catch(e){ return 'Reddit'; }
+})();
+function baseOf(id){ for(var i=0;i<BASES.length;i++){ if(BASES[i].id===id) return BASES[i]; } return BASES[0]; }
+function setBase(id){
+  if(id===PROJECT) return;
+  PROJECT=id; try{ localStorage.setItem('rdt_base', id); }catch(e){}
+  ROWS=[]; COVER={}; CV_FROM='';
+  paintBases();
+  var g=document.getElementById('grid'); if(g) g.innerHTML='<div class="muted">Loading the '+baseOf(id).n+' board…</div>';
+  try{ loadCover(); }catch(e){}
+  load();
+}
+function paintBases(){
+  var host=document.getElementById('basebar'); if(!host) return;
+  host.innerHTML='<span style="font-size:11px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;">Base</span> '+
+    BASES.map(function(b){
+      var on=(b.id===PROJECT);
+      var cnt=(window._baseCounts&&window._baseCounts[b.id]!=null)?(' · '+window._baseCounts[b.id]):'';
+      return '<button onclick="setBase(\''+b.id+'\')" style="border:2px solid '+(on?b.c:'var(--line)')+';background:'+(on?(b.c+'14'):'var(--card)')+';color:'+(on?b.c:'var(--ink2)')+';border-radius:100px;padding:6px 14px;font:800 12px \'Manrope\',sans-serif;cursor:pointer;">'+b.n+cnt+'</button>';
+    }).join(' ')+
+    ' <span style="font-size:11px;color:var(--ink3);font-weight:700;" id="base-mine"></span>';
+}
+async function loadBaseCounts(){
+  try{
+    var me=String((USER&&USER.id)||'').toLowerCase(); var counts={}, mine=[];
+    for(var i=0;i<BASES.length;i++){
+      var d=await (await fetch(API+'?action=pa_list&project='+encodeURIComponent(BASES[i].id)+'&_='+Date.now())).json();
+      var rows=(d&&d.rows)||[];
+      var myN=rows.filter(function(r){ return String(r.assigned_to||r.created_by||'').toLowerCase()===me; }).length;
+      counts[BASES[i].id]=isBoss()?rows.length:myN;
+      if(myN>0) mine.push(BASES[i].n+' ('+myN+')');
+    }
+    window._baseCounts=counts; paintBases();
+    var bm=document.getElementById('base-mine');
+    if(bm) bm.textContent=isBoss()?'':(mine.length?('you are on: '+mine.join(' · ')):'no accounts assigned to you yet');
+  }catch(e){}
+}
 var USER=null, ROWS=[], NAMES={}, SHIFTOF={}, PHOTOOF={};
 var SI=function(p,w){ return '<svg width="'+(w||14)+'" height="'+(w||14)+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px">'+p+'</svg>'; };
 var IC={
@@ -1219,6 +1274,8 @@ function vsRender(){
         '<div style="display:flex;gap:8px;">'+
           '<button onclick="vsReplace(\'file\')" class="go" style="background:#b45309;padding:8px 14px;" '+(VS.busy?'disabled':'')+'>📎 Replace with file</button>'+
           '<button onclick="vsReplace(\'shot\')" class="go" style="background:#0f766e;padding:8px 14px;" '+(VS.busy?'disabled':'')+'>📷 Replace with screenshot</button>'+
+          '<button onclick="vsAppend(\'shot\')" class="go" style="background:#1d4ed8;padding:8px 14px;" '+(VS.busy?'disabled':'')+'>➕ Add screenshot</button>'+
+          '<button onclick="vsAppend(\'file\')" class="go" style="background:#6d28d9;padding:8px 14px;" '+(VS.busy?'disabled':'')+'>➕ Add file</button>'+
         '</div>'+
       '</div>'+
       '<div style="font-size:11px;color:#94a3b8;margin-top:9px;">Replacing swaps ONLY this photo — the other screenshots, the session status, counts and karma stay exactly as they are.</div>'+
@@ -1226,6 +1283,39 @@ function vsRender(){
   ov.style.display='flex';
 }
 function vsClose(){ var ov=document.getElementById('vs-ov'); if(ov){ ov.style.display='none'; ov.innerHTML=''; } }
+/* ➕ ADD MORE EVIDENCE AFTER SAVING — forgot a screenshot? Append it to the saved proof (or the
+   tray, pre-save) without touching what is already there. */
+async function vsAppend(how){
+  if(VS.busy) return;
+  var getImg;
+  if(how==='shot'){ getImg=(async function(){ if(!shotLive()){ var okS=await shotStart(); if(!okS) return null; } return shotGrab(); }); }
+  else { getImg=(function(){ return new Promise(function(res){
+      var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
+      inp.onchange=async function(){ if(!inp.files.length) return res(null);
+        try{ res(await proofCompress(inp.files[0])); }catch(e){ res(null); } };
+      inp.click(); }); }); }
+  var img=await getImg();
+  if(!img){ toast('No image captured — nothing added.'); return; }
+  VS.busy=true; vsRender();
+  try{
+    if(VS.mode==='tray'){
+      if((SHOTTRAY[VS.key]||[]).length>=SHOT.max){ toast(SHOT.max+' screenshots is the max for one session.'); }
+      else{ SHOTTRAY[VS.key].push(img); try{ pupStart(img,{task:''}); }catch(_p){} VS.imgs.push(img);
+            toast('Photo added to the tray ('+VS.imgs.length+').'); renderShotCount(VS.id, VS.phk, VS.n); }
+    } else {
+      var emp=(USER&&(USER.id||USER.employee_id))||'';
+      var url=await psUpload(img, emp, 'append');
+      var r=await fetch(API,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body:JSON.stringify({ action:'proof_append', employee_id:emp, id:VS.rowId, url:url }) });
+      var d=await r.json();
+      if(d&&d.ok){ VS.imgs=d.urls.slice(); VS.i=VS.imgs.length-1; toast('Photo added — '+VS.imgs.length+' total, saved.'); }
+      else if(d&&d.error==='NOT_YOURS'){ toast('Only '+((VS.saver&&typeof vaName==='function')?vaName(VS.saver):'the person who saved this proof')+' — or admin — can add to it.'); }
+      else if(d&&d.error==='FULL'){ toast('This proof already holds the maximum number of photos.'); }
+      else { toast('Could not add: '+((d&&d.error)||'unknown')+'.'); }
+    }
+  }catch(e){ toast('Could not add the photo.'); }
+  VS.busy=false; vsRender();
+}
 async function vsReplace(how){
   if(VS.busy) return;
   var getImg;
@@ -1316,7 +1406,7 @@ function start(){ try{ fetch(API+'?action=tool_used&employee_id='+encodeURICompo
   try{ $('ra-cdate').value=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){}
   loadNames();
   var ps=$('ra-phase'); if(ps && !ps.options.length){ ps.innerHTML=PH.map(function(p){ return '<option value="'+p.k+'">'+p.n+'</option>'; }).join(''); }
-  paintCached(); load(); smartPoll(); }
+  paintBases(); loadBaseCounts(); paintCached(); load(); smartPoll(); }
 
 var _ldRetryT=null;
 async function load(){

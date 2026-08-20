@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JMB — NewFans (Wallpost)</title>
+<title>JMB — NewFans · FB Outreach</title>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@700;800&display=swap" rel="stylesheet">
 <style>
   :root{--bg:#f6f7fb;--card:#fff;--ink:#171a21;--ink2:#5b6470;--ink3:#8a93a3;--line:#e5e8ef;--nf:#e11d74;--nf2:#9d1355;--ok:#10b981;--warn:#f59e0b;--bad:#ef4444;}
@@ -80,23 +80,46 @@
 </head>
 <body>
 <div id="signin">
-  <div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:800">💗 JMB <em style="font-style:normal;color:var(--nf)">NewFans</em> — Wallpost</div>
-  <div style="font-size:12.5px;color:var(--ink2);margin-top:6px">Content scheduling · sign in with Employee ID + PIN</div>
+  <div style="font-family:'Sora',sans-serif;font-size:20px;font-weight:800">💗 JMB <em style="font-style:normal;color:var(--nf)">NewFans</em> — FB Outreach</div>
+  <div style="font-size:12.5px;color:var(--ink2);margin-top:6px">Setter &amp; closer recruitment · sign in with Employee ID + PIN</div>
   <input id="si-id" placeholder="Employee ID"><input id="si-pin" type="password" placeholder="PIN">
   <button onclick="signIn()">Sign in</button><div id="si-err"></div>
 </div>
 
 <div class="wrap" id="app" style="display:none">
-  <h1>💗 JMB <em>NewFans</em> — Wallpost <span style="font-size:12px;color:var(--ink3);font-weight:600" id="who"></span></h1>
-  <div class="sub">Per model: track content in from Content Snare, schedule posts (1 photo/set, PM EST, unique flirty captions), and never let the runway hit zero — the board flags when it's time to ask the client for content. Every scheduled post counts your output automatically.</div>
+  <h1>💗 JMB <em>NewFans</em> — FB Outreach <span style="font-size:12px;color:var(--ink3);font-weight:600" id="who"></span></h1>
+  <div class="sub">Educo recruitment SOP: find setter/closer Facebook groups → check the rules → post the recruitment message (max 3–4 per group per day, 1–2 h apart) → every interested candidate gets the application form (the form is the official record — never collect details in Messenger) → shortlist → hand off to <b>Hayden</b> (never book interviews or discuss pay). Reports go to Hayden at <b>12 PM &amp; 6 PM MST</b>.</div>
   <div class="top" id="stats"></div>
-  <div class="addbox">
-    <input id="nf-model" placeholder="Model / client name">
-    <button onclick="addModel()">＋ Add model</button>
+  <div id="nftabs" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;"></div>
+
+  <div id="pane-g">
+    <div class="addbox">
+      <input id="g-name" placeholder="Group name" style="min-width:200px">
+      <input id="g-link" placeholder="Group link" style="min-width:180px">
+      <input id="g-mem" placeholder="Members (e.g. 12k)" style="flex:0 1 130px;min-width:110px">
+      <select id="g-cat" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px"><option>Setter</option><option>Closer</option><option>Sales</option></select>
+      <select id="g-act" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px"><option>High</option><option selected>Medium</option><option>Low</option></select>
+      <select id="g-st" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px"><option value="can">✅ Can Post</option><option value="appr">🟡 Approval Needed</option><option value="no">🚫 No-Post</option></select>
+      <button onclick="addGroup()">＋ Add group</button>
+    </div>
+    <div id="byva" style="margin-bottom:14px;"></div>
+    <div id="vatabs" style="margin-bottom:12px;"></div>
+    <div class="grid" id="grid"><div class="muted">Loading…</div></div>
   </div>
-  <div id="byva" style="margin-bottom:14px;"></div>
-  <div id="vatabs" style="margin-bottom:12px;"></div>
-  <div class="grid" id="grid"><div class="muted">Loading…</div></div>
+
+  <div id="pane-c" style="display:none">
+    <div style="background:rgba(225,29,116,.06);border:1px solid rgba(225,29,116,.25);border-radius:12px;padding:10px 14px;font-size:12px;color:#9d1355;font-weight:700;margin-bottom:12px">The form is the official record — no manual detail collection, no own spreadsheets, no Messenger-only applications. And never: book interviews · confirm schedules · negotiate pay. Hayden handles all of that.</div>
+    <div class="addbox">
+      <input id="c-name" placeholder="Candidate name" style="min-width:200px">
+      <select id="c-role" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px"><option>Setter</option><option>Closer</option></select>
+      <input id="c-src" placeholder="From which group?" style="min-width:170px">
+      <button onclick="addCand()">＋ Add candidate</button>
+    </div>
+    <div class="grid" id="cgrid"><div class="muted">Loading…</div></div>
+  </div>
+
+  <div id="pane-t" style="display:none"></div>
+  <div id="pane-r" style="display:none"></div>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -405,8 +428,9 @@ function pupPaint(){
   keys.forEach(function(k){ var s=PUP.q[k]; if(!s) return;
     if(s.state==='up') up++; else if(s.state==='done') done++; else fail++; });
   el.textContent = fail ? (fail+' failed — they will be retried on save')
-                 : up ? ('Uploading '+up+'…  '+done+' ready')
-                 : done ? (done+' screenshot'+(done>1?'s':'')+' ready') : '';
+                 : up ? ('Uploading '+up+'…  '+done+' attached')
+                 : done ? (done+' screenshot'+(done>1?'s':'')+" attached — nothing is counted until you press Save")
+                 : '';
   el.style.color = fail ? '#b91c1c' : (up ? '#b45309' : '#047857');
 }
 /* Returns the Drive ids for the current selection, waiting only on uploads still running and
@@ -475,7 +499,7 @@ function proofThumb(d){
   w.style.cssText='position:relative;width:74px;height:74px;border-radius:9px;overflow:hidden;border:1px solid #e2e8f0;margin:0 8px 8px 0;';
   w.innerHTML='<img src="'+d+'" style="width:100%;height:100%;object-fit:cover;">'+
     '<button style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;line-height:1;">×</button>';
-  w.querySelector('button').onclick=function(){ var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1); w.remove(); };
+  w.querySelector('button').onclick=function(){ var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1); try{ delete PUP.q[pupKey(d)]; pupPaint(); }catch(_pq){} w.remove(); };
   host.appendChild(w);
 }
 async function proofAdd(files){
@@ -568,7 +592,20 @@ function markOk(v, empId){
 
 
 
-function M(r){ return { avail:(r.meta&&r.meta.avail)||0, sched:(r.meta&&r.meta.sched)||0, last:(r.meta&&r.meta.last)||'' }; }
+/* ══ NewFans v2 · Facebook Outreach data model — one pa row per GROUP or CANDIDATE (meta.k) ══ */
+var FORM_URL='https://forms.educo.io/setter';
+var GSTS={can:'✅ Can Post',appr:'🟡 Approval Needed',no:'🚫 No-Post'};
+var STAGES=[['int','💬 Interested'],['sent','📨 Form sent'],['sub','📥 Form submitted'],['short','⭐ Shortlisted'],['hayden','🚀 With Hayden'],['rej','🗂 Not a fit']];
+function isG(r){ return ((r.meta&&r.meta.k)||'g')==='g'; }
+function GM(r){ var m=r.meta||{}; return { link:m.link||'', mem:m.mem||'', cat:m.cat||'Setter', act:m.act||'Medium', rules:m.rules||'', st:m.st||'can', adminc:m.adminc||'', notes:m.notes||'', posts:m.posts||[], cdate:m.cdate||'' }; }
+function CM(r){ var m=r.meta||{}; return { role:m.role||'Setter', src:m.src||'', stage:m.stage||'int', avail:m.avail||'', tz:m.tz||'', exp:m.exp||'', notes:m.notes||'', hist:m.hist||{}, cdate:m.cdate||'' }; }
+function nowHM(){ try{ return new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date()); }catch(e){ return '00:00'; } }
+function postsToday(g){ return (GM(g).posts||[]).filter(function(x){ return x.d===today() && x.s!=='rem'; }); }
+function lastPostMins(g){
+  var ps=postsToday(g); if(!ps.length) return null;
+  var pt=String(ps[ps.length-1].t||'00:00').split(':'), n=nowHM().split(':');
+  return (parseInt(n[0],10)*60+parseInt(n[1],10)) - (parseInt(pt[0],10)*60+parseInt(pt[1],10));
+}
 
 async function signIn(){
   var id=$('si-id').value.trim(), pin=$('si-pin').value.trim(); var err=$('si-err'); err.style.display='none';
@@ -581,7 +618,7 @@ async function signIn(){
     start();
   }catch(e){ err.style.display='block'; err.textContent='Network error — try again.'; }
 }
-function start(){ try{ fetch(API+'?action=tool_used&employee_id='+encodeURIComponent(USER.id)+'&tool=newfans&_='+Date.now()); }catch(_tu){} $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name; loadNames(); paintCached(); load(); smartPoll(); }
+function start(){ try{ fetch(API+'?action=tool_used&employee_id='+encodeURIComponent(USER.id)+'&tool=newfans&_='+Date.now()); }catch(_tu){} $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name; loadNames(); showPane(PANE); paintCached(); load(); smartPoll(); }
 
 async function load(){
   try{
@@ -589,68 +626,248 @@ async function load(){
     if(!d||!d.ok) throw new Error((d&&d.error)||'load'); ROWS=d.rows||[]; cacheRows(); render();
   }catch(e){ $('grid').innerHTML='<div class="muted">Could not load — redeploy the Apps Script (pa_list).</div>'; }
 }
+var PANE=(function(){ try{ return sessionStorage.getItem('nf_pane')||'g'; }catch(e){ return 'g'; } })();
+function showPane(pn){
+  PANE=pn; try{ sessionStorage.setItem('nf_pane',pn); }catch(e){}
+  ['g','c','t','r'].forEach(function(k){ var el=$('pane-'+k); if(el) el.style.display=(k===pn)?'block':'none'; });
+  render();
+}
+function paneTabs(){
+  var T=[['g','📌 Groups'],['c','👥 Candidates'],['t','📝 Templates'],['r','📤 Daily report']];
+  $('nftabs').innerHTML=T.map(function(t){ var on=(PANE===t[0]);
+    return '<button onclick="showPane(\''+t[0]+'\')" style="border:1px solid '+(on?'var(--nf)':'var(--line)')+';background:'+(on?'rgba(225,29,116,.09)':'var(--card)')+';color:'+(on?'#9d1355':'var(--ink2)')+';border-radius:100px;padding:7px 16px;font:800 12.5px \'Manrope\',sans-serif;cursor:pointer;">'+t[1]+'</button>'; }).join('');
+}
+function groups(){ return ROWS.filter(isG); }
+function cands(){ return ROWS.filter(function(r){ return !isG(r); }); }
 function render(){
-  var totAvail=0, totSched=0, low=0;
-  ROWS.forEach(function(r){ var m=M(r); totAvail+=m.avail; totSched+=m.sched; if(m.avail<=0) low++; });
+  paneTabs();
+  var G=groups(), C=cands();
+  var postsN=0; G.forEach(function(g){ postsN+=postsToday(g).length; });
+  var pipe=C.filter(function(r){ var st=CM(r).stage; return st!=='hayden'&&st!=='rej'; }).length;
+  var ready=C.filter(function(r){ return CM(r).stage==='short'; }).length;
   $('stats').innerHTML=
-    '<div class="stat"><b>'+ROWS.length+'</b><span>Models</span></div>'+
-    '<div class="stat"><b style="color:#0f766e">'+totAvail+'</b><span>Content on hand</span></div>'+
-    '<div class="stat"><b style="color:#9d1355">'+totSched+'</b><span>Posts scheduled</span></div>'+
-    '<div class="stat"><b style="color:'+(low?'#b91c1c':'#0f766e')+'">'+low+'</b><span>Need content</span></div>';
-  renderByVA([
-    ['Has content','#10b981',function(r){return M(r).avail>0;}],
-    ['Out of content','#ef4444',function(r){return M(r).avail<=0;}]
-  ], function(r){ return markOk(M(r).last, r.assigned_to||r.created_by); }, null);
-  if(!ROWS.length){ $('grid').innerHTML='<div class="muted">No models yet — add the first above.</div>'; return; }
+    '<div class="stat"><b>'+G.length+'</b><span>Groups</span></div>'+
+    '<div class="stat"><b style="color:#0f766e">'+G.filter(function(g){return GM(g).st==='can';}).length+'</b><span>Can post</span></div>'+
+    '<div class="stat"><b style="color:#9d1355">'+postsN+'</b><span>Posts today</span></div>'+
+    '<div class="stat"><b>'+pipe+'</b><span>In pipeline</span></div>'+
+    '<div class="stat"><b style="color:'+(ready?'#b45309':'var(--ink)')+'">'+ready+'</b><span>Ready for Hayden</span></div>';
+  renderByVA(null,
+    function(r){ return isG(r)&&postsToday(r).length>0; },
+    function(r){ return isG(r)&&GM(r).st!=='no'; });
   renderTabs();
-  var base=filterRows();
-  var sorted=base.slice().sort(function(a,b){ return M(a).avail-M(b).avail; });
-  if(!sorted.length){ $('grid').innerHTML='<div class="muted">No models in this view.</div>'; return; }
-  function grpN(r){ var a=M(r).avail; return a<=0?'🚨 Out of content — tell the client':(a<=2?'⚠ Runway low':'✅ Stocked'); }
-  var gcnt={}; sorted.forEach(function(r){ var g=grpN(r); gcnt[g]=(gcnt[g]||0)+1; });
+  renderGroups(); renderCands(); renderTemplates(); renderReport();
+}
+function renderGroups(){
+  var base=filterRows().filter(isG);
+  if(!base.length){ $('grid').innerHTML='<div class="muted">No groups in this view — add the first one above (SOP Step 1–2).</div>'; return; }
+  var order={can:0,appr:1,no:2};
+  var sorted=base.slice().sort(function(a,b){ var d=order[GM(a).st]-order[GM(b).st]; return d||postsToday(b).length-postsToday(a).length; });
+  var gcnt={}; sorted.forEach(function(r){ var g=GSTS[GM(r).st]; gcnt[g]=(gcnt[g]||0)+1; });
   var out=[], lastG='';
   sorted.forEach(function(r){
-    var g=grpN(r); if(g!==lastG){ out.push('<div class="sect"><b>'+g+'</b><span>'+gcnt[g]+'</span><i></i></div>'); lastG=g; }
-    var m=M(r); var lowFlag=m.avail<=0;
-    out.push('<div class="model'+(lowFlag?' low':'')+'"><div class="hd"><b>'+esc(r.handle)+'</b>'+kmenu([['📣 Client updated (+1)',"clientUpdated('"+r.id+"')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+
-      '<div class="nums">'+
-        '<div class="nm"><b style="color:'+(lowFlag?'#b91c1c':'#0f766e')+'">'+m.avail+'</b><span>content left</span></div>'+
-        '<div class="nm"><b style="color:#9d1355">'+m.sched+'</b><span>scheduled</span></div>'+
-      '</div>'+
-      '<div class="last">'+(m.last?('Last scheduled post: <b>'+esc(m.last)+'</b>'):'Nothing scheduled yet')+'</div>'+
+    var m=GM(r), hdr=GSTS[m.st];
+    if(hdr!==lastG){ out.push('<div class="sect"><b>'+hdr+'</b><span>'+gcnt[hdr]+'</span><i></i></div>'); lastG=hdr; }
+    var pn=postsToday(r).length, mins=lastPostMins(r);
+    var pace = m.st==='no' ? '<span style="color:#b91c1c;font-weight:800">Do not post here'+(m.adminc?' · admin: '+esc(m.adminc):'')+'</span>'
+      : pn>=4 ? '<span style="color:#b91c1c;font-weight:800">Daily cap reached (4/4)</span>'
+      : (mins!=null&&mins<120) ? '<span style="color:#b45309;font-weight:800">'+pn+'/4 today · last post '+mins+' min ago — SOP says 1–2 h apart</span>'
+      : '<span style="color:#0f766e;font-weight:800">'+pn+'/4 today'+(mins!=null?' · last '+Math.round(mins/60*10)/10+' h ago':' · none yet')+'</span>';
+    var canLog=(m.st!=='no'&&pn<4);
+    out.push('<div class="model'+(m.st==='no'?' low':'')+'"><div class="hd"><b>'+(m.link?('<a href="'+esc(m.link)+'" target="_blank" style="color:inherit">'+esc(r.handle)+' ↗</a>'):esc(r.handle))+'</b>'+
+      kmenu([
+        ['🟡 Log post — pending approval',"logPost('"+r.id+"','pend')"],
+        ['✅ Pending post got approved',"pendOk('"+r.id+"')"],
+        ['🗑 Latest post was removed',"postRemoved('"+r.id+"')"],
+        '---',
+        ['🔁 Change post status',"cycleSt('"+r.id+"')"],
+        ['📏 Edit rules / notes',"editG('"+r.id+"')"],
+        '---',
+        ['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']
+      ])+'</div>'+
+      '<div class="meta1">'+esc(m.cat)+' · '+esc(m.mem||'?')+' members · activity '+esc(m.act)+(m.rules?(' · rules: '+esc(m.rules)):'')+(m.notes?(' · '+esc(m.notes)):'')+'</div>'+
+      '<div class="last" style="margin-top:8px">'+pace+'</div>'+
       '<div class="btns">'+
-        '<button class="in" onclick="contentIn(\''+r.id+'\')">📥 + Content received</button>'+
-        '<button class="sched" '+(m.avail<=0?'disabled style="opacity:.5"':'')+' onclick="schedPost(\''+r.id+'\')">📅 Scheduled a post</button>'+
+        '<button class="sched" '+(canLog?'':'disabled style="opacity:.45" ')+'onclick="logPost(\''+r.id+'\',\'pub\')">📣 Posted the recruitment message</button>'+
       '</div></div>');
   });
   $('grid').innerHTML=out.join('');
 }
-async function addModel(){
-  var n=$('nf-model').value.trim(); if(!n){ toast('Type the model name.'); return; }
-  try{
-    var meta=encodeURIComponent(JSON.stringify({avail:0,sched:0,last:''}));
-    var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(n)+'&status=active&meta='+meta+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
-    var d=await r.json();
-    if(d&&d.ok){ $('nf-model').value=''; toast('Model added.'); load(); }
-    else if(d&&d.error==='DUPLICATE') toast('That model is already on the board.');
-    else toast('Could not add.');
-  }catch(e){ toast('Connection error.'); }
+function renderCands(){
+  var C=cands();
+  if(!C.length){ $('cgrid').innerHTML='<div class="muted">No candidates yet — add everyone who replies to a post or DMs you.</div>'; return; }
+  var out=[], byStage={};
+  C.forEach(function(r){ var k=CM(r).stage; (byStage[k]=byStage[k]||[]).push(r); });
+  STAGES.forEach(function(st){
+    var rows=byStage[st[0]]||[]; if(!rows.length) return;
+    out.push('<div class="sect"><b>'+st[1]+'</b><span>'+rows.length+'</span><i></i></div>');
+    rows.forEach(function(r){
+      var m=CM(r), b='';
+      if(m.stage==='int')  b='<button class="sched" onclick="formSent(\''+r.id+'\')">📨 Sent the form link</button>';
+      if(m.stage==='sent') b='<button class="in" onclick="formSub(\''+r.id+'\')">📥 Form submitted</button>';
+      if(m.stage==='sub')  b='<button class="cli" onclick="shortlist(\''+r.id+'\')">⭐ Shortlist (collect availability)</button>';
+      if(m.stage==='short')b='<button class="sched" onclick="toHayden(\''+r.id+'\')">🚀 Copy Hayden hand-off &amp; mark sent</button>';
+      out.push('<div class="model"><div class="hd"><b>'+esc(r.handle)+'</b>'+
+        kmenu([['✏️ Edit notes / experience',"editC('"+r.id+"')"],['🗂 Not a fit',"candStage('"+r.id+"','rej')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+
+        '<div class="meta1">'+esc(m.role)+(m.src?(' · from '+esc(m.src)):'')+(m.exp?(' · exp: '+esc(m.exp)):'')+'</div>'+
+        (m.avail?('<div class="meta1">🗓 '+esc(m.avail)+(m.tz?(' ('+esc(m.tz)+')'):'')+'</div>'):'')+
+        (m.notes?('<div class="meta1">'+esc(m.notes)+'</div>'):'')+
+        (b?('<div class="btns" style="margin-top:9px">'+b+'</div>'):'')+
+      '</div>');
+    });
+  });
+  $('cgrid').innerHTML=out.join('');
 }
+/* ── SOP copy blocks — the exact wording lives in the tool so it never drifts ── */
+var TPL_POST="We're a done-for-you business-building agency (Educo). We are looking to hire more team members for our clients to support their continued growth with us.\n\nWe're not filling one seat—we're hiring multiple setters regularly to implement them into active businesses.\n\nWhat you'd be doing:\n• Working inbound leads and warm lists (DMs, SMS, email follow-up) for one of our client offers.\n• Qualifying prospects and booking them onto a closer's calendar.\n• Tracking your pipeline in the CRM—everything is already built; you plug in and work.\n\nWhat you're NOT doing:\n• No cold scraping or buying your own lists.\n• No closing or taking payment—booked calls are your job; the close is the closer's.\n\nCompensation:\n• Per booked call that shows + % of closed revenue on your booked calls.\nOffers range across niches and price points, so earning potential depends on placement. Compensation details will be discussed during the interview.\n\nWho this fits:\n• You've set before (agency, coaching, info, or local service offers) OR you're hungry, coachable, and can prove you follow up relentlessly.\n• Available consistent daily hours.\n• US time zones preferred.\n• Comfortable working inside a CRM and hitting daily activity numbers.\n\nTo apply:\nDM me directly with a quick intro, and I'll send you our application form.\nThe application takes around 3–5 minutes to complete.\nWe're placing people fast—first placements start within the week.";
+var TPL_DM="Hey, thanks for reaching out about the setter role.\n\nHere's our application — it takes about 3 minutes:\n"+FORM_URL+"\n\nOnce you submit it, we'll review your application and reach out within 24 hours to schedule a quick 15-minute call if it's a fit.";
+var TPL_REDIR="Thanks for sharing that. To keep everything organized, please complete our application form first. Once submitted, our team will review your information and get back to you regarding the next steps.\n"+FORM_URL;
+var TPL_AVAIL="Thanks for completing the application. Can you provide your preferred 15-minute availability windows in EST for a quick interview?";
+var _TPLS={};
+function copyTxt(t,msg){ try{ navigator.clipboard.writeText(t).then(function(){ toast(msg||'Copied.'); }); }catch(e){ prompt('Copy:', t); } }
+function renderTemplates(){
+  var host=$('pane-t'); if(!host||host.dataset.done) return; host.dataset.done='1';
+  _TPLS={post:TPL_POST,dm:TPL_DM,redir:TPL_REDIR,avail:TPL_AVAIL};
+  function block(title,when,txt,key){
+    return '<div class="model" style="margin-bottom:12px"><div class="hd"><b>'+title+'</b></div>'+
+      '<div class="meta1">'+when+'</div>'+
+      '<div style="font-size:12px;color:var(--ink2);background:rgba(15,23,42,.035);border-radius:9px;padding:9px 11px;margin:9px 0;white-space:pre-wrap;max-height:180px;overflow:auto">'+esc(txt)+'</div>'+
+      '<div class="btns"><button class="in" onclick="copyTxt(_TPLS[\''+key+'\'],\'Template copied — paste it in Facebook.\')">📋 Copy</button></div></div>';
+  }
+  host.innerHTML=
+    block('📣 Recruitment post','Step 4 — post this in groups that allow it (check the rules first)',TPL_POST,'post')+
+    block('📨 Candidate DM — form link','Step 7 — when someone responds to a post or DMs you',TPL_DM,'dm')+
+    block('↩️ Redirect to the form','Step 9 — when a candidate sends details through Messenger instead',TPL_REDIR,'redir')+
+    block('🗓 Availability ask','Step 12 — shortlisted candidates only',TPL_AVAIL,'avail')+
+    '<div class="model" style="border-color:rgba(245,158,11,.5)"><div class="hd"><b>🚨 Escalate to Hayden immediately</b></div>'+
+    '<div class="meta1" style="line-height:1.7;margin-top:6px">Account restricted or flagged, or a group bans/removes posts → <b>stop posting</b> and report.<br>Candidate asks about contract, legal, or pay → escalate; never answer or promise.<br>Form broken → notify Hayden, collect the candidate\'s email as backup, wait for instructions.</div></div>';
+}
+function repLine(){
+  var d=today(), G=groups(), C=cands();
+  var newG=G.filter(function(g){ return GM(g).cdate===d; }).length;
+  var lines=['Facebook Outreach Update','','Date: '+d,'','Groups Found:','• Total groups found: '+G.length,'• New groups added: '+newG,'','Posts Made:'];
+  var any=false;
+  G.forEach(function(g){ var ps=(GM(g).posts||[]).filter(function(x){return x.d===d;}); if(!ps.length) return; any=true;
+    var st=ps.map(function(x){return x.s==='pub'?'Published':(x.s==='pend'?'Pending Approval':'Removed');});
+    lines.push('• '+g.handle+' — '+ps.length+' post'+(ps.length>1?'s':'')+' ('+st.join(', ')+')'); });
+  if(!any) lines.push('• (none yet)');
+  var sent=C.filter(function(r){return (CM(r).hist||{}).sent===d;}).length;
+  var sub =C.filter(function(r){return (CM(r).hist||{}).sub===d;}).length;
+  var sh  =C.filter(function(r){return (CM(r).hist||{}).short===d;}).length;
+  lines.push('','Candidate Activity:','• Form links sent: '+sent,'• Form submissions received: '+sub,'• Candidates shortlisted: '+sh,'','Blockers:','• ','','Requests:','• ','','Escalations:','• ');
+  return lines.join('\n');
+}
+function renderReport(){
+  var host=$('pane-r'); if(!host) return;
+  host.innerHTML='<div class="model"><div class="hd"><b>📤 Daily report to Hayden — 12:00 PM &amp; 6:00 PM MST</b></div>'+
+    '<div class="meta1">Auto-filled from today\'s board. Add blockers / requests / escalations after pasting.</div>'+
+    '<div style="font-size:12px;color:var(--ink2);background:rgba(15,23,42,.035);border-radius:9px;padding:9px 11px;margin:9px 0;white-space:pre-wrap">'+esc(repLine())+'</div>'+
+    '<div class="btns"><button class="in" onclick="copyTxt(repLine(),\'Report copied — send it to Hayden.\')">📋 Copy report</button></div></div>';
+}
+/* ── actions ── */
 async function saveMeta(r, m){
   var meta=encodeURIComponent(JSON.stringify(m));
   var rr=await fetch(API+'?action=pa_update&id='+encodeURIComponent(r.id)+'&meta='+meta+'&_='+Date.now());
   return (await rr.json());
 }
 function row(id){ return ROWS.filter(function(r){return r.id===id;})[0]; }
-async function contentIn(id){ var r=row(id); if(!r) return; var m=M(r); m.avail++;
-  var d=await saveMeta(r,m); if(d&&d.ok){ toast('Content logged — prep it for posting right away (SOP).'); load(); } else toast('Could not save.'); }
-async function schedPost(id){ var r=row(id); if(!r) return; var m=M(r); if(m.avail<=0){ toast('No content left.'); return; }
-  await bump('Wallpost Scheduled',1);   // proof BEFORE the counter moves — cancelling changes nothing
-  m.avail--; m.sched++; m.last=vaKeyOf(USER.id);
+async function addGroup(){
+  var n=$('g-name').value.trim(); if(!n){ toast('Type the group name.'); return; }
+  var meta={k:'g',link:$('g-link').value.trim(),mem:$('g-mem').value.trim(),cat:$('g-cat').value,act:$('g-act').value,st:$('g-st').value,rules:'',notes:'',posts:[],cdate:today()};
+  try{
+    var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(n)+'&status=active&meta='+encodeURIComponent(JSON.stringify(meta))+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
+    var d=await r.json();
+    if(d&&d.ok){ ['g-name','g-link','g-mem'].forEach(function(i){$(i).value='';}); toast('Group added to the master list.'); load(); }
+    else if(d&&d.error==='DUPLICATE') toast('That group is already on the list.');
+    else toast('Could not add.');
+  }catch(e){ toast('Connection error.'); }
+}
+async function addCand(){
+  var n=$('c-name').value.trim(); if(!n){ toast('Type the candidate name.'); return; }
+  var meta={k:'c',role:$('c-role').value,src:$('c-src').value.trim(),stage:'int',hist:{int:today()},cdate:today()};
+  try{
+    var r=await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(n)+'&status=active&meta='+encodeURIComponent(JSON.stringify(meta))+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now());
+    var d=await r.json();
+    if(d&&d.ok){ $('c-name').value=''; $('c-src').value=''; toast('Candidate added — next: send the form link.'); load(); }
+    else if(d&&d.error==='DUPLICATE') toast('That candidate is already on the board.');
+    else toast('Could not add.');
+  }catch(e){ toast('Connection error.'); }
+}
+async function logPost(id, st){
+  var r=row(id); if(!r||!isG(r)) return; var m=GM(r);
+  if(m.st==='no'){ toast('This is a No-Post group — SOP says do not post.'); return; }
+  var pn=postsToday(r).length;
+  if(pn>=4){ toast('SOP cap: max 3–4 posts per group per day — this group is at '+pn+'.'); return; }
+  var mins=lastPostMins(r);
+  if(mins!=null&&mins>=0&&mins<120&&!confirm('Last post in this group was '+mins+' min ago.\nSOP pacing is 1–2 hours apart. Log anyway?')) return;
+  if(st==='pub') await bump('FB Post Published',1);   // proof BEFORE the counter moves
+  m.posts=(m.posts||[]).concat([{d:today(),t:nowHM(),s:st,by:USER.id}]).slice(-60);
   var d=await saveMeta(r,m);
-  if(d&&d.ok){ toast('+1 Wallpost Scheduled ✅'+(m.avail<=2?(' · runway low — plan a client update'):'')); load(); } else toast('Could not save.'); }
-async function clientUpdated(id){ var r=row(id); if(!r) return;
-  await bump('Client Update',1); toast('+1 Client Update 📣 — noted.'); }
+  if(d&&d.ok){ toast(st==='pub'?'+1 FB Post Published ✅':'Logged as pending approval — flip it when the mods approve.'); load(); }
+  else toast('Could not save.');
+}
+async function pendOk(id){
+  var r=row(id); if(!r) return; var m=GM(r);
+  var ix=-1; (m.posts||[]).forEach(function(x,i){ if(x.s==='pend') ix=i; });
+  if(ix<0){ toast('No pending post on this group.'); return; }
+  await bump('FB Post Published',1);
+  m.posts[ix].s='pub'; m.posts[ix].d=today(); m.posts[ix].t=nowHM();
+  var d=await saveMeta(r,m);
+  if(d&&d.ok){ toast('Approved post counted ✅'); load(); } else toast('Could not save.');
+}
+async function postRemoved(id){
+  var r=row(id); if(!r) return; var m=GM(r);
+  var ix=-1; (m.posts||[]).forEach(function(x,i){ if(x.s!=='rem') ix=i; });
+  if(ix<0){ toast('No post to mark.'); return; }
+  m.posts[ix].s='rem';
+  var d=await saveMeta(r,m);
+  if(d&&d.ok){ toast('Marked removed. If this keeps happening: stop posting here and tell Hayden (escalation rule).'); load(); }
+}
+async function cycleSt(id){
+  var r=row(id); if(!r) return; var m=GM(r);
+  m.st=(m.st==='can')?'appr':(m.st==='appr'?'no':'can');
+  if(m.st==='no'){ var a=prompt('Marking No-Post. Admin/moderator info, if you have it:', m.adminc||''); if(a!=null) m.adminc=a.trim(); }
+  var d=await saveMeta(r,m);
+  if(d&&d.ok){ toast('Status → '+GSTS[m.st]); load(); }
+}
+async function editG(id){
+  var r=row(id); if(!r) return; var m=GM(r);
+  var ru=prompt('Posting rules for this group:', m.rules); if(ru!=null) m.rules=ru.trim();
+  var no=prompt('Notes:', m.notes); if(no!=null) m.notes=no.trim();
+  var d=await saveMeta(r,m); if(d&&d.ok){ toast('Saved.'); load(); }
+}
+async function editC(id){
+  var r=row(id); if(!r) return; var m=CM(r);
+  var ex=prompt('Experience (setter / high-ticket / agency / CRM):', m.exp); if(ex!=null) m.exp=ex.trim();
+  var no=prompt('Notes:', m.notes); if(no!=null) m.notes=no.trim();
+  var d=await saveMeta(r,m); if(d&&d.ok){ toast('Saved.'); load(); }
+}
+async function candStage(id, st, extra){
+  var r=row(id); if(!r) return false; var m=CM(r);
+  m.stage=st; m.hist=m.hist||{}; m.hist[st]=today();
+  if(extra) Object.keys(extra).forEach(function(k){ m[k]=extra[k]; });
+  var d=await saveMeta(r,m);
+  if(d&&d.ok){ load(); return true; } toast('Could not save.'); return false;
+}
+async function formSent(id){
+  await bump('Form Link Sent',1);   // screenshot of the DM = the proof
+  if(await candStage(id,'sent')) toast('+1 Form Link Sent 📨 — review lands within 24 h once they submit.');
+}
+async function formSub(id){ if(await candStage(id,'sub')) toast('Submission recorded — the form is the official record.'); }
+async function shortlist(id){
+  var r=row(id); if(!r) return;
+  var av=prompt('Preferred 15-min interview windows (EST):',''); if(av==null) return;
+  var tz=prompt('Candidate time zone:','EST')||'';
+  var ex=prompt('Experience summary (setter / high-ticket / agency / CRM):', CM(r).exp||'')||'';
+  var no=prompt('Additional notes:', CM(r).notes||'')||'';
+  if(await candStage(id,'short',{avail:av.trim(),tz:tz.trim(),exp:ex.trim(),notes:no.trim()}))
+    toast('Shortlisted ⭐ — hand off to Hayden from the card.');
+}
+async function toHayden(id){
+  var r=row(id); if(!r) return; var m=CM(r);
+  var txt='Candidate Name: '+r.handle+'\nRole Applied: '+m.role+'\nExperience: '+(m.exp||'—')+'\nApplication Completed: Yes'+((m.hist||{}).sub?(' ('+m.hist.sub+')'):'')+'\nInterview Availability: '+(m.avail||'—')+((m.tz&&m.avail)?(' '+m.tz):'')+'\n\nNotes: '+(m.notes||'—');
+  copyTxt(txt,'Hand-off copied — send it to Hayden. (No booking, no pay talk — Hayden schedules.)');
+  await candStage(id,'hayden');
+}
 (function(){ var u=null; try{ u=JSON.parse(sessionStorage.getItem('newfans_user')||'null'); }catch(e){}
   if(u&&u.id){ USER=u; start(); } else { $('si-id').focus(); $('si-pin').addEventListener('keydown',function(e){ if(e.key==='Enter') signIn(); }); } })();
 </script>
