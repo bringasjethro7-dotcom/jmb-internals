@@ -110,10 +110,7 @@ body{background:radial-gradient(1100px 480px at 85% -12%, #ffe9d9 0%, rgba(255,2
   <div class="tabs">
     <button class="tab on" data-p="p1">✉️ Applications</button>
     <button class="tab" data-p="p2">📋 Tracker</button>
-    <button class="tab" data-p="p3">💬 Answers</button>
-    <button class="tab" data-p="p6">🎬 Video script</button>
-    <button class="tab" data-p="p5">👤 Profile</button>
-    <button class="tab" data-p="p4">📎 Resume &amp; files</button>
+    <button class="tab" data-p="p5">👤 Profile &amp; Résumés</button>
   </div>
 
   <!-- ══════════ PROPOSALS ══════════ -->
@@ -126,7 +123,6 @@ body{background:radial-gradient(1100px 480px at 85% -12%, #ffe9d9 0%, rgba(255,2
       <div class="vars">
         <div><label>Employer name</label><input id="v_name" placeholder="Sarah"></div>
         <div><label>Role / post title</label><input id="v_role" placeholder="Reddit Poster"></div>
-        <div><label>Accounts in trial</label><input id="v_acc" value="3"></div>
         <div><label>Your rate line</label><input id="v_rate" placeholder="$5/hr or $600/mo"></div>
         <div><label>Available from</label><input id="v_date" type="date"></div>
       </div>
@@ -140,6 +136,7 @@ body{background:radial-gradient(1100px 480px at 85% -12%, #ffe9d9 0%, rgba(255,2
   <!-- ══════════ TRACKER ══════════ -->
   <div class="pane" id="p2">
     <div class="stat" id="stats"></div>
+    <div id="board-stats"></div>
     <div class="note">Rows turn <b>amber</b> when a follow-up is due. Most replies come from the second message, not the first — this is the whole reason the tracker exists.</div>
     <div class="rowbar" style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:9px 11px">
       <span style="font-size:11.5px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.6px">Sync</span>
@@ -150,8 +147,12 @@ body{background:radial-gradient(1100px 480px at 85% -12%, #ffe9d9 0%, rgba(255,2
       <span style="font-size:11.5px;font-weight:700" id="sync-msg"></span>
     </div>
     <div class="rowbar">
+      <span style="font-size:11px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;">Campaign</span>
+      <select id="camp-sel" onchange="setCampaign(this.value)" style="width:auto;border-color:rgba(234,88,12,.5);font-weight:700;"></select>
       <button class="btn p" onclick="addRow()">+ Add application</button>
       <button class="btn" onclick="exportCsv()">Export CSV</button>
+      <button class="btn" onclick="exportJson()">Export JSON</button>
+      <button class="btn" onclick="importFile()">⬆ Import</button>
       <select id="filt" onchange="render()" style="width:auto">
         <option value="">All statuses</option>
         <option>Applied</option><option>Needs video</option><option>Needs assessment</option>
@@ -161,12 +162,15 @@ body{background:radial-gradient(1100px 480px at 85% -12%, #ffe9d9 0%, rgba(255,2
       <select id="filtb" onchange="render()" style="width:auto">
         <option value="">All boards</option>
       </select>
+      <select id="filtn" onchange="render()" style="width:auto">
+        <option value="">All niches</option>
+      </select>
       <span style="color:var(--t3);font-size:11.5px" id="cnt"></span>
     </div>
     <div style="overflow-x:auto"><table>
       <thead><tr>
-        <th>Employer / post</th><th>Board</th><th class="hidem">Applied</th><th>Rate quoted</th>
-        <th>Status</th><th>Follow up</th><th class="hidem">Notes</th><th></th>
+        <th>Employer / post</th><th>Board</th><th>Niche</th><th class="hidem">Applied</th><th>Rate quoted</th>
+        <th>Status</th><th>Follow up</th><th class="hidem">Notes</th><th>Links · gate</th><th></th>
       </tr></thead>
       <tbody id="tb"></tbody>
     </table></div>
@@ -174,6 +178,7 @@ body{background:radial-gradient(1100px 480px at 85% -12%, #ffe9d9 0%, rgba(255,2
 
   <!-- ══════════ ANSWERS ══════════ -->
   <div class="pane" id="p3">
+    <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);margin:18px 0 8px;">💬 Interview answers</div>
     <div class="card">
       <h3>The five questions you will get</h3>
       <div class="why">Have these ready. The ban question is the one you win on.</div>
@@ -196,6 +201,7 @@ body{background:radial-gradient(1100px 480px at 85% -12%, #ffe9d9 0%, rgba(255,2
 
   <!-- ══════════ VIDEO SCRIPT ══════════ -->
   <div class="pane" id="p6">
+    <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);margin:18px 0 8px;">🎬 Video script</div>
     <div class="note">One script per application, saved against that posting. Write your own or paste one in — <b>nothing here is overwritten unless you say so</b>. Mark a row <b>Needs video</b> in the Tracker and press 📄 to land here with that application selected.</div>
     <div class="card">
       <h3>Script <span id="sc-for" style="font-weight:600;color:var(--t3);font-size:12.5px"></span></h3>
@@ -227,6 +233,29 @@ body{background:radial-gradient(1100px 480px at 85% -12%, #ffe9d9 0%, rgba(255,2
 
   <!-- ══════════ PROFILE ══════════ -->
   <div class="pane" id="p5">
+    <div class="card" style="border-color:rgba(234,88,12,.4);">
+      <h3>⚡ Reply-ready — the 5 answers you keep needing</h3>
+      <div class="why">Employers (especially in Bossjob chat) ask the same things. Copy, personalize one line, send within minutes — speed wins these.</div>
+      <pre class="tpl" id="qa1">Experience: I run social media operations daily — I founded a VA agency where we operate 600+ creator accounts across Instagram, Reddit, X and Snapchat, and I personally grew Instagram pages to 95K and 65K followers. Portfolio with numbers: https://jmbvirtuals.com/portfolio.html</pre>
+      <button class="btn sm" onclick="cpEl('qa1')">Copy</button>
+      <pre class="tpl" id="qa2">Tools: Meta Business Suite, scheduling tools, CapCut/Canva for content, and my own tracking dashboards — I'm an accountant by training, so every account gets weekly numbers-first reporting (reach, engagement, growth, next week's plan).</pre>
+      <button class="btn sm" onclick="cpEl('qa2')">Copy</button>
+      <pre class="tpl" id="qa3">How I grow a page: niche-locked content calendar, daily story/feed/reel cadence, trending-audio reels posted within 48h of a trend, hashtag rotation, and a weekly analytics review that decides the next week. Retention first — followers that stay, not spikes.</pre>
+      <button class="btn sm" onclick="cpEl('qa3')">Copy</button>
+      <pre class="tpl" id="qa4">Rate &amp; availability: from $8/hr, or ₱35,000/month full-time. Available full-time and comfortable on US hours. I hold this floor because the reporting and results justify it.</pre>
+      <button class="btn sm" onclick="cpEl('qa4')">Copy</button>
+      <pre class="tpl" id="qa5">Trial: happy to do a paid 1–2 week trial on 2–3 accounts — you'll get a full reporting sample at the end, so you can judge the numbers before committing to anything longer.</pre>
+      <button class="btn sm" onclick="cpEl('qa5')">Copy</button>
+    </div>
+    <div class="card">
+      <h3>🎯 Positioning — the headline that isn't generic</h3>
+      <div class="why">"An accountant who does social media" is the memorable angle — data-driven, audit-clean reporting. Use one of these as your profile headline everywhere:</div>
+      <pre class="tpl" id="hl1">Data-Driven Social Media Manager — an accountant's discipline applied to growth. 95K &amp; 65K IG pages grown, 600+ accounts operated, weekly ROI reporting.</pre>
+      <button class="btn sm" onclick="cpEl('hl1')">Copy</button>
+      <pre class="tpl" id="hl2">The SMM who sends you books, not vibes: CPA-trained, reels-first growth, and a weekly report that shows exactly what your money did.</pre>
+      <button class="btn sm" onclick="cpEl('hl2')">Copy</button>
+      <div class="note" style="margin-top:10px;"><b>Rate floor: never below $8/hr or ₱35K/mo.</b> Low anchors attract the worst clients and cost more than they pay. If a post is under the floor, apply only if it's a foot-in-the-door with a written upgrade path.</div>
+    </div>
     <div class="note">Fill this once. Every form answer I give comes from here, so nothing contradicts across applications. Saved in this browser only — <b>nothing is sent anywhere</b>, and do not put passwords here.</div>
     <div class="rowbar">
       <button class="btn p" onclick="pfSave()">Save profile</button>
@@ -284,6 +313,7 @@ I'm available full-time on your hours. Thanks for watching.</pre>
 
   <!-- ══════════ FILES ══════════ -->
   <div class="pane" id="p4">
+    <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);margin:18px 0 8px;">📎 Résumés &amp; files</div>
     <div class="card">
       <h3>📄 Resume versions — one per niche</h3>
       <div class="why">Different niche, different resume — never send the SMM one to an e-commerce post. Each version ships as PDF (the one you attach) + DOCX (the editable master). New niches get added here as they're built.</div>
@@ -324,21 +354,6 @@ I'm available full-time on your hours. Thanks for watching.</pre>
 /* ── Templates. {name} etc. are filled from the vars bar at send time. ───────────
    Kept as data rather than markup so a wording change happens in one place. */
 var TPL=[
- {id:'base',t:'General — Reddit + IG posting role',
-  why:'When the post wants both platforms, or is vague about which.',
-  b:"Hi {name},\n\nI'm applying for the {role} role. Daily Reddit and Instagram posting for creator accounts is what I already do, so I'd start knowing the workflow rather than learning it.\n\nOn Reddit I keep to the rules that actually keep accounts alive — at least 4 hours between posts on the same account, joining the subreddit before posting or commenting in it, and no duplicate image or caption in the same day. On Instagram I run the full daily cycle per account: story, feed post and trial reel, with rotating hashtags, trending audio and a text overlay.\n\nI screenshot every task and keep a daily sheet of what posted from which account, so you know where things stand without asking.\n\nAvailable full-time and able to work US hours. Resume attached.\n\nThank you,\nJethro"},
- {id:'reddit',t:'Reddit only',
-  why:'Opens with a question. Employers reply to questions more than to pitches.',
-  b:"Hi {name},\n\nI'd like to apply for the {role} role. Reddit posting for creator accounts is what I do daily.\n\nA question so I can answer properly: how many accounts would I be handling, and are the target subreddits already set or would I be finding them?\n\nThe rules I work to without being reminded — 4 hours minimum between posts on the same account, join the subreddit before posting or commenting, no duplicate image or caption in a day, no repeat commenting in the same subreddit the same day. I've also run account warm-up before an account starts carrying promotional posts, and handled DM outreach per SOP.\n\nEvery task gets a screenshot and goes into a daily sheet. If an account gets restricted, you hear it from me that day.\n\nAvailable full-time, US hours. Resume attached.\n\nThank you,\nJethro"},
- {id:'ig',t:'Instagram Reels only',
-  why:"Leads on ban prevention — the IG employer's real worry.",
-  b:"Hi {name},\n\nI'm applying for the {role} role. I run daily Instagram posting for creator accounts — story, feed post and trial reel per account, with captions, rotating hashtags, trending audio, text overlay and link-in-bio CTA.\n\nTwo habits I bring: content tracked one-to-one per account so the same clip never goes out twice, and a check on every piece before it posts so nothing crosses Instagram's line. Most bans in this niche are self-inflicted and those two are why.\n\nI'm used to scheduling across time zones to set slots, and to working several accounts from one device setup. Everything goes into a daily sheet with screenshots.\n\nAvailable full-time and able to work US hours. Resume attached.\n\nThank you,\nJethro"},
- {id:'multi',t:'Multi-platform / full-time VA',
-  why:'For posts wanting one person across several platforms.',
-  b:"Hi {name},\n\nI'm applying for the {role} role. I've worked creator accounts across Reddit, Instagram, X and Snapchat, so a multi-platform setup is familiar rather than new.\n\nReddit: posting, comment seeding, DM outreach per SOP, warm-up phases. Instagram: daily story, feed and trial reel with captions and audio. X: profile warm-up, pinned content, daily follow routines. Snapchat: account setup with AdsPower, VPS, proxies and SMSPool verification.\n\nThe first thing I'd ask for is your posting rules written down — accounts, cadence, and what to do when something breaks. Undocumented rules get followed inconsistently, and that's usually where these setups start losing accounts.\n\nFull-time, US hours. Resume attached.\n\nThank you,\nJethro"},
- {id:'trial',t:'Offer a paid test task',
-  why:'Normal on this board and the fastest way past a crowded post.',
-  b:"Hi {name},\n\nI'm applying for the {role} role, and rather than just make claims — happy to do a paid test on {acc} accounts for a few days so you can see the work before deciding.\n\nYou'd get the posts done to your cadence, a screenshot of every task, and a daily sheet showing what went out from which account plus anything that went wrong.\n\nI do Reddit and Instagram posting for creator accounts daily and keep to strict spacing rules — 4 hours between posts, subreddit joined before posting, no duplicate captions in a day — because keeping the account is worth more than the extra post.\n\nAvailable full-time, US hours. Resume attached.\n\nThank you,\nJethro"},
  {id:'f1',t:'Follow-up 1 — send 3 days later',
   why:'Adds something new instead of just nudging.',
   b:"Hi {name} — following up on my application for the {role} role. Still very interested. If it helps, I can send a sample of the daily sheet I keep so you can see exactly what you'd be getting."},
@@ -351,7 +366,7 @@ function V(){
   var d=document.getElementById('v_date').value, nice=d;
   if(d){ var p=d.split('-'); nice=new Date(p[0],p[1]-1,p[2]).toLocaleDateString('en-US',{month:'long',day:'numeric'}); }
   return { name:val('v_name')||'[Name]', role:val('v_role')||'[role]',
-           acc:val('v_acc')||'[2-3]', rate:val('v_rate')||'[rate]', date:nice||'[date]' };
+           acc:'2-3', rate:val('v_rate')||'[rate]', date:nice||'[date]' };
 }
 function val(id){ return (document.getElementById(id).value||'').trim(); }
 function fill(s){ var v=V(); return s.replace(/\{(\w+)\}/g,function(m,k){ return v[k]!==undefined?v[k]:m; }); }
@@ -420,11 +435,24 @@ async function syncPull(quiet){
       await syncPush(true);
       return;
     }
-    /* Keep the copy we are about to overwrite — a wrong-ID pull must never be able to destroy
-       the only copy of the real list. */
+    /* MERGE, never clobber. Every row carries a client timestamp (u): the union is taken by
+       id, whichever side touched a row last wins, and local-only rows (added while offline or
+       after a failed save) always survive. If the merge changed anything vs the server copy,
+       an autosave is queued so the server converges. A backup of the pre-merge local list is
+       still kept, so nothing can be silently destroyed. */
     try{ localStorage.setItem('jmb_apply_v1_bak', JSON.stringify(ROWS)); }catch(_b){}
-    ROWS=d.rows; _pulled=true; save(); render();
-    syncMsg(d.rows.length+' applications synced','var(--gr)');
+    var srv=d.rows||[], srvIds={}, changed=false;
+    srv.forEach(function(r){ srvIds[r.id]=1; });
+    var localOnly=ROWS.filter(function(l){ return l.id && !srvIds[l.id]; });
+    var merged=localOnly.concat(srv.map(function(r){
+      var l=null; for(var li=0; li<ROWS.length; li++){ if(ROWS[li].id===r.id){ l=ROWS[li]; break; } }
+      if(l && (l.u||0)>(r.u||0)){ changed=true; return l; }
+      return r;
+    }));
+    if(localOnly.length) changed=true;
+    ROWS=merged; _pulled=true; save(); render();
+    if(changed){ syncMsg('Merged local changes — autosaving…','var(--am)'); syncQueue(); }
+    else syncMsg(merged.length+' applications synced · autosave on','var(--gr)');
   }catch(e){
     syncMsg('Offline — using this browser\'s copy','var(--am)');
   }
@@ -444,7 +472,7 @@ async function syncPush(force){
     var r=await fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
       body: JSON.stringify({ action:'app_save', employee_id:SYNC_ID, rows:ROWS }) });
     var d=await r.json();
-    if(d&&d.ok) syncMsg('Saved · '+d.saved+' applications','var(--gr)');
+    if(d&&d.ok) syncMsg('✓ Saved · '+d.saved+' applications · autosave on','var(--gr)');
     else syncMsg('Not saved: '+((d&&d.error)||'unknown'),'var(--rd)');
   }catch(e){
     /* A push that dies must not die quietly — retry until it lands or the tab closes. */
@@ -475,6 +503,16 @@ function syncQueue(){
 /* Every board Jeth holds an account on. OnlineJobs.ph first (the home board), then A→Z, then
    the three non-board channels. A row whose saved board fell off this list still renders — the
    select adds it back at the top rather than silently blanking history. */
+/* Campaigns: one entry per niche, mirroring the "Résumé versions — one per niche" library.
+   The active campaign tags every new row (niche + résumé version) automatically. */
+var NICHES=[
+ { id:'SMM',  n:'SMM · Reddit & IG',    rv:'SMM (Reddit & IG)' },
+ { id:'Ecom', n:'Amazon / E-commerce',  rv:'Amazon & E-comm (planned)' },
+ { id:'Drop', n:'Dropshipping',         rv:'Dropshipping (planned)' }
+];
+function nicheOf(id){ for(var i=0;i<NICHES.length;i++){ if(NICHES[i].id===id) return NICHES[i]; } return null; }
+var CAMPAIGN=(function(){ try{ return localStorage.getItem('jmb_apply_campaign')||'SMM'; }catch(e){ return 'SMM'; } })();
+function setCampaign(v){ CAMPAIGN=v; try{ localStorage.setItem('jmb_apply_campaign',v); }catch(e){} render(); }
 var BOARDS=['OnlineJobs.ph','20four7VA','Bossjob','Contra','Fiverr','FreeUp','Freelancer',
   'Hubstaff Talent','Jobseeker','Kalibrr','MyOutDesk','PeoplePerHour','Truelancer','Twine',
   'Useme','Virtual Coworker','VirtualStaff.ph','We Work Remotely','Wellfound','Workana',
@@ -493,10 +531,11 @@ function saveSync(){ save(); syncQueue(); }
 function today(){ return new Date().toISOString().slice(0,10); }
 function plus(d,n){ var t=new Date(d+'T00:00:00'); t.setDate(t.getDate()+n); return t.toISOString().slice(0,10); }
 function addRow(){
-  ROWS.unshift({id:'app-'+Date.now()+'-'+Math.random().toString(36).slice(2,6),e:'',b:'OnlineJobs.ph',d:today(),r:'',s:'Applied',f:plus(today(),3),n:''});
+  var _cn=nicheOf(CAMPAIGN)||NICHES[0];
+  ROWS.unshift({id:'app-'+Date.now()+'-'+Math.random().toString(36).slice(2,6),e:'',b:'OnlineJobs.ph',d:today(),r:'',s:'Applied',f:plus(today(),3),n:'',l:'',t:'',k:'',nc:_cn.id,rv:_cn.rv,u:Date.now()});
   saveSync(); render(); document.querySelector('#tb input').focus();
 }
-function upd(i,k,v){ ROWS[i][k]=v;
+function upd(i,k,v){ ROWS[i][k]=v; ROWS[i].u=Date.now();
   // Advancing the status moves the follow-up date with it, so the amber flag stays meaningful.
   if(k==='s'){ if(v==='Applied') ROWS[i].f=plus(ROWS[i].d||today(),3);
                else if(v==='Follow-up sent') ROWS[i].f=plus(today(),7);
@@ -506,6 +545,103 @@ function upd(i,k,v){ ROWS[i][k]=v;
   saveSync(); render();
 }
 function del(i){ ROWS.splice(i,1); saveSync(); render(); }
+function updNiche(i,v){ var n2=nicheOf(v); ROWS[i].nc=v; ROWS[i].rv=n2?n2.rv:''; ROWS[i].u=Date.now(); saveSync(); render(); }
+/* 🔗/💬 — click opens the saved link; no link yet (or shift-click) prompts for one. */
+function rowLink(i,field){
+  var r=ROWS[i]; if(!r) return;
+  var cur=r[field]||'';
+  if(cur && !window.event.shiftKey){ window.open(cur,'_blank','noopener'); return; }
+  var label=field==='l'?'job posting URL':'chat / thread URL (e.g. the Bossjob conversation)';
+  var v=prompt('Paste the '+label+':', cur);
+  if(v===null) return;
+  upd(i, field, v.trim()); render();
+}
+/* ── Import / restore — pairs with Export. JSON = exact backup restore (merge by id, newer
+   wins). CSV = bulk-add (our own export format; every line becomes a new row). ── */
+function exportJson(){
+  var blob=new Blob([JSON.stringify(ROWS,null,2)],{type:'application/json'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='jmb-applications-'+today()+'.json'; a.click();
+}
+function importFile(){
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='.json,.csv';
+  inp.onchange=function(){
+    var f=inp.files[0]; if(!f) return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      var txt=String(rd.result||''), added=0, updated=0;
+      try{
+        if(/^\s*\[/.test(txt)){                      // JSON backup → merge by id, newer wins
+          var arr=JSON.parse(txt);
+          arr.forEach(function(r){ if(!r||!r.id) return;
+            var ex=null; for(var i2=0;i2<ROWS.length;i2++){ if(ROWS[i2].id===r.id){ ex=i2; break; } }
+            if(ex===null){ ROWS.push(r); added++; }
+            else if((r.u||0)>=(ROWS[ex].u||0)){ ROWS[ex]=r; updated++; }
+          });
+        } else {                                     // CSV (our export format) → bulk-add as new rows
+          var lines=txt.split(/\r?\n/).filter(function(x){ return x.trim(); });
+          lines.slice(1).forEach(function(line){
+            var cells=line.match(/("([^"]|"")*"|[^,]*)(,|$)/g);
+            if(!cells) return;
+            var vals=cells.map(function(c2){ return c2.replace(/,$/,'').replace(/^"|"$/g,'').replace(/""/g,'"'); });
+            if(!vals[0]) return;
+            ROWS.push({ id:'app-'+Date.now()+'-'+Math.random().toString(36).slice(2,6),
+              e:vals[0]||'', b:vals[1]||'Other', d:vals[2]||today(), r:vals[3]||'', s:vals[4]||'Applied',
+              f:vals[5]||'', n:vals[6]||'', l:'', t:'', k:'', u:Date.now() });
+            added++;
+          });
+        }
+        saveSync(); render();
+        toast('Imported — '+added+' added'+(updated?(' · '+updated+' updated'):'')+'.');
+      }catch(e){ toast('Could not read that file.'); }
+    };
+    rd.readAsText(f);
+  };
+  inp.click();
+}
+/* ── Which boards actually convert: per-board sent / replies / wins with rates, best first.
+   "Replied+" = anything past Applied/Closed (they engaged). ── */
+function boardStats(){
+  var by={};
+  ROWS.forEach(function(r){
+    var b=r.b||'—'; var a=(by[b]=by[b]||{sent:0,rep:0,won:0});
+    a.sent++;
+    if(['Replied','Interview','Trial','Won','Needs video','Needs assessment','Needs test task'].indexOf(r.s)>=0) a.rep++;
+    if(r.s==='Won') a.won++;
+  });
+  var rows=Object.keys(by).map(function(b){ var a=by[b];
+    return { b:b, sent:a.sent, rep:a.rep, won:a.won,
+             rr:a.sent?Math.round(a.rep/a.sent*100):0, wr:a.sent?Math.round(a.won/a.sent*100):0 }; })
+    .filter(function(x){ return x.sent>0; })
+    .sort(function(a,b){ return (b.rr-a.rr) || (b.sent-a.sent); });
+  var host=document.getElementById('board-stats'); if(!host) return;
+  if(!rows.length){ host.innerHTML=''; return; }
+  var best=rows[0];
+  host.innerHTML='<details style="margin:2px 0 12px;"><summary style="cursor:pointer;font-size:12px;font-weight:800;color:var(--t2);">'+
+    '📊 Board analytics — best reply rate: <span style="color:var(--o2)">'+esc2(best.b)+' ('+best.rr+'%)</span> · click to expand</summary>'+
+    '<div style="margin-top:8px;overflow-x:auto;"><table style="font-size:12px;"><thead><tr>'+
+      '<th>Board</th><th>Sent</th><th>Replied+</th><th>Reply rate</th><th>Won</th><th>Win rate</th><th></th></tr></thead><tbody>'+
+    rows.map(function(x,i3){
+      var bar='<div style="height:7px;border-radius:4px;background:linear-gradient(90deg,#f97316,#ea580c);width:'+Math.max(3,x.rr)+'%;max-width:160px;"></div>';
+      return '<tr'+(i3===0?' style="background:#fff7ed;"':'')+'><td style="font-weight:700;">'+boardDot(x.b)+esc2(x.b)+'</td>'+
+        '<td>'+x.sent+'</td><td>'+x.rep+'</td><td style="font-weight:800;color:var(--o2);">'+x.rr+'%</td>'+
+        '<td>'+x.won+'</td><td style="font-weight:700;color:'+(x.won?'#047857':'var(--t3)')+';">'+x.wr+'%</td>'+
+        '<td style="min-width:120px;">'+bar+'</td></tr>';
+    }).join('')+'</tbody></table></div>'+
+    '<div style="font-size:11px;color:var(--t3);margin-top:6px;">Lean into the top rows — that is where replies actually come from.</div>'+
+    (function(){
+      var byN={};
+      ROWS.forEach(function(r){ var k4=r.nc||'—'; var a=(byN[k4]=byN[k4]||{sent:0,rep:0,won:0}); a.sent++;
+        if(['Replied','Interview','Trial','Won','Needs video','Needs assessment','Needs test task'].indexOf(r.s)>=0) a.rep++;
+        if(r.s==='Won') a.won++; });
+      var ks=Object.keys(byN).filter(function(k5){ return byN[k5].sent>0; });
+      if(ks.length<1) return '';
+      return '<div style="font-size:12px;font-weight:800;color:var(--t2);margin:12px 0 5px;">🎯 Per-niche performance</div>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+ks.map(function(k6){ var a=byN[k6]; var nn=nicheOf(k6);
+          return '<div style="background:var(--card2,#f1f5f9);border:1px solid var(--line);border-radius:10px;padding:7px 12px;font-size:11.5px;">'+
+            '<b>'+esc2(nn?nn.n:k6)+'</b> · '+a.sent+' sent · '+a.rep+' replied ('+(a.sent?Math.round(a.rep/a.sent*100):0)+'%) · '+a.won+' won</div>'; }).join('')+'</div>';
+    })()+'</details>';
+}
 /* Pipeline order, not alphabetical. A log read top-to-bottom should walk the application from
    "just sent" through "they owe me a reply" to done — and the two groups that need action today
    (waiting on you, follow-up due) sit at the top where they cannot be scrolled past. */
@@ -526,6 +662,7 @@ var GROUP_NOTE={
 function render(){
   var f=document.getElementById('filt').value, tb=document.getElementById('tb'), n=0, due=0, won=0, out=[];
   var fb=(document.getElementById('filtb')||{}).value||'';
+  var fn=(document.getElementById('filtn')||{}).value||'';
   /* Bucket first so each status renders as its own block with a header and a count. */
   var buckets={}, order=[];
   ROWS.forEach(function(r,i){
@@ -545,7 +682,8 @@ function render(){
     var isDue = !blocked && r.f && r.f<=today() && r.s!=='Won' && r.s!=='Closed';
     if(isDue) due++;
     if(f && r.s!==f) return;
-    if(fb && String(r.b||'')!==fb) return; n++;
+    if(fb && String(r.b||'')!==fb) return;
+    if(fn && String(r.nc||'')!==fn) return; n++;
     /* Group header row, emitted the first time a status appears in the sequence. */
     if(r.s!==lastGroup){
       lastGroup=r.s;
@@ -553,7 +691,7 @@ function render(){
       var blocked2=BLOCKED.indexOf(r.s)>=0;
       var tint = r.s==='Won' ? '#ecfdf5' : (blocked2 ? '#eef4ff' : (r.s==='Closed' ? '#f8fafc' : '#fff7ed'));
       var ink  = r.s==='Won' ? '#047857' : (blocked2 ? '#1e40af' : (r.s==='Closed' ? '#64748b' : '#9a3412'));
-      out.push('<tr><td colspan="8" style="background:'+tint+';padding:9px 10px;border-top:1px solid rgba(15,23,42,.10)">'
+      out.push('<tr><td colspan="10" style="background:'+tint+';padding:9px 10px;border-top:1px solid rgba(15,23,42,.10)">'
         +'<b style="color:'+ink+';font-size:11.5px;letter-spacing:.06em;text-transform:uppercase">'+esc2(r.s)+'</b>'
         +'<span style="color:'+ink+';opacity:.75;font-size:11.5px;font-weight:700;margin-left:7px">'+cnt+'</span>'
         +'<span style="color:var(--t3);font-size:11.5px;margin-left:10px">'+esc2(GROUP_NOTE[r.s]||'')+'</span>'
@@ -566,16 +704,25 @@ function render(){
     out.push('<tr class="'+(r.s==='Won'?'won':(blocked?'todo':(isDue?'due':'')))+'">'+
       '<td><input value="'+att(r.e)+'" placeholder="employer / post" oninput="upd('+i+',\'e\',this.value)"></td>'+
       '<td><div style="display:flex;align-items:center">'+boardDot(r.b)+'<select onchange="upd('+i+',\'b\',this.value)">'+bd+'</select></div></td>'+
+      '<td><select onchange="updNiche('+i+',this.value)" style="width:auto;max-width:120px;">'+
+        [''].concat(NICHES.map(function(x){return x.id;})).map(function(o){ var n3=nicheOf(o); return '<option value="'+o+'"'+(o===String(r.nc||'')?' selected':'')+'>'+(n3?n3.n:'—')+'</option>'; }).join('')+
+        '</select>'+(r.rv?('<div style="font-size:9.5px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;" title="Résumé version sent">📄 '+esc2(r.rv)+'</div>'):'')+'</td>'+
       '<td class="hidem"><input type="date" value="'+att(r.d)+'" onchange="upd('+i+',\'d\',this.value)"></td>'+
       '<td><input value="'+att(r.r)+'" placeholder="—" oninput="upd('+i+',\'r\',this.value)"></td>'+
       '<td><select onchange="upd('+i+',\'s\',this.value)">'+sel+'</select></td>'+
       '<td><input type="date" value="'+att(r.f)+'" onchange="upd('+i+',\'f\',this.value)">'+
         (blocked?(' <span class="pill todo">'+BLOCKED_LABEL[r.s]+'</span>'):(isDue?' <span class="pill due">DUE</span>':''))+'</td>'+
       '<td class="hidem"><input value="'+att(r.n)+'" placeholder="—" oninput="upd('+i+',\'n\',this.value)"></td>'+
+      '<td style="white-space:nowrap">'+
+        '<button class="btn sm" title="'+(r.l?'Open the job posting':'Attach the posting link')+'" style="'+(r.l?'color:#0369a1;border-color:rgba(3,105,161,.4);':'opacity:.5;')+'" onclick="rowLink('+i+',\'l\')">🔗</button> '+
+        '<button class="btn sm" title="'+(r.t?'Open the chat / message thread':'Attach the chat thread link (e.g. Bossjob chat)')+'" style="'+(r.t?'color:#7c3aed;border-color:rgba(124,58,237,.4);':'opacity:.5;')+'" onclick="rowLink('+i+',\'t\')">💬</button> '+
+        '<select title="Gate blocking this opportunity" onchange="upd('+i+',\'k\',this.value)" style="width:auto;padding:4px 5px;font-size:11px;'+(r.k?'border-color:rgba(217,119,6,.55);color:#b45309;background:#fffbeb;':'')+'">'+
+          ['','ID Proof','OTP','Paid sub','Other gate'].map(function(o){ return '<option value="'+o+'"'+(o===String(r.k||'')?' selected':'')+'>'+(o||'no gate')+'</option>'; }).join('')+
+        '</select></td>'+
       '<td>'+(blocked?('<button class="btn sm" title="Open a script for this posting" onclick="scriptFor('+i+')">📄</button> '):'')+
         '<button class="btn sm" onclick="del('+i+')">✕</button></td></tr>');
   });
-  tb.innerHTML = out.join('') || '<tr><td colspan="8" style="color:var(--t3);padding:22px;text-align:center">'+
+  tb.innerHTML = out.join('') || '<tr><td colspan="10" style="color:var(--t3);padding:22px;text-align:center">'+
     'No applications yet. Add one as you send it — logging it after the fact never happens.</td></tr>';
   document.getElementById('cnt').textContent = n+' shown of '+ROWS.length;
   document.getElementById('stats').innerHTML =
@@ -584,6 +731,7 @@ function render(){
     st(won,'Won','var(--gr)')+
     st(ROWS.length?Math.round(ROWS.filter(function(r){return r.s!=='Applied'&&r.s!=='Closed';}).length/ROWS.length*100)+'%':'—','Reply rate','var(--t1)')+
     funnel();
+  try{ boardStats(); }catch(_bs){}
 }
 /* The pipeline at a glance: how far applications travel. Widths scale to Sent. */
 function funnel(){
@@ -609,14 +757,16 @@ function exportCsv(){
   a.download='jmb-applications-'+today()+'.csv'; a.click();
 }
 
-document.querySelectorAll('.tab').forEach(function(b){
-  b.onclick=function(){
-    document.querySelectorAll('.tab').forEach(function(x){x.classList.remove('on');});
-    document.querySelectorAll('.pane').forEach(function(x){x.classList.remove('on');});
-    b.classList.add('on'); document.getElementById(b.dataset.p).classList.add('on');
-  };
-});
-['v_name','v_role','v_acc','v_rate','v_date'].forEach(function(id){
+/* "Profile & Résumés" is one tab showing four merged panes (profile, answers, video script,
+   résumé files) stacked — everything about WHO you are and WHAT you send, per niche. */
+function showPane(pid){
+  document.querySelectorAll('.tab').forEach(function(x){ x.classList.toggle('on', x.dataset.p===pid); });
+  document.querySelectorAll('.pane').forEach(function(x){ x.classList.remove('on'); });
+  var ids=(pid==='p5')?['p5','p3','p6','p4']:[pid];
+  ids.forEach(function(id2){ var el=document.getElementById(id2); if(el) el.classList.add('on'); });
+}
+document.querySelectorAll('.tab').forEach(function(b){ b.onclick=function(){ showPane(b.dataset.p); }; });
+['v_name','v_role','v_rate','v_date'].forEach(function(id){
   document.getElementById(id).addEventListener('input',paint);
   document.getElementById(id).addEventListener('change',paint);
 });
@@ -640,10 +790,7 @@ function scId(r){ return ((r&&r.e)||'').trim().toLowerCase()+'::'+((r&&r.b)||'')
 function scriptFor(i){
   var r=ROWS[i]; if(!r) return;
   SCRIPT_FOR=i;
-  document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('on'); });
-  document.querySelectorAll('.pane').forEach(function(x){ x.classList.remove('on'); });
-  var t=document.querySelector('.tab[data-p="p6"]'); if(t) t.classList.add('on');
-  var p=document.getElementById('p6'); if(p) p.classList.add('on');
+  showPane('p5');
   scPaint();
   window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -743,6 +890,13 @@ function cpEl(id){
 load(); paint();
 try{ var _fb=document.getElementById('filtb');
   if(_fb) BOARDS.forEach(function(b){ var o=document.createElement('option'); o.textContent=b; _fb.appendChild(o); }); }catch(e){}
+try{
+  var _cs=document.getElementById('camp-sel'), _fn2=document.getElementById('filtn');
+  NICHES.forEach(function(nx){
+    if(_cs){ var o1=document.createElement('option'); o1.value=nx.id; o1.textContent=nx.n; if(nx.id===CAMPAIGN) o1.selected=true; _cs.appendChild(o1); }
+    if(_fn2){ var o2=document.createElement('option'); o2.value=nx.id; o2.textContent=nx.n; _fn2.appendChild(o2); }
+  });
+}catch(e){}
 render(); pfLoad(); scLoad();
 try{ var _si=document.getElementById('sync-id'); if(_si) _si.value=SYNC_ID; if(SYNC_ID) syncPull(true); else syncMsg('Enter your employee ID to sync across machines','var(--am)'); }catch(e){} try{ scPaint(); }catch(e){}
 </script>
