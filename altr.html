@@ -810,7 +810,14 @@ body::after{ content:""; position:fixed; left:-120px; top:-120px; width:380px; h
 /* ====== CONFIG ====== */
 var PORTAL_URL = "https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec"; // for employee ID+PIN login
 var ALTR_URL   = "https://script.google.com/macros/s/AKfycbxp7wcIf48urxm2DcPoNgdmQreYUGia-YNnXwIXfyMqOLkyWpaqI3hoMZa4VPmjZa9_Mg/exec"; // deployed altr-apps-script.gs /exec URL
-var ADMIN_PASS = "JMBeast_020298";
+/* ── ADMIN SIGN-IN — verified SERVER-SIDE, no password in this file ──
+   These pages live in a public repo and anyone can view-source the live site, so the
+   admin password must never appear here. The portal Apps Script checks it against a
+   Script Property (ADMIN_PASS) and answers yes/no. */
+async function verifyAdminPass(p){
+  try{ var r=await fetch('https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec?action=verify_admin&pass='+encodeURIComponent(p)+'&_='+Date.now()); var d=await r.json(); return !!(d&&d.ok); }
+  catch(e){ return false; }
+}
 /* Employee IDs granted ADMIN-level access to ALTR when they log in with their own ID + PIN.
    Add a user's employee ID here (as it appears in the Employees sheet) to promote them.
    Case-insensitive; whitespace ignored. */
@@ -996,7 +1003,7 @@ async function doLogin(){
   err.style.display='none';
   if(!id||!pin){ err.textContent='Enter your employee ID and PIN.'; err.style.display='block'; return; }
   if(id.toUpperCase()==='ADMIN'){
-    if(pin===ADMIN_PASS){ enterApp({ full_name:'Admin (JMB Virtuals)', employee_id:'ADMIN' }, true); }
+    if(await verifyAdminPass(pin)){ try{ sessionStorage.setItem('altr_adm', pin); }catch(e){} enterApp({ full_name:'Admin (JMB Virtuals)', employee_id:'ADMIN' }, true); }
     else { err.textContent='Invalid admin password.'; err.style.display='block'; }
     return;
   }
@@ -1018,6 +1025,7 @@ function doLogout(){ sessionStorage.removeItem('altr_user'); location.reload(); 
 function firstName(n){ n=String(n||'').trim(); if(n.indexOf(',')>=0) return (n.split(',')[1]||'').trim().split(/\s+/)[0]||n; return n.split(/\s+/)[0]||n; }
 
 function enterApp(user, admin){
+  try{ loadEmpDir(); }catch(_ed){}
   USER=user; ISADMIN=!!admin;
   /* USER is known now, so today's tray key resolves — bring back anything attached before a
      refresh. Must run before the boards draw, or the cameras paint amber for accounts that
@@ -1268,8 +1276,9 @@ function renderPostTeam(){
     var p=target?Math.round(posted/target*100):0, pc=p>=100?'ok':(p>=70?'mid':'low');
     var active = String(px.active||'').toUpperCase()!=='FALSE';
     var chk = ISADMIN ? '<input type="checkbox" class="empchk" title="Working today" '+(active?'checked':'')+' onchange="setPoster(\''+esc(px.id)+'\',\'active\',this.checked?\'TRUE\':\'FALSE\')">' : '';
+    var _psel=ISADMIN?empSelHtml(px.eid, px.name, "setPosterEmp('"+esc(px.id)+"',this.value)"):null;
     var nameCell = ISADMIN
-      ? '<div class="empwrap">'+chk+'<input class="empin" value="'+escAttr(px.name||'')+'" placeholder="Employee" onchange="setPoster(\''+esc(px.id)+'\',\'name\',this.value)"></div>'
+      ? '<div class="empwrap">'+chk+(_psel||('<input class="empin" value="'+escAttr(px.name||'')+'" placeholder="Employee" onchange="setPoster(\''+esc(px.id)+'\',\'name\',this.value)">'))+'</div>'
       : esc(px.name||'—');
     var phoneCell = ISADMIN
       ? '<input class="empin" value="'+escAttr(String(px.phones||''))+'" placeholder="e.g. 1, 4, 7" onchange="setPoster(\''+esc(px.id)+'\',\'phones\',this.value)">'
@@ -2316,8 +2325,9 @@ function renderTargets(){
     var p=target?Math.round(sourced/target*100):0, pc=p>=100?'ok':(p>=70?'mid':'low');
     var active = String(srx.active||'').toUpperCase()!=='FALSE';   // default working unless explicitly FALSE
     var chk = ISADMIN ? '<input type="checkbox" class="empchk" title="Working today" '+(active?'checked':'')+' onchange="setSourcer(\''+esc(srx.id)+'\',\'active\',this.checked?\'TRUE\':\'FALSE\')">' : '';
+    var _ssel=ISADMIN?empSelHtml(srx.eid, srx.name, "setSourcerEmp('"+esc(srx.id)+"',this.value)"):null;
     var nameCell = ISADMIN
-      ? '<div class="empwrap">'+chk+'<input class="empin" value="'+escAttr(srx.name||'')+'" placeholder="Employee" onchange="setSourcer(\''+esc(srx.id)+'\',\'name\',this.value)"></div>'
+      ? '<div class="empwrap">'+chk+(_ssel||('<input class="empin" value="'+escAttr(srx.name||'')+'" placeholder="Employee" onchange="setSourcer(\''+esc(srx.id)+'\',\'name\',this.value)">'))+'</div>'
       : esc(srx.name||'—');
     var phoneCell = ISADMIN
       ? '<input class="empin" value="'+escAttr(String(srx.phones||''))+'" placeholder="e.g. 1, 4, 7" onchange="setSourcer(\''+esc(srx.id)+'\',\'phones\',this.value)">'
@@ -2327,6 +2337,49 @@ function renderTargets(){
   });
   var sum=$('targ-sum'); if(sum) sum.textContent=totS+' / '+totT+' sourced · '+(totT?Math.round(totS/totT*100):0)+'%';
   var body=$('src-body'); if(body) body.innerHTML = html || '<tr><td colspan="5" class="muted">No sourcers.</td></tr>';
+}
+/* ── CONTRACTOR DROPDOWN (Aug 21) — no more typing names by hand. The roster comes from the
+   portal's Employees sheet; picking a person writes BOTH eid (JMB0XX — the key the Data Center
+   push and the Productivity Hub match on) and the display name in one save. A VA moving from
+   Content Sourcing to Vysor IG Posting keeps the same ID, so the hub follows them across roles
+   with zero gaps. Falls back to the old text input only if the roster fetch fails. */
+var EMPDIR=[];
+(function(){ try{ var c=JSON.parse(sessionStorage.getItem('altr_empdir')||'null');
+  if(c && c.t && (Date.now()-c.t)<24*3600*1000 && (c.list||[]).length) EMPDIR=c.list; }catch(e){} })();
+async function loadEmpDir(){
+  if(EMPDIR.length) return;
+  try{
+    var r=await fetch(PORTAL_URL+'?action=get_all_employees&_='+Date.now()); var j=await r.json();
+    EMPDIR=((j&&j.employees)||[]).map(function(e){ return { id:String(e.employee_id||'').toUpperCase(), name:String(e.full_name||e.employee_id||'') }; })
+      .filter(function(e){ return e.id; })
+      .sort(function(a,b){ return a.id<b.id?-1:1; });
+    try{ sessionStorage.setItem('altr_empdir', JSON.stringify({t:Date.now(), list:EMPDIR})); }catch(_c){}
+  }catch(e){}
+}
+function empSelHtml(cur, curName, onchangeJs){
+  if(!EMPDIR.length) return null;   // roster unavailable → caller keeps the text input
+  var curId=String(cur||'').toUpperCase();
+  if(!curId && curName){ var nm=String(curName).toLowerCase().replace(/[^a-z]/g,'');
+    for(var i=0;i<EMPDIR.length;i++){ if(EMPDIR[i].name.toLowerCase().replace(/[^a-z]/g,'')===nm){ curId=EMPDIR[i].id; break; } } }
+  return '<select class="empin" style="max-width:190px" onchange="'+onchangeJs+'">'+
+    '<option value="">— unassigned —</option>'+
+    EMPDIR.map(function(e){ return '<option value="'+escAttr(e.id)+'"'+(e.id===curId?' selected':'')+'>'+esc(e.id+' · '+e.name)+'</option>'; }).join('')+
+  '</select>';
+}
+function _empName(eid){ eid=String(eid||'').toUpperCase(); for(var i=0;i<EMPDIR.length;i++) if(EMPDIR[i].id===eid) return EMPDIR[i].name; return ''; }
+function setSourcerEmp(id, eid){
+  var s=(STATE.sourcers||[]).filter(function(x){ return String(x.id)===String(id); })[0];
+  var nm=_empName(eid);
+  if(s){ s.eid=eid; if(nm) s.name=nm; }
+  renderTargets();
+  apiPost({ action:'sourcer_set', id:id, eid:eid, name:(nm||(s&&s.name)||'') }).catch(function(){ toast('Save failed'); });
+}
+function setPosterEmp(id, eid){
+  var s=(STATE.posters||[]).filter(function(x){ return String(x.id)===String(id); })[0];
+  var nm=_empName(eid);
+  if(s){ s.eid=eid; if(nm) s.name=nm; }
+  renderPostTeam();
+  apiPost({ action:'poster_set', id:id, eid:eid, name:(nm||(s&&s.name)||'') }).catch(function(){ toast('Save failed'); });
 }
 function setSourcer(id, field, val){
   var s=(STATE.sourcers||[]).filter(function(x){ return String(x.id)===String(id); })[0]; if(s){ s[field]=val; }
@@ -2572,14 +2625,14 @@ function goalTarget(key){ var g=(STATE.goals||[]).filter(function(x){ return Str
 function setIgCookie(){
   var msg='Paste the IG "sessionid" cookie value from a logged-in (ideally BURNER) account.\n\nGet it in your browser: log into instagram.com → DevTools (F12) → Application → Cookies → instagram.com → copy the "sessionid" value.\n\nLeave blank and OK to DISCONNECT.';
   var ck=prompt(msg, ''); if(ck===null) return;
-  apiPost({ action:'ig_cookie_set', pass:ADMIN_PASS, cookie:ck.trim() })
+  apiPost({ action:'ig_cookie_set', pass:(function(){ try{ return sessionStorage.getItem('altr_adm')||prompt('Admin password:')||''; }catch(e){ return prompt('Admin password:')||''; } })(), cookie:ck.trim() })
     .then(function(r){ if(r&&r.error){ toast('Unauthorized'); return; } toast(ck.trim()?'IG session saved':'IG session cleared'); return refreshQuiet(); })
     .catch(function(){ toast('Save failed'); });
 }
 function setIgWorker(){
   var msg='Paste your Cloudflare Worker URL (the bio proxy on a non-Google IP).\n\nExample: https://altr-ig.yourname.workers.dev\n\nLeave blank and OK to DISCONNECT (falls back to direct fetch).';
   var u=prompt(msg, STATE&&STATE.ig_worker?'':''); if(u===null) return;
-  apiPost({ action:'ig_worker_set', pass:ADMIN_PASS, url:u.trim() })
+  apiPost({ action:'ig_worker_set', pass:(function(){ try{ return sessionStorage.getItem('altr_adm')||prompt('Admin password:')||''; }catch(e){ return prompt('Admin password:')||''; } })(), url:u.trim() })
     .then(function(r){
       if(r&&r.error){ toast(r.error==='unauthorized' ? 'Unauthorized — admin pass mismatch' : ('Save failed: '+r.error+(/unknown action/i.test(r.error)?' (redeploy the ALTR script)':''))); return; }
       toast(u.trim()?'Bio proxy saved':'Bio proxy cleared'); return refreshQuiet();
