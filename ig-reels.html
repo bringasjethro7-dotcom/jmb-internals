@@ -1053,7 +1053,7 @@ async function tick(id, kind){
   /* PROOF FIRST, THEN SAVE. This used to save the tick and only afterwards ask for the
      screenshot — so cancelling the panel left the account marked as posted with no evidence
      and no output counted. bump() rejects on cancel, which now stops the save too. */
-  await bump('IG Reels Posting',1);
+  await bump('IG Reels Posting',1, r.handle||'');   // handle attached → QA samples per ACCOUNT, not one blob
   var meta=r.meta||{}; var t=T(r); t[kind]=1; meta.t=t;
   var d=await saveMeta(r, meta);
   if(d&&d.ok){
@@ -1069,7 +1069,7 @@ async function mark1k(id){
 }
 async function wuDone(id, day){
   var r=row(id); if(!r) return;
-  await bump('IG Reels Posting',1);          // proof before the day advances
+  await bump('IG Reels Posting',1, r.handle||'');   // proof before the day advances · handle → per-account QA
   try{
     var m=Object.assign({}, r.meta||{}, {wl:vaKeyOf(USER.id)});
     var url=API+'?action=pa_update&id='+encodeURIComponent(id)+'&day='+(day+1)+(day>=14?'&status=active':'')+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now();

@@ -401,7 +401,14 @@ td{padding:11px 12px;border-bottom:1px solid rgba(15,23,42,.05)}
 var PORTAL_URL = "https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec";
 /* Same admin password as the QA Computer — taken from there rather than set
    separately, so there is only ever one thing to change. */
-var ADMIN_PASS = "JMBeast_020298";
+/* ── ADMIN SIGN-IN — verified SERVER-SIDE, no password in this file ──
+   These pages live in a public repo and anyone can view-source the live site, so the
+   admin password must never appear here. The portal Apps Script checks it against a
+   Script Property (ADMIN_PASS) and answers yes/no. */
+async function verifyAdminPass(p){
+  try{ var r=await fetch('https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec?action=verify_admin&pass='+encodeURIComponent(p)+'&_='+Date.now()); var d=await r.json(); return !!(d&&d.ok); }
+  catch(e){ return false; }
+}
 var USER=null, ISADMIN=false, TAB='mine', UNITS=[], BOARD=null;
 function $(id){ return document.getElementById(id); }
 function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('on'); setTimeout(function(){ t.classList.remove('on'); },2200); }
@@ -423,7 +430,7 @@ async function signIn(){
   var err=$('si-err'); err.style.display='none';
   if(!id||!pin){ err.style.display='block'; err.textContent='Enter your ID and PIN.'; return; }
   if(id.toUpperCase()==='ADMIN'){
-    if(pin===ADMIN_PASS){ USER={id:'ADMIN',name:'Admin'}; ISADMIN=true; start(); }
+    if(await verifyAdminPass(pin)){ USER={id:'ADMIN',name:'Admin'}; ISADMIN=true; start(); }
     else { err.style.display='block'; err.textContent='Incorrect admin password.'; }
     return;
   }
@@ -669,6 +676,7 @@ function renderBoard(){
 
   h+='<div class="bar"><button class="btn" onclick="planWeek(1)">Preview plan</button>'+
      '<button class="btn" onclick="planWeek(0)">Rebuild plan</button>'+
+     '<button class="btn p" onclick="shuffleReviewers()" title="Auto-assign every unassigned VA a peer reviewer — never the same reviewer they had in an earlier week this month">🎲 Auto-shuffle reviewers</button>'+
      '<button class="btn" onclick="notifyAll()" title="Send each reviewer a message with a direct link to their review">Notify reviewers</button>';
   if(uncovered.length) h+='<span class="tag" style="background:var(--redSoft);color:#991b1b;">'+
      uncovered.length+' VA'+(uncovered.length>1?'s':'')+' still need a reviewer: '+
@@ -762,6 +770,23 @@ async function planWeek(dry){
   }catch(e){ p.innerHTML='<div class="warn">'+esc(e.message)+'</div>'; }
 }
 
+/* 🎲 One click assigns everyone: peer reviewers, balanced load, no self-review, and nobody
+   gets the reviewer they already had in an earlier week of the month. Existing/submitted
+   assignments are kept — this only fills the gaps. */
+async function shuffleReviewers(){
+  var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
+  if(!confirm('Auto-shuffle reviewers for week '+w+'?\n\n· fills every UNASSIGNED VA (existing assignments are kept)\n· never the same reviewer as their earlier weeks this month\n· load balanced across the team\n\nEach reviewer is notified with their link.')) return;
+  toast('Shuffling…');
+  try{
+    var d=await (await fetch(PORTAL_URL+'?action=qa2_shuffle&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&_='+Date.now())).json();
+    if(d&&d.ok){
+      toast('🎲 '+d.assigned+' reviewer'+(d.assigned===1?'':'s')+' assigned'+(d.kept?(' · '+d.kept+' kept'):'')+
+        ((d.repeats&&d.repeats.length)?(' · '+d.repeats.length+' repeat(s) unavoidable'):''));
+      if(d.repeats&&d.repeats.length) console.log('Unavoidable repeats:', d.repeats);
+      loadBoard();
+    } else toast('Shuffle failed: '+((d&&(d.message||d.error))||'unknown'));
+  }catch(e){ toast('Shuffle failed: '+e.message); }
+}
 /* A VA has exactly one reviewer, so assigning someone who already has one MOVES them. That is a
    real change to another person's workload, so it is confirmed rather than silent. */
 async function assign(emp, rev){
@@ -1233,7 +1258,16 @@ async function submitAll(){
     var d=await (await fetch(PORTAL_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
       body:JSON.stringify({ action:'qa2_submit', month:$('f-month').value, week:$('f-week').value,
                             employee_id:va.employee_id, by:USER.name })})).json();
-    if(d&&d.ok){ toast('Submitted — '+va.full_name+' scored '+d.score); CUR_UNIT=''; loadMine(); }
+    if(d&&d.ok){
+      var msg='Submitted — '+va.full_name+' scored '+d.score;
+      if(d.capped) msg+=' (raw '+d.raw+', capped: only '+d.coverage+'% of their recorded outputs had screenshots)';
+      toast(msg);
+      if(d.tasks && d.tasks.length>1){
+        alert('Score breakdown for '+va.full_name+' — '+d.score+'/100'+
+          (d.capped?('\n⚠ Raw checklist score was '+d.raw+', capped because proof coverage is '+d.coverage+'%. Unproven work cannot be graded perfect.'):'')+
+          '\n\n'+d.tasks.map(function(t){ return '· '+t.task+' — '+(t.pct==null?'n/a':t.pct+'%')+' ('+t.answered+' criteria)'; }).join('\n'));
+      }
+      CUR_UNIT=''; loadMine(); }
     else if(d&&d.error==='INCOMPLETE'){
       toast((d.examples&&d.examples[0]) ? ('Still unchecked — '+d.examples[0]) : (d.remaining+' account(s) still unchecked'));
       if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
