@@ -960,8 +960,8 @@ function render(){
       (function(){
         var na=NA(r);
         function pill(key, lbl, naLbl){
-          if(t[key]) return '<button class="on" disabled>✓ '+lbl+'</button>';
-          if(na[key]) return '<button class="navl" onclick="toggleNA(\''+r.id+'\',\''+key+'\')" title="Click to make it available again">🔒 '+naLbl+'</button>';
+          if(t[key]) return '<button class="on" onclick="igvOpen(\''+r.id+'\',\''+key+'\')" title="View / replace / remove the screenshot">✓ '+lbl+'</button>';
+          if(na[key]) return '<button class="navl" onclick="igvLocked(\''+r.id+'\',\''+key+'\')" title="No screenshot — marked not available">🔒 '+naLbl+'</button>';
           return '<button onclick="pillClick(\''+r.id+'\',\''+key+'\')">'+lbl+'</button>';
         }
         return '<div class="ticks">'+
@@ -1069,7 +1069,7 @@ async function mark1k(id){
 }
 async function wuDone(id, day){
   var r=row(id); if(!r) return;
-  await bump('IG Reels Posting',1, r.handle||'');   // proof before the day advances · handle → per-account QA
+  await bump('IG Warm-up Day',1, r.handle||'');   // its OWN task → QA grades warm-up on the warm-up SOP, not the posting one
   try{
     var m=Object.assign({}, r.meta||{}, {wl:vaKeyOf(USER.id)});
     var url=API+'?action=pa_update&id='+encodeURIComponent(id)+'&day='+(day+1)+(day>=14?'&status=active':'')+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now();
@@ -1100,5 +1100,131 @@ async function setStatus(id, st){
 .top .stat{ width:auto !important; display:flex; flex-direction:column; justify-content:center; }
 .top .balance{ grid-column:1 / -1; margin-left:0 !important; text-align:center; }
 </style>
+
+<!-- ══════════ SCREENSHOT GALLERY — view / replace / remove per chip ══════════ -->
+<div id="igv-ov" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(8,12,20,.78);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:14px;"></div>
+<script>
+/* Done chips open this gallery; a proof photo can be inspected, replaced (one photo only) or
+   removed. Removing the LAST photo reverts the chip to not-done and un-counts the output, so a
+   mistake leaves no trace of a "done" that never happened. Accent #E8833A, matches the tool. */
+var IGV={ list:[], i:0, rowId:'', acct:'', key:'', task:'', busy:false, pend:'', acctRowId:'' };
+function igvLocked(acctId, key){
+  var r=row(acctId); if(!r) return;
+  var names={s:'Story', f:'Feed Post', rl:'Reel'};
+  var ov=document.getElementById('igv-ov'); ov.style.display='flex';
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:360px;width:100%;padding:20px 22px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.4);">'+
+    '<div style="font-size:15px;font-weight:800;">No screenshot available</div>'+
+    '<div style="font-size:12.5px;color:#5b6470;margin:6px 0 14px;">'+names[key]+' on @'+esc(r.handle)+' is marked <b>Not available</b> — nothing was posted, so there is no screenshot.</div>'+
+    '<button class="go" style="width:100%;background:#E8833A;color:#fff;border:none;border-radius:10px;padding:10px;font-weight:800;cursor:pointer;" onclick="igvClose();toggleNA(\''+acctId+'\',\''+key+'\')">Make it available again</button>'+
+    '<button style="width:100%;margin-top:8px;background:none;border:1px solid #e5e8ef;border-radius:10px;padding:9px;cursor:pointer;font-weight:700;color:#5b6470;" onclick="igvClose()">Close</button></div>';
+}
+function igvClose(){ var ov=document.getElementById('igv-ov'); ov.style.display='none'; ov.innerHTML=''; IGV.busy=false; IGV.pend=''; }
+async function igvOpen(acctId, key){
+  var r=row(acctId); if(!r) return;
+  var names={s:'Story', f:'Feed Post', rl:'Trial Reel'};
+  IGV={ list:[], i:0, rowId:'', acct:r.handle, key:key, task:names[key], busy:false, pend:'', acctRowId:acctId };
+  var ov=document.getElementById('igv-ov'); ov.style.display='flex';
+  ov.innerHTML='<div style="background:#fff;border-radius:16px;padding:22px;font-weight:700;color:#5b6470;">Loading screenshots…</div>';
+  try{
+    var to=today(); var fromD=new Date(Date.now()-7*86400000).toISOString().slice(0,10);
+    var d=await (await fetch(API+'?action=proof_list&employee_id='+encodeURIComponent(USER.id)+'&from='+fromD+'&to='+to+'&_='+Date.now())).json();
+    var rows=((d&&d.rows)||[]).filter(function(x){
+      return String(x.account||'').toLowerCase()===String(r.handle).toLowerCase() &&
+             /ig reels posting|ig warm-up/i.test(String(x.task||'')) && (x.urls||[]).length;
+    }).sort(function(a,b){ return String(b.date).localeCompare(String(a.date)) || String(b.at).localeCompare(String(a.at)); });
+    if(!rows.length){
+      ov.innerHTML='<div style="background:#fff;border-radius:16px;max-width:360px;width:100%;padding:20px 22px;text-align:center;">'+
+        '<div style="font-size:15px;font-weight:800;">No screenshot found</div>'+
+        '<div style="font-size:12.5px;color:#5b6470;margin:6px 0 14px;">The tick is saved, but no proof photos matched @'+esc(r.handle)+' in the last 7 days. Screenshots saved without the account name (older tool builds) can\'t be matched here.</div>'+
+        '<button style="width:100%;background:none;border:1px solid #e5e8ef;border-radius:10px;padding:9px;cursor:pointer;font-weight:700;color:#5b6470;" onclick="igvClose()">Close</button></div>';
+      return;
+    }
+    IGV.rowId=rows[0].id; IGV.list=rows[0].urls.slice(); IGV.i=0;
+    igvRender();
+  }catch(e){ igvClose(); toast('Could not load the screenshots.'); }
+}
+function igvFname(u){ try{ return decodeURIComponent(String(u).split('/').pop().split('?')[0]); }catch(e){ return 'photo.jpg'; } }
+function igvRender(){
+  var ov=document.getElementById('igv-ov'); if(!ov) return;
+  var n=IGV.list.length, u=IGV.list[IGV.i]||'';
+  var thumbs=n>1?('<div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:8px;">'+
+    IGV.list.map(function(x,ix){ return '<img src="'+x+'" onclick="IGV.i='+ix+';igvRender()" style="width:52px;height:52px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid '+(ix===IGV.i?'#E8833A':'transparent')+';">'; }).join('')+'</div>'):'';
+  ov.innerHTML='<div style="background:#fff;border-radius:18px;max-width:560px;width:100%;max-height:94vh;overflow:auto;padding:16px 18px;box-shadow:0 30px 80px rgba(0,0,0,.45);">'+
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+
+      '<b style="font-size:14px;flex:1;">'+esc(IGV.task)+' · @'+esc(IGV.acct)+'</b>'+
+      '<span style="font-size:11px;color:#8a93a3;font-weight:700;">'+(IGV.i+1)+' / '+n+'</span>'+
+      '<button onclick="igvClose()" style="border:none;background:rgba(15,23,42,.06);border-radius:50%;width:26px;height:26px;cursor:pointer;font-weight:800;color:#5b6470;">✕</button></div>'+
+    '<div style="position:relative;background:#0f172a;border-radius:12px;overflow:hidden;">'+
+      '<img src="'+u+'" style="width:100%;max-height:56vh;object-fit:contain;display:block;">'+
+      (n>1?'<button onclick="IGV.i=(IGV.i-1+'+n+')%'+n+';igvRender()" style="position:absolute;left:6px;top:50%;transform:translateY(-50%);border:none;background:rgba(0,0,0,.5);color:#fff;border-radius:50%;width:34px;height:34px;cursor:pointer;font-size:16px;">‹</button>'+
+            '<button onclick="IGV.i=(IGV.i+1)%'+n+';igvRender()" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:rgba(0,0,0,.5);color:#fff;border-radius:50%;width:34px;height:34px;cursor:pointer;font-size:16px;">›</button>':'')+
+    '</div>'+thumbs+
+    '<div style="font-size:10.5px;color:#8a93a3;margin-top:7px;text-align:center;" id="igv-meta">'+esc(igvFname(u))+'</div>'+
+    '<div id="igv-actions" style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">'+
+      '<button style="flex:1;background:none;border:1px solid #e5e8ef;border-radius:10px;padding:9px;cursor:pointer;font-weight:700;color:#5b6470;" onclick="igvClose()">Close</button>'+
+      '<button style="flex:1.4;background:#E8833A;color:#fff;border:none;border-radius:10px;padding:9px;font-weight:800;cursor:pointer;" '+(IGV.busy?'disabled':'')+' onclick="igvReplaceUI()">Replace this photo</button>'+
+      '<button style="flex:.9;background:rgba(239,68,68,.08);color:#b91c1c;border:1px solid rgba(239,68,68,.35);border-radius:10px;padding:9px;font-weight:800;cursor:pointer;" '+(IGV.busy?'disabled':'')+' onclick="igvRemove()">Remove</button>'+
+    '</div></div>';
+  // async size lookup — best effort
+  try{ fetch(u,{method:'HEAD'}).then(function(r2){ var sz=r2.headers.get('content-length');
+    if(sz){ var el=document.getElementById('igv-meta'); if(el) el.textContent=igvFname(u)+' · '+Math.round(sz/1024)+' KB'; } }).catch(function(){}); }catch(_h){}
+}
+function igvReplaceUI(){
+  IGV.pend='';
+  document.getElementById('igv-actions').innerHTML=
+    '<div style="width:100%;font-size:12px;font-weight:800;color:#171a21;">Replace photo '+(IGV.i+1)+' — choose the new image:</div>'+
+    '<button style="flex:1;background:#fff;border:1.5px solid #E8833A;color:#c2410c;border-radius:10px;padding:9px;font-weight:800;cursor:pointer;" onclick="igvPick(\'file\')">Upload file</button>'+
+    '<button style="flex:1;background:#fff;border:1.5px solid #E8833A;color:#c2410c;border-radius:10px;padding:9px;font-weight:800;cursor:pointer;" onclick="igvPick(\'shot\')">Take screenshot</button>'+
+    '<button id="igv-confirm" style="flex:1.3;background:#E8833A;color:#fff;border:none;border-radius:10px;padding:9px;font-weight:800;cursor:pointer;opacity:.45;" disabled onclick="igvDoReplace(this)">Confirm replace</button>'+
+    '<button style="flex:.7;background:none;border:1px solid #e5e8ef;border-radius:10px;padding:9px;cursor:pointer;font-weight:700;color:#5b6470;" onclick="igvRender()">Cancel</button>';
+}
+async function igvPick(how){
+  var img=null;
+  if(how==='shot'){ if(!shotLive()){ var ok=await shotStart(); if(!ok) return; } img=shotGrab(); if(!img){ toast('Could not read the window — pick it again.'); return; } }
+  else{
+    img=await new Promise(function(res){ var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
+      inp.onchange=async function(){ if(!inp.files.length) return res(null); try{ res(await proofCompress(inp.files[0])); }catch(e){ res(null); } };
+      inp.click(); });
+    if(!img) return;
+  }
+  IGV.pend=img;
+  var btn=document.getElementById('igv-confirm');
+  if(btn){ btn.disabled=false; btn.style.opacity='1'; btn.textContent='Confirm replace ✓ (image picked)'; }
+}
+async function igvDoReplace(btn){
+  if(!IGV.pend||IGV.busy) return; IGV.busy=true; btn.disabled=true; btn.textContent='Uploading…';
+  try{
+    var url=await psUpload(IGV.pend, USER.id, 'replace');
+    var d=await (await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({ action:'proof_replace', employee_id:USER.id, id:IGV.rowId, index:IGV.i, url:url })})).json();
+    if(d&&d.ok){ IGV.list=d.urls.slice(); IGV.busy=false; IGV.pend=''; toast('Photo replaced ✓ — only this one changed.'); igvRender(); }
+    else{ IGV.busy=false; toast('Replace failed: '+((d&&d.error)||'error')); igvRender(); }
+  }catch(e){ IGV.busy=false; toast('Upload failed — try again.'); igvRender(); }
+}
+async function igvRemove(){
+  if(IGV.busy) return;
+  var last=(IGV.list.length===1);
+  if(!confirm('Remove this screenshot?'+(last?'\n\nIt is the LAST one — the '+IGV.task+' chip will revert to NOT DONE and the output will be un-counted. You will need to redo it properly.':'\n\nOnly this photo is deleted; the others stay.'))) return;
+  IGV.busy=true; igvRender();
+  try{
+    var d=await (await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({ action:'proof_remove', employee_id:USER.id, id:IGV.rowId, url:IGV.list[IGV.i] })})).json();
+    if(d&&d.ok){
+      IGV.list=d.urls.slice(); IGV.busy=false;
+      if(d.remaining===0){
+        /* last photo gone → revert the chip and un-count the output */
+        try{
+          var r=row(IGV.acctRowId);
+          if(r){ var meta=Object.assign({}, r.meta||{}); var t=Object.assign({}, (meta.t||{})); delete t[IGV.key]; meta.t=t;
+            await saveMeta(r, meta); }
+          fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent('IG Reels Posting')+'&n=-1&_='+Date.now()).catch(function(){});
+        }catch(_rv){}
+        igvClose(); toast('Removed — the chip is back to not-done and the count was reduced by 1.'); load();
+      } else { IGV.i=Math.min(IGV.i, IGV.list.length-1); toast('Screenshot removed.'); igvRender(); }
+    } else { IGV.busy=false; toast('Remove failed: '+((d&&d.error)||'error')); igvRender(); }
+  }catch(e){ IGV.busy=false; toast('Connection error.'); igvRender(); }
+}
+</script>
+
 </body>
 </html>
