@@ -86,8 +86,9 @@
 
 <div class="wrap" id="app" style="display:none">
   <h1>𝕏 Project John — Warm-up Tracker <span style="font-size:12px;color:var(--ink3);font-weight:600" id="who"></span></h1>
-  <div class="sub">Each account follows the SOP day plan. <b>Every completed session counts +1 output instantly</b> — no waiting for the day to finish, and a takeover mid-day credits whoever completed each session. Randomize batches &amp; scroll times so every account looks human. <span style="opacity:.55">Build 2026-08-23 · per-card lists + 2-shot proof — if you don't see this line, press Ctrl+Shift+R.</span></div>
+  <div class="sub">Each account follows the SOP day plan. <b>Every completed session counts +1 output instantly</b> — no waiting for the day to finish, and a takeover mid-day credits whoever completed each session. Randomize batches &amp; scroll times so every account looks human. <span style="opacity:.55">Build 2026-08-23b · session-chunk lists (pull-only) — if you don't see this line, press Ctrl+Shift+R.</span></div>
   <div class="top" id="stats"></div>
+  <div id="poolbar"></div>
   <div class="addbox">
     <input id="jn-user" placeholder="Account handle (@…)">
     <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink2);font-weight:700;">created on <input type="date" id="jn-cdate" style="width:140px;flex:none;min-width:0;"></label>
@@ -686,7 +687,38 @@ async function signIn(){
 }
 function start(){ try{ fetch(API+'?action=tool_used&employee_id='+encodeURIComponent(USER.id)+'&tool=john&_='+Date.now()); }catch(_tu){} $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name; try{ $('jn-cdate').value=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){} loadNames(); paintCached(); load(); smartPoll(); }
 
+/* ── TARGET-POOL PROGRESS BAR ──
+   One glance answers "how much of the client's list is left": USED (days completed with that
+   list) · ASSIGNED (reserved on an account, day not finished yet) · FREE (still in the pool). */
+var POOL=null;
+async function poolLoad(){
+  try{
+    var d=await (await fetch(API+'?action=john_pool&_='+Date.now())).json();
+    if(d&&d.ok){ POOL=d; poolRender(); }
+  }catch(e){}
+}
+function poolRender(){
+  var el=$('poolbar'); if(!el||!POOL) return;
+  var t=POOL.total||0;
+  if(!t){ el.innerHTML='<div class="muted" style="margin:6px 0 10px;">Follow-target pool is empty — paste the client\'s list into the JohnFollowTargets tab.</div>'; return; }
+  var pu=POOL.used/t*100, pa=POOL.assigned/t*100, pf=POOL.free/t*100;
+  el.innerHTML=
+    '<div style="margin:6px 0 12px;border:1px solid #0f141920;border-radius:12px;padding:10px 12px;background:#fff;">'+
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;font-weight:800;color:#0f1419;margin-bottom:6px;">'+
+        '<span>🎯 Follow-target pool</span><span style="color:#667;">'+ (POOL.used+POOL.assigned) +' / '+t+' consumed · '+POOL.free+' left</span></div>'+
+      '<div style="display:flex;height:12px;border-radius:100px;overflow:hidden;background:#e5e7eb;">'+
+        '<div style="width:'+pu+'%;background:#0f766e;" title="Used"></div>'+
+        '<div style="width:'+pa+'%;background:#f59e0b;" title="Assigned (in progress)"></div>'+
+        '<div style="width:'+pf+'%;background:#e5e7eb;" title="Free"></div></div>'+
+      '<div style="display:flex;gap:14px;margin-top:6px;font-size:11px;font-weight:700;color:#556;">'+
+        '<span><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#0f766e;margin-right:4px;"></i>Used '+POOL.used+'</span>'+
+        '<span><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#f59e0b;margin-right:4px;"></i>Assigned '+POOL.assigned+'</span>'+
+        '<span><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#cbd5e1;margin-right:4px;"></i>Free '+POOL.free+'</span>'+
+        (POOL.free<50?'<span style="color:#b91c1c;">⚠ running low — ask the client for more targets</span>':'')+
+      '</div></div>';
+}
 async function load(){
+  poolLoad();
   var d=null;
   try{
     d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
@@ -709,7 +741,7 @@ function render(){
     '<div class="stat"><b style="color:#0f766e">'+doneToday+' / '+act.length+'</b><span>Done today</span></div>'+
     '<div class="stat"><b>'+inSetup+'</b><span>In setup (D1–3)</span></div>'+
     '<div class="stat"><b style="color:#b91c1c">'+ROWS.filter(function(r){return r.status==='suspended';}).length+'</b><span>Suspended</span></div>'+
-    ((USER&&/^jmbeast$/i.test(String(USER.id||'')))?'<button onclick="jnSendLists()" style="border:1px solid rgba(15,118,110,.45);background:rgba(16,185,129,.08);color:#0f766e;border-radius:10px;padding:8px 14px;font-weight:800;cursor:pointer;font-size:12px;">📤 Send today\'s follow lists</button>':'');
+    ((USER&&/^jmbeast$/i.test(String(USER.id||'')))?'<button onclick="jnSendLists()" style="border:1px solid rgba(15,118,110,.45);background:rgba(16,185,129,.08);color:#0f766e;border-radius:10px;padding:8px 14px;font-weight:800;cursor:pointer;font-size:12px;" title="Marks completed days\' targets as used, releases suspended accounts\' targets, and re-sends unfinished lists as reminders. Never assigns anything.">🧹 Reconcile pool + remind unfinished</button>':'');
   renderByVA([
     ['Setup D1–3','#0f1419',function(r){return r.status!=='suspended' && r.day<=3;}],
     ['Follows D4+','#10b981',function(r){return r.status!=='suspended' && r.day>3;}],
@@ -736,7 +768,8 @@ function render(){
          A disabled button carrying a counter told the VA what they could not do; the pills above
          already say where they are. */
       (r.day<=3
-        ? '<div class="btns">'+(done
+        ? (r.day===3?jnFlist(r):'')+   /* Day 3's plan follows 10 targets — pull them here */
+          '<div class="btns">'+(done
             ? '<button disabled style="opacity:.55">✓ Done today</button>'
             : '<button class="go" onclick="dayDone(\''+r.id+'\','+r.day+')">✓ Mark day '+r.day+' complete</button>')+'</div>'
         : '<div class="btns">'+sessBtns(r)+'</div>'+jnFlist(r)+
@@ -795,19 +828,22 @@ var JN_SESSIONS=3;   // Aug 2026: every follow day is 3 sessions (was 4)
 /* 📋 Today's auto-assigned follow list — tap a chip and the X app opens that profile
    directly (no search bar). Assigned server-side from the client's target sheet. */
 function jnFlist(r){
-  /* PER-CARD PULL (his design): each account has its own button — the VA fetches THIS
-     account's list when they're about to work it, instead of one confusing bulk blast.
-     No list yet today → "Get today's follow list" assigns from the pool and pushes it to
-     the Telegram phone. List already assigned → chips render here + a re-send button. */
+  /* PULL-ONLY, PER-SESSION CHUNKS (his rule): NOTHING is assigned until the VA starts working
+     this account. The day quota is split across the sessions (50 → 17/17/16), and each press
+     of the button pulls the NEXT chunk to the Telegram phone. Untouched account = zero
+     targets reserved from the pool. */
   var m=(r&&r.meta)||{};
+  var chunks=(r.day>=4)?3:1;
+  var served=(m.flist_forday===r.day)?(parseInt(m.flist_sess,10)||0):0;
+  var hs=(served&&m.flist)?String(m.flist).split(',').filter(Boolean):[];
   var btn=function(txt){ return '<button id="jngl-'+esc(r.id)+'" onclick="jnGetList(\''+esc(r.id)+'\')" style="border:1px solid rgba(15,118,110,.45);background:rgba(16,185,129,.08);color:#0f766e;border-radius:10px;padding:6px 12px;font-weight:800;cursor:pointer;font-size:11px;">'+txt+'</button>'; };
-  if(!m.flist || m.flist_day!==today())
-    return '<div style="margin-top:8px;">'+btn('📨 Get today\'s follow list')+'</div>';
-  var hs=String(m.flist).split(',').filter(Boolean);
-  if(!hs.length) return '<div style="margin-top:8px;">'+btn('📨 Get today\'s follow list')+'</div>';
-  return '<details class="planbox" open style="margin-top:8px;"><summary>📋 Today\'s follow list ('+hs.length+') — tap to open in X</summary><div style="display:flex;flex-wrap:wrap;gap:5px;padding-top:5px;">'+
+  var label=(served>=chunks)
+    ? '🔁 Re-send full list to phone'
+    : '📨 Get session '+(served+1)+(chunks>1?' of '+chunks:'')+' list';
+  if(!hs.length) return '<div style="margin-top:8px;">'+btn(label)+'</div>';
+  return '<details class="planbox" open style="margin-top:8px;"><summary>📋 Follow list — '+hs.length+' so far · session '+served+'/'+chunks+' — tap to open in X</summary><div style="display:flex;flex-wrap:wrap;gap:5px;padding-top:5px;">'+
     hs.map(function(h){ return '<a href="https://x.com/'+encodeURIComponent(h)+'" target="_blank" style="text-decoration:none;background:#0f141910;border:1px solid #0f141926;color:#0f1419;border-radius:100px;padding:4px 10px;font-size:11px;font-weight:800;">@'+esc(h)+'</a>'; }).join('')+
-  '</div><div style="padding-top:7px;">'+btn('📨 Re-send to the Telegram phone')+'</div></details>';
+  '</div><div style="padding-top:7px;">'+btn(label)+'</div></details>';
 }
 async function jnGetList(id){
   var r=(ROWS||[]).filter(function(x){ return String(x.id)===String(id); })[0];
@@ -815,13 +851,18 @@ async function jnGetList(id){
   var b=document.getElementById('jngl-'+id); if(b){ b.disabled=true; b.textContent='Sending…'; }
   try{
     var d=await (await fetch(API+'?action=john_send_one&handle='+encodeURIComponent(r.handle)+'&employee_id='+encodeURIComponent((USER&&USER.id)||'')+'&_='+Date.now())).json();
-    if(d&&d.ok){ toast(d.fresh_lists?'📨 Fresh list assigned — check the Telegram phone.':'📨 List re-sent to the Telegram phone.'); load(); return; }
-    if(d&&d.error==='POOL_EMPTY') toast('⚠ No unused targets left in the pool — ask the admin to add more.');
-    else if(d&&d.error==='NO_LIST') toast('No list for this account yet — setup days (1–3) have no follow quota.');
+    if(d&&d.ok){
+      toast(d.fresh
+        ? '📨 Session '+d.sess+(d.chunks>1?'/'+d.chunks:'')+' list sent ('+d.fresh+' targets) — check the Telegram phone.'
+        : '🔁 Full list ('+(d.total_today||0)+') re-sent to the Telegram phone.');
+      load(); return;
+    }
+    if(d&&d.error==='POOL_EMPTY') toast('⚠ Pool too low for this session'+((d.detail)?' — '+d.detail:'')+' Ask the admin to add targets.');
+    else if(d&&d.error==='NO_LIST') toast(d.detail||'No list for this account yet.');
     else if(d&&d.error==='BUSY') toast('Server is busy — try again in a few seconds.');
     else toast('Could not send: '+((d&&d.error)||'error'));
   }catch(e){ toast('Connection error.'); }
-  if(b){ b.disabled=false; b.textContent='📨 Get today\'s follow list'; }
+  if(b){ b.disabled=false; b.textContent='📨 Get session list'; }
 }
 function jnSess(r){ return JN_SESSIONS; }   // all follow days: 3 sessions
 function sessMark(r,n){ return ((r&&r.meta)||{})['s'+n]; }
@@ -958,11 +999,13 @@ async function setStatus(id, st){
 
 <script>
 async function jnSendLists(){
-  var pass=prompt('Admin password (to push the follow lists now):'); if(!pass) return;
-  toast('Assigning & sending…');
+  /* PULL-ONLY MODEL: this never assigns. It reconciles the pool (used/released) and re-sends
+     unfinished lists to Telegram as reminders. */
+  var pass=prompt('Admin password (reconcile pool + remind unfinished):'); if(!pass) return;
+  toast('Reconciling…');
   try{
     var d=await (await fetch(API+'?action=john_send_lists&pass='+encodeURIComponent(pass)+'&_='+Date.now())).json();
-    if(d&&d.ok){ toast('📤 '+d.accounts_served+' list(s) assigned · Telegram sent: '+(d.telegram_sent||0)+(d.pool_short_for?(' · ⚠ pool short for '+d.pool_short_for+' account(s) — add more targets'):'')); load(); }
+    if(d&&d.ok){ toast('🧹 Used: +'+(d.targets_marked_used||0)+' · released: '+(d.targets_released||0)+' · reminders sent: '+(d.unfinished_reminded||0)); load(); }
     else toast('Failed: '+((d&&d.error)||'error'));
   }catch(e){ toast('Connection error.'); }
 }
