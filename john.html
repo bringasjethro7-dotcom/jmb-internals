@@ -687,10 +687,18 @@ async function signIn(){
 function start(){ try{ fetch(API+'?action=tool_used&employee_id='+encodeURIComponent(USER.id)+'&tool=john&_='+Date.now()); }catch(_tu){} $('signin').style.display='none'; $('app').style.display='block'; $('who').textContent='· '+USER.name; try{ $('jn-cdate').value=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){} loadNames(); paintCached(); load(); smartPoll(); }
 
 async function load(){
+  var d=null;
   try{
-    var d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
-    if(!d||!d.ok) throw new Error((d&&d.error)||'load'); ROWS=d.rows||[]; noteSeen(); cacheRows(); render();
-  }catch(e){ $('grid').innerHTML='<div class="muted">Could not load — redeploy the Apps Script (pa_list).</div>'; }
+    d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
+  }catch(e){
+    $('grid').innerHTML='<div class="muted">Server is busy — retrying in 8s…</div>';
+    setTimeout(load, 8000);   // congestion, not a broken deployment — retry by itself
+    return;
+  }
+  if(!d||!d.ok){ $('grid').innerHTML='<div class="muted">Server returned an error ('+esc((d&&d.error)||'unknown')+') — retrying in 8s…</div>'; setTimeout(load, 8000); return; }
+  ROWS=d.rows||[]; cacheRows();
+  try{ render(); }
+  catch(re){ $('grid').innerHTML='<div class="muted">Display error: '+esc(String(re&&re.message||re))+' — tell the admin (data loaded fine).</div>'; }
 }
 function render(){
   var act=ROWS.filter(function(r){return r.status!=='suspended';});
@@ -701,7 +709,7 @@ function render(){
     '<div class="stat"><b style="color:#0f766e">'+doneToday+' / '+act.length+'</b><span>Done today</span></div>'+
     '<div class="stat"><b>'+inSetup+'</b><span>In setup (D1–3)</span></div>'+
     '<div class="stat"><b style="color:#b91c1c">'+ROWS.filter(function(r){return r.status==='suspended';}).length+'</b><span>Suspended</span></div>'+
-    (isBoss&&isBoss()?'<button onclick="jnSendLists()" style="border:1px solid rgba(15,118,110,.45);background:rgba(16,185,129,.08);color:#0f766e;border-radius:10px;padding:8px 14px;font-weight:800;cursor:pointer;font-size:12px;">📤 Send today\'s follow lists</button>':'');
+    ((USER&&/^jmbeast$/i.test(String(USER.id||'')))?'<button onclick="jnSendLists()" style="border:1px solid rgba(15,118,110,.45);background:rgba(16,185,129,.08);color:#0f766e;border-radius:10px;padding:8px 14px;font-weight:800;cursor:pointer;font-size:12px;">📤 Send today\'s follow lists</button>':'');
   renderByVA([
     ['Setup D1–3','#0f1419',function(r){return r.status!=='suspended' && r.day<=3;}],
     ['Follows D4+','#10b981',function(r){return r.status!=='suspended' && r.day>3;}],
