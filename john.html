@@ -86,7 +86,7 @@
 
 <div class="wrap" id="app" style="display:none">
   <h1>𝕏 Project John — Warm-up Tracker <span style="font-size:12px;color:var(--ink3);font-weight:600" id="who"></span></h1>
-  <div class="sub">Each account follows the SOP day plan. <b>Every completed session counts +1 output instantly</b> — no waiting for the day to finish, and a takeover mid-day credits whoever completed each session. Randomize batches &amp; scroll times so every account looks human. <span style="opacity:.55">Build 2026-08-21 · per-session outputs — if you don't see this line, press Ctrl+Shift+R.</span></div>
+  <div class="sub">Each account follows the SOP day plan. <b>Every completed session counts +1 output instantly</b> — no waiting for the day to finish, and a takeover mid-day credits whoever completed each session. Randomize batches &amp; scroll times so every account looks human. <span style="opacity:.55">Build 2026-08-23 · per-card lists + 2-shot proof — if you don't see this line, press Ctrl+Shift+R.</span></div>
   <div class="top" id="stats"></div>
   <div class="addbox">
     <input id="jn-user" placeholder="Account handle (@…)">
@@ -306,8 +306,8 @@ var PLANS={
  2:_jList(['Scroll 2 minutes','Change profile name to a random <b>female name</b> (not username)','Follow 1 random page','Repost from homepage','Normal post','Scroll 20 seconds','Repost from homepage','Normal post']),
  3:_jList(['Change profile photo and header (<b>never reuse media</b>)','Scroll 1 minute','Follow 5 target accounts','Repost from homepage','Normal post','Follow 5 target accounts']),
  4:'<b>25 follows</b> split across opens: 5 / 10 / 10 · <b>3 sessions today</b> — the day completes after Session 3',
- 5:'Scroll 1 min · <b>30–45 follows</b> (randomize!) in 4–5 opens: 10 / 10 / 15 / rest',
- 6:'<b>35–50 follows daily</b> (randomize total, batches & scroll time; client error → smaller batches)'
+ 5:'Scroll 1 min · <b>30–45 follows</b> (randomize!) in <b>3 sessions</b>: 10 / 15 / rest',
+ 6:'<b>35–50 follows daily</b> in <b>3 sessions</b> (randomize total, batches & scroll time; client error → smaller batches)'
 };
 function planFor(day){ return PLANS[Math.min(day,6)] + (day>6?' · day '+day:''); }
 function $(id){return document.getElementById(id);}
@@ -789,21 +789,41 @@ async function addAcct(){
    Day done stays locked until all required sessions are in: an account is not finished because
    someone says so, it is finished when the sessions exist. Session marks PERSIST across days
    until the day completes (see sessOk) — only the day-done mark itself resets per shift. */
-var JN_SESSIONS=4;
+var JN_SESSIONS=3;   // Aug 2026: every follow day is 3 sessions (was 4)
 /* Sessions required for THIS account's day. Day 4's plan is "25 follows: 5 / 10 / 10" —
    three opens — so Day 4 completes after SESSION 3. Every later follow day keeps four. */
 /* 📋 Today's auto-assigned follow list — tap a chip and the X app opens that profile
    directly (no search bar). Assigned server-side from the client's target sheet. */
 function jnFlist(r){
+  /* PER-CARD PULL (his design): each account has its own button — the VA fetches THIS
+     account's list when they're about to work it, instead of one confusing bulk blast.
+     No list yet today → "Get today's follow list" assigns from the pool and pushes it to
+     the Telegram phone. List already assigned → chips render here + a re-send button. */
   var m=(r&&r.meta)||{};
-  if(!m.flist || m.flist_day!==today()) return '';
+  var btn=function(txt){ return '<button id="jngl-'+esc(r.id)+'" onclick="jnGetList(\''+esc(r.id)+'\')" style="border:1px solid rgba(15,118,110,.45);background:rgba(16,185,129,.08);color:#0f766e;border-radius:10px;padding:6px 12px;font-weight:800;cursor:pointer;font-size:11px;">'+txt+'</button>'; };
+  if(!m.flist || m.flist_day!==today())
+    return '<div style="margin-top:8px;">'+btn('📨 Get today\'s follow list')+'</div>';
   var hs=String(m.flist).split(',').filter(Boolean);
-  if(!hs.length) return '';
+  if(!hs.length) return '<div style="margin-top:8px;">'+btn('📨 Get today\'s follow list')+'</div>';
   return '<details class="planbox" open style="margin-top:8px;"><summary>📋 Today\'s follow list ('+hs.length+') — tap to open in X</summary><div style="display:flex;flex-wrap:wrap;gap:5px;padding-top:5px;">'+
     hs.map(function(h){ return '<a href="https://x.com/'+encodeURIComponent(h)+'" target="_blank" style="text-decoration:none;background:#0f141910;border:1px solid #0f141926;color:#0f1419;border-radius:100px;padding:4px 10px;font-size:11px;font-weight:800;">@'+esc(h)+'</a>'; }).join('')+
-  '</div></details>';
+  '</div><div style="padding-top:7px;">'+btn('📨 Re-send to the Telegram phone')+'</div></details>';
 }
-function jnSess(r){ return (r && r.day===4) ? 3 : JN_SESSIONS; }
+async function jnGetList(id){
+  var r=(ROWS||[]).filter(function(x){ return String(x.id)===String(id); })[0];
+  if(!r){ toast('Row not found — refresh the page.'); return; }
+  var b=document.getElementById('jngl-'+id); if(b){ b.disabled=true; b.textContent='Sending…'; }
+  try{
+    var d=await (await fetch(API+'?action=john_send_one&handle='+encodeURIComponent(r.handle)+'&employee_id='+encodeURIComponent((USER&&USER.id)||'')+'&_='+Date.now())).json();
+    if(d&&d.ok){ toast(d.fresh_lists?'📨 Fresh list assigned — check the Telegram phone.':'📨 List re-sent to the Telegram phone.'); load(); return; }
+    if(d&&d.error==='POOL_EMPTY') toast('⚠ No unused targets left in the pool — ask the admin to add more.');
+    else if(d&&d.error==='NO_LIST') toast('No list for this account yet — setup days (1–3) have no follow quota.');
+    else if(d&&d.error==='BUSY') toast('Server is busy — try again in a few seconds.');
+    else toast('Could not send: '+((d&&d.error)||'error'));
+  }catch(e){ toast('Connection error.'); }
+  if(b){ b.disabled=false; b.textContent='📨 Get today\'s follow list'; }
+}
+function jnSess(r){ return JN_SESSIONS; }   // all follow days: 3 sessions
 function sessMark(r,n){ return ((r&&r.meta)||{})['s'+n]; }
 /* SESSIONS DO NOT RESET DAILY (unlike every other lane in this tool). A session mark stays
    valid across days until the account COMPLETES its required sessions — finishing the day
@@ -825,9 +845,11 @@ function sessBtns(r){
     var ok=sessOk(r,i);
     // sessions run in order, so a missed one can't be papered over by doing the next
     var next=(!ok && sessDone(r)===(i-1));
+    /* TWO-SHOT RULE: only the first and last sessions carry a camera — start/end following count. */
+    var lbl=(i===1?'📷 Session 1 · start count':(i===jnSess(r)?'📷 Session '+i+' · end count':'Session '+i));
     out.push(ok
       ? '<button disabled style="opacity:.55">✓ S'+i+'</button>'
-      : (next ? '<button class="go" onclick="sessDone_('+"'"+r.id+"'"+','+i+')">📷 Session '+i+'</button>'
+      : (next ? '<button class="go" onclick="sessDone_('+"'"+r.id+"'"+','+i+')">'+lbl+'</button>'
               : '<button disabled style="opacity:.35;cursor:not-allowed" title="Finish session '+(sessDone(r)+1)+' first">S'+i+'</button>'));
   }
   return out.join('');
@@ -859,10 +881,15 @@ async function sessDone_(id, n){
   var r0=ROWS.filter(function(x){return x.id===id;})[0]; if(!r0) return;
   if(sessOk(r0,n)){ toast('Session '+n+' is already logged.'); return; }
   if(!(await metricGate(r0,'fol','followers'))) return;
-  /* Proof first. bump() rejects when the VA backs out of the screenshot, which stops the
-     session being marked — the same ordering every other tool now uses. */
-  try{ await proofOnly((r0.day<=3?'Setup Day':'Follow Day')+' — Session '+n, r0.handle); }
-  catch(e){ if(e && e.proofCancelled) return; toast('Connection error.'); return; }
+  /* TWO-SHOT RULE (Aug 2026): only the FIRST and LAST sessions of the day carry a screenshot —
+     the profile's FOLLOWING count before any follows, and again after the final session.
+     End − start must equal the day's follow target, so those two numbers prove the whole day;
+     the middle sessions are just ticks. Backing out of the screenshot cancels the session. */
+  var isFirstShot=(sessDone(r0)===0), isLastShot=(n===jnSess(r0));
+  if(isFirstShot||isLastShot){
+    try{ await proofOnly('Follow Day — '+(isFirstShot?'START':'END')+' following count', r0.handle); }
+    catch(e){ if(e && e.proofCancelled) return; toast('Connection error.'); return; }
+  }
   try{
     var m=Object.assign({}, r0.meta||{}); m['s'+n]=vaKeyOf(USER.id);
     var rr=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&meta='+encodeURIComponent(JSON.stringify(m))+'&_='+Date.now());
@@ -903,7 +930,7 @@ async function dayDone(id, day, noProof){
     var r0=ROWS.filter(function(x){return x.id===id;})[0];
     /* The finished day consumes its sessions — clear the marks so the next day starts at S1. */
     var _m=Object.assign({}, (r0&&r0.meta)||{}, {last:vaKeyOf(USER.id)});
-    for(var _si=1;_si<=JN_SESSIONS;_si++) delete _m['s'+_si];
+    for(var _si=1;_si<=4;_si++) delete _m['s'+_si];   // clears up to 4 to wipe legacy S4 marks
     var meta=JSON.stringify(_m);
     var r=await fetch(API+'?action=pa_update&id='+encodeURIComponent(id)+'&day='+(day+1)+'&meta='+encodeURIComponent(meta)+'&_='+Date.now());
     var d=await r.json();
