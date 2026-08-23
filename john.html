@@ -6,7 +6,8 @@
 <title>JMB — Project John (X Warm-up)</title>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Sora:wght@700;800&display=swap" rel="stylesheet">
 <style>
-  :root{--bg:#f6f7fb;--card:#fff;--ink:#171a21;--ink2:#5b6470;--ink3:#8a93a3;--line:#e5e8ef;--x:#0f1419;--x2:#536471;--ok:#10b981;--susp:#ef4444;}
+  /* DARK THEME (Aug 2026, his ask): charcoal "light black" background, soft light ink. */
+  :root{--bg:#101216;--card:#181b21;--ink:#e7eaf0;--ink2:#9aa3b2;--ink3:#6b7480;--line:#262b33;--x:#e7eaf0;--x2:#8b98a5;--ok:#10b981;--susp:#ef4444;}
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Manrope',system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
   .wrap{max-width:1100px;margin:0 auto;padding:24px 16px 60px}
@@ -18,26 +19,30 @@
   .stat span{font-size:10.5px;color:var(--ink3);font-weight:800;text-transform:uppercase;letter-spacing:.05em}
   .addbox{display:flex;gap:8px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:13px;padding:12px;margin-bottom:16px}
   .addbox input{flex:1;min-width:180px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:13px}
-  .addbox button{background:#0f1419;color:#fff;border:none;border-radius:10px;padding:9px 16px;font-weight:800;cursor:pointer}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
-  .acct{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 15px}
+  .addbox button{background:#e7eaf0;color:#101216;border:none;border-radius:10px;padding:9px 16px;font-weight:800;cursor:pointer}
+  .addbox input{background:#101216;color:var(--ink)}
+  .addbox input::placeholder{color:var(--ink3)}
+  /* VERTICAL LIST (Aug 2026): one account per row instead of tiles — easier to scan top-down. */
+  .grid{display:flex;flex-direction:column;gap:8px}
+  .acct{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 15px}
   .acct.done-today{border-color:rgba(16,185,129,.5)}
   .acct.susp{opacity:.55}
   .hd{display:flex;align-items:center;gap:8px}
   .hd b{font-size:14.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .dayb{font-size:11px;font-weight:900;color:#fff;background:#0f1419;border-radius:100px;padding:3px 10px}
-  .plan{font-size:12px;color:var(--ink2);background:rgba(15,20,25,.04);border-radius:9px;padding:8px 10px;margin:9px 0;line-height:1.55}
+  .plan{font-size:12px;color:var(--ink2);background:rgba(231,234,240,.05);border-radius:9px;padding:8px 10px;margin:9px 0;line-height:1.55}
   .plan b{color:var(--ink)}
   .btns{display:flex;gap:6px;flex-wrap:wrap}
-  .btns button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 11px;font-size:11.5px;font-weight:800;cursor:pointer;color:var(--ink2)}
+  .btns button{border:1px solid var(--line);background:#1f242c;border-radius:8px;padding:6px 11px;font-size:11.5px;font-weight:800;cursor:pointer;color:var(--ink2)}
   .btns button.go{border-color:rgba(16,185,129,.5);color:#0f766e;background:rgba(16,185,129,.08)}
   .btns button.bad{border-color:rgba(239,68,68,.4);color:#b91c1c;background:rgba(239,68,68,.06)}
   .muted{color:var(--ink3);font-size:12px;padding:6px 2px}
   #signin{max-width:360px;margin:12vh auto;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px;text-align:center}
-  #signin input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:14px;margin-top:9px}
-  #signin button{width:100%;margin-top:12px;background:#0f1419;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;cursor:pointer;font-size:14px}
+  #signin input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font:inherit;font-size:14px;margin-top:9px;background:#101216;color:var(--ink)}
+  #signin input::placeholder{color:var(--ink3)}
+  #signin button{width:100%;margin-top:12px;background:#e7eaf0;color:#101216;border:none;border-radius:10px;padding:11px;font-weight:800;cursor:pointer;font-size:14px}
   #si-err{display:none;color:#b91c1c;font-size:12.5px;margin-top:9px}
-  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#171a21;color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;opacity:0;transition:.3s;pointer-events:none;z-index:50}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#e7eaf0;color:#101216;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;opacity:0;transition:.3s;pointer-events:none;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.5)}
   .toast.on{opacity:1}
 
   /* ── UI v2: calmer look, section headers, ⋯ menus, big progress panel ── */
@@ -48,7 +53,7 @@
   .sect span{font-size:11px;color:var(--ink3);font-weight:800}
   .sect i{flex:1;height:1px;background:var(--line)}
   .ph2{font-size:10px;font-weight:900;border-radius:100px;padding:3px 9px;white-space:nowrap}
-  .xbtn{border:1px solid #0f141926;background:#0f1419;color:#fff;border-radius:8px;padding:2px 9px;font:800 11px 'Manrope',sans-serif;cursor:pointer;line-height:1.5;flex:none}
+  .xbtn{border:1px solid #3a4250;background:#0f1419;color:#fff;border-radius:8px;padding:2px 9px;font:800 11px 'Manrope',sans-serif;cursor:pointer;line-height:1.5;flex:none}
   .xbtn:hover{background:#26303a}
   .meta1{font-size:10.5px;color:var(--ink3);margin-top:4px}
   .planbox{margin:8px 0 2px}
@@ -56,22 +61,22 @@
   .planbox summary::-webkit-details-marker{display:none}
   .planbox summary::after{content:' ▾'}
   .planbox[open] summary::after{content:' ▴'}
-  .planbox>div{font-size:11.5px;color:var(--ink2);background:rgba(15,23,42,.035);border-radius:9px;padding:7px 10px;margin-top:5px;line-height:1.5}
+  .planbox>div{font-size:11.5px;color:var(--ink2);background:rgba(231,234,240,.05);border-radius:9px;padding:7px 10px;margin-top:5px;line-height:1.5}
   .kmenu{position:relative}
-  .kmenu summary{list-style:none;cursor:pointer;width:27px;height:27px;border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--ink3);font-weight:900;background:#fff;font-size:14px}
+  .kmenu summary{list-style:none;cursor:pointer;width:27px;height:27px;border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--ink3);font-weight:900;background:#1f242c;font-size:14px}
   .kmenu summary::-webkit-details-marker{display:none}
   .kmenu[open] summary{background:var(--bg)}
-  .kmenu .dd{position:absolute;right:0;top:31px;z-index:30;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(15,23,42,.16);padding:6px;min-width:210px;display:flex;flex-direction:column;gap:2px}
+  .kmenu .dd{position:absolute;right:0;top:31px;z-index:30;background:#1f242c;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.55);padding:6px;min-width:210px;display:flex;flex-direction:column;gap:2px}
   .kmenu .dd button{border:none;background:none;text-align:left;padding:8px 10px;border-radius:8px;font:700 12px 'Manrope',sans-serif;color:var(--ink2);cursor:pointer;white-space:nowrap}
   .kmenu .dd button:hover{background:var(--bg)}
-  .kmenu .dd button.danger{color:#b91c1c}
+  .kmenu .dd button.danger{color:#f87171}
   .kmenu .dd .sep{height:1px;background:var(--line);margin:4px 6px}
   .acct .btns,.model .btns{margin-top:8px}
   .pvwrap{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 18px 8px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .pvrow{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
   .pvrow.first{border-top:none}
   .pvav{width:36px;height:36px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font:800 12.5px 'Sora',sans-serif;color:#fff}
-  .pvbar{height:14px;border-radius:8px;background:rgba(15,23,42,.07);overflow:hidden}
+  .pvbar{height:14px;border-radius:8px;background:rgba(231,234,240,.09);overflow:hidden}
   .pvbar i{display:block;height:100%;border-radius:8px;transition:width .4s}
   .pvpct{font-family:'Sora',sans-serif;font-weight:800;min-width:118px;text-align:right;line-height:1.25}
 </style>
@@ -86,7 +91,7 @@
 
 <div class="wrap" id="app" style="display:none">
   <h1>𝕏 Project John — Warm-up Tracker <span style="font-size:12px;color:var(--ink3);font-weight:600" id="who"></span></h1>
-  <div class="sub">Each account follows the SOP day plan. <b>Every completed session counts +1 output instantly</b> — no waiting for the day to finish, and a takeover mid-day credits whoever completed each session. Randomize batches &amp; scroll times so every account looks human. <span style="opacity:.55">Build 2026-08-23b · session-chunk lists (pull-only) — if you don't see this line, press Ctrl+Shift+R.</span></div>
+  <div class="sub">Each account follows the SOP day plan. <b>Every completed session counts +1 output instantly</b> — no waiting for the day to finish, and a takeover mid-day credits whoever completed each session. Randomize batches &amp; scroll times so every account looks human. <span style="opacity:.55">Build 2026-08-23c · dark vertical UI + SVG icons — if you don't see this line, press Ctrl+Shift+R.</span></div>
   <div class="top" id="stats"></div>
   <div id="poolbar"></div>
   <div class="addbox">
@@ -229,7 +234,7 @@ async function assignTo(id,to){
     render(); alert('Could not reassign — try again.');
   }
 }
-function delBtn(id){ return '<button onclick="delAcct(\''+id+'\')" title="Delete (wrong entry)" style="border:1px solid rgba(239,68,68,.3);background:#fff;color:#b91c1c;border-radius:8px;padding:5px 8px;font-size:10.5px;font-weight:800;cursor:pointer;">🗑</button>'; }
+function delBtn(id){ return '<button onclick="delAcct(\''+id+'\')" title="Delete (wrong entry)" style="border:1px solid rgba(239,68,68,.4);background:transparent;color:#f87171;border-radius:8px;padding:5px 8px;font-size:10.5px;font-weight:800;cursor:pointer;">'+ic('trash')+'</button>'; }
 async function delAcct(id){
   var r0=ROWS.filter(function(x){return x.id===id;})[0];
   if(!confirm('DELETE '+((r0&&r0.handle)||'this entry')+' from the board?\n\nUse this only for wrong entries. Outputs already counted are not affected.')) return;
@@ -279,7 +284,7 @@ function renderByVA(segs, doneFn, activeFn, amFn){
   }).sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
   try{ var _me=list.filter(function(o){ return o.k===mine; })[0]; if(_me) _maybeSnap(_me.done, _me.tot); }catch(_ms){}
   host.innerHTML='<div class="pvwrap">'+
-    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">📊 Today — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked this shift · resets per shift · ☀ 8 AM / 🌙 8 PM</span></div>'+
+    '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">'+ic('chart',14)+'Today — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked this shift · resets per shift · ☀ 8 AM / 🌙 8 PM</span></div>'+
     list.map(function(o,ix){
       var pc=o.pct>=100?'#10b981':(o.pct>=70?'#f59e0b':'#ef4444');
       var name=vaName(o.k);
@@ -352,9 +357,9 @@ async function shotStart(){
     await SHOT.video.play();
     SHOT.stream.getVideoTracks()[0].addEventListener('ended', function(){
       SHOT.stream=null; SHOT.video=null; try{ renderShotBar(); }catch(e){}
-      toast('Screen sharing stopped. Click 📷 Pick window to resume.');
+      toast('Screen sharing stopped. Click "Pick window" to resume.');
     });
-    renderShotBar(); toast('Window locked in — 📷 is one click from now on.');
+    renderShotBar(); toast('Window locked in — capture is one click from now on.');
     return true;
   }catch(e){ toast('Capture cancelled.'); return false; }
 }
@@ -382,7 +387,7 @@ function renderShotBar(){
     ? '<span style="width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 8px #34d399;margin-right:8px;"></span>Capture armed'+
       '<button onclick="shotStop()" style="margin-left:8px;background:rgba(255,255,255,.12);border:none;color:#e2e8f0;border-radius:7px;padding:4px 9px;font-weight:700;cursor:pointer;">Stop</button>'
     : '<span style="width:8px;height:8px;border-radius:50%;background:#94a3b8;margin-right:8px;"></span>Capture off'+
-      '<button onclick="shotStart()" style="margin-left:8px;background:#0f766e;border:none;color:#fff;border-radius:7px;padding:4px 10px;font-weight:800;cursor:pointer;">📷 Pick window</button>';
+      '<button onclick="shotStart()" style="margin-left:8px;background:#0f766e;border:none;color:#fff;border-radius:7px;padding:4px 10px;font-weight:800;cursor:pointer;">'+ic('cam')+'Pick window</button>';
 }
 function proofCompress(file){
   return new Promise(function(res,rej){
@@ -516,7 +521,7 @@ function proofPanel(){
       '<div style="font:800 17px Sora,Manrope,sans-serif;">Attach proof</div>'+
       '<div id="proof-what" style="font-size:12.5px;color:#64748b;margin-top:3px;"></div>'+
       '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">'+
-        '<button id="proof-cap" style="background:#0f766e;color:#fff;border:none;border-radius:9px;padding:10px 16px;font-weight:800;cursor:pointer;">📷 Capture window</button>'+
+        '<button id="proof-cap" style="background:#0f766e;color:#fff;border:none;border-radius:9px;padding:10px 16px;font-weight:800;cursor:pointer;">'+ic('cam')+'Capture window</button>'+
         '<button id="proof-pick" style="background:#475569;color:#fff;border:none;border-radius:9px;padding:10px 14px;font-weight:800;cursor:pointer;">📎 Attach file</button>'+
         '<span style="font-size:12px;color:#64748b;align-self:center;">or paste with Ctrl+V · up to 5</span>'+
       '</div>'+
@@ -703,18 +708,18 @@ function poolRender(){
   if(!t){ el.innerHTML='<div class="muted" style="margin:6px 0 10px;">Follow-target pool is empty — paste the client\'s list into the JohnFollowTargets tab.</div>'; return; }
   var pu=POOL.used/t*100, pa=POOL.assigned/t*100, pf=POOL.free/t*100;
   el.innerHTML=
-    '<div style="margin:6px 0 12px;border:1px solid #0f141920;border-radius:12px;padding:10px 12px;background:#fff;">'+
-      '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;font-weight:800;color:#0f1419;margin-bottom:6px;">'+
-        '<span>🎯 Follow-target pool</span><span style="color:#667;">'+ (POOL.used+POOL.assigned) +' / '+t+' consumed · '+POOL.free+' left</span></div>'+
-      '<div style="display:flex;height:12px;border-radius:100px;overflow:hidden;background:#e5e7eb;">'+
-        '<div style="width:'+pu+'%;background:#0f766e;" title="Used"></div>'+
+    '<div style="margin:6px 0 12px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--card);">'+
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;font-weight:800;color:var(--ink);margin-bottom:6px;">'+
+        '<span>'+ic('target')+'Follow-target pool</span><span style="color:var(--ink3);">'+ (POOL.used+POOL.assigned) +' / '+t+' consumed · '+POOL.free+' left</span></div>'+
+      '<div style="display:flex;height:12px;border-radius:100px;overflow:hidden;background:rgba(231,234,240,.1);">'+
+        '<div style="width:'+pu+'%;background:#10b981;" title="Used"></div>'+
         '<div style="width:'+pa+'%;background:#f59e0b;" title="Assigned (in progress)"></div>'+
-        '<div style="width:'+pf+'%;background:#e5e7eb;" title="Free"></div></div>'+
-      '<div style="display:flex;gap:14px;margin-top:6px;font-size:11px;font-weight:700;color:#556;">'+
-        '<span><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#0f766e;margin-right:4px;"></i>Used '+POOL.used+'</span>'+
+        '<div style="width:'+pf+'%;" title="Free"></div></div>'+
+      '<div style="display:flex;gap:14px;margin-top:6px;font-size:11px;font-weight:700;color:var(--ink2);">'+
+        '<span><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#10b981;margin-right:4px;"></i>Used '+POOL.used+'</span>'+
         '<span><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#f59e0b;margin-right:4px;"></i>Assigned '+POOL.assigned+'</span>'+
-        '<span><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#cbd5e1;margin-right:4px;"></i>Free '+POOL.free+'</span>'+
-        (POOL.free<50?'<span style="color:#b91c1c;">⚠ running low — ask the client for more targets</span>':'')+
+        '<span><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#3a4250;margin-right:4px;"></i>Free '+POOL.free+'</span>'+
+        (POOL.free<50?'<span style="color:#f87171;">'+ic('warn')+'running low — ask the client for more targets</span>':'')+
       '</div></div>';
 }
 async function load(){
@@ -740,8 +745,8 @@ function render(){
     '<div class="stat"><b>'+act.length+'</b><span>Active accounts</span></div>'+
     '<div class="stat"><b style="color:#0f766e">'+doneToday+' / '+act.length+'</b><span>Done today</span></div>'+
     '<div class="stat"><b>'+inSetup+'</b><span>In setup (D1–3)</span></div>'+
-    '<div class="stat"><b style="color:#b91c1c">'+ROWS.filter(function(r){return r.status==='suspended';}).length+'</b><span>Suspended</span></div>'+
-    ((USER&&/^jmbeast$/i.test(String(USER.id||'')))?'<button onclick="jnSendLists()" style="border:1px solid rgba(15,118,110,.45);background:rgba(16,185,129,.08);color:#0f766e;border-radius:10px;padding:8px 14px;font-weight:800;cursor:pointer;font-size:12px;" title="Marks completed days\' targets as used, releases suspended accounts\' targets, and re-sends unfinished lists as reminders. Never assigns anything.">🧹 Reconcile pool + remind unfinished</button>':'');
+    '<div class="stat"><b style="color:#f87171">'+ROWS.filter(function(r){return r.status==='suspended';}).length+'</b><span>Suspended</span></div>'+
+    ((USER&&/^jmbeast$/i.test(String(USER.id||'')))?'<button onclick="jnSendLists()" style="border:1px solid rgba(15,118,110,.45);background:rgba(16,185,129,.08);color:#0f766e;border-radius:10px;padding:8px 14px;font-weight:800;cursor:pointer;font-size:12px;" title="Marks completed days\' targets as used, releases suspended accounts\' targets, and re-sends unfinished lists as reminders. Never assigns anything.">'+ic('refresh')+'Reconcile pool + remind unfinished</button>':'');
   renderByVA([
     ['Setup D1–3','#0f1419',function(r){return r.status!=='suspended' && r.day<=3;}],
     ['Follows D4+','#10b981',function(r){return r.status!=='suspended' && r.day>3;}],
@@ -750,18 +755,20 @@ function render(){
   if(!ROWS.length){ $('grid').innerHTML='<div class="muted">No accounts yet — add your first above.</div>'; return; }
   renderTabs();
   var base=filterRows();
-  var sorted=base.slice().sort(function(a,b){ return (a.status==='suspended'?1:0)-(b.status==='suspended'?1:0) || a.day-b.day; });
+  /* AGED ACCOUNTS FIRST (his rule): highest day on top — the seasoned accounts lead the
+     list, fresh/new accounts sit below. Suspended stays at the bottom. */
+  var sorted=base.slice().sort(function(a,b){ return (a.status==='suspended'?1:0)-(b.status==='suspended'?1:0) || b.day-a.day; });
   if(!sorted.length){ $('grid').innerHTML='<div class="muted">No accounts in this view.</div>'; return; }
-  function grpJ(r){ return r.status==='suspended'?'⛔ Suspended':(r.day<=3?'🛠 Setup · Days 1–3':'📈 Follow phase · Day 4+'); }
+  function grpJ(r){ return r.status==='suspended'?ic('ban',13)+'Suspended':(r.day<=3?ic('clip',13)+'Setup · Days 1–3':ic('trend',13)+'Follow phase · Day 4+'); }
   var gcnt={}; sorted.forEach(function(r){ var g=grpJ(r); gcnt[g]=(gcnt[g]||0)+1; });
   var out=[], lastG='';
   sorted.forEach(function(r){
     var g=grpJ(r); if(g!==lastG){ out.push('<div class="sect"><b>'+g+'</b><span>'+gcnt[g]+'</span><i></i></div>'); lastG=g; }
     var done=markOk(r.meta&&r.meta.last, r.assigned_to||r.created_by);
     var who='<div class="meta1">'+assignSel(r)+(cdateOf(r)?(' · created '+esc(ageTxt(r))):'')+'</div>';
-    if(r.status==='suspended'){ out.push('<div class="acct susp"><div class="hd"><b>'+esc(r.handle)+'</b><button class="xbtn" onclick="openX(\''+esc(r.id)+'\')" title="Open this account on X — check it live">𝕏</button><span class="ph2" style="background:#ef444414;color:#b91c1c;border:1px solid #ef44442e">⛔ Suspended</span>'+kmenu([['↩ Reinstate',"setStatus('"+r.id+"','active')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+'</div>'); return; }
-    out.push('<div class="acct'+(done?' done-today':'')+'"><div class="hd"><b>'+esc(r.handle)+'</b><button class="xbtn" onclick="openX(\''+esc(r.id)+'\')" title="Open this account on X — check it live">𝕏</button><span class="ph2" style="background:#0f141910;color:#0f1419;border:1px solid #0f141926">Day '+r.day+'</span>'+kmenu([['⛔ Suspended',"setStatus('"+r.id+"','suspended')"],'---',['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+
-      '<details class="planbox"'+(done?'':' open')+'><summary>📋 Day '+r.day+' plan</summary><div>'+planFor(r.day)+'</div></details>'+
+    if(r.status==='suspended'){ out.push('<div class="acct susp"><div class="hd"><b>'+esc(r.handle)+'</b><button class="xbtn" onclick="openX(\''+esc(r.id)+'\')" title="Open this account on X — check it live">𝕏</button><span class="ph2" style="background:#ef444422;color:#f87171;border:1px solid #ef444440">'+ic('ban')+'Suspended</span>'+kmenu([[ic('undo')+'Reinstate',"setStatus('"+r.id+"','active')"],'---',[ic('trash')+'Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+'</div>'); return; }
+    out.push('<div class="acct'+(done?' done-today':'')+'"><div class="hd"><b>'+esc(r.handle)+'</b><button class="xbtn" onclick="openX(\''+esc(r.id)+'\')" title="Open this account on X — check it live">𝕏</button><span class="ph2" style="background:rgba(231,234,240,.1);color:var(--ink);border:1px solid rgba(231,234,240,.22)">Day '+r.day+'</span>'+kmenu([[ic('ban')+'Suspended',"setStatus('"+r.id+"','suspended')"],'---',[ic('trash')+'Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']])+'</div>'+who+
+      '<details class="planbox"'+(done?'':' open')+'><summary>'+ic('clip')+'Day '+r.day+' plan</summary><div>'+planFor(r.day)+'</div></details>'+
       /* SETUP (days 1-3) has no sessions — it is a checklist you work once, so a single action
          completes the day. FOLLOW phase (day 4+) keeps the four sessions, and the day-done button
          simply APPEARS once all four are in rather than sitting there as a locked "(2/4)" label.
@@ -840,15 +847,13 @@ function jnFlist(r){
      when no session has been started on this account today. Sessions completed without a
      pulled list skip their chunks — those targets stay in the pool. */
   var served=Math.max(pulled, Math.min(chunks, sessDone(r)));
-  var hs=(pulled&&m.flist)?String(m.flist).split(',').filter(Boolean):[];
-  var btn=function(txt){ return '<button id="jngl-'+esc(r.id)+'" onclick="jnGetList(\''+esc(r.id)+'\')" style="border:1px solid rgba(15,118,110,.45);background:rgba(16,185,129,.08);color:#0f766e;border-radius:10px;padding:6px 12px;font-weight:800;cursor:pointer;font-size:11px;">'+txt+'</button>'; };
+  /* LIST HIDDEN ON THE CARD (his ask): the chips ate the interface. The list itself lives on
+     the Telegram phone — the card only carries the pull / re-send button. */
+  var btn=function(txt){ return '<button id="jngl-'+esc(r.id)+'" onclick="jnGetList(\''+esc(r.id)+'\')" style="border:1px solid rgba(16,185,129,.45);background:rgba(16,185,129,.1);color:#34d399;border-radius:10px;padding:6px 12px;font-weight:800;cursor:pointer;font-size:11px;">'+txt+'</button>'; };
   var label=(served>=chunks)
-    ? '🔁 Re-send full list to phone'
-    : '📨 Get session '+(served+1)+(chunks>1?' of '+chunks:'')+' list';
-  if(!hs.length) return '<div style="margin-top:8px;">'+btn(label)+'</div>';
-  return '<details class="planbox" open style="margin-top:8px;"><summary>📋 Follow list — '+hs.length+' so far · session '+served+'/'+chunks+' — tap to open in X</summary><div style="display:flex;flex-wrap:wrap;gap:5px;padding-top:5px;">'+
-    hs.map(function(h){ return '<a href="https://x.com/'+encodeURIComponent(h)+'" target="_blank" style="text-decoration:none;background:#0f141910;border:1px solid #0f141926;color:#0f1419;border-radius:100px;padding:4px 10px;font-size:11px;font-weight:800;">@'+esc(h)+'</a>'; }).join('')+
-  '</div><div style="padding-top:7px;">'+btn(label)+'</div></details>';
+    ? ic('refresh')+'Re-send full list to phone'
+    : ic('send')+'Get session '+(served+1)+(chunks>1?' of '+chunks:'')+' list'+(served?' · '+served+'/'+chunks+' sent':'');
+  return '<div style="margin-top:8px;">'+btn(label)+'</div>';
 }
 async function jnGetList(id){
   var r=(ROWS||[]).filter(function(x){ return String(x.id)===String(id); })[0];
@@ -858,8 +863,8 @@ async function jnGetList(id){
     var d=await (await fetch(API+'?action=john_send_one&handle='+encodeURIComponent(r.handle)+'&employee_id='+encodeURIComponent((USER&&USER.id)||'')+'&done='+Math.min((r.day>=4)?3:1, sessDone(r))+'&_='+Date.now())).json();
     if(d&&d.ok){
       toast(d.fresh
-        ? '📨 Session '+d.sess+(d.chunks>1?'/'+d.chunks:'')+' list sent ('+d.fresh+' targets) — check the Telegram phone.'
-        : '🔁 Full list ('+(d.total_today||0)+') re-sent to the Telegram phone.');
+        ? 'Session '+d.sess+(d.chunks>1?'/'+d.chunks:'')+' list sent ('+d.fresh+' targets) — check the Telegram phone.'
+        : 'Full list ('+(d.total_today||0)+') re-sent to the Telegram phone.');
       load(); return;
     }
     if(d&&d.error==='POOL_EMPTY') toast('⚠ Pool too low for this session'+((d.detail)?' — '+d.detail:'')+' Ask the admin to add targets.');
@@ -867,7 +872,7 @@ async function jnGetList(id){
     else if(d&&d.error==='BUSY') toast('Server is busy — try again in a few seconds.');
     else toast('Could not send: '+((d&&d.error)||'error'));
   }catch(e){ toast('Connection error.'); }
-  if(b){ b.disabled=false; b.textContent='📨 Get session list'; }
+  if(b){ b.disabled=false; b.innerHTML=ic('send')+'Get session list'; }
 }
 function jnSess(r){ return JN_SESSIONS; }   // all follow days: 3 sessions
 function sessMark(r,n){ return ((r&&r.meta)||{})['s'+n]; }
@@ -885,6 +890,22 @@ function sessOk(r,n){
   return true;
 }
 function sessDone(r){ var c=0; for(var i=1;i<=jnSess(r);i++) if(sessOk(r,i)) c++; return c; }
+/* ── SVG ICON SET (his ask: no emoji in the chrome — crisp stroke icons instead) ── */
+var SVGI={
+  cam:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+  send:'<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
+  refresh:'<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>',
+  target:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  ban:'<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>',
+  trash:'<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  undo:'<polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>',
+  clip:'<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/>',
+  warn:'<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  check:'<polyline points="20 6 9 17 4 12"/>',
+  trend:'<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>',
+  chart:'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>'
+};
+function ic(n,sz){ sz=sz||12; return '<svg width="'+sz+'" height="'+sz+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1.5px;margin-right:4px">'+(SVGI[n]||'')+'</svg>'; }
 function sessBtns(r){
   var out=[];
   for(var i=1;i<=jnSess(r);i++){
@@ -892,7 +913,7 @@ function sessBtns(r){
     // sessions run in order, so a missed one can't be papered over by doing the next
     var next=(!ok && sessDone(r)===(i-1));
     /* TWO-SHOT RULE: only the first and last sessions carry a camera — start/end following count. */
-    var lbl=(i===1?'📷 Session 1 · start count':(i===jnSess(r)?'📷 Session '+i+' · end count':'Session '+i));
+    var lbl=(i===1?ic('cam')+'Session 1 · start count':(i===jnSess(r)?ic('cam')+'Session '+i+' · end count':'Session '+i));
     out.push(ok
       ? '<button disabled style="opacity:.55">✓ S'+i+'</button>'
       : (next ? '<button class="go" onclick="sessDone_('+"'"+r.id+"'"+','+i+')">'+lbl+'</button>'
@@ -1010,7 +1031,7 @@ async function jnSendLists(){
   toast('Reconciling…');
   try{
     var d=await (await fetch(API+'?action=john_send_lists&pass='+encodeURIComponent(pass)+'&_='+Date.now())).json();
-    if(d&&d.ok){ toast('🧹 Used: +'+(d.targets_marked_used||0)+' · released: '+(d.targets_released||0)+' · reminders sent: '+(d.unfinished_reminded||0)); load(); }
+    if(d&&d.ok){ toast('Reconciled — used: +'+(d.targets_marked_used||0)+' · released: '+(d.targets_released||0)+' · reminders sent: '+(d.unfinished_reminded||0)); load(); }
     else toast('Failed: '+((d&&d.error)||'error'));
   }catch(e){ toast('Connection error.'); }
 }
