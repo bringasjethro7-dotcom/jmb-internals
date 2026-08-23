@@ -834,8 +834,13 @@ function jnFlist(r){
      targets reserved from the pool. */
   var m=(r&&r.meta)||{};
   var chunks=(r.day>=4)?3:1;
-  var served=(m.flist_forday===r.day)?(parseInt(m.flist_sess,10)||0):0;
-  var hs=(served&&m.flist)?String(m.flist).split(',').filter(Boolean):[];
+  var pulled=(m.flist_forday===r.day)?(parseInt(m.flist_sess,10)||0):0;
+  /* SYNC WITH SESSION TICKS (his rule): the button always offers the session the VA is ON.
+     2 sessions already done -> "Get session 3 of 3", never back to 1. Session 1 shows only
+     when no session has been started on this account today. Sessions completed without a
+     pulled list skip their chunks — those targets stay in the pool. */
+  var served=Math.max(pulled, Math.min(chunks, sessDone(r)));
+  var hs=(pulled&&m.flist)?String(m.flist).split(',').filter(Boolean):[];
   var btn=function(txt){ return '<button id="jngl-'+esc(r.id)+'" onclick="jnGetList(\''+esc(r.id)+'\')" style="border:1px solid rgba(15,118,110,.45);background:rgba(16,185,129,.08);color:#0f766e;border-radius:10px;padding:6px 12px;font-weight:800;cursor:pointer;font-size:11px;">'+txt+'</button>'; };
   var label=(served>=chunks)
     ? '🔁 Re-send full list to phone'
@@ -850,7 +855,7 @@ async function jnGetList(id){
   if(!r){ toast('Row not found — refresh the page.'); return; }
   var b=document.getElementById('jngl-'+id); if(b){ b.disabled=true; b.textContent='Sending…'; }
   try{
-    var d=await (await fetch(API+'?action=john_send_one&handle='+encodeURIComponent(r.handle)+'&employee_id='+encodeURIComponent((USER&&USER.id)||'')+'&_='+Date.now())).json();
+    var d=await (await fetch(API+'?action=john_send_one&handle='+encodeURIComponent(r.handle)+'&employee_id='+encodeURIComponent((USER&&USER.id)||'')+'&done='+Math.min((r.day>=4)?3:1, sessDone(r))+'&_='+Date.now())).json();
     if(d&&d.ok){
       toast(d.fresh
         ? '📨 Session '+d.sess+(d.chunks>1?'/'+d.chunks:'')+' list sent ('+d.fresh+' targets) — check the Telegram phone.'
