@@ -566,7 +566,17 @@ function progRows(){
   var nrm=function(x){ return String(x||'').toLowerCase().replace(/[^a-z0-9]/g,''); };
   var byName={}; Object.keys(PROG.dir).forEach(function(k){ byName[nrm(PROG.dir[k].n)]=k; });
   var SH=curShift();
-  var cards=Object.keys(by).map(function(k){ var rows=by[k]; var avg=Math.round(rows.reduce(function(sm,x){return sm+x.pct;},0)/rows.length); return {k:k,rows:rows,avg:avg}; })
+  /* WEIGHTED, NOT AVERAGED (Aug 25 fix): the headline % used the unweighted MEAN of each tool's
+     pct, while the line beside it reads "X of Y this shift" — so a VA on 1/1 (100%) and 5/50
+     (10%) showed 55% next to "6 of 51". Same rule as the EOD gate and the Productivity Hub now:
+     total done ÷ total target, so every screen tells him the same number. */
+  var cards=Object.keys(by).map(function(k){
+      var rows=by[k];
+      var td=rows.reduce(function(sm,x){ return sm+(parseFloat(x.done)||0); },0);
+      var ta=rows.reduce(function(sm,x){ return sm+(parseFloat(x.total)||0); },0);
+      var avg=ta?Math.round(td/ta*100):0;
+      return {k:k,rows:rows,avg:avg};
+    })
     .filter(function(c){
       // ON-DUTY ONLY. (ALTR pushes names, not IDs — resolve those through the name index.)
       var rk=PROG.dir[c.k]?c.k:(byName[nrm(c.k)]||null);
