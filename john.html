@@ -91,7 +91,7 @@
 
 <div class="wrap" id="app" style="display:none">
   <h1>𝕏 Project John — Warm-up Tracker <span style="font-size:12px;color:var(--ink3);font-weight:600" id="who"></span></h1>
-  <div class="sub">Each account follows the SOP day plan. <b>Every completed session counts +1 output instantly</b> — no waiting for the day to finish, and a takeover mid-day credits whoever completed each session. Randomize batches &amp; scroll times so every account looks human. <span style="opacity:.55">Build 2026-08-23c · dark vertical UI + SVG icons — if you don't see this line, press Ctrl+Shift+R.</span></div>
+  <div class="sub">Each account follows the SOP day plan. <b>Every completed session counts +1 output instantly</b> — no waiting for the day to finish, and a takeover mid-day credits whoever completed each session. Randomize batches &amp; scroll times so every account looks human. <span style="opacity:.55">Build 2026-08-25a · wallboard counts sessions — if you don't see this line, press Ctrl+Shift+R.</span></div>
   <div class="top" id="stats"></div>
   <div id="poolbar"></div>
   <div class="addbox">
@@ -282,7 +282,22 @@ function renderByVA(segs, doneFn, activeFn, amFn){
     var done=doneFn?act.filter(doneFn).length:0, tot=act.length;
     return {k:k,i:i,done:done,tot:tot,pct:tot?Math.round(done/tot*100):0,n:rows.length};
   }).sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
-  try{ var _me=list.filter(function(o){ return o.k===mine; })[0]; if(_me) _maybeSnap(_me.done, _me.tot); }catch(_ms){}
+  try{
+    /* WALLBOARD COUNTS SESSIONS, NOT ACCOUNTS (his ask, Aug 25): the first wave of the day is
+       Session 1 on every account — under account-counting the wallboard showed 0 done until an
+       account finished ALL its sessions. Each session is one unit of output: a follow-phase
+       account is 3 units (setup days D1–3 stay 1), so a finished first wave already reads as
+       ~1/3 board progress instead of nothing. */
+    var _sd=0,_st=0;
+    ROWS.forEach(function(r){
+      if(r.status==='suspended') return;
+      if(String(r.assigned_to||r.created_by||'').toLowerCase()!==mine) return;
+      var _full=markOk(r.meta&&r.meta.last, r.assigned_to||r.created_by);
+      if(r.day<=3){ _st+=1; _sd+=(_full?1:0); }
+      else { var _n=jnSess(r); _st+=_n; _sd+=(_full?_n:Math.min(_n,sessDone(r))); }
+    });
+    if(_st) _maybeSnap(_sd,_st);
+  }catch(_ms){}
   host.innerHTML='<div class="pvwrap">'+
     '<div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;"><span style="font-family:\'Sora\',sans-serif;font-size:15px;font-weight:800;">'+ic('chart',14)+'Today — progress per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">worked this shift · resets per shift · ☀ 8 AM / 🌙 8 PM</span></div>'+
     list.map(function(o,ix){
@@ -695,8 +710,13 @@ function start(){ try{ fetch(API+'?action=tool_used&employee_id='+encodeURICompo
 /* ── TARGET-POOL PROGRESS BAR ──
    One glance answers "how much of the client's list is left": USED (days completed with that
    list) · ASSIGNED (reserved on an account, day not finished yet) · FREE (still in the pool). */
-var POOL=null;
+var POOL=null, _poolAt=0;
 async function poolLoad(){
+  /* THROTTLED (Aug 25): this fired on every board poll and each call was a full 6k-row sheet
+     read server-side — a standing load that slowed the whole deployment. Once per 5 minutes
+     is plenty for a capacity bar. */
+  if(Date.now()-_poolAt < 300000) return;
+  _poolAt=Date.now();
   try{
     var d=await (await fetch(API+'?action=john_pool&_='+Date.now())).json();
     if(d&&d.ok){ POOL=d; poolRender(); }
