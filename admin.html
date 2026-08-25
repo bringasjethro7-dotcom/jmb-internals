@@ -655,7 +655,7 @@ body{background-attachment:initial !important}
     <span class="pill">Admin</span>
     <div class="ttl">Portal admin</div>
     <div class="sub">Manage contractor records, rates, and payslips.</div>
-    <div class="sub" style="font-size:11px;opacity:.6;margin-top:2px;">Build 2026-07-05 · qr-manager</div>
+    <div class="sub" style="font-size:11px;opacity:.6;margin-top:2px;">Build 2026-08-23 · live scorecard</div>
     <div class="fg">
       <label class="lbl" for="apass">Admin password</label>
       <div class="pin-input-wrap">
@@ -1071,12 +1071,13 @@ body{background-attachment:initial !important}
     <!-- SCORECARD ADMIN -->
     <div id="p-qa" style="display:none;">
       <div class="toolbar">
-        <div class="tl"><span style="font-size:14px;font-weight:600;color:var(--t1);">Weekly QA</span> <span style="font-size:12px;color:var(--t3);margin-left:6px;">4 scores/month · scorecard QA = the month's average</span></div>
+        <div class="tl"><span style="font-size:14px;font-weight:600;color:var(--t1);">Weekly QA</span> <span style="font-size:12px;color:var(--t3);margin-left:6px;">4 scores/month · scorecard QA = the month's average · reviewer grades need your approval below</span></div>
         <div style="display:flex;gap:8px;align-items:center;">
           <label style="font-size:12px;color:var(--t3);">Month <input class="sinp" id="qa-month" type="month" style="width:150px;" onchange="loadQaGrid()"></label>
           <button class="bsm" onclick="loadQaGrid()" style="color:var(--o3);border-color:rgba(255,107,26,.3);">↻ Refresh</button>
         </div>
       </div>
+      <div id="qa-approvals" style="margin:10px 0 14px;"></div>
       <div id="qa-disputes"></div>
       <div id="qa-body"><div class="es">Loading…</div></div>
     </div>
@@ -1095,6 +1096,7 @@ body{background-attachment:initial !important}
           <button class="bsm" id="sc-reveal-btn" onclick="rankingsReveal()" style="color:#fff;background:linear-gradient(135deg,#ff6b1a,#e83d00);border-color:transparent;font-weight:700;">🎬 Rankings Reveal</button>
           <button class="bsm" id="sc-ppt-btn" onclick="exportRankingsPptx()" style="color:#c2410c;border-color:rgba(255,107,26,.3);">▤ Rankings PPT</button>
           <button class="bsm" id="sc-recompute-btn" onclick="recomputeScorecards()" title="Force-refresh all scores (clear the cache and recompute)">↻ Recompute</button>
+          <span id="sc-live-badge" style="font-size:11px;color:var(--t3);margin-left:8px;white-space:nowrap;"></span>
           <button class="bsm" id="sc-teams-btn" onclick="openTeamSales()" style="color:#0e7490;border-color:rgba(8,145,178,.35);">📊 Team Sales</button>
           <button class="bsm" id="sc-cert-btn" onclick="openCertPicker()" style="color:#a16207;border-color:rgba(202,138,4,.35);">🏅 Certificates &amp; Awards</button>
           <button class="bsm" id="sc-integrity-btn" onclick="openIntegrityCheck()" style="color:#b91c1c;border-color:rgba(185,28,28,.35);" title="Scan for coordinated or padded output">🔎 Integrity Check</button>
@@ -1114,19 +1116,6 @@ body{background-attachment:initial !important}
         <button class="bsm" id="assess-open-toggle" onclick="toggleAssessmentOpen()" style="white-space:nowrap;">Toggle</button>
       </div>
 
-      <!-- Client Feedback links (per project/client CSAT) -->
-      <div class="card" style="padding:0;margin-bottom:14px;overflow:hidden;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 16px;cursor:pointer;" onclick="toggleCfPanel()">
-          <div style="font-size:13px;color:var(--t1);">
-            <b>Client Feedback links</b> <span style="color:var(--t3);font-size:11px;">· legacy · stopped scoring Aug 2026</span>
-            <div style="font-size:11px;color:var(--t3);margin-top:3px;">These client ratings fed the old Client Feedback 5%. From August 2026 that slot is the <b>Reviewer Grade</b>, computed automatically from QA peer reviews — client ratings still record here but no longer reach the scorecard.</div>
-          </div>
-          <button class="bsm" id="cf-panel-toggle" style="white-space:nowrap;" onclick="event.stopPropagation();toggleCfPanel()">Manage</button>
-        </div>
-        <div id="cf-panel-body" style="display:none;border-top:1px solid var(--border);padding:12px 16px;">
-          <div id="cf-links-body" style="font-size:13px;color:var(--t3);">Loading…</div>
-        </div>
-      </div>
 
       <div class="tw">
         <table id="sc-table">
@@ -1223,6 +1212,8 @@ body{background-attachment:initial !important}
             <option value="15">Markup +15%</option>
             <option value="20">Markup +20%</option>
           </select>
+          <label style="font-size:11px;color:var(--t3);" title="Unpaid amount carried over from a previous invoice — shown as its own line and added to the total due. Leave 0 when the client is fully settled.">Outstanding (USD)
+            <input class="sinp" id="wl-outstanding" type="number" min="0" step="any" placeholder="0.00" style="width:100px;"></label>
           <button class="bsm" onclick="generateInvoice()" style="color:#fff;background:var(--o3);border-color:var(--o3);font-weight:600;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Generate Invoice</button>
           <button class="bsm" onclick="exportWorkLogCSV()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV</button>
           <button class="bsm" onclick="loadWorkLog()" style="color:var(--o3);border-color:rgba(255,107,26,.3);">↻ Refresh</button>
@@ -1380,6 +1371,7 @@ body{background-attachment:initial !important}
       </div>
       <div id="dm-tierlegend" style="font-size:11.5px;color:var(--t3);margin-bottom:10px;">Points: <b style="color:#34d399">0.15</b> minor · <b style="color:#fbbf24">0.30</b> moderate · <b style="color:#fb923c">0.50</b> major · <b style="color:#f87171">0.75</b> severe &nbsp;·&nbsp; <span style="color:var(--t2)">each month caps at 10 pts</span></div>
       <div id="dm-disputes"></div>
+      <div id="dm-pending"></div>
       <div id="dm-body"><div class="es">Loading…</div></div>
     </div>
 
@@ -1548,7 +1540,16 @@ body{background-attachment:initial !important}
     };
   });
 })();
-const PASS = "JMBeast_020298";
+/* ── ADMIN PASSWORD — never in this file ──
+   This page is world-readable (view-source / public repo), so the password lives only in the
+   Apps Script's Script Properties. Login is verified server-side (verify_admin); the typed
+   password is kept for this browser session only, for the few actions that require it. */
+var PASS = (function(){ try{ return sessionStorage.getItem('adm_pass')||''; }catch(e){ return ''; } })();
+function admPass(){ if(!PASS){ PASS=prompt('Admin password:')||''; try{ sessionStorage.setItem('adm_pass', PASS); }catch(e){} } return PASS; }
+async function verifyAdminPass(p){
+  try{ var r=await fetch(API+'?action=verify_admin&pass='+encodeURIComponent(p)+'&_='+Date.now()); var d=await r.json(); return !!(d&&d.ok); }
+  catch(e){ return false; }
+}
 const API  = "https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec";
 
 // ── Shared READ helper: timeout + 1 retry + in-flight dedupe + short TTL cache ──
@@ -1743,13 +1744,16 @@ function enterAdmin(){
   renderTable();
   loadFromSheet();
   loadDashboard();
-  // Poll for new requests in the background and chime on arrival (works on any tab)
-  setInterval(function(){ if(document.hidden) return; loadDashboard({ silent:true }); }, 60000);
+  // Poll for new requests in the background and chime on arrival (works on any tab).
+  // 2-min cadence (Aug 25): the scorecard is the priority feed — this poll only powers the
+  // request chime, so it yields bandwidth to the board.
+  setInterval(function(){ if(document.hidden) return; loadDashboard({ silent:true }); }, 120000);
   initAdminBubbles();   // floating bubbles of active accounts
 }
-function doLogin(){
+async function doLogin(){
   var p=document.getElementById('apass').value;
-  if(p===PASS){
+  if(await verifyAdminPass(p)){
+    PASS=p; try{ sessionStorage.setItem('adm_pass', p); }catch(e){}
     try { localStorage.setItem('admin_authed','1'); } catch(e) {}
     enterAdmin();
   } else {
@@ -1760,7 +1764,7 @@ function doLogin(){
 async function forceRefreshAll(){
   if(!confirm('Reload the portal for ALL signed-in users now?\n\nUse this after publishing a portal update — everyone’s open portal will refresh within ~1 minute.')) return;
   try{
-    var r = await fetch(API + '?action=set_refresh&pass=' + encodeURIComponent(PASS) + '&_=' + Date.now());
+    var r = await fetch(API + '?action=set_refresh&pass=' + encodeURIComponent(admPass()) + '&_=' + Date.now());
     var d = await r.json();
     if(d && d.ok){ alert('Done. All open portals will refresh within ~1 minute (v' + d.ver + ').'); }
     else { alert('Could not trigger refresh' + (d && d.error ? (': ' + d.error) : '.')); }
@@ -1962,7 +1966,7 @@ async function salesAdd(){
   if(usd===''||isNaN(parseFloat(usd))){ alert('Enter the invoice amount in USD.'); return; }
   if(fx===''||isNaN(parseFloat(fx))||parseFloat(fx)<=0){ alert('Enter the USD→PHP rate.'); return; }
   try{
-    var u=API+'?action=save_sales&token='+encodeURIComponent(_salesToken())+'&period='+encodeURIComponent(period)+'&invoice_usd='+encodeURIComponent(usd)+'&fx_rate='+encodeURIComponent(fx)+'&method='+encodeURIComponent(method)+'&client='+encodeURIComponent(client)+'&note='+encodeURIComponent(note)+'&by='+encodeURIComponent(PASS?'Admin':'')+'&_='+Date.now();
+    var u=API+'?action=save_sales&token='+encodeURIComponent(_salesToken())+'&period='+encodeURIComponent(period)+'&invoice_usd='+encodeURIComponent(usd)+'&fx_rate='+encodeURIComponent(fx)+'&method='+encodeURIComponent(method)+'&client='+encodeURIComponent(client)+'&note='+encodeURIComponent(note)+'&by='+encodeURIComponent('Admin')+'&_='+Date.now();
     var r=await fetch(u); var d=await r.json();
     if(d&&d.ok){ document.getElementById('sl-period').value=''; document.getElementById('sl-usd').value=''; document.getElementById('sl-client').value=''; document.getElementById('sl-note').value=''; _salesPayroll=0; salesRecompute(); loadSalesData(); }
     else if(d&&d.error==='LOCKED'){ salesLock(); }
@@ -2296,6 +2300,7 @@ function dashLeadDem(btn, id, empId, action){
 
 /* ════════ DEMERITS ════════ */
 var DEM_CATALOG={
+  'WFH Setup':[['Camera turned off during shift',0.30],['No sound / mic muted when called',0.30],['Away from camera frame (extended)',0.30],['Not joined the monitoring call',0.50],['Workspace not compliant (noise / background)',0.15]],
   'Attendance':[['Late',0.15],['No-call no-show',1.00],['Idle over 90 min in a shift',0.30],['Shift swap without notice',0.15]],
   'Break':[['Short lunch (under 50 min)',0.30],['Over break (lunch over 70 min)',0.30],['No break — 6+ hrs without lunch',0.50],['Unauthorized break',0.30]],
   'Time tracking':[['Super-early task (before 7:15 shift start)',0.15],['Forgot Time In/Out',0.15],['Idle auto-stop',0.15],['Untracked work / no volume',0.15],['Overwork — over 11 productive hrs (no approval)',0.30]],
@@ -2316,6 +2321,7 @@ function dmFillEmployees(){
   var f=document.getElementById('dm-filter'); if(f){ var cur=f.value; f.innerHTML='<option value="">Standings (all)</option>'+optHtml; f.value=cur; }
 }
 async function loadDemerits(){
+  try{ loadDemPending(); }catch(_pd){}
   if(!_demEmps().length){ try{ var er=await jGet(API+'?action=get_all_employees'); var ed=await er.json(); if(ed&&ed.employees) emps=ed.employees; }catch(e){} }
   dmFillCategories(); dmFillEmployees();
   var dEl=document.getElementById('dm-date'); if(dEl && !dEl.value){ var n=new Date(); dEl.value=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0'); }
@@ -2414,10 +2420,48 @@ async function autoScanDemerits(days, silent){
 /* ════════ WEEKLY QA GRID ════════ */
 function _qaMonthVal(){ var el=document.getElementById('qa-month'); if(el&&!el.value){ var n=new Date(); el.value=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0'); } return el?el.value:''; }
 function _qaAvgOf(w){ var v=[]; for(var k=1;k<=4;k++){ var x=w&&w[k]; if(x!==''&&x!=null&&!isNaN(x)) v.push(Number(x)); } return v.length?Math.round(v.reduce(function(a,b){return a+b;},0)/v.length*100)/100:null; }
+/* ⏳ REVIEWER GRADES AWAITING APPROVAL — the reviewer's submit parks here. Tick "client
+   findings" when the client raised QA issues that week (automatic −10%), then Approve:
+   the final score hits the scorecard on both portals and the VA gets the auto result email. */
+async function loadQaApprovals(){
+  var host=document.getElementById('qa-approvals'); if(!host) return;
+  var month=_qaMonthVal();
+  try{
+    var r=await fetch(API+'?action=qa_approvals&month='+encodeURIComponent(month)+'&pass='+encodeURIComponent(admPass())+'&_='+Date.now());
+    var d=await r.json();
+    if(!d||!d.ok){ host.innerHTML=(d&&d.error==='UNAUTHORIZED')?'<div class="es">QA approvals: wrong admin password.</div>':''; return; }
+    var pend=(d.rows||[]).filter(function(x){ return x.status!=='approved'; });
+    var done=(d.rows||[]).filter(function(x){ return x.status==='approved'; }).length;
+    if(!pend.length){ host.innerHTML=done?('<div style="font-size:12px;color:var(--t3);">✓ No reviewer grades waiting — '+done+' approved this month.</div>'):''; return; }
+    var nmOf=function(id){ var e=_demEmps().filter(function(x){return String(x.employee_id).toLowerCase()===String(id).toLowerCase();})[0]; return e?(e.full_name||id):id; };
+    host.innerHTML='<div style="border:1px solid rgba(245,158,11,.4);background:rgba(245,158,11,.05);border-radius:12px;padding:12px 14px;">'+
+      '<div style="font-size:13px;font-weight:700;color:#b45309;margin-bottom:8px;">⏳ Reviewer grades awaiting your approval ('+pend.length+') — not visible to the VA until approved</div>'+
+      pend.map(function(x){
+        var key=x.employee_id+'|'+x.week;
+        return '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:7px 0;border-top:1px solid rgba(15,23,42,.06);">'+
+          '<b style="font-size:13px;">'+x.employee_id+' · '+nmOf(x.employee_id)+'</b>'+
+          '<span style="font-size:12px;color:var(--t2);">week '+x.week+' · <b>'+x.score+'</b> (raw '+x.raw+' · coverage '+x.coverage+'%) · by '+x.by+'</span>'+
+          '<label style="font-size:12px;color:#b91c1c;display:flex;gap:5px;align-items:center;margin-left:auto;"><input type="checkbox" id="qaap-cl-'+x.employee_id+'-'+x.week+'"> Client findings this week (−10%)</label>'+
+          '<button class="bsm" style="color:#16a34a;border-color:rgba(34,197,94,.4);" onclick="qaApprove(\''+x.employee_id+'\','+x.week+')">✓ Approve → scorecard + email</button>'+
+        '</div>';
+      }).join('')+'</div>';
+  }catch(e){ host.innerHTML=''; }
+}
+async function qaApprove(emp, week){
+  var month=_qaMonthVal();
+  var cl=(document.getElementById('qaap-cl-'+emp+'-'+week)||{}).checked?1:0;
+  if(!confirm('Approve '+emp+' week '+week+(cl?' WITH the client-findings −10%':'')+'?\n\nThe final score lands on the scorecard and the VA is emailed the result.')) return;
+  try{
+    var r=await fetch(API+'?action=qa_approve&employee_id='+encodeURIComponent(emp)+'&month='+encodeURIComponent(month)+'&week='+week+'&client='+cl+'&pass='+encodeURIComponent(admPass())+'&_='+Date.now());
+    var d=await r.json();
+    if(d&&d.ok){ toast('Approved — final '+d.final+(cl?' (client −10%)':'')+' · VA emailed.'); loadQaApprovals(); loadQaGrid(); }
+    else toast('Not approved: '+((d&&(d.message||d.error))||'error'));
+  }catch(e){ toast('Connection error.'); }
+}
 async function loadQaGrid(){
   var month=_qaMonthVal(); var box=document.getElementById('qa-body'); if(!box) return;
   box.innerHTML='<div class="es">Loading…</div>';
-  loadQaDisputes();
+  loadQaDisputes(); loadQaApprovals();
   if(!_demEmps().length){ try{ var er=await jGet(API+'?action=get_all_employees'); var ed=await er.json(); if(ed&&ed.employees) emps=ed.employees; }catch(e){} }
   var map={}; try{ var r=await fetch(API+'?action=get_all_qa_weekly&month='+encodeURIComponent(month)+'&_='+Date.now()); var d=await r.json(); map=(d&&d.map)||{}; }catch(e){}
   var list=_demEmps().filter(function(e){return e.employee_id && String(e.status||'active').toLowerCase()!=='inactive';})
@@ -2471,15 +2515,75 @@ async function runDemeritScan(){
   await autoScanDemerits(14,false);
   if(b){ b.disabled=false; b.innerHTML=orig; }
 }
+/* ⏳ PENDING DEMERITS PANEL — the approval queue, visible where you actually work (Demerits
+   tab), with per-row Approve/Reject and BULK buttons for a flooded run. Handles hundreds of
+   rows without breaking a sweat: renders the first 60, summarises the rest. */
+async function loadDemPending(){
+  var host=document.getElementById('dm-pending'); if(!host) return;
+  try{
+    var r=await fetch(API+'?action=lead_demerit_list&_='+Date.now()); var d=await r.json();
+    var rows=(d&&d.requests)||[];
+    if(!rows.length){ host.innerHTML=''; return; }
+    var nAuto=rows.filter(function(x){return x.source==='auto';}).length;
+    host.innerHTML='<div style="border:1px solid rgba(245,158,11,.4);background:rgba(245,158,11,.05);border-radius:12px;padding:12px 14px;margin-bottom:14px;">'+
+      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">'+
+        '<b style="font-size:13px;color:#b45309;">⏳ '+rows.length+' pending demerit'+(rows.length>1?'s':'')+' awaiting approval'+(nAuto?(' · '+nAuto+' auto-detected'):'')+'</b>'+
+        '<span style="font-size:11px;color:var(--t3);">nothing counts or notifies until approved</span>'+
+        (nAuto?'<button class="bsm" style="margin-left:auto;color:#f87171;border-color:rgba(248,113,113,.4);" onclick="demBulkReject()">🗑 Reject ALL auto ('+nAuto+')</button>':'')+
+      '</div>'+
+      rows.slice(0,60).map(function(x){
+        return '<div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;padding:6px 0;border-top:1px solid rgba(15,23,42,.06);font-size:12.5px;">'+
+          '<b>'+escAdmin(x.full_name||x.employee_id)+'</b>'+
+          '<span style="color:var(--t2);">'+escAdmin(x.date)+' · '+escAdmin(x.infraction)+' · '+x.points+'pts</span>'+
+          '<span style="font-size:9.5px;font-weight:700;color:'+(x.source==='auto'?'#34d399':'#60a5fa')+';">'+(x.source==='auto'?'AUTO':'LEAD')+'</span>'+
+          '<span style="margin-left:auto;display:flex;gap:6px;">'+
+            '<button class="bsm" style="color:#16a34a;border-color:rgba(34,197,94,.4);" onclick="demResolve(\''+escAdmin(x.id)+'\',\''+escAdmin(x.employee_id)+'\',\'approve\',this)">✓</button>'+
+            '<button class="bsm" style="color:#f87171;border-color:rgba(248,113,113,.4);" onclick="demResolve(\''+escAdmin(x.id)+'\',\''+escAdmin(x.employee_id)+'\',\'reject\',this)">✗</button>'+
+          '</span></div>';
+      }).join('')+
+      (rows.length>60?('<div style="font-size:11px;color:var(--t3);padding-top:6px;">…and '+(rows.length-60)+' more — bulk-reject the junk, or approve in batches and refresh.</div>'):'')+
+    '</div>';
+  }catch(e){ host.innerHTML=''; }
+}
+async function demResolve(id, empId, action, btn){
+  if(btn) btn.disabled=true;
+  try{
+    var r=await fetch(API+'?action=lead_demerit_resolve&id='+encodeURIComponent(id)+'&action='+action+'&employee_id='+encodeURIComponent(empId)+'&by=Admin&_='+Date.now());
+    var d=await r.json();
+    if(d&&d.ok){ if(btn){ var row=btn.closest('div[style]'); } toast(action==='approve'?'Approved — counts now, VA notified.':'Rejected — discarded silently.'); loadDemPending(); loadDemerits(); }
+    else { toast('Failed: '+((d&&d.error)||'error')); if(btn) btn.disabled=false; }
+  }catch(e){ toast('Network error.'); if(btn) btn.disabled=false; }
+}
+async function demBulkReject(){
+  if(!confirm('Reject ALL pending AUTO-detected demerits?\n\nEvery one is discarded — nothing counts, nobody is notified. Lead-submitted pendings are kept.\n\nUse this to drain a bad detection run, then re-run auto-detect on the improved rules.')) return;
+  toast('Rejecting… this may take a minute for a big queue.');
+  try{
+    var r=await fetch(API+'?action=dem_reject_all_auto&_='+Date.now()); var d=await r.json();
+    if(d&&(d.ok||d.rejected!=null)){ toast('🗑 Rejected '+(d.rejected||0)+' auto-detected pendings.'); loadDemPending(); }
+    else toast('Failed: '+((d&&d.error)||'error'));
+  }catch(e){ toast('Slow response — refresh in a minute; the server may still be finishing.'); }
+}
 function renderDemerits(){
   var body=document.getElementById('dm-body'); if(!body) return;
   var f=(document.getElementById('dm-filter')||{}).value||'';
   if(!f){
-    var st=DEM_STATE.standings||[];
+    /* RANKED MONTHLY BARS — this month only (no rolling total), worst offender on top.
+       Bar runs against the 10-point monthly cap; colour turns with severity. */
+    var st=(DEM_STATE.standings||[]).slice().sort(function(a,b){ return (b.month_points||0)-(a.month_points||0); });
     if(!st.length){ body.innerHTML='<div class="es" style="padding:1.5rem;text-align:center;">No demerits logged yet.</div>'; return; }
-    body.innerHTML='<div class="tw"><table><thead><tr><th>Contractor</th><th>This month</th><th>Rolling total</th></tr></thead><tbody>'+
-      st.map(function(s){ var mp=(s.month_points!=null?s.month_points:0), cap=(s.month_cap||10); var mc=mp>=cap?'#f87171':'var(--t1)';
-        return '<tr><td>'+escAdmin(s.full_name)+'</td><td><b style="color:'+mc+'">'+mp+'</b> <span style="color:var(--t3)">/ '+cap+'</span></td><td><b>'+s.total+'</b></td></tr>'; }).join('')+'</tbody></table></div>';
+    body.innerHTML='<div style="display:flex;flex-direction:column;gap:6px;">'+
+      st.map(function(s,ix){
+        var mp=(s.month_points!=null?s.month_points:0), cap=(s.month_cap||10);
+        var pct=Math.min(100, mp/cap*100);
+        var col=mp>=5?'#ef4444':(mp>=2?'#f59e0b':(mp>0?'#fbbf24':'#22c55e'));
+        return '<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--border);border-radius:10px;background:var(--card2);cursor:pointer;" onclick="var s2=document.getElementById(\'dm-filter\'); if(s2){ s2.value=\''+escAdmin(s.employee_id)+'\'; renderDemerits(); }">'+
+          '<span style="width:26px;text-align:right;font-size:11px;color:var(--t3);font-weight:700;">'+(ix+1)+'</span>'+
+          '<span style="flex:0 0 190px;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+escAdmin(s.full_name)+'</span>'+
+          '<span style="flex:1;height:12px;border-radius:7px;background:rgba(148,163,184,.15);overflow:hidden;"><i style="display:block;height:100%;width:'+pct+'%;background:'+col+';border-radius:7px;transition:width .4s;"></i></span>'+
+          '<b style="width:74px;text-align:right;font-size:13px;color:'+(mp>=cap?'#f87171':'var(--t1)')+';">'+mp+' <span style="color:var(--t3);font-weight:400;font-size:11px;">/ '+cap+'</span></b>'+
+        '</div>';
+      }).join('')+'</div>'+
+      '<div style="font-size:11px;color:var(--t3);margin-top:8px;">This month\'s accumulated points only · resets on the 1st · click a bar for the full history.</div>';
     return;
   }
   var rows=(DEM_STATE.rows||[]).filter(function(x){return String(x.employee_id).toLowerCase()===f.toLowerCase();});
@@ -2568,7 +2672,7 @@ function toggleForce(){
   var target=!_wbForce;
   if(target && !confirm('Enforce office codes RIGHT NOW, ignoring the Mon–Sat schedule?\n\nThis is for testing. Make sure the office wallboard is showing codes, or you may lock yourself out (admin account stays exempt). Remember to Stop test when done.')) return;
   var fb=document.getElementById('wb-force'); if(fb){ fb.disabled=true; fb.textContent='…'; }
-  fetch(API+'?action=office_otp_force&pass='+encodeURIComponent(PASS)+'&on='+(target?'1':'0')+'&_='+Date.now())
+  fetch(API+'?action=office_otp_force&pass='+encodeURIComponent(admPass())+'&on='+(target?'1':'0')+'&_='+Date.now())
     .then(function(r){ return r.json(); }).then(function(d){ if(fb) fb.disabled=false; if(d&&d.error){ alert(d.error); } loadWallboard(); })
     .catch(function(){ if(fb) fb.disabled=false; alert('Network error.'); });
 }
@@ -2579,7 +2683,7 @@ function toggleWallboard(){
     : 'Turn OFF office-code login?\n\nStaff will be able to log in normally from anywhere.';
   if(!confirm(msg)) return;
   var tg=document.getElementById('wb-toggle'); if(tg){ tg.disabled=true; tg.textContent='…'; }
-  fetch(API+'?action=office_otp_set&pass='+encodeURIComponent(PASS)+'&on='+(target?'1':'0')+'&_='+Date.now())
+  fetch(API+'?action=office_otp_set&pass='+encodeURIComponent(admPass())+'&on='+(target?'1':'0')+'&_='+Date.now())
     .then(function(r){ return r.json(); }).then(function(d){ if(tg) tg.disabled=false; if(d&&d.error){ alert(d.error); } loadWallboard(); })
     .catch(function(){ if(tg) tg.disabled=false; alert('Network error.'); });
 }
@@ -3483,6 +3587,7 @@ async function loadPayslipsAdmin(){
     // Funding: each contractor's main project + which (period → project) invoices are paid.
     var fund={main_project:{},paid:{}};
     try{ var fr=await jGet(API+'?action=payslip_funding&_='+Date.now()); var fd=await fr.json(); if(fd&&fd.ok) fund=fd; }catch(_e){}
+    window._payFund=fund;
     var payBanks={};
     try{ var bkr=await jGet(API+'?action=get_banks&_='+Date.now()); var bkd=await bkr.json(); payBanks=(bkd&&bkd.banks)||{}; }catch(_b){}
     var mpOf=function(id, period){ var mb=(fund.main_by_period||{})[period||'']; return (mb&&mb[id])||fund.main_project[id]||''; };
@@ -3500,10 +3605,14 @@ async function loadPayslipsAdmin(){
         var paid=!!p.paid;
         if(fStatus==='paid'&&!paid) return;
         if(fStatus==='pending'&&paid) return;
-        rows.push({empId:e.employee_id,name:e.full_name||e.employee_id,period:p.period||'',hours:p.hours||'',paid:paid,paid_date:p.paid_date||'',project:proj,funded:(!paid && isFunded(p.period,proj)),rate:e.rate||'',shift:p.shift||'',incentives:p.incentives||'',amount:p.amount||'',qr:e.bank_qr||'',gotyme:payBanks[e.employee_id]||'',deductions:(parseFloat(e.deductions!=null?e.deductions:e.deduction)||0)});
+        var _parts=(p.partials||[]).slice(); if(p.partial) _parts.push(p.partial);
+        var _partSum=0; _parts.forEach(function(x){ _partSum+=parseFloat(x.amount)||0; });
+        rows.push({empId:e.employee_id,name:e.full_name||e.employee_id,period:p.period||'',hours:p.hours||'',paid:paid,paid_date:p.paid_date||'',project:proj,funded:(!paid && isFunded(p.period,proj)),rate:e.rate||'',shift:p.shift||'',incentives:p.incentives||'',amount:p.amount||'',qr:e.bank_qr||'',gotyme:payBanks[e.employee_id]||'',deductions:(parseFloat(e.deductions!=null?e.deductions:e.deduction)||0),partials:_parts,partialPaid:Math.round(_partSum*100)/100});
       });
     });
-    // Ready-to-pay (invoice paid) pending first, then other pending, then paid — newest period within each.
+    // Ready-to-pay (invoice paid) pending first, then other pending, then paid — newest within
+    // each. A partially-paid slip sits with the normal pending rows: it is simply awaiting the
+    // other client's invoice again, so it gets no special placement or highlight.
     rows.sort(function(a,b){
       if(a.paid!==b.paid) return a.paid?1:-1;
       if(!a.paid && !b.paid && a.funded!==b.funded) return a.funded?-1:1;
@@ -3520,16 +3629,32 @@ async function loadPayslipsAdmin(){
       (readyN?' · <b style="color:#16a34a;">'+readyN+' ready to pay</b> · <b style="color:#16a34a;">'+readyTotalStr+' total</b>':'');
     window._payRows=rows;
     body.innerHTML=rows.map(function(r,ri){
-      var status=r.paid?'<span style="color:#16a34a;font-weight:600;"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><polyline points="20 6 9 17 4 12"/></svg>Paid</span>':'<span style="color:#f59e0b;font-weight:600;">● Pending</span>';
+      var status=r.paid?'<span style="color:#16a34a;font-weight:600;"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><polyline points="20 6 9 17 4 12"/></svg>Paid</span>'
+        :(r.partialPaid>0?'<span style="color:#2563eb;font-weight:700;">◐ Partial · ₱'+r.partialPaid.toLocaleString()+'</span>':'<span style="color:#f59e0b;font-weight:600;">● Pending</span>');
       // Project / Invoice funding cell
       var projCell;
       if(!r.project){ projCell='<span style="color:var(--t3);font-size:11.5px;">no tracked project</span>'; }
       else if(r.paid){ projCell='<span style="color:var(--t3);font-size:12px;">'+payEsc(r.project)+'</span>'; }
       else if(r.funded){ projCell='<div style="font-size:12px;color:var(--t1);">'+payEsc(r.project)+'</div><span style="display:inline-block;margin-top:3px;font-size:10.5px;font-weight:700;color:#16a34a;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);border-radius:20px;padding:1px 8px;white-space:nowrap;">💰 Invoice paid — ready</span>'; }
       else{ projCell='<div style="font-size:12px;color:var(--t2);">'+payEsc(r.project)+'</div><span style="display:inline-block;margin-top:3px;font-size:10.5px;color:var(--t3);background:rgba(15,23,42,.07);border:1px solid var(--line);border-radius:20px;padding:1px 8px;white-space:nowrap;">Awaiting invoice</span>'; }
+      /* ◐ Partial only appears when it genuinely applies: the slip already has a partial
+         tranche recorded, or the VA worked for several clients this period and SOME (not all)
+         of those invoices are settled. A single-client slip, or nothing funded yet, or fully
+         funded — those are plain Pay situations, and the extra button was just noise. */
+      var showPartial=(r.partialPaid>0);
+      if(!showPartial){
+        try{
+          var _fund=window._payFund||{};
+          var _split=((_fund.projects_by_period||{})[r.period]||{})[r.empId]||[];
+          var _paidMap=(_fund.paid||{})[r.period]||{};
+          var _f=_split.filter(function(x){ return !!_paidMap[String(x.p).toLowerCase()]; }).length;
+          showPartial=(_split.length>1 && _f>0 && _f<_split.length);
+        }catch(_pp){}
+      }
       var action=r.paid
         ? '<span style="color:var(--t3);font-size:12px;">—</span>'
-        : '<button class="bsm" onclick="openPayModal('+ri+')" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.4);color:#16a34a;font-weight:600;white-space:nowrap;"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><path d="M2 10h20M6 15h4"/><rect x="2" y="5" width="20" height="14" rx="2"/></svg>Pay</button>';
+        : '<button class="bsm" onclick="openPayModal('+ri+')" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.4);color:#16a34a;font-weight:600;white-space:nowrap;"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px;"><path d="M2 10h20M6 15h4"/><rect x="2" y="5" width="20" height="14" rx="2"/></svg>Pay</button>'+
+          (showPartial?' <button class="bsm" onclick="openPartialModal('+ri+')" title="Pay only the portion funded by a settled client" style="background:rgba(37,99,235,.1);border:1px solid rgba(37,99,235,.4);color:#2563eb;font-weight:600;white-space:nowrap;">◐ Partial</button>':'');
       var trStyle=(!r.paid && r.funded)?' style="background:rgba(34,197,94,.07);"':'';
       return '<tr'+trStyle+'><td><strong>'+payEsc(r.name)+'</strong></td><td>'+payEsc(r.period||'—')+'</td><td>'+projCell+'</td><td>'+(r.hours?payEsc(String(r.hours))+' hrs':'—')+'</td><td style="color:var(--t3);font-size:12px;white-space:nowrap;">'+(r.paid_date?payEsc(r.paid_date):'—')+'</td><td style="white-space:nowrap;">'+status+'</td><td>'+action+'</td></tr>';
     }).join('');
@@ -3585,7 +3710,10 @@ function payNet(r){ return Math.max(0, payAmt(r)-(parseFloat(r.deductions)||0));
 function openPayModal(idx){
   var r=(window._payRows||[])[idx]; if(!r) return; window._payCur=r;
   var gross=payAmt(r), ded=parseFloat(r.deductions)||0, net=Math.max(0,gross-ded);
-  var amtStr=payMoney(net);
+  /* Partials already sent come off here — the final Pay shows only what is still owed,
+     so the deduction (already spread pro-rata across the tranches) is never taken twice. */
+  var already=r.partialPaid||0, toPay=Math.max(0,Math.round((net-already)*100)/100);
+  var amtStr=payMoney(toPay);
   var qrImg = r.qr
     ? '<img src="'+convertDrive(r.qr)+'" alt="QR" style="width:230px;height:230px;object-fit:contain;border-radius:12px;background:#fff;padding:8px;">'
     : '<div style="width:230px;height:230px;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--t3);font-size:12.5px;border:1px dashed var(--line);border-radius:12px;padding:16px;margin:auto;">No bank QR on file.<br><br>Add one via Contractors → Edit → Bank QR.</div>';
@@ -3593,20 +3721,31 @@ function openPayModal(idx){
     ? '<div style="margin-top:4px;font-size:13px;">GoTyme: <b style="font-family:monospace;">'+payEsc(r.gotyme)+'</b> <button class="bsm" onclick="pgCopy(\''+payEsc(r.gotyme)+'\')">⧉</button></div>'
     : '<div style="margin-top:4px;color:var(--t3);font-size:12px;">No GoTyme number on file.</div>';
   // Deduction breakdown — shown only when a deduction is on file. The payslip itself keeps the gross.
-  var breakdown = ded>0
-    ? '<div style="margin:10px auto 2px;max-width:236px;font-size:12.5px;text-align:left;background:#f8fafc;border:1px solid rgba(15,23,42,.10);border-radius:10px;padding:9px 12px;">'+
-        '<div style="display:flex;justify-content:space-between;color:var(--t2);"><span>Payslip (gross)</span><span style="font-family:monospace;">'+payMoney(gross)+'</span></div>'+
-        '<div style="display:flex;justify-content:space-between;color:#dc2626;margin-top:3px;"><span>Deductions</span><span style="font-family:monospace;">− '+payMoney(ded)+'</span></div>'+
+  /* With partials, the tranche already carried its pro-rata slice of the deduction (the
+     partial amount was computed from the NET). So the final view shows only the REMAINING
+     shares: remaining gross share − remaining deduction share = remaining to pay. Showing the
+     full deduction here made it look like it was being charged twice — it never was. */
+  var remFrac=(already>0 && net>0)? Math.max(0,(net-already)/net) : 1;
+  var dedRem=Math.round(ded*remFrac*100)/100, grossRem=Math.round(gross*remFrac*100)/100;
+  var dedUsed=Math.round((ded-dedRem)*100)/100;
+  var breakdown = (ded>0||already>0)
+    ? '<div style="margin:10px auto 2px;max-width:248px;font-size:12.5px;text-align:left;background:#f8fafc;border:1px solid rgba(15,23,42,.10);border-radius:10px;padding:9px 12px;">'+
+        (already>0
+          ? '<div style="display:flex;justify-content:space-between;color:var(--t2);"><span>Gross — remaining share</span><span style="font-family:monospace;">'+payMoney(grossRem)+'</span></div>'+
+            (ded>0?'<div style="display:flex;justify-content:space-between;color:#dc2626;margin-top:3px;"><span>Deduction — remaining share</span><span style="font-family:monospace;">− '+payMoney(dedRem)+'</span></div>':'')
+          : '<div style="display:flex;justify-content:space-between;color:var(--t2);"><span>Payslip (gross)</span><span style="font-family:monospace;">'+payMoney(gross)+'</span></div>'+
+            (ded>0?'<div style="display:flex;justify-content:space-between;color:#dc2626;margin-top:3px;"><span>Deductions</span><span style="font-family:monospace;">− '+payMoney(ded)+'</span></div>':''))+
         '<div style="border-top:1px dashed rgba(15,23,42,.18);margin:6px 0;"></div>'+
-        '<div style="display:flex;justify-content:space-between;font-weight:800;color:var(--t1);"><span>Net to pay</span><span style="font-family:monospace;">'+amtStr+'</span></div>'+
+        '<div style="display:flex;justify-content:space-between;font-weight:800;color:var(--t1);"><span>'+(already>0?'Remaining to pay':'Net to pay')+'</span><span style="font-family:monospace;">'+amtStr+'</span></div>'+
       '</div>'+
-      '<div style="font-size:10.5px;color:var(--t3);margin-top:3px;">Deduction applied here only — the contractor\'s payslip still shows the gross.</div>'
+      (already>0?'<div style="font-size:10.5px;color:var(--t3);margin-top:3px;">◐ ₱'+already.toLocaleString()+' already sent'+(dedUsed>0?(' — that tranche already absorbed ₱'+dedUsed.toLocaleString()+' of the ₱'+ded.toLocaleString()+' deduction'):'')+'.</div>':'')+
+      (ded>0?'<div style="font-size:10.5px;color:var(--t3);margin-top:3px;">Deduction applied here only — the contractor\'s payslip still shows the gross.</div>':'')
     : '';
   document.getElementById('pay-modal-body').innerHTML=
     '<div style="text-align:center;">'+qrImg+'</div>'+
     '<div style="margin-top:14px;text-align:center;">'+
       '<div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;">Amount to pay'+(ded>0?' (net)':'')+'</div>'+
-      '<div style="font-size:32px;font-weight:800;color:#16a34a;line-height:1.15;">'+amtStr+' <button class="bsm" style="vertical-align:middle;font-size:11px;" onclick="pgCopy(\''+net.toFixed(2)+'\')">⧉ Copy</button></div>'+
+      '<div style="font-size:32px;font-weight:800;color:#16a34a;line-height:1.15;">'+amtStr+' <button class="bsm" style="vertical-align:middle;font-size:11px;" onclick="pgCopy(\''+toPay.toFixed(2)+'\')">⧉ Copy</button></div>'+
       breakdown+
       '<div style="font-size:13px;color:var(--t1);margin-top:6px;"><b>'+payEsc(r.name)+'</b> · '+payEsc(r.period)+'</div>'+
       '<div style="font-size:12px;color:var(--t2);">'+(r.hours?payEsc(String(r.hours))+' hrs':'')+(r.project?(' · '+payEsc(r.project)):'')+'</div>'+
@@ -3620,6 +3759,103 @@ function openPayModal(idx){
   document.getElementById('pay-modal').style.display='flex';
 }
 function closePayModal(){ var m=document.getElementById('pay-modal'); if(m) m.style.display='none'; }
+
+/* ── MULTI-CLIENT PARTIAL PAYMENT ──
+   A cutoff funded by two clients where only one has settled: tick the client(s) being paid
+   now, the amount pre-fills as that share of the net (hours-weighted, editable), and on send
+   the tranche is recorded, the contractor is emailed the paid/outstanding breakdown, and the
+   row shows "◐ Partial" until the final tranche goes through the normal Pay button. */
+function openPartialModal(idx){
+  var r=(window._payRows||[])[idx]; if(!r) return; window._payCur=r;
+  var fund=window._payFund||{}; var split=((fund.projects_by_period||{})[r.period]||{})[r.empId]||[];
+  var gross=payAmt(r), ded=parseFloat(r.deductions)||0, net=Math.max(0,gross-ded);
+  var already=r.partialPaid||0, remaining=Math.max(0,Math.round((net-already)*100)/100);
+  var totH=0; split.forEach(function(x){ totH+=x.h; });
+  var isFunded=function(proj){ return !!((fund.paid||{})[r.period] && fund.paid[r.period][String(proj).toLowerCase()]); };
+  var rowsHtml = split.length ? split.map(function(x,i){
+      var f=isFunded(x.p);
+      return '<label style="display:flex;align-items:center;gap:9px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;margin-bottom:6px;cursor:pointer;'+(f?'background:rgba(34,197,94,.06);':'')+'">'+
+        '<input type="checkbox" class="ppm-chk" data-h="'+x.h+'" data-p="'+payEsc(x.p)+'"'+(f?' checked':'')+' onchange="ppmRecalc()">'+
+        '<span style="flex:1;font-size:13px;font-weight:600;">'+payEsc(x.p)+'</span>'+
+        '<span style="font-size:12px;color:var(--t2);font-family:monospace;">'+x.h.toFixed(2)+'h</span>'+
+        (f?'<span style="font-size:10px;font-weight:700;color:#16a34a;background:rgba(34,197,94,.12);border-radius:20px;padding:1px 7px;">💰 invoice paid</span>'
+          :'<span style="font-size:10px;color:var(--t3);background:rgba(15,23,42,.06);border-radius:20px;padding:1px 7px;">awaiting</span>')+
+      '</label>'; }).join('')
+    : '<div style="color:var(--t3);font-size:12px;padding:8px 2px;">No per-client hour split found for this period — enter the amount manually below.</div>';
+  document.getElementById('pay-modal-body').innerHTML=
+    '<div style="font-size:15px;font-weight:800;">◐ Partial payment — '+payEsc(r.name)+'</div>'+
+    '<div style="font-size:12px;color:var(--t2);margin:2px 0 12px;">'+payEsc(r.period)+' · '+(r.hours?payEsc(String(r.hours))+' hrs · ':'')+'net '+payMoney(net)+(already?(' · <b style="color:#2563eb;">₱'+already.toLocaleString()+' already sent</b>'):'')+'</div>'+
+    /* The QR is how the money actually moves — same block as the full Pay modal, so a partial
+       can be sent without closing this and opening the other one just to scan. */
+    (r.qr
+      ? '<div style="text-align:center;margin:2px 0 10px;"><img src="'+convertDrive(r.qr)+'" alt="QR" style="width:200px;height:200px;object-fit:contain;border-radius:12px;background:#fff;padding:8px;border:1px solid var(--line);"></div>'
+      : '<div style="text-align:center;font-size:12px;color:#b45309;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:9px;padding:8px;margin:2px 0 10px;">No bank QR on file for this contractor — upload one in the Contractors tab first.</div>')+
+    (r.gotyme?'<div style="text-align:center;font-size:13px;margin:-4px 0 10px;">GoTyme: <b style="font-family:monospace;">'+payEsc(r.gotyme)+'</b> <button class="bsm" onclick="pgCopy(\''+payEsc(r.gotyme)+'\')">⧉</button></div>':'')+
+    '<div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Pay the hours funded by…</div>'+
+    rowsHtml+
+    '<div style="display:flex;gap:10px;align-items:flex-end;margin-top:10px;">'+
+      '<div style="flex:1;"><div style="font-size:11px;color:var(--t3);margin-bottom:3px;">Amount to send now (₱)</div>'+
+        '<input id="ppm-amt" type="number" min="1" step="0.01" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font:700 14px monospace;"></div>'+
+      '<div style="flex:1;font-size:11.5px;color:var(--t2);" id="ppm-info"></div>'+
+    '</div>'+
+    '<input id="ppm-note" placeholder="Optional note to the contractor" style="width:100%;margin-top:9px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;font-size:12.5px;">'+
+    '<div style="display:flex;gap:8px;margin-top:14px;">'+
+      '<button class="bsm" onclick="closePayModal()" style="flex:1;">Cancel</button>'+
+      '<button class="bsm" id="ppm-send" onclick="doPartialPay()" style="flex:1.6;color:#fff;background:#2563eb;border-color:#2563eb;font-weight:700;">◐ Send partial &amp; email breakdown</button>'+
+    '</div>';
+  window._ppmCtx={ net:net, totH:totH, already:already, gross:gross, ded:ded };
+  document.getElementById('pay-modal').style.display='flex';
+  ppmRecalc();
+}
+function ppmRecalc(){
+  var ctx=window._ppmCtx||{net:0,totH:0,already:0};
+  var selH=0, selP=[], leftH=0, leftP=[];
+  document.querySelectorAll('.ppm-chk').forEach(function(c){
+    var h=parseFloat(c.dataset.h)||0;
+    if(c.checked){ selH+=h; selP.push(c.dataset.p); } else { leftH+=h; leftP.push(c.dataset.p); }
+  });
+  window._ppmSel={ selH:Math.round(selH*100)/100, selP:selP, leftH:Math.round(leftH*100)/100, leftP:leftP };
+  var amt=(ctx.totH>0)? Math.round(ctx.net*(selH/ctx.totH)*100)/100 : 0;
+  var el=document.getElementById('ppm-amt'); if(el && ctx.totH>0) el.value=amt>0?amt.toFixed(2):'';
+  var info=document.getElementById('ppm-info');
+  /* Show the deduction math for THIS tranche, live: the ticked hours' gross share, minus their
+     proportional slice of the deduction, equals the amount prefilled — no mental arithmetic. */
+  var dedShare=(ctx.totH>0)? Math.round((ctx.ded||0)*(selH/ctx.totH)*100)/100 : 0;
+  var grossShare=(ctx.totH>0)? Math.round((ctx.gross||0)*(selH/ctx.totH)*100)/100 : 0;
+  var math=(selH&&ctx.ded>0)
+    ? '<div style="margin-top:5px;font-size:11.5px;background:#f8fafc;border:1px solid rgba(15,23,42,.10);border-radius:8px;padding:6px 9px;">'+
+        '<div style="display:flex;justify-content:space-between;color:var(--t2);"><span>Gross for '+selH.toFixed(2)+'h</span><span style="font-family:monospace;">'+payMoney(grossShare)+'</span></div>'+
+        '<div style="display:flex;justify-content:space-between;color:#dc2626;"><span>Deduction share</span><span style="font-family:monospace;">− '+payMoney(dedShare)+'</span></div>'+
+        '<div style="display:flex;justify-content:space-between;font-weight:800;border-top:1px dashed rgba(15,23,42,.18);margin-top:3px;padding-top:3px;"><span>This tranche</span><span style="font-family:monospace;">'+payMoney(amt)+'</span></div>'+
+      '</div>'
+    : '';
+  if(info) info.innerHTML=(selH?('Covers <b>'+selH.toFixed(2)+'h</b>'):'Nothing ticked')+
+    (leftH?('<br>Outstanding after: <b>'+leftH.toFixed(2)+'h</b> ('+leftP.join(', ')+')'):'<br>Nothing left outstanding — use the normal Pay instead?')+math;
+}
+async function doPartialPay(){
+  var r=window._payCur, sel=window._ppmSel||{selH:0,selP:[],leftH:0,leftP:[]};
+  var amt=parseFloat((document.getElementById('ppm-amt')||{}).value);
+  if(!r) return;
+  if(isNaN(amt)||amt<=0){ if(typeof toast==='function') toast('Enter the amount to send.'); return; }
+  var note=(document.getElementById('ppm-note')||{}).value||'';
+  if(!confirm('Send PARTIAL payment?\n\n  '+r.name+' · '+r.period+'\n  Amount now: ₱'+amt.toLocaleString()+(sel.selP.length?('\n  Covers: '+sel.selH+'h — '+sel.selP.join(', ')):'')+(sel.leftP.length?('\n  Outstanding: '+sel.leftH+'h — '+sel.leftP.join(', ')):'')+'\n\nThe contractor will be emailed this exact breakdown.')) return;
+  var btn=document.getElementById('ppm-send'); if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
+  try{
+    var res=await fetch(API+'?action=payslip_partial&employee_id='+encodeURIComponent(r.empId)+'&period='+encodeURIComponent(r.period)+
+      '&amount='+encodeURIComponent(amt)+'&hours_paid='+encodeURIComponent(sel.selH||'')+'&client_paid='+encodeURIComponent(sel.selP.join(', '))+
+      '&hours_left='+encodeURIComponent(sel.leftH||'')+'&client_left='+encodeURIComponent(sel.leftP.join(', '))+
+      '&note='+encodeURIComponent(note)+'&by=Admin&_='+Date.now());
+    var d=await res.json();
+    if(d&&d.ok){ if(typeof toast==='function') toast('Partial sent — ₱'+amt.toLocaleString()+(d.emailed?' · contractor emailed.':' (no email on file).')); jBust(); closePayModal(); loadPayslipsAdmin(); }
+    else{ if(typeof toast==='function') toast('Not recorded: '+((d&&(d.message||d.error))||'error')); if(btn){ btn.disabled=false; btn.innerHTML='◐ Send partial &amp; email breakdown'; } }
+  }catch(e){
+    /* A timeout does NOT mean it failed — the server often finishes after the browser gives up
+       (that's how the duplicate tranches happened). Keep the button locked and say so. */
+    if(typeof toast==='function') toast('No response — do NOT resend. The tranche may still have been recorded: close this, refresh the list and check the ◐ amount first.');
+    if(btn){ btn.disabled=true; btn.innerHTML='⚠ Check the list before retrying'; }
+    setTimeout(function(){ try{ jBust(); loadPayslipsAdmin(); }catch(_r){} }, 4000);
+  }
+}
 async function doPayModal(next){
   var r=window._payCur; if(!r) return;
   var b1=document.getElementById('pay-do'), b2=document.getElementById('pay-do-next');
@@ -3776,7 +4012,10 @@ async function generateInvoice(){
   // Prior invoices for this project → the invoice window shows an amount trend.
   var history=[];
   try{ var rh=await fetch(API+'?action=invoice_history&project='+encodeURIComponent(project)+'&_='+Date.now()); var dh=await rh.json(); history=(dh&&dh.history)||[]; }catch(e){}
-  openInvoiceWindow(project, from, to, lines, Math.round(subtotal*100)/100, history);
+  /* Outstanding balance from a previous cutoff the client only part-paid. Carried as its own
+     line on the invoice so the client sees exactly what is old debt and what is new work. */
+  var outstanding=parseFloat((document.getElementById('wl-outstanding')||{}).value)||0;
+  openInvoiceWindow(project, from, to, lines, Math.round(subtotal*100)/100, history, outstanding);
 }
 // Build a no-print comparative trend panel (bars of prior invoice amounts + % change vs last).
 function buildInvoiceTrend(history, subtotal, project){
@@ -3809,7 +4048,8 @@ function buildInvoiceTrend(history, subtotal, project){
     '<div style="font-size:11px;color:#9ca3af;margin-top:8px;">Prior average $'+avg.toLocaleString(undefined,{maximumFractionDigits:2})+' · '+history.length+' prior invoice'+(history.length!==1?'s':'')+' · amounts in USD · this panel is not printed</div>'+
   '</div>';
 }
-function openInvoiceWindow(project, from, to, lines, subtotal, history){
+function openInvoiceWindow(project, from, to, lines, subtotal, history, outstanding){
+  outstanding=Math.round((parseFloat(outstanding)||0)*100)/100;
   var invNo='';   // no number until the invoice is RECORDED (assigned server-side, starts at 762)
   var trendHtml=buildInvoiceTrend(history||[], subtotal, project);
   var today=new Date(); var todayStr=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
@@ -3865,7 +4105,18 @@ function openInvoiceWindow(project, from, to, lines, subtotal, history){
       '<div class="metaright"><div class="mrow"><span>INVOICE</span><b id="inv-no" contenteditable="true">'+(invNo||'PREVIEW — not recorded')+'</b></div><div class="mrow"><span>DATE</span><b contenteditable="true">'+invDate(todayStr)+'</b></div><div class="mrow"><span>TERMS</span><b contenteditable="true">DUE IN 48 HRS</b></div></div></div>'+
     '<table class="items"><thead><tr><th>SERVICE</th><th class="num">TOTAL HOURS</th><th class="num">RATE/HR</th><th class="num">AMOUNT</th></tr></thead><tbody>'+
       '<tr class="grp"><td colspan="4">'+escAdmin(project)+'</td></tr>'+rowsHtml+'</tbody></table>'+
-    '<div class="totals"><div class="trow"><span>SUBTOTAL</span><b>'+invMoney(subtotal)+'</b></div></div>'+
+    /* When an outstanding balance exists the totals become three lines — this period's work,
+       the carried balance, and the real amount due — so a part-paying client is never confused
+       about what the number is made of. Revenue recorded in Sales stays the SUBTOTAL: the
+       outstanding was already booked as revenue the period it was invoiced, and adding it again
+       would double-count. */
+    '<div class="totals"><div style="display:block;">'+
+      (outstanding>0
+        ? ('<div class="trow" style="border-top:none;padding-top:0;"><span>THIS PERIOD</span><b>'+invMoney(subtotal)+'</b></div>'+
+           '<div class="trow" style="border-top:1px solid #e5e7eb;padding-top:8px;"><span style="color:#b45309;">OUTSTANDING BALANCE (previous invoice)</span><b style="color:#b45309;">'+invMoney(outstanding)+'</b></div>'+
+           '<div class="trow"><span>TOTAL DUE</span><b>'+invMoney(Math.round((subtotal+outstanding)*100)/100)+'</b></div>')
+        : ('<div class="trow"><span>SUBTOTAL</span><b>'+invMoney(subtotal)+'</b></div>'))+
+    '</div></div>'+
     '<div class="foot"><div class="ftitle">PAYMENT OPTIONS</div><div class="qrow">'+
       '<div class="qcard"><img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=8&data='+encodeURIComponent('0x937119525166bfbc8f1b5af09ce467e9c40612f3')+'" alt="Binance QR"/><div class="qlbl">Binance · USDT</div><div class="qsub">ETH network</div></div>'+
       '<div class="qcard"><img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=8&data='+encodeURIComponent('https://www.paypal.com/paypalme/JethroBringas')+'" alt="PayPal QR"/><div class="qlbl">PayPal</div><div class="qsub">Jethro Bringas</div></div>'+
@@ -5163,6 +5414,30 @@ function _scPaint(rows){
   if(!rows || !rows.length){ tbody.innerHTML = '<tr><td colspan="11" class="es">No scorecards found.</td></tr>'; return; }
   var _ov = function(v){ return (v!==''&&v!=null&&!isNaN(parseFloat(v))) ? parseFloat(v) : -Infinity; };
   rows = rows.slice().sort(function(a,b){ return _ov(b.overall) - _ov(a.overall); });
+  /* ── LIVE RANKING MOVEMENT (Aug 2026) ──
+     ▲▼ = places moved vs the LAST OBSERVED standing (kept per month in localStorage),
+     with the overall's +/− delta next to it. The diff freezes until the data actually
+     changes again, so arrows don't vanish on the next 20s repaint. */
+  try{
+    var _mvKey='sc_prev_'+(document.getElementById('sc-month-filter').value||'');
+    var _prev=null; try{ _prev=JSON.parse(localStorage.getItem(_mvKey)||'null'); }catch(_p){}
+    var _cur={}; rows.forEach(function(r,i){ _cur[String(r.employee_id||'').toLowerCase()]={rank:i+1, ov:_ov(r.overall)}; });
+    var _sig=JSON.stringify(_cur);
+    if(!window._scDiff) window._scDiff={};
+    if(!_prev || _prev.sig!==_sig){
+      window._scDiff={};
+      if(_prev && _prev.map){
+        Object.keys(_cur).forEach(function(k){
+          var p=_prev.map[k];
+          if(!p){ window._scDiff[k]={neu:true}; return; }
+          var dr=p.rank-_cur[k].rank;   // positive = climbed
+          var dv=(isFinite(_cur[k].ov)&&isFinite(p.ov))?(_cur[k].ov-p.ov):0;
+          if(dr||Math.abs(dv)>=0.005) window._scDiff[k]={dr:dr, dv:dv};
+        });
+      }
+      localStorage.setItem(_mvKey, JSON.stringify({sig:_sig, map:_cur, ts:Date.now()}));
+    }
+  }catch(_mv){}
   var dash = function(v){ return (v!==''&&v!=null&&!isNaN(parseFloat(v))) ? parseFloat(v).toFixed(0) : '—'; };
   tbody.innerHTML = rows.map(function(sc, i) {
     var overall = (sc.overall!==''&&sc.overall!=null) ? parseFloat(sc.overall).toFixed(2) : '—';
@@ -5170,8 +5445,15 @@ function _scPaint(rows){
     var demCol = dem==='—' ? 'var(--t3)' : (parseFloat(sc.demerit_score) >= 100 ? '#16a34a' : '#dc2626');
     var rankCol = i===0 ? 'var(--o3)' : 'var(--t3)';
     var rk = '<span style="display:inline-block;min-width:22px;color:'+rankCol+';font-weight:700;">' + (i+1) + '.</span>';
+    var _mv=(window._scDiff||{})[String(sc.employee_id||'').toLowerCase()], mvH='', dvH='';
+    if(_mv){
+      if(_mv.neu) mvH='<span style="color:#a855f7;font-size:10px;font-weight:800;margin-right:4px;">NEW</span>';
+      else if(_mv.dr>0) mvH='<span style="color:#16a34a;font-size:10px;font-weight:800;margin-right:4px;">▲'+_mv.dr+'</span>';
+      else if(_mv.dr<0) mvH='<span style="color:#dc2626;font-size:10px;font-weight:800;margin-right:4px;">▼'+(-_mv.dr)+'</span>';
+      if(_mv.dv&&Math.abs(_mv.dv)>=0.005) dvH='<span style="font-size:10px;font-weight:700;color:'+(_mv.dv>0?'#16a34a':'#dc2626')+';margin-left:4px;">'+(_mv.dv>0?'+':'')+_mv.dv.toFixed(2)+'</span>';
+    }
     return '<tr>' +
-      '<td>' + rk + '<strong>' + (sc.full_name||sc.employee_id) + '</strong></td>' +
+      '<td>' + rk + mvH + '<strong>' + (sc.full_name||sc.employee_id) + '</strong></td>' +
       '<td style="color:var(--t3);font-size:12px;">' + sc.month + '</td>' +
       '<td><span style="color:#2563eb;font-weight:600;">' + dash(sc.productivity) + '</span></td>' +
       '<td><span style="color:#0d9488;font-weight:600;">' + dash(sc.quality) + '</span></td>' +
@@ -5181,7 +5463,7 @@ function _scPaint(rows){
       '<td><span style="color:' + demCol + ';font-weight:600;">' + dem + '</span></td>' +
       '<td><span style="color:#0ea5a4;font-weight:600;">' + dash(sc.csat) + '</span></td>' +
       '<td><span style="color:#a855f7;font-weight:600;">' + dash(sc.innovation) + '</span></td>' +
-      '<td><strong style="color:var(--o3);">' + overall + '</strong></td>' +
+      '<td><strong style="color:var(--o3);">' + overall + '</strong>' + dvH + '</td>' +
     '</tr>';
   }).join('');
 }
@@ -5193,6 +5475,13 @@ async function _scRenderRows(force) {
   var tbody = document.getElementById('sc-body'); if (!tbody) return;
   var empId = document.getElementById('sc-emp-filter').value;
   var month = document.getElementById('sc-month-filter').value;
+  /* PAINT-FIRST (Aug 25): show the last known board immediately so the tab is NEVER blank while
+     the network is working. Fresh rows overwrite it a moment later. A blank scorecard was the
+     thing he kept hitting; there is always a previous board worth showing. */
+  if(!tbody.children.length || /skl|class="es"|Loading/.test(tbody.innerHTML)){
+    try{ var _s0=JSON.parse(localStorage.getItem(_scSnapKey())||'null');
+         if(_s0 && _s0.rows && _s0.rows.length) _scPaint(_s0.rows); }catch(_p0){}
+  }
   try {
     /* One bundled call for the tab. Falls back to the old endpoint if the bundle is missing,
        so an un-deployed script still renders the table instead of showing nothing. */
@@ -5206,11 +5495,27 @@ async function _scRenderRows(force) {
        path and an un-deployed script still render. */
     var _sc = data.scorecards;
     var rows = (_sc && _sc.scorecards) ? _sc.scorecards : (Array.isArray(_sc) ? _sc : []);
-    _scPaint(rows);
-    try{ localStorage.setItem(_scSnapKey(), JSON.stringify({ rows:rows, ts:Date.now() })); }catch(_e){}
+    if(rows.length){
+      _scPaint(rows);
+      try{ window._scAsOf=(_sc&&_sc.as_of)||null; }catch(_a){}
+      try{ localStorage.setItem(_scSnapKey(), JSON.stringify({ rows:rows, ts:Date.now() })); }catch(_e){}
+      try{ _scBadge(); }catch(_b){}
+    } else if(!tbody.children.length){
+      tbody.innerHTML='<tr><td colspan="11" class="es">No scorecard rows for this month yet.</td></tr>';
+    }
   } catch(e) {
-    // keep any already-painted rows (snapshot) on a transient error; only show error on a blank table
-    if(/skl|class="es"|Loading/.test(tbody.innerHTML) || !tbody.children.length){ tbody.innerHTML = '<tr><td colspan="11" class="es">Error loading scorecards.</td></tr>'; }
+    /* NEVER LEAVE HIM STARING AT NOTHING. Fall back to the stored board and label it, so a slow
+       or failed request degrades to "slightly old numbers" instead of an empty screen. */
+    var painted=false;
+    try{ var _s=JSON.parse(localStorage.getItem(_scSnapKey())||'null');
+         if(_s && _s.rows && _s.rows.length){ _scPaint(_s.rows); painted=true;
+           var _el=document.getElementById('sc-live-badge');
+           if(_el) _el.innerHTML='<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#f59e0b;box-shadow:0 0 6px #f59e0b;margin-right:5px;"></span>'+
+             'OFFLINE COPY · saved '+new Date(_s.ts).toLocaleTimeString('en-US',{hour12:false})+' · server slow — press ↻ to retry';
+         } }catch(_f){}
+    if(!painted && (!tbody.children.length || /skl|class="es"|Loading/.test(tbody.innerHTML))){
+      tbody.innerHTML='<tr><td colspan="11" class="es">Could not reach the server. Press ↻ Recompute to retry.</td></tr>';
+    }
   }
 }
 
@@ -5322,8 +5627,52 @@ async function cfRemoveVA(encProject, encEmp){
 
 // Live ranking — refresh the scorecard table on an interval while its tab is showing.
 var scLiveTimer = null;
-function startScLive(){ stopScLive(); scLiveTimer = setInterval(function(){ _scRenderRows(); }, 20000); }
-function stopScLive(){ if (scLiveTimer){ clearInterval(scLiveTimer); scLiveTimer = null; } }
+/* ── REAL-TIME SCORECARD (Aug 2026) ──
+   Two rhythms while the tab is open, both paused when the browser tab is hidden:
+     · every 20s — repaint from cache (cheap, catches anything another admin busted);
+     · every 5 min — FULL silent recompute (auto version of the ↻ Recompute button:
+       busts the server cache and recomputes all contractors), so demerits, QA grades,
+       attendance, and sales land on the board within 5 minutes with no clicking. */
+function startScLive(){ stopScLive();
+  scLiveTimer = setInterval(function(){ if(document.hidden) return; _scRenderRows(); _scBadge(); }, 60000);
+  /* SCORECARD-FIRST FETCHING (Aug 25, his ask): he watches this board for accuracy, so the
+     full recompute runs every 10 MINUTES — fresh enough to trust, cheap enough to live with.
+     LOAD LESSON (Aug 24 night) still applies: a recompute colliding with the shift-login
+     surge helped saturate the server, so the auto-recompute SKIPS the two login-rush windows
+     (07:30–08:30 and 19:30–20:30 PHT) — the badge says so, and the manual ↻ Recompute always
+     works, rush hour or not. */
+  window._scForceTimer = setInterval(async function(){ if(document.hidden) return;
+    if(_scRushHour()){ _scBadge(); return; }
+    try{ await fetch(API+'?action=bust_scorecards&_='+Date.now()); try{ jBust(); }catch(_j){}
+         await _scRenderRows(true); window._scLastFull=Date.now(); _scBadge(); }catch(_e){}
+  }, 600000);
+  if(!window._scLastFull) window._scLastFull=Date.now();
+  _scBadge();
+}
+function stopScLive(){
+  if (scLiveTimer){ clearInterval(scLiveTimer); scLiveTimer = null; }
+  if (window._scForceTimer){ clearInterval(window._scForceTimer); window._scForceTimer=null; }
+}
+function _scRushHour(){
+  /* PHT login-rush windows where auto-recompute stands down: 07:30–08:30 and 19:30–20:30. */
+  var ph=new Date(Date.now()+8*3600000);            // UTC → PHT
+  var mins=ph.getUTCHours()*60+ph.getUTCMinutes();
+  return (mins>=450&&mins<510)||(mins>=1170&&mins<1230);
+}
+function _scBadge(){
+  var el=document.getElementById('sc-live-badge'); if(!el) return;
+  /* Prefer the SERVER's as_of (when the snapshot was actually computed) over the browser's
+     fetch time — that is the number he needs to judge whether the board is accurate. */
+  var asOf=window._scAsOf ? String(window._scAsOf).slice(11,19)
+          : (window._scLastFull?new Date(window._scLastFull).toLocaleTimeString('en-US',{hour12:false}):'—');
+  var msg;
+  if(_scRushHour()){ msg='data as of '+asOf+' · auto-refresh paused (login rush) — use ↻ for fresh numbers'; }
+  else{
+    var left=Math.max(0, 600000-(Date.now()-(window._scLastFull||Date.now())));
+    msg='data as of '+asOf+' · next full refresh in ≤'+Math.ceil(left/60000)+'m';
+  }
+  el.innerHTML='<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#16a34a;box-shadow:0 0 6px #16a34a;margin-right:5px;"></span>LIVE · '+msg;
+}
 
 // ── Rankings export (PPTX) + Top-5 printable certificates ──
 async function _scRanked(){
@@ -5361,7 +5710,7 @@ async function updateFinalizeUI(month){
 async function finalizeMonth(){
   var month=document.getElementById('sc-month-filter').value; if(!month){ toast('Pick a month first.'); return; }
   var lbl=_scMonthLabel(month);
-  if(!confirm('Finalize '+lbl+'?\n\nThis locks the rankings and all 5 awards for '+lbl+' into a frozen snapshot — the numbers can no longer change, and the Reveal and Certificates will print from it.\n\nYou can Re-finalize later to refresh the snapshot with the latest data.')) return;
+  if(!confirm('Finalize '+lbl+'?\n\nThis locks the rankings and all monthly awards for '+lbl+' into a frozen snapshot — the numbers can no longer change, and the Reveal and Certificates will print from it.\n\nYou can Re-finalize later to refresh the snapshot with the latest data.')) return;
   var btn=document.getElementById('sc-final-btn'); var old=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='Finalizing…'; }
   try{
     var d=await (await jGet(API+'?action=finalize_scorecard&month='+encodeURIComponent(month)+'&by=Admin', 0, 90000)).json();
@@ -5539,7 +5888,7 @@ async function _awardExtras(month){
   try{ return await (await jGet(API+'?action=award_extras'+(month?'&month='+encodeURIComponent(month):''), 4000, 120000)).json(); }
   catch(e){ return {}; }
 }
-// The five monthly awards: Early Bird, Perfect Attendance, Spotless Record, Sales MVP, Workhorse.
+// The monthly awards: Early Bird, Perfect Attendance, Spotless Record, Sales MVP, Workhorse, and from Aug 2026 Innovation and Best Reviewer.
 function _scAwards(rows, eb, ex){
   ex=ex||{}; var hours=ex.hours||{}, present=ex.present||{}, lates=ex.lates||{}, names=ex.names||{};
   function photoOf(id){ var r=(rows||[]).filter(function(x){ return String(x.employee_id||'').toLowerCase()===String(id||'').toLowerCase(); })[0]; return r?r.photo:''; }
@@ -5552,8 +5901,9 @@ function _scAwards(rows, eb, ex){
       name:eb.full_name||eb.employee_id, id:eb.employee_id, photo:photoOf(eb.employee_id),
       metricText:'Average clock-in: <b>'+String(eb.avg_time||'').replace(/</g,'')+'</b> across '+(eb.days||0)+' logged day'+((eb.days===1)?'':'s')+'.' });
   }
-  // 2 · Perfect Attendance — zero lates, most days present (needs a meaningful sample)
-  var paBest=null; Object.keys(present).forEach(function(k){ var pd=present[k]||0, l=lates[k]||0; if(l===0 && pd>=8){ if(!paBest||pd>paBest.p) paBest={k:k,p:pd}; } });
+  // 2 · Perfect Attendance — ZERO lates AND ZERO absences, most days present (needs a meaningful sample)
+  var _abs=ex.absent||{};
+  var paBest=null; Object.keys(present).forEach(function(k){ var pd=present[k]||0, l=lates[k]||0, ab=_abs[k]||0; if(l===0 && ab===0 && pd>=8){ if(!paBest||pd>paBest.p) paBest={k:k,p:pd}; } });
   if(paBest){ out.push({ title:'Perfect Attendance', emoji:'🎖️', color:'#B45309',
     cite:'for flawless attendance — present and on time every single day, with no lates all month long.',
     name:names[paBest.k]||paBest.k, id:paBest.k, photo:photoOf(paBest.k),
@@ -5585,84 +5935,126 @@ function _scAwards(rows, eb, ex){
     cite:'for the most productive hours tracked this month — sheer dedication and a relentless work ethic.',
     name:names[whBest.k]||whBest.k, id:whBest.k, photo:photoOf(whBest.k),
     metricText:'Logged <b>'+whBest.h.toFixed(1)+' productive hours</b> this month.' }); }
+  // 6 + 7 exist from Aug 2026 — before that, the csat slot held Client Feedback and Innovation wasn't scored.
+  var _awMonth=''; try{ _awMonth=document.getElementById('sc-month-filter').value||''; }catch(_e){}
+  if(!_awMonth || _awMonth>='2026-08'){
+    // 6 · Innovation Award — the highest ADMIN-APPROVED innovation score of the month
+    /* Ties are broken by the admin's explicit pick for the month (Aug 2026: Suelto and Hamto
+       both scored 90 — the award goes to Suelto, chosen as the best idea of the month). */
+    var INNO_TIE_PICK={ '2026-08':'jmb001' };
+    var _pin=String(INNO_TIE_PICK[_awMonth]||'').toLowerCase();
+    var inBest=null; (rows||[]).forEach(function(r){ var iv=num(r.innovation); if(iv==null||iv<=0) return;
+      var isPin=(_pin && String(r.employee_id||'').toLowerCase()===_pin);
+      if(!inBest || iv>inBest.iv || (iv===inBest.iv && isPin)) inBest={r:r,iv:iv}; });
+    if(inBest){ out.push({ title:'Innovation Award', emoji:'💡', color:'#7C3AED',
+      cite:'for the best innovation idea of the month — seeing what slows the team down and designing the fix.',
+      name:inBest.r.full_name||inBest.r.employee_id, id:inBest.r.employee_id, photo:inBest.r.photo,
+      metricText:'Innovation score: <b>'+inBest.iv.toFixed(0)+'/100</b>'+(inBest.iv>=90?' — marked for implementation.':'.') }); }
+    // 7 · Best Reviewer — the highest Reviewer Grade (how fairly and thoroughly they QA colleagues)
+    var rvBest=null; (rows||[]).forEach(function(r){ var g=num(r.csat); if(g==null||g<=0) return; if(!rvBest||g>rvBest.g) rvBest={r:r,g:g}; });
+    if(rvBest){ out.push({ title:'Best Reviewer Award', emoji:'🔍', color:'#0EA5A4',
+      cite:'for the sharpest and fairest QA reviewing of the month — real attention to the evidence, sound judgement, and integrity throughout.',
+      name:rvBest.r.full_name||rvBest.r.employee_id, id:rvBest.r.employee_id, photo:rvBest.r.photo,
+      metricText:'Reviewer grade: <b>'+rvBest.g.toFixed(2)+'/100</b>.' }); }
+  }
   return out;
 }
+/* Award icons: crisp stroke SVGs in the brand gradient — replaces the emoji imagery on
+   Special Award certificates (his ask: "use SVG icon instead"). */
+function _awIconSvg(title){
+  var t=String(title||'').toLowerCase(), p;
+  if(/early/.test(t)) p='<path d="M12 3v4M5.2 6.2l2.1 2.1M18.8 6.2l-2.1 2.1M3 14h3M18 14h3M7.5 14a4.5 4.5 0 0 1 9 0M2 18h20M6.5 21h11"/>';
+  else if(/attendance|perfect/.test(t)) p='<circle cx="12" cy="8.5" r="5.5"/><path d="M9.5 6.9l1.8 1.8 3.2-3.4M9 13.4 7.5 21l4.5-2.6L16.5 21 15 13.4"/>';
+  else if(/spotless/.test(t)) p='<path d="M12 3l7 3v5.2c0 4.4-2.9 7.8-7 9.8-4.1-2-7-5.4-7-9.8V6z"/><path d="M8.8 11.6l2.2 2.2 4.2-4.6"/>';
+  else if(/sales|mvp/.test(t)) p='<path d="M3 17l6-6 4 4 7.5-8.5"/><path d="M14.5 6.5H21V13"/>';
+  else if(/workhorse/.test(t)) p='<path d="M13 2 4.5 14H10l-1 8 9.5-12H13z"/>';
+  else if(/idea|innovation/.test(t)) p='<path d="M9.2 18h5.6M10.2 21h3.6M12 3a6 6 0 0 1 3.7 10.7c-.7.6-1.2 1.4-1.2 2.3H9.5c0-.9-.5-1.7-1.2-2.3A6 6 0 0 1 12 3z"/>';
+  else if(/review/.test(t)) p='<circle cx="10.5" cy="10.5" r="6.8"/><path d="M21 21l-4.6-4.6M7.9 10.7l1.9 1.9 3.3-3.6"/>';
+  else p='<path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-3-5.4 3 1.1-6L3.2 9.4l6.1-.8z"/>';
+  return '<svg class="awi" viewBox="0 0 24 24" fill="none" stroke="url(#gM)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+p+'</svg>';
+}
 function _certHTML(rows, label, awards){
+  /* APPROVED DESIGN (Aug 2026): split layout — dark brand panel (gradient JMB mark, TOP N,
+     month) + clean right side (name, citation, overall score, real signature.png). */
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
-  var escA=function(s){ return esc(s).replace(/"/g,'&quot;'); };
-  var ord=['First','Second','Third','Fourth','Fifth'];
-  var medal=['#C79A1E','#7C8590','#B45309','#0E7490','#6D28D9'];
+  var SIG='data:image/png;base64,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';   /* embedded transparent signature — never 404s */
+  var MARK='<svg class="mk" viewBox="76 82 360 360" xmlns="http://www.w3.org/2000/svg"><defs>'+
+    '<linearGradient id="gM" x1="0" y1="0.05" x2="0" y2="0.95"><stop offset="0%" stop-color="#FFE0BE"/><stop offset="16%" stop-color="#FFB16A"/><stop offset="46%" stop-color="#FF7A29"/><stop offset="78%" stop-color="#F1560F"/><stop offset="100%" stop-color="#C3380A"/></linearGradient>'+
+    '<linearGradient id="gB" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FF8E45"/><stop offset="55%" stop-color="#E64C10"/><stop offset="100%" stop-color="#A52E08"/></linearGradient></defs>'+
+    '<rect x="241" y="110" width="30" height="304" rx="15" fill="url(#gM)"/>'+
+    '<path d="M256 226 Q341 264 398 320 Q341 376 256 414 Q171 376 114 320 Q171 264 256 226 Z" fill="none" stroke="url(#gB)" stroke-width="50" stroke-linejoin="round" stroke-linecap="round"/>'+
+    '<path d="M256 110 Q341 148 398 204 Q341 260 256 298 Q171 260 114 204 Q171 148 256 110 Z" fill="none" stroke="url(#gM)" stroke-width="50" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+  function page(o){
+    /* o: {big, title, titleAccent, sub, name, cite, score, scoreLabel} */
+    return '<div class="cert"><div class="panel"><div class="edge"></div>'+MARK.replace('class="mk"','class="wm"')+
+      MARK+'<div class="bn">JMB <em>VIRTUALS</em></div><div class="bs">Social Media Management</div>'+
+      '<div class="pdiv"></div><div class="plabel">'+esc(o.plabel||'Monthly Ranking')+'</div>'+
+      '<div class="prank">'+(o.bigRaw||esc(o.big))+'</div><div class="pmonth">'+esc(label||'')+'</div>'+
+      '<div class="purl">jmbvirtuals.com</div></div>'+
+      '<div class="main"><div class="topline"></div>'+
+      '<div class="h1">'+esc(o.title)+' <span>'+esc(o.titleAccent)+'</span></div>'+
+      '<div class="hsub">'+esc(o.sub)+'</div>'+
+      '<div class="pres">Proudly presented to</div>'+
+      '<div class="nm">'+esc(o.name)+'</div><div class="nrule"></div>'+
+      '<div class="cite">'+o.cite+'</div>'+
+      (o.score?('<div class="meta"><div class="v">'+esc(o.score)+'</div><div class="k">'+esc(o.scoreLabel||'Overall performance score')+'</div></div>'):'')+
+      '<div class="ft"><div class="sg"><div class="ln"></div><div class="who">'+esc(o.date||new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}))+'</div><div class="role">Date Awarded</div></div>'+
+      '<div class="sg r"><img class="sigimg" src="'+SIG+'" alt=""><div class="ln"></div><div class="who">JETHRO BRINGAS</div><div class="role">Founder · JMB Virtuals</div></div></div>'+
+      '</div></div>';
+  }
+  var ord=['Top 1','Top 2','Top 3','Top 4','Top 5'];
   var pages=rows.map(function(r,i){
-    var name=esc(r.full_name||r.employee_id); var score=parseFloat(r.overall).toFixed(2); var mc=medal[i]||'#E8590C';
-    var img = r.photo
-      ? '<img src="'+escA(r.photo)+'" alt="" onerror="this.style.display=\'none\';var s=this.nextElementSibling;if(s)s.style.display=\'flex\';">'
-      : '';
-    var init = '<div class="ph-init"'+(r.photo?' style="display:none"':'')+'>'+esc(_scInitials(r.full_name||r.employee_id))+'</div>';
-    return '<div class="cert"><div class="frame"><div class="inner" style="--mc:'+mc+'">'+
-      '<div class="seal"><span>'+(i+1)+'</span><small>PLACE</small></div>'+
-      '<div class="brand">JMB VIRTUALS</div>'+
-      '<div class="photo">'+img+init+'</div>'+
-      '<div class="sub">Certificate of Excellence</div>'+
-      '<div class="rank">'+ord[i]+' Place</div>'+
-      '<div class="pres">This certificate is proudly presented to</div>'+
-      '<div class="name">'+name+'</div>'+
-      '<div class="body">in recognition of an outstanding overall scorecard of <b>'+score+'</b>'+(label?(' for <b>'+esc(label)+'</b>'):'')+', ranking among the company’s top performers. Your dedication, consistency, and professionalism set the standard for the team.</div>'+
-      '<div class="sigrow"><div class="sig"><div class="line"></div>Management</div><div class="sig"><div class="line"></div>Date</div></div>'+
-      '</div></div></div>';
+    return page({ big:ord[i]||('Top '+(i+1)), plabel:'Monthly Ranking',
+      title:'Certificate of', titleAccent:'Excellence', sub:(i===0?'Top Performer of the Month':'Top '+(i+1)+' Performer of the Month'),
+      name:r.full_name||r.employee_id,
+      cite:'In recognition of <b>outstanding performance</b> across productivity, quality, attendance, and team contribution — ranking <b>'+(i+1)+(i===0?'st':(i===1?'nd':(i===2?'rd':'th')))+'</b> company-wide'+(label?(' for <b>'+esc(label)+'</b>'):'')+' and setting the standard the whole team works toward.',
+      score:parseFloat(r.overall).toFixed(2) });
   }).join('');
-  var awardPages=(awards||[]).map(function(a){
-    if(a.event){
-      return '<div class="cert"><div class="frame"><div class="inner" style="--mc:'+a.color+'">'+
-        '<div class="brand">JMB VIRTUALS</div>'+
-        '<div class="evticon">'+(a.icon||'')+'</div>'+
-        '<div class="sub">'+esc(a.title)+'</div>'+
-        '<div class="rank">Special Award'+(label?(' · '+esc(label)):'')+'</div>'+
-        '<div class="pres">This award is proudly presented to</div>'+
-        '<div class="name evtname">'+esc(a.name||'')+'</div>'+
-        '<div class="body">'+esc(a.cite)+' '+(a.metricText||'')+' Thank you for setting the standard for the whole team.</div>'+
-        '<div class="sigrow"><div class="sig"><div class="line"></div>Management</div><div class="sig"><div class="line"></div>Date</div></div>'+
-      '</div></div></div>';
-    }
-    var img = a.photo
-      ? '<img src="'+escA(a.photo)+'" alt="" onerror="this.style.display=\'none\';var s=this.nextElementSibling;if(s)s.style.display=\'flex\';">'
-      : '';
-    var init = a.blank ? '' : ('<div class="ph-init"'+(a.photo?' style="display:none"':'')+'>'+esc(_scInitials(a.name))+'</div>');
-    return '<div class="cert"><div class="frame"><div class="inner" style="--mc:'+a.color+'">'+
-      '<div class="seal" style="background:#fff;border-color:var(--mc);"><span style="font-size:34px;line-height:1;">'+a.emoji+'</span></div>'+
-      '<div class="brand">JMB VIRTUALS</div>'+
-      '<div class="photo">'+img+init+'</div>'+
-      '<div class="sub">'+esc(a.title)+'</div>'+
-      '<div class="rank">Special Award'+(label?(' · '+esc(label)):'')+'</div>'+
-      '<div class="pres">This award is proudly presented to</div>'+
-      '<div class="name">'+esc(a.name)+'</div>'+
-      '<div class="body">'+esc(a.cite)+' '+(a.metricText||'')+' Thank you for setting the standard for the whole team.</div>'+
-      '<div class="sigrow"><div class="sig"><div class="line"></div>Management</div><div class="sig"><div class="line"></div>Date</div></div>'+
-      '</div></div></div>';
+  var awardPages=(awards||[]).map(function(a2){
+    return page({ big:'', bigRaw:_awIconSvg(a2.title), plabel:'Special Award',
+      title:esc(a2.title||'Special Award').replace(/ .*/,''), titleAccent:String(a2.title||'').split(' ').slice(1).join(' ')||'Award',
+      sub:'Special Award'+(label?(' · '+label):''), name:a2.name||'',
+      cite:esc(a2.cite||'')+' '+String(a2.metricText||'')+' Thank you for setting the standard for the whole team.',
+      score:'' });
   }).join('');
-  pages = pages + awardPages;
-  return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>JMB Virtuals — Certificates</title><style>'+
-    '@page{size:landscape;margin:0}'+
-    '*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}html,body{margin:0;padding:0}body{font-family:Georgia,\'Times New Roman\',serif;color:#1f2430;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
-    '.cert{width:100vw;height:100vh;padding:12mm;page-break-after:always;display:flex}'+
-    '.frame{flex:1;border:2px solid #E8590C;border-radius:16px;padding:9px;background:radial-gradient(circle at 50% -10%, #FFF6EE, #FFFFFF 55%)}'+
-    '.inner{position:relative;height:100%;border:1px solid #EABF92;border-radius:11px;padding:18px 60px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}'+
-    '.seal{position:absolute;top:16px;right:22px;width:82px;height:82px;border-radius:50%;background:var(--mc);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;border:3px solid #fff}'+
-    '.seal span{font-size:30px;font-weight:bold;line-height:1}.seal small{font-size:8.5px;letter-spacing:2px;margin-top:1px}'+
-    '.brand{font-size:17px;font-weight:bold;letter-spacing:6px;color:#E8590C;margin-bottom:10px}'+
-    '.photo{width:140px;height:140px;border-radius:50%;overflow:hidden;border:4px solid var(--mc);margin-bottom:12px;background:transparent;display:flex;align-items:center;justify-content:center}'+
-    '.photo img{width:100%;height:100%;object-fit:cover;border-radius:50%}'+
-    '.ph-init{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:52px;font-weight:bold;color:#E8590C;border-radius:50%;background:#F3F4F6}'+
-    '.evticon{width:118px;height:118px;margin:2px 0 14px;color:var(--mc);display:flex;align-items:center;justify-content:center}'+
-    '.evticon svg{width:100%;height:100%;display:block}'+
-    '.evtname{min-width:460px;min-height:46px}'+
-    '.sub{font-size:32px;font-weight:bold;letter-spacing:1px;margin-bottom:4px}'+
-    '.rank{font-size:14px;color:#a16207;letter-spacing:3px;text-transform:uppercase;margin-bottom:14px}'+
-    '.pres{font-size:13px;color:#555;margin-bottom:6px}'+
-    '.name{font-size:38px;font-weight:bold;color:#0f172a;border-bottom:2px solid var(--mc);padding:0 28px 6px;margin-bottom:12px}'+
-    '.body{font-size:14px;line-height:1.65;max-width:640px;color:#374151;margin-bottom:22px}'+
-    '.sigrow{display:flex;gap:110px}'+
-    '.sig{font-size:12px;color:#555}.line{width:190px;border-top:1px solid #333;margin-bottom:5px}'+
-    '</style></head><body onload="setTimeout(function(){window.focus();window.print();},250);">'+pages+'</body></html>';
+  pages+=awardPages;
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>JMB Virtuals — Certificates</title>'+
+    '<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet"><style>'+
+    '@page{size:landscape;margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}html,body{margin:0;padding:0}'+
+    'body{font-family:Manrope,sans-serif;color:#191510}'+
+    '.awi{width:88px;height:88px;display:block;margin:10px auto 2px;background:none;border:none;box-shadow:none}'+
+    '.cert{width:100vw;height:100vh;display:flex;page-break-after:always;background:#FCFBF8;overflow:hidden}'+
+    '.panel{position:relative;width:31%;flex:none;background:#121419;color:#f2ede5;display:flex;flex-direction:column;align-items:center;padding:7vh 20px 5vh;overflow:hidden;text-align:center}'+
+    '.edge{position:absolute;top:0;right:0;bottom:0;width:6px;background:linear-gradient(180deg,#FFB16A,#FF7A29 40%,#F1560F 75%,#C3380A)}'+
+    '.wm{position:absolute;bottom:-16vh;left:-10vw;width:42vw;opacity:.08}'+
+    '.mk{width:15vh;height:15vh;margin-top:1vh;position:relative}'+
+    '.bn{font-family:Sora,sans-serif;font-weight:800;font-size:2.9vh;margin-top:2vh}'+
+    '.bn em{font-style:normal;background:linear-gradient(135deg,#FFB16A,#F1560F);-webkit-background-clip:text;background-clip:text;color:transparent}'+
+    '.bs{font-size:1.25vh;font-weight:700;letter-spacing:.3em;color:#7d8494;text-transform:uppercase;margin-top:.9vh}'+
+    '.pdiv{width:44px;height:3px;border-radius:2px;background:linear-gradient(90deg,#FF7A29,#C3380A);margin:4vh 0}'+
+    '.plabel{font-size:1.3vh;font-weight:800;letter-spacing:.26em;color:#7d8494;text-transform:uppercase}'+
+    '.prank{font-family:Sora,sans-serif;font-weight:800;font-size:6.6vh;line-height:1.05;margin-top:1vh;background:linear-gradient(135deg,#FFB16A,#FF7A29 55%,#F1560F);-webkit-background-clip:text;background-clip:text;color:transparent}'+
+    '.pmonth{font-family:Sora,sans-serif;font-weight:700;font-size:2vh;margin-top:.8vh}'+
+    '.purl{margin-top:auto;font-size:1.3vh;font-weight:700;letter-spacing:.22em;color:#5b6270;text-transform:uppercase;position:relative}'+
+    '.main{position:relative;flex:1;display:flex;flex-direction:column;padding:8vh 6vw 6.5vh}'+
+    '.topline{position:absolute;top:0;left:0;right:0;height:6px;background:linear-gradient(90deg,#C3380A,#F1560F 30%,#FF7A29 65%,#FFB16A)}'+
+    '.h1{font-family:Sora,sans-serif;font-weight:800;font-size:5.2vh;line-height:1.12}'+
+    '.h1 span{display:inline-block;padding-right:.08em;margin-right:-.08em;background:linear-gradient(105deg,#FF7A29,#C3380A);-webkit-background-clip:text;background-clip:text;color:transparent}'+
+    '.hsub{font-size:1.5vh;font-weight:800;letter-spacing:.34em;color:#8a7f70;text-transform:uppercase;margin-top:1.3vh}'+
+    '.pres{font-size:1.8vh;font-weight:600;color:#8a7f70;margin-top:6vh}'+
+    '.nm{font-family:Sora,sans-serif;font-weight:800;font-size:7vh;letter-spacing:-.015em;margin-top:.6vh;line-height:1.05}'+
+    '.nrule{width:320px;height:4px;border-radius:3px;margin-top:1.7vh;background:linear-gradient(90deg,#FF7A29,#C3380A)}'+
+    '.cite{max-width:62ch;font-size:1.95vh;line-height:1.7;font-weight:600;color:#5f5546;margin-top:3.2vh}'+
+    '.cite b{color:#191510;font-weight:800}'+
+    '.meta{margin-top:4vh}.meta .v{font-family:Sora,sans-serif;font-weight:800;font-size:4.2vh;background:linear-gradient(135deg,#FF7A29,#C3380A);-webkit-background-clip:text;background-clip:text;color:transparent}'+
+    '.meta .k{font-size:1.25vh;font-weight:800;letter-spacing:.2em;color:#8a7f70;text-transform:uppercase;margin-top:.4vh}'+
+    '.ft{margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between;gap:40px}'+
+    '.sg{width:250px}.sg.r{text-align:right}'+
+    '.sg .ln{height:2px;background:#191510;border-radius:2px;margin-bottom:1.1vh;opacity:.85}'+
+    '.sg .who{font-family:Sora,sans-serif;font-weight:800;font-size:1.75vh}'+
+    '.sg .role{font-size:1.25vh;font-weight:800;letter-spacing:.2em;color:#8a7f70;text-transform:uppercase;margin-top:.4vh}'+
+    '.sigimg{width:170px;display:block;margin:0 0 -1.6vh auto;background:none}'+
+    '</style></head><body onload="setTimeout(function(){window.focus();window.print();},400);">'+pages+'</body></html>';
 }
 
 /* ============================ CINEMATIC RANKINGS REVEAL ============================ */
@@ -5695,13 +6087,13 @@ function _revStyle(){
   '.rev-intro .b{font-size:clamp(28px,5vw,64px);font-weight:900;letter-spacing:.06em;background:linear-gradient(180deg,#fff,#ffcf9e);-webkit-background-clip:text;background-clip:text;color:transparent;}'+
   '.rev-intro .m{font-size:clamp(15px,2.2vw,26px);color:#ffb98a;font-weight:700;letter-spacing:.3em;text-transform:uppercase;margin-top:10px;}'+
   '.rev-intro .s{margin-top:22px;font-size:15px;color:#cbb4a6;}'+
-  '.rev-card{position:relative;text-align:center;z-index:2;padding:0 20px;max-width:760px;}'+
-  '.rev-rank{font-size:clamp(70px,15vw,190px);font-weight:900;line-height:.9;color:var(--rc,#ff8a4a);text-shadow:0 0 60px color-mix(in srgb,var(--rc,#ff8a4a) 60%,transparent);animation:revRank .7s cubic-bezier(.2,1.4,.3,1) both;}'+
-  '.rev-photo{width:clamp(120px,20vw,200px);height:clamp(120px,20vw,200px);border-radius:50%;margin:6px auto 14px;overflow:hidden;border:5px solid var(--rc,#ff8a4a);box-shadow:0 12px 50px -10px rgba(0,0,0,.7),0 0 0 10px color-mix(in srgb,var(--rc,#ff8a4a) 18%,transparent);background:#1a1006;display:flex;align-items:center;justify-content:center;animation:revUp .6s .12s cubic-bezier(.2,1.2,.3,1) both;}'+
+  '.rev-card{position:relative;text-align:center;z-index:2;padding:0 20px;max-width:920px;}'+
+  '.rev-rank{font-size:clamp(84px,17vw,230px);font-weight:900;line-height:.9;color:var(--rc,#ff8a4a);text-shadow:0 0 70px color-mix(in srgb,var(--rc,#ff8a4a) 65%,transparent);animation:revRank .7s cubic-bezier(.2,1.4,.3,1) both;}'+
+  '.rev-photo{width:clamp(150px,23vw,250px);height:clamp(150px,23vw,250px);border-radius:50%;margin:6px auto 16px;overflow:hidden;border:6px solid var(--rc,#ff8a4a);box-shadow:0 12px 60px -10px rgba(0,0,0,.75),0 0 0 12px color-mix(in srgb,var(--rc,#ff8a4a) 18%,transparent);background:#1a1006;display:flex;align-items:center;justify-content:center;animation:revUp .6s .12s cubic-bezier(.2,1.2,.3,1) both;}'+
   '.rev-photo img{width:100%;height:100%;object-fit:cover;}'+
   '.rev-init{font-size:clamp(40px,7vw,74px);font-weight:900;color:var(--rc,#ff8a4a);}'+
-  '.rev-name{font-size:clamp(26px,4.5vw,54px);font-weight:900;letter-spacing:.02em;text-transform:uppercase;animation:revUp .6s .2s cubic-bezier(.2,1.2,.3,1) both;}'+
-  '.rev-score{margin-top:10px;font-size:clamp(30px,5vw,60px);font-weight:900;color:#ffd7a1;animation:revUp .6s .28s both;}'+
+  '.rev-name{font-size:clamp(30px,5.4vw,68px);font-weight:900;letter-spacing:.02em;text-transform:uppercase;animation:revUp .6s .2s cubic-bezier(.2,1.2,.3,1) both;}'+
+  '.rev-score{margin-top:10px;font-size:clamp(34px,5.6vw,72px);font-weight:900;color:#ffd7a1;animation:revUp .6s .28s both;}'+
   '.rev-score .sl{font-size:.34em;letter-spacing:.35em;color:#c99;display:block;margin-top:2px;font-weight:800;}'+
   '.rev-bar{height:12px;border-radius:20px;background:rgba(255,255,255,.1);overflow:hidden;max-width:420px;margin:16px auto 0;animation:revUp .6s .34s both;}'+
   '.rev-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--rc,#ff8a4a),#ffd7a1);transition:width 1s cubic-bezier(.2,.9,.2,1);}'+
@@ -5710,6 +6102,28 @@ function _revStyle(){
   '.rev-drum{text-align:center;z-index:2;animation:revPop .5s both;}'+
   '.rev-drum .d1{font-size:clamp(20px,3vw,34px);color:#ffb98a;font-weight:800;letter-spacing:.2em;text-transform:uppercase;}'+
   '.rev-drum .d2{margin-top:14px;font-size:clamp(40px,8vw,110px);font-weight:900;color:#fff;animation:revPulse 1s ease-in-out infinite;}'+
+  /* ── ceremony dressing: spotlight, bigger type, score breakdown ── */
+  '#rev-ov::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(58% 46% at 50% 44%,rgba(255,190,130,.16),transparent 70%);}'+
+  '#rev-yt-wrap{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden;left:-9999px;}'+
+  '.rev-hint{position:absolute;bottom:86px;left:0;right:0;text-align:center;z-index:5;font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:rgba(255,185,138,.5);font-weight:700;animation:revBreathe 2.6s ease-in-out infinite;}'+
+  '.rev-intro .k{font-size:13px;letter-spacing:.5em;text-transform:uppercase;color:#c9895c;font-weight:800;margin-bottom:14px;}'+
+  '.rev-tease{text-align:center;z-index:2;animation:revPop .5s cubic-bezier(.2,1.2,.3,1) both;}'+
+  '.rev-tease .t1{font-size:clamp(15px,2.4vw,26px);letter-spacing:.42em;text-transform:uppercase;color:#ffb98a;font-weight:800;}'+
+  '.rev-tease .t2{font-size:clamp(110px,26vw,340px);font-weight:900;line-height:.92;margin-top:8px;color:var(--rc,#ff8a4a);text-shadow:0 0 90px color-mix(in srgb,var(--rc,#ff8a4a) 70%,transparent);animation:revRank .8s cubic-bezier(.2,1.4,.3,1) both;}'+
+  '.rev-tease .t3{font-size:clamp(28px,5vw,54px);color:#8a6a58;letter-spacing:.4em;animation:revBreathe 1.6s ease-in-out infinite;}'+
+  '.rev-drum .d3{margin-top:20px;font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:rgba(255,185,138,.5);font-weight:700;}'+
+  '.rev-rankline{display:flex;align-items:center;justify-content:center;gap:18px;}'+
+  '.rev-medal{font-size:clamp(38px,7vw,80px);animation:revUp .6s .08s both;}'+
+  '.rev-ribbon.alt{background:linear-gradient(135deg,#e8eef6,#b9c6d6);color:#2b3a4a;box-shadow:0 10px 30px -8px rgba(190,205,225,.6);}'+
+  '.rev-metrics{max-width:560px;margin:22px auto 0;display:flex;flex-direction:column;gap:7px;}'+
+  '.rev-mrow{display:flex;align-items:center;gap:12px;animation:revUp .5s both;}'+
+  '.rev-mlab{flex:0 0 118px;text-align:right;font-size:clamp(10px,1.15vw,13px);letter-spacing:.16em;text-transform:uppercase;color:#c8a894;font-weight:800;}'+
+  '.rev-mbar{flex:1;height:8px;border-radius:20px;background:rgba(255,255,255,.09);overflow:hidden;}'+
+  '.rev-mbar i{display:block;height:100%;border-radius:20px;background:linear-gradient(90deg,var(--rc,#ff8a4a),#ffd7a1);animation:revGrow .9s cubic-bezier(.2,.9,.2,1) both;}'+
+  '.rev-mval{flex:0 0 52px;text-align:left;font-size:clamp(11px,1.3vw,15px);font-weight:900;color:#ffd7a1;font-variant-numeric:tabular-nums;}'+
+  '.rev-card.champ .rev-name{background:linear-gradient(180deg,#fff,#ffd88e);-webkit-background-clip:text;background-clip:text;color:transparent;}'+
+  '@keyframes revBreathe{0%,100%{opacity:.45}50%{opacity:1}}'+
+  '@keyframes revGrow{0%{transform:scaleX(0);transform-origin:left}100%{transform:scaleX(1);transform-origin:left}}'+
   '@keyframes revPop{0%{opacity:0;transform:scale(.8)}100%{opacity:1;transform:scale(1)}}'+
   '@keyframes revRank{0%{opacity:0;transform:scale(2.4);filter:blur(8px)}100%{opacity:1;transform:scale(1);filter:blur(0)}}'+
   '@keyframes revUp{0%{opacity:0;transform:translateY(26px)}100%{opacity:1;transform:none}}'+
@@ -5718,6 +6132,57 @@ function _revStyle(){
   document.head.appendChild(s);
 }
 var _REV=null;
+/* ══════════ CEREMONY SOUNDTRACK (his pick) ══════════
+   "Awards Winner Ceremony Victory Background Music" — played through a hidden YouTube IFrame
+   player so the reveal has real music under it, not just the synth stings.
+   · Browsers block autoplay with sound, so playback starts on the Start press — that click IS
+     the user gesture the browser requires. Nothing plays before it.
+   · The music DUCKS to a low volume during the drumroll and the #1 fanfare so the stings cut
+     through, then lifts back. That is the difference between "music playing" and a ceremony.
+   · The API script is only loaded when a reveal actually opens, so the admin page carries no
+     YouTube weight the rest of the time. */
+var REV_MUSIC_ID='zLJ9cXWct1g';
+var REV_MUSIC_VOL=45;
+function _revMusicLoad(cb){
+  if(window.YT && window.YT.Player) return cb();
+  var prev=window.onYouTubeIframeAPIReady;
+  window.onYouTubeIframeAPIReady=function(){ try{ if(prev) prev(); }catch(e){} cb(); };
+  if(!document.getElementById('rev-yt-api')){
+    var s=document.createElement('script'); s.id='rev-yt-api'; s.src='https://www.youtube.com/iframe_api';
+    document.head.appendChild(s);
+  }
+}
+function _revMusicStart(){
+  if(!_REV || _REV.ytReq) return; _REV.ytReq=true;
+  try{
+    _revMusicLoad(function(){
+      if(!_REV) return;
+      var host=document.getElementById('rev-yt'); if(!host) return;
+      _REV.yt=new YT.Player('rev-yt',{
+        videoId:REV_MUSIC_ID,
+        playerVars:{ autoplay:1, controls:0, disablekb:1, modestbranding:1, playsinline:1, loop:1, playlist:REV_MUSIC_ID },
+        events:{ onReady:function(ev){
+          try{ ev.target.setVolume(_REV.muted?0:REV_MUSIC_VOL); ev.target.playVideo(); }catch(e){}
+        } }
+      });
+    });
+  }catch(e){}
+}
+/* Temporarily drop the music under a sting, then bring it back. */
+function _revDuck(level, ms){
+  try{
+    if(!_REV||!_REV.yt||!_REV.yt.setVolume||_REV.muted) return;
+    _REV.yt.setVolume(level);
+    if(_REV.duckT) clearTimeout(_REV.duckT);
+    _REV.duckT=setTimeout(function(){ try{ if(_REV&&_REV.yt&&!_REV.muted) _REV.yt.setVolume(REV_MUSIC_VOL); }catch(e){} }, ms||2200);
+  }catch(e){}
+}
+function _revMute(){
+  if(!_REV) return;
+  _REV.muted=!_REV.muted;
+  try{ if(_REV.yt&&_REV.yt.setVolume) _REV.yt.setVolume(_REV.muted?0:REV_MUSIC_VOL); }catch(e){}
+  var b=document.getElementById('rev-mute'); if(b) b.textContent=_REV.muted?'🔇':'🔊';
+}
 function _revAC(){ try{ if(!_REV.ac) _REV.ac=new (window.AudioContext||window.webkitAudioContext)(); if(_REV.ac.state==='suspended') _REV.ac.resume(); }catch(e){} return _REV.ac; }
 function _revTone(freq,dur,type,vol,when){ var c=_revAC(); if(!c) return; var t=when||c.currentTime; var o=c.createOscillator(),g=c.createGain(); o.type=type||'sine'; o.frequency.value=freq; g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol||0.2,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+dur); o.connect(g).connect(c.destination); o.start(t); o.stop(t+dur); }
 function _revWhoosh(){ var c=_revAC(); if(!c) return; var b=c.createBuffer(1,Math.floor(c.sampleRate*0.4),c.sampleRate); var d=b.getChannelData(0); for(var i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,2); var s=c.createBufferSource(); s.buffer=b; var f=c.createBiquadFilter(); f.type='bandpass'; f.frequency.setValueAtTime(500,c.currentTime); f.frequency.exponentialRampToValueAtTime(3200,c.currentTime+0.32); var g=c.createGain(); g.gain.value=0.22; s.connect(f).connect(g).connect(c.destination); s.start(); }
@@ -5764,64 +6229,164 @@ function _revCountUp(target){
   (function step(now){ var k=Math.min(1,(now-t0)/dur); var e=1-Math.pow(1-k,3); el.textContent=(target*e).toFixed(2); if(k<1) requestAnimationFrame(step); else el.textContent=target.toFixed(2); })(t0);
   if(bar) setTimeout(function(){ bar.style.width=Math.max(3,Math.min(100,target))+'%'; },60);
 }
+/* ══════════ CEREMONY REVEAL — CLICK-DRIVEN ══════════
+   His direction: this should feel like a real awards night, not a slideshow that runs itself.
+   Nothing advances on a timer any more — the admin drives EVERY beat with a click (or Space /
+   →). That way the room reacts, the host talks over the music, and the reveal lands when the
+   admin decides it lands.
+
+   Each rank is broken into beats so there is suspense before a name:
+     · TEASE   — the rank number alone under a spotlight ("Rank #7 …") — top ranks only
+     · CARD    — the person: photo, name, score counting up, and their score breakdown
+     · DRUMROLL— before #1
+   Lower ranks move in a single beat so a 25-person reveal doesn't drag. */
+function _revBeats(order){
+  var beats=[];
+  order.forEach(function(e){
+    if(e.rank===1) beats.push({t:'drum', e:e});
+    if(e.rank<=5) beats.push({t:'tease', e:e});
+    beats.push({t:'card', e:e});
+  });
+  beats.push({t:'finale'});
+  return beats;
+}
 function _revStart(rows, label){
   _revStyle();
   var order=rows.map(function(r,i){ return {r:r, rank:i+1}; }).reverse(); // lowest rank first
-  _REV={ order:order, label:label, p:-1, auto:true, timer:null, parts:[], confRAF:null, ac:null, phase:'intro' };
+  _REV={ order:order, label:label, beats:_revBeats(order), i:-1, p:-1, parts:[], confRAF:null,
+         ac:null, phase:'intro', muted:false, yt:null, ytReq:false, started:false };
   var ov=document.createElement('div'); ov.id='rev-ov';
   ov.innerHTML=
     '<canvas id="rev-cv"></canvas>'+
+    '<div id="rev-yt-wrap"><div id="rev-yt"></div></div>'+
     '<button class="rev-x" onclick="_revClose()" title="Close">✕</button>'+
     '<div class="rev-top">JMB Virtuals · '+String(label||'').replace(/</g,'')+' Rankings</div>'+
     '<div class="rev-stage" id="rev-stage"></div>'+
+    '<div class="rev-hint" id="rev-hint">click anywhere · or press Space</div>'+
     '<div class="rev-ctrls">'+
-      '<button onclick="_revPrev()" title="Previous">⏮</button>'+
-      '<button class="pri" id="rev-play" onclick="_revToggle()">▶ Start</button>'+
-      '<button onclick="_revNext()" title="Next">⏭</button>'+
+      '<button onclick="_revPrev(event)" title="Back one beat">⏮</button>'+
+      '<button class="pri" id="rev-play" onclick="_revNext(event)">▶ Begin</button>'+
       '<span class="rev-prog" id="rev-prog"></span>'+
-      '<button onclick="_revFull()" title="Fullscreen">⛶</button>'+
+      '<button id="rev-mute" onclick="_revMute(event)" title="Mute / unmute the music">🔊</button>'+
+      '<button onclick="_revFull(event)" title="Fullscreen">⛶</button>'+
     '</div>';
   document.body.appendChild(ov);
   document.getElementById('rev-stage').innerHTML=
-    '<div class="rev-intro"><div class="b">THE RESULTS ARE IN</div><div class="m">'+String(label||'').replace(/</g,'')+' Scorecard Rankings</div><div class="s">Press <b>Start</b> — we count down from the bottom to reveal your #1. 🏆</div></div>';
+    '<div class="rev-intro"><div class="k">JMB Virtuals presents</div><div class="b">THE RESULTS ARE IN</div>'+
+    '<div class="m">'+String(label||'').replace(/</g,'')+' Scorecard Rankings</div>'+
+    '<div class="s">Counting down from the bottom to your #1. <b>You control every reveal</b> — click when the room is ready. 🏆</div></div>';
   document.getElementById('rev-prog').textContent=order.length+' ranked';
-  document.onkeydown=function(e){ if(!_REV) return; if(e.key==='Escape') _revClose(); else if(e.key==='ArrowRight'||e.key===' '){ e.preventDefault(); _revNext(); } else if(e.key==='ArrowLeft') _revPrev(); };
+  /* The whole stage is the button — the admin should never have to aim for a small control. */
+  ov.addEventListener('click', function(ev){
+    if(ev.target.closest('.rev-ctrls')||ev.target.closest('.rev-x')) return;
+    _revNext(ev);
+  });
+  document.onkeydown=function(e){
+    if(!_REV) return;
+    if(e.key==='Escape') _revClose();
+    else if(e.key==='ArrowRight'||e.key===' '||e.key==='Enter'){ e.preventDefault(); _revNext(); }
+    else if(e.key==='ArrowLeft'){ e.preventDefault(); _revPrev(); }
+  };
 }
-function _revClose(){ if(_REV&&_REV.timer) clearTimeout(_REV.timer); if(_REV&&_REV.confRAF) cancelAnimationFrame(_REV.confRAF); var o=document.getElementById('rev-ov'); if(o) o.remove(); document.onkeydown=null; try{ if(_REV&&_REV.ac) _REV.ac.close(); }catch(e){} _REV=null; }
-function _revFull(){ var o=document.getElementById('rev-ov'); if(!o) return; if(!document.fullscreenElement){ (o.requestFullscreen||o.webkitRequestFullscreen||function(){}).call(o); } else { (document.exitFullscreen||function(){}).call(document); } }
-function _revToggle(){ if(!_REV) return; if(_REV.p<0){ _REV.auto=true; _revNext(); return; } _REV.auto=!_REV.auto; document.getElementById('rev-play').textContent=_REV.auto?'⏸ Pause':'▶ Play'; if(_REV.auto) _revSchedule(); else if(_REV.timer) clearTimeout(_REV.timer); }
-function _revPrev(){ if(!_REV) return; if(_REV.timer) clearTimeout(_REV.timer); _REV.p=Math.max(-1,_REV.p-2); _revNext(); }
-function _revSchedule(){
-  if(!_REV||!_REV.auto) return; if(_REV.timer) clearTimeout(_REV.timer);
-  var e=_REV.order[_REV.p]; if(!e) return;
-  var delay = e.rank>10?1200 : (e.rank>3?1900 : (e.rank>1?2800:6000));
-  _REV.timer=setTimeout(function(){ _revNext(); }, delay);
+function _revClose(ev){
+  if(ev){ try{ ev.stopPropagation(); }catch(e){} }
+  if(_REV&&_REV.confRAF) cancelAnimationFrame(_REV.confRAF);
+  try{ if(_REV&&_REV.duckT) clearTimeout(_REV.duckT); }catch(e){}
+  try{ if(_REV&&_REV.yt&&_REV.yt.destroy) _REV.yt.destroy(); }catch(e){}
+  var o=document.getElementById('rev-ov'); if(o) o.remove();
+  document.onkeydown=null; try{ if(_REV&&_REV.ac) _REV.ac.close(); }catch(e){}
+  _REV=null;
 }
-function _revNext(){
-  if(!_REV) return; if(_REV.timer) clearTimeout(_REV.timer);
+function _revFull(ev){ if(ev){ try{ ev.stopPropagation(); }catch(e){} } var o=document.getElementById('rev-ov'); if(!o) return; if(!document.fullscreenElement){ (o.requestFullscreen||o.webkitRequestFullscreen||function(){}).call(o); } else { (document.exitFullscreen||function(){}).call(document); } }
+function _revPrev(ev){
+  if(ev){ try{ ev.stopPropagation(); }catch(e){} }
+  if(!_REV||_REV.i<0) return;
+  // step back to the previous CARD so going back always lands on a person, not a tease
+  var j=_REV.i-1;
+  while(j>=0 && _REV.beats[j].t!=='card') j--;
+  _REV.i=j-1; _revNext();
+}
+function _revMetrics(r){
+  /* The breakdown is what makes a reveal feel earned rather than arbitrary — the room sees WHY
+     someone placed where they did. Only metrics that actually carry a value are shown. */
+  var M=[['Productivity',r.productivity],['Quality',r.quality],['Attendance',r.attendance],
+         ['Assessment',r.assessment],['Team Sales',r.team_sales],['Conduct',r.demerit],
+         ['Client CSAT',r.csat],['Innovation',r.innovation]];
+  var out=M.filter(function(m){ return m[1]!==''&&m[1]!=null&&!isNaN(parseFloat(m[1])); })
+           .map(function(m,i){
+    var v=Math.max(0,Math.min(100,parseFloat(m[1])));
+    return '<div class="rev-mrow" style="animation-delay:'+(0.42+i*0.07).toFixed(2)+'s">'+
+      '<span class="rev-mlab">'+m[0]+'</span>'+
+      '<span class="rev-mbar"><i style="width:'+v.toFixed(0)+'%"></i></span>'+
+      '<span class="rev-mval">'+v.toFixed(1)+'</span></div>';
+  }).join('');
+  return out?('<div class="rev-metrics">'+out+'</div>'):'';
+}
+function _revCardFull(entry){
+  var r=entry.r, rank=entry.rank, rc=_rankColor(rank), champ=(rank===1);
+  var img=r.photo?'<img src="'+String(r.photo).replace(/"/g,'&quot;')+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">':'';
+  var init='<div class="rev-init"'+(r.photo?' style="display:none"':'')+'>'+_scInitials(r.full_name||r.employee_id)+'</div>';
+  var name=String(r.full_name||r.employee_id).replace(/</g,'&lt;');
+  var medal=(rank===1?'🥇':(rank===2?'🥈':(rank===3?'🥉':'')));
+  return '<div class="rev-card'+(champ?' champ':'')+'" style="--rc:'+rc+'">'+
+    (champ?'<div class="rev-champ">👑</div>':'')+
+    '<div class="rev-rankline"><span class="rev-rank">#'+rank+'</span>'+(medal?('<span class="rev-medal">'+medal+'</span>'):'')+'</div>'+
+    '<div class="rev-photo">'+img+init+'</div>'+
+    (champ?'<div class="rev-ribbon">Champion</div>':(rank<=3?'<div class="rev-ribbon alt">Podium Finish</div>':''))+
+    '<div class="rev-name">'+name+'</div>'+
+    '<div class="rev-score"><span id="rev-num">0.00</span><span class="sl">Overall Score</span></div>'+
+    '<div class="rev-bar"><i id="rev-bar-i" style="width:0%"></i></div>'+
+    _revMetrics(r)+
+  '</div>';
+}
+function _revNext(ev){
+  if(ev){ try{ ev.stopPropagation(); }catch(e){} }
+  if(!_REV) return;
   var stage=document.getElementById('rev-stage'); if(!stage) return;
-  var next=_REV.p+1;
-  if(next>=_REV.order.length){ return; } // finished — hold on champion
-  var e=_REV.order[next];
-  // dramatic drumroll before the #1 reveal
-  if(e.rank===1 && _REV.phase!=='drum'){
+  /* First click is the browser gesture that lets audio play — start the ceremony music here. */
+  if(!_REV.started){ _REV.started=true; _revMusicStart(); _revAC(); }
+  var n=_REV.i+1;
+  if(n>=_REV.beats.length) return;                 // finished — hold on the finale
+  _REV.i=n;
+  var b=_REV.beats[n], e=b.e;
+  var play=document.getElementById('rev-play'); if(play) play.textContent='▶ Next';
+  var hint=document.getElementById('rev-hint');
+
+  if(b.t==='drum'){
     _REV.phase='drum';
-    stage.innerHTML='<div class="rev-drum"><div class="d1">And the number one spot goes to…</div><div class="d2">🥁</div></div>';
-    _revDrum(2.4);
-    document.getElementById('rev-prog').textContent='Rank 1 of '+_REV.order.length;
-    if(_REV.auto) _REV.timer=setTimeout(function(){ _revNext(); },2500);
-    document.getElementById('rev-play').textContent=_REV.auto?'⏸ Pause':'▶ Play';
+    stage.innerHTML='<div class="rev-drum"><div class="d1">And the number one spot goes to…</div><div class="d2">🥁</div><div class="d3">click when you\'re ready</div></div>';
+    _revDrum(2.4); _revDuck(14, 3000);
+    if(hint) hint.textContent='click to reveal your champion';
     return;
   }
-  _REV.phase='card'; _REV.p=next;
-  stage.innerHTML=_revCard(e);
+  if(b.t==='tease'){
+    _REV.phase='tease';
+    stage.innerHTML='<div class="rev-tease" style="--rc:'+_rankColor(e.rank)+'">'+
+      '<div class="t1">Coming in at</div><div class="t2">#'+e.rank+'</div><div class="t3">…</div></div>';
+    _revWhoosh(); _revDuck(22, 1600);
+    document.getElementById('rev-prog').textContent='Rank '+e.rank+' of '+_REV.order.length;
+    if(hint) hint.textContent='click to reveal who it is';
+    return;
+  }
+  if(b.t==='finale'){
+    _REV.phase='finale';
+    stage.innerHTML='<div class="rev-intro"><div class="k">that\'s a wrap</div>'+
+      '<div class="b">CONGRATULATIONS</div>'+
+      '<div class="m">'+String(_REV.label||'').replace(/</g,'')+'</div>'+
+      '<div class="s">Every single one of you moved the needle this month. Thank you. 🧡</div></div>';
+    _revConfetti(true);
+    if(hint) hint.textContent='press ✕ to close';
+    return;
+  }
+  // ── CARD ──
+  _REV.phase='card'; _REV.p=_REV.order.indexOf(e);
+  stage.innerHTML=_revCardFull(e);
   _revCountUp(parseFloat(e.r.overall)||0);
   document.getElementById('rev-prog').textContent='Rank '+e.rank+' of '+_REV.order.length;
-  document.getElementById('rev-play').textContent=_REV.auto?'⏸ Pause':'▶ Play';
-  if(e.rank===1){ _revFanfare(); setTimeout(function(){ _revConfetti(true); },250); setTimeout(function(){ _revConfetti(false); },1400); }
-  else if(e.rank<=3){ _revDing(); _revConfetti(false); }
+  if(hint) hint.textContent=(e.rank===1?'click for the closing slide':'click for the next rank');
+  if(e.rank===1){ _revFanfare(); _revDuck(12,3500); setTimeout(function(){ _revConfetti(true); },250); setTimeout(function(){ _revConfetti(false); },1400); }
+  else if(e.rank<=3){ _revDing(); _revDuck(24,1500); _revConfetti(false); }
   else { _revWhoosh(); }
-  _revSchedule();
 }
 // ── Force-refresh all scores (clear server cache + recompute) ──
 async function recomputeScorecards(){
@@ -5829,7 +6394,7 @@ async function recomputeScorecards(){
   /* force=1 on the reload as well as busting the version. bust_scorecards bumps sc_ver, but the
      admin bundle is also held in its own short cache and the client keeps a copy in jGet — an
      admin pressing Recompute is explicitly asking for fresh numbers, so bypass every layer. */
-  try{ await fetch(API+'?action=bust_scorecards&_='+Date.now()); try{ jBust(); }catch(_){} await loadAdminScorecard(true); if(typeof toast==='function') toast('Scores recomputed — Team Sales refreshed.'); }
+  try{ await fetch(API+'?action=bust_scorecards&_='+Date.now()); try{ jBust(); }catch(_){} await loadAdminScorecard(true); window._scLastFull=Date.now(); try{ _scBadge(); }catch(_b){} if(typeof toast==='function') toast('Scores recomputed — Team Sales refreshed.'); }
   catch(e){ if(typeof toast==='function') toast('Recompute failed — try again.'); }
   finally{ if(btn){ btn.disabled=false; btn.textContent=old||'↻ Recompute'; } }
 }
@@ -5957,9 +6522,13 @@ function _awardNominees(rows, ebRows, ex, ideas){
   function mk(key,id,metricText){ var m=_AWMETA[key]; return { title:m.title,emoji:m.emoji,color:m.color,cite:m.cite,name:nameOf(id),id:id,photo:photoOf(id),metricText:metricText }; }
   var out={ early:[], perfect:[], spotless:[], sales:[], workhorse:[] };
   (ebRows||[]).slice(0,5).forEach(function(r){ out.early.push(mk('early', r.employee_id, 'Average clock-in: <b>'+_ce(r.avg_time)+'</b> · '+(r.days||0)+' day'+((r.days===1)?'':'s'))); });
-  var pk=Object.keys(present).map(function(k){ return {id:k, p:present[k]||0, l:lates[k]||0}; }).filter(function(o){ return o.p>=5; });
-  pk.sort(function(a,b){ return (a.l-b.l)||(b.p-a.p); });
-  pk.slice(0,5).forEach(function(o){ out.perfect.push(mk('perfect', o.id, 'Present <b>'+o.p+'</b> day'+(o.p===1?'':'s')+' · <b>'+o.l+'</b> late'+(o.l===1?'':'s'))); });
+  /* Only genuinely flawless VAs qualify: zero lates AND zero absences (the absent map now
+     comes from the same calculator the scorecard uses). */
+  var _abn=(ex&&ex.absent)||{};
+  var pk=Object.keys(present).map(function(k){ return {id:k, p:present[k]||0, l:lates[k]||0, a:_abn[k]||0}; })
+    .filter(function(o){ return o.p>=5 && o.l===0 && o.a===0; });
+  pk.sort(function(a,b){ return b.p-a.p; });
+  pk.slice(0,5).forEach(function(o){ out.perfect.push(mk('perfect', o.id, 'Present <b>'+o.p+'</b> day'+(o.p===1?'':'s')+' · <b>zero</b> lates · <b>zero</b> absences')); });
   var sp=(rows||[]).map(function(r){ var vp=num(r.violation_points); return vp==null?null:{id:r.employee_id, vp:vp, p:(present[String(r.employee_id||'').toLowerCase()]||0), ov:num(r.overall)||0}; }).filter(Boolean);
   sp.sort(function(a,b){ return (a.vp-b.vp)||(b.p-a.p)||(b.ov-a.ov); });
   sp.slice(0,5).forEach(function(o){ out.spotless.push(mk('spotless', o.id, (o.vp===0?('<b>Zero</b> demerits · present <b>'+o.p+'</b> days'):('<b>'+o.vp+'</b> demerit pt'+(o.vp===1?'':'s')+' · present <b>'+o.p+'</b>')))); });
@@ -6496,7 +7065,7 @@ function closeSettings(){ document.getElementById('settings-modal').style.displa
 async function launchTrivia(){
   if(!confirm('Launch a Daily Trivia session on ALL signed-in portals right now (for testing)?\n\nEveryone gets the alarm countdown, then the 15-question game starts. Window is ~7 minutes.')) return;
   try{
-    var r=await fetch(API+'?action=trivia_launch_now&slot=test&pass='+encodeURIComponent(PASS)+'&_='+Date.now());
+    var r=await fetch(API+'?action=trivia_launch_now&slot=test&pass='+encodeURIComponent(admPass())+'&_='+Date.now());
     var d=await r.json();
     if(d&&d.ok){ alert('🎯 Session launched ('+(d.session_id||'')+'). Portals start the countdown within ~20 seconds.'); setTimeout(loadTriviaBoard,1500); }
     else { alert('Could not launch'+((d&&d.error)?(': '+d.error):'.')); }
