@@ -98,6 +98,24 @@ select.ctl{background:var(--card);border:1px solid var(--line2);border-radius:9p
 .kpi b{display:block;font-size:22px;font-weight:700;letter-spacing:-.02em;color:var(--kc,var(--t1));font-variant-numeric:tabular-nums}
 .kpi span{font-size:11px;color:var(--t3);font-weight:500}
 
+/* per-platform breakdown cards (Overview) — active vs inactive, click through to the platform */
+.platboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:0 0 14px}
+.pcard{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:13px 14px;cursor:pointer;transition:border-color .15s,transform .1s}
+.pcard:hover{border-color:var(--t3);transform:translateY(-1px)}
+.pc-h{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--t2);margin-bottom:7px}
+.pc-h b{font-weight:650;color:var(--t1)}
+.pc-n{font-size:24px;font-weight:700;letter-spacing:-.02em;color:var(--t1);font-variant-numeric:tabular-nums;line-height:1}
+.pc-n small{font-size:11px;font-weight:500;color:var(--t3);margin-left:6px;letter-spacing:0}
+.pc-bar{height:5px;border-radius:3px;background:var(--line);overflow:hidden;margin:9px 0 7px}
+.pc-bar i{display:block;height:100%;border-radius:3px}
+.pc-s{display:flex;justify-content:space-between;font-size:10.5px;font-weight:600}
+.pc-dead{color:var(--dn)} .pc-ok{color:var(--up)} .pc-tot{color:var(--t3);font-weight:500}
+
+/* open-on-platform button (row + drawer) */
+.goplat{border:1px solid var(--line);background:transparent;color:var(--t2);border-radius:7px;
+  padding:4px 9px;font-size:11px;font-weight:650;cursor:pointer;white-space:nowrap}
+.goplat:hover{border-color:var(--t3);color:var(--t1)}
+
 /* vertical account list — one row per account, built for scanning down a column of numbers */
 .lst{width:100%;border-collapse:separate;border-spacing:0;background:var(--card);
   border:1px solid var(--line);border-radius:12px;overflow:hidden}
@@ -216,6 +234,8 @@ select.ctl{background:var(--card);border:1px solid var(--line2);border-radius:9p
       <button class="ib" onclick="loadAll(true)" title="Refresh">Refresh</button>
     </div>
     <div class="kpis" id="kpis"></div>
+    <!-- Per-platform breakdown (Overview only): active vs inactive, click to open that platform. -->
+    <div class="platboard" id="platboard" style="display:none"></div>
     <div id="grid"></div>
     <div class="empty" id="empty" style="display:none">No accounts match this view.</div>
   </div>
@@ -238,7 +258,12 @@ var PLATS={
   altr:  { n:'ALTR · IG', c:'var(--altr)',   hex:'#0369a1', metric:'followers', link:function(h){return 'https://www.instagram.com/'+encodeURIComponent(h.replace(/^@+/,''));} }
 };
 var PLAT_FB={ n:'Other', c:'var(--acc)', hex:'#4f46e5', metric:'followers', link:function(){return null;} };
-var DEAD=['banned','suspended','tempban','closed','dead','archived'];
+/* NOT ACTIVE (his rule, Aug 25): a suspended / blacked-out / logged-out account is NOT an active
+   account and must never be counted as one. Anything listed here is excluded from every "active"
+   number on the page and reported separately under Inactive. */
+var DEAD=['banned','suspended','tempban','closed','dead','archived',
+          'blackout','blacked_out','blocked','logged_out','loggedout','logout',
+          'inactive','disabled','deactivated','paused','onhold','on_hold','restricted','shadowban','shadowbanned'];
 var STATUS_COLORS={ banned:'#dc2626', suspended:'#dc2626', tempban:'#d97706', recovery:'#d97706',
   warmup:'#d97706', warming:'#d97706', onhold:'#6b7280', reserved:'#6b7280', flagged:'#d97706', rest:'#6b7280' };
 
@@ -356,7 +381,24 @@ function freshOf(a){
   var ddays=Math.floor((Date.now()-at.getTime())/86400000);
   return ddays<=0?'updated today':(ddays+'d old');
 }
-function isDead(a){ return DEAD.indexOf(String(a.status||'').toLowerCase())>=0; }
+function isDead(a){
+  var s=String(a.status||'').toLowerCase().replace(/[\s-]+/g,'_');
+  return DEAD.indexOf(s)>=0;
+}
+/* Direct link to the account ON its platform (X, IG, Reddit, Snapchat, ALTR-IG).
+   A stored link from the source tool wins; otherwise the platform builds it from the handle. */
+function platUrl(a){
+  if(a.link && /^https?:/i.test(String(a.link))) return String(a.link);
+  var p=PLATS[a.plat]||PLAT_FB;
+  try{ return p.link(String(a.handle||'')) || null; }catch(e){ return null; }
+}
+function openPlat(key, ev){
+  try{ if(ev){ ev.stopPropagation(); ev.preventDefault(); } }catch(_e){}
+  var a=DATA.accounts.filter(function(x){ return x.key===key; })[0]; if(!a) return;
+  var u=platUrl(a);
+  if(!u){ toast('No profile link for this account.'); return; }
+  window.open(u,'_blank','noopener');
+}
 function moveTag(a){
   var d=deltaOf(a); if(!d) return '';
   if(d.pct>=20) return '<span class="mv up">Rising</span>';
@@ -430,17 +472,61 @@ function render(){
   var risers=0,fallers=0;
   live.forEach(function(a){ var d=deltaOf(a); if(d&&d.pct>=20)risers++; else if(d&&d.pct<=-20)fallers++; });
   var deadN=DATA.accounts.length-live.length;
+  /* PLATFORM VIEW gets its own KPI row: that platform's active count, its inactive count, and
+     the audience behind the ACTIVE accounts only. The Overview keeps the whole-network numbers. */
+  var isPlatView=!!PLATS[VIEW];
+  if(isPlatView){
+    var pAll=DATA.accounts.filter(function(a){ return a.plat===VIEW; });
+    var pLive=pAll.filter(function(a){ return !isDead(a); });
+    var pDead=pAll.length-pLive.length;
+    var pSum=0; pLive.forEach(function(a){ var n=numOf(a); if(n.label!=='karma'&&n.v) pSum+=n.v; });
+    var pRise=0,pFall=0; pLive.forEach(function(a){ var d=deltaOf(a); if(d&&d.pct>=20)pRise++; else if(d&&d.pct<=-20)pFall++; });
+    document.getElementById('kpis').innerHTML=
+      kpi(pLive.length,'Active accounts','var(--t1)')+
+      kpi(pDead,'Inactive · not counted', pDead?'var(--dn)':'var(--t3)')+
+      kpi(pAll.length,'Total on platform','var(--t3)')+
+      kpi(fmtN(pSum),'Audience · active only','var(--t1)')+
+      kpi(pRise,'Rising · 7d', pRise?'var(--up)':'var(--t3)')+
+      kpi(pFall,'Falling · 7d', pFall?'var(--dn)':'var(--t3)');
+  } else {
   document.getElementById('kpis').innerHTML=
     kpi(live.length,'Active accounts','var(--t1)')+
     kpi(fmtN(fsum),'Audience tracked','var(--t1)')+
     kpi(risers,'Rising · 7d', risers?'var(--up)':'var(--t3)')+
     kpi(fallers,'Falling · 7d', fallers?'var(--dn)':'var(--t3)')+
     kpi(deadN,'Inactive / banned', deadN?'var(--dn)':'var(--t3)');
+  }
+  /* Per-platform breakdown strip on the Overview — active vs inactive at a glance, each card
+     clicking through to that platform's own dashboard. */
+  var pb=document.getElementById('platboard');
+  if(pb){
+    if(VIEW==='all'){
+      var byP={};
+      DATA.accounts.forEach(function(a){
+        var b=byP[a.plat]||(byP[a.plat]={live:0,dead:0});
+        if(isDead(a)) b.dead++; else b.live++;
+      });
+      var order=Object.keys(PLATS).filter(function(p){ return byP[p]; });
+      Object.keys(byP).forEach(function(p){ if(order.indexOf(p)<0) order.push(p); });
+      pb.innerHTML=order.map(function(p){
+        var P=PLATS[p]||PLAT_FB, b=byP[p], tot=b.live+b.dead;
+        var pct=tot?Math.round(b.live/tot*100):0;
+        return '<div class="pcard" onclick="setView(\''+p+'\')" title="Open the '+esc(P.n)+' dashboard">'+
+          '<div class="pc-h"><span class="pdot" style="background:'+P.hex+'"></span><b>'+esc(P.n)+'</b></div>'+
+          '<div class="pc-n">'+b.live+'<small>active</small></div>'+
+          '<div class="pc-bar"><i style="width:'+pct+'%;background:'+P.hex+'"></i></div>'+
+          '<div class="pc-s">'+(b.dead?('<span class="pc-dead">'+b.dead+' inactive</span>'):'<span class="pc-ok">all active</span>')+
+            '<span class="pc-tot">'+tot+' total</span></div>'+
+        '</div>';
+      }).join('');
+      pb.style.display=order.length?'grid':'none';
+    } else { pb.style.display='none'; }
+  }
   var g=document.getElementById('grid');
   g.innerHTML=rows.length
     ? '<table class="lst"><thead><tr>'+
         '<th>Platform</th><th>Account</th><th class="hide-sm">Handler</th><th>Status</th>'+
-        '<th class="r">Number</th><th class="r">7d change</th><th class="hide-md">Trend · 15d</th><th class="hide-md">Updated</th>'+
+        '<th class="r">Number</th><th class="r">7d change</th><th class="hide-md">Trend · 15d</th><th class="hide-md">Updated</th><th></th>'+
       '</tr></thead><tbody>'+rows.map(rowHtml).join('')+'</tbody></table>'
     : '';
   document.getElementById('empty').style.display=rows.length?'none':'block';
@@ -469,6 +555,10 @@ function rowHtml(a){
     '<td class="r">'+dHtml+'</td>'+
     '<td class="hide-md">'+sparkSvg(seriesOf(a), p.hex)+'</td>'+
     '<td class="l-fresh hide-md'+(fresh==='updated today'||fresh==='auto'?' ok':'')+'">'+fresh+'</td>'+
+    /* Straight to the account on its own platform — stopPropagation so it doesn't open the drawer. */
+    '<td class="r">'+(platUrl(a)
+      ? '<button class="goplat" onclick="openPlat(\''+esc(a.key)+'\',event)" title="Open '+esc(a.handle)+' on '+esc(p.n)+'">Open ↗</button>'
+      : '')+'</td>'+
   '</tr>';
 }
 function sparkSvg(s, color){
