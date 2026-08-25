@@ -543,6 +543,8 @@ body::after{ content:""; position:fixed; left:-120px; top:-120px; width:380px; h
         <select class="sel" id="src-filter" onchange="renderSourcing()"><option value="all">All accounts</option><option value="red">Has red (targets)</option><option value="todo">Not sourced</option><option value="done">Sourced</option><option value="active">Active only</option></select>
         <input class="search" id="src-search" placeholder="Search handle…" oninput="renderSourcing()" />
         <button class="adminbtn" id="src-record-btn" style="display:none" onclick="recordDay()">Record day</button>
+        <!-- Everyone sees this: if EOD shows a lower % than this board, press it and re-check. -->
+        <button class="ghost" onclick="dcSyncNow()" title="Send your current board numbers to the portal now — use this if your EOD shows a lower % than this board.">🔄 Sync my % to portal</button>
         <button class="ghost" id="src-import-btn" style="display:none" onclick="importSourcingHistory()">Import history</button>
         <button class="ghost" id="src-reset-btn" style="display:none" onclick="resetTodaySourced()">Reset today's sourced</button>
         <button class="ghost" id="src-clear-btn" style="display:none" onclick="clearBoard()">Clear board</button>
@@ -2471,17 +2473,16 @@ var _dcLastSig='';
 var _tuSent=false;
 function reportToolUse(){ if(_tuSent||!USER) return; _tuSent=true;
   try{ fetch('https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec?action=tool_used&employee_id='+encodeURIComponent(USER.employee_id||USER.id||'')+'&tool=altr&_='+Date.now()); }catch(_e){} }
-function dcAutoPush(silent){
-  /* DISABLED — the daily push now runs server-side (pushDailyOutputs in altr-apps-script.gs).
-     This function read the LIVE board and wrote it as the day's total, which meant:
-       · nothing was recorded unless someone had this tab open, and whatever the board showed
-         at the last push became the frozen total for the whole day;
-       · board state isn't a day's work, so the portal received 1-4 completed items against
-         nine-hour shifts — the "ALTR outputs not being pulled" problem.
-     po_batch is an ABSOLUTE upsert, so leaving this running would overwrite the accurate
-     server-side numbers with board state every time the tool is opened. Left as a no-op
-     rather than deleted so the existing call sites stay harmless. */
-  if(true) return;
+async function dcAutoPush(silent){
+  /* RE-ENABLED WITH A HIGH-WATER GUARD (Aug 25).
+     WHY IT WAS OFF: po_batch is an ABSOLUTE upsert, so pushing raw board state could overwrite
+     the accurate server-side numbers with a LOWER reading.
+     WHY IT IS SAFE NOW: before pushing we read what the portal already has and only send a VA
+     whose LIVE board is AHEAD of it. Progress can therefore only ever move FORWARD — the push
+     can raise a stale portal figure, never lower a good one.
+     WHY IT IS NEEDED: the server-side push runs on a timer, so a VA who finishes at 100% during
+     the shift still hit EOD against the portal's older, much lower number (the "100% on the tool,
+     19% on EOD" report). With this, the portal matches the board as soon as the tool is open. */
   try{
     var PORTAL='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
     var today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-8*3600*1000));
@@ -2509,18 +2510,47 @@ function dcAutoPush(silent){
       });
     }catch(_pt){}
     items.forEach(function(x){ if(!x.task) x.task='Content Sourcing'; });
+    if(!items.length) return;
     var sig=today+'|'+items.map(function(x){ return x.emp+':'+x.task+':'+x.target+':'+x.done; }).join(',');
     if(sig===_dcLastSig) return;                                        // nothing changed
-    if(Date.now()-(window._dcLastAt||0) < 180000 && silent) return;     // min 3-min spacing for auto pushes
+    if(Date.now()-(window._dcLastAt||0) < 60000 && silent) return;      // min 1-min spacing for auto pushes
     _dcLastSig=sig; window._dcLastAt=Date.now();
-    if(!items.length) return;
+
+    /* ── HIGH-WATER GUARD ── read the portal's current ALTR numbers first. */
+    var portal={};
+    try{
+      var pv=await fetch(PORTAL+'?action=po_va_progress&_='+Date.now()).then(function(r){ return r.json(); });
+      ((pv&&pv.rows)||[]).forEach(function(r){
+        if(!/^altr/i.test(String(r.project||''))) return;
+        portal[String(r.employee_id||'').toLowerCase()]={ done:parseFloat(r.done)||0, total:parseFloat(r.total)||0 };
+      });
+    }catch(_pv){ portal=null; }        // portal unreachable → push anyway rather than stall the VA
+
+    var agg={};
+    items.forEach(function(x){ var k=String(x.emp).toLowerCase();
+      var a=agg[k]||(agg[k]={done:0,total:0}); a.done+=(parseFloat(x.done)||0); a.total+=(parseFloat(x.target)||0); });
+    var send=items;
+    if(portal){
+      send=items.filter(function(x){
+        var k=String(x.emp).toLowerCase(), p=portal[k];
+        if(!p) return true;                       // portal has nothing for this VA yet
+        return agg[k].done > p.done;              // only when the live board is AHEAD
+      });
+    }
+    if(!send.length){ if(!silent) toast('✅ Portal already matches the board.'); return; }
     // ONE batched request for the whole team — the server upserts everything in a single execution.
-    var payload=encodeURIComponent(JSON.stringify(items.map(function(x){ return { emp:x.emp, task:x.task, target:x.target, done:x.done }; })));
+    var payload=encodeURIComponent(JSON.stringify(send.map(function(x){ return { emp:x.emp, task:x.task, target:x.target, done:x.done }; })));
     fetch(PORTAL+'?action=po_batch&project=ALTR&date='+encodeURIComponent(today)+'&items='+payload+'&_='+Date.now())
       .then(function(r){ return r.json(); })
-      .then(function(d){ if(!silent) toast('🗄 Data Center updated ('+((d&&d.written)||items.length)+' teammates)'); })
-      .catch(function(){});
+      .then(function(d){ if(!silent) toast('🗄 Portal synced ('+((d&&d.written)||send.length)+' teammate'+(send.length===1?'':'s')+')'); })
+      .catch(function(){ if(!silent) toast('Sync failed — try again.'); });
   }catch(_dc){}
+}
+/* Manual, VA-facing: "my board says 100% but EOD says less" → press this, then do EOD.
+   Bypasses the change-signature and spacing throttles so a press always re-checks. */
+async function dcSyncNow(){
+  try{ toast('Syncing your numbers to the portal…'); _dcLastSig=''; window._dcLastAt=0;
+       await dcAutoPush(false); }catch(e){ toast('Sync failed — try again.'); }
 }
 /* Which accounts did real work today, and which of those have no screenshots?
    Posting counts an account worked when its first cell is green; sourcing when a cell carries
