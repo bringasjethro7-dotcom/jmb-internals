@@ -110,6 +110,9 @@
   /* Team progress slide */
   .pgrid{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:1.2vh 1.2vw;align-content:start;overflow:hidden}
   .prow{display:flex;align-items:center;gap:1vw;background:var(--card);border:1px solid var(--line);border-radius:1.6vh;padding:1.2vh 1.2vw;box-shadow:var(--shSoft)}
+  /* waiting on the VA's tool to report this run — visibly not a scored result */
+  .prow.pending{opacity:.55}
+  .prow.pending .ppct{color:var(--ink3)}
   .prow img{width:5vh;height:5vh;border-radius:50%;object-fit:cover;flex-shrink:0;box-shadow:0 0 0 .3vh #fff,0 0 0 .6vh rgba(255,90,0,.35)}
   .pmain{flex:1;min-width:0}
   .pname{font-size:1.9vh;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
@@ -570,12 +573,18 @@ function progRows(){
      pct, while the line beside it reads "X of Y this shift" — so a VA on 1/1 (100%) and 5/50
      (10%) showed 55% next to "6 of 51". Same rule as the EOD gate and the Productivity Hub now:
      total done ÷ total target, so every screen tells him the same number. */
+  /* STALE ROWS DON'T SCORE (Aug 25). A row marked src:"stale" is a board snapshot from the OTHER
+     shift — the VA's tool simply hasn't reported yet this run. It keeps them on the board, but it
+     must never drive the headline number: an inherited 100% at half-shift is exactly what made
+     this display untrustworthy. Those cards read "syncing" until their tool checks in. */
+  var live=function(r){ return String(r.src||'')!=='stale'; };
   var cards=Object.keys(by).map(function(k){
       var rows=by[k];
-      var td=rows.reduce(function(sm,x){ return sm+(parseFloat(x.done)||0); },0);
-      var ta=rows.reduce(function(sm,x){ return sm+(parseFloat(x.total)||0); },0);
+      var real=rows.filter(live);
+      var td=real.reduce(function(sm,x){ return sm+(parseFloat(x.done)||0); },0);
+      var ta=real.reduce(function(sm,x){ return sm+(parseFloat(x.total)||0); },0);
       var avg=ta?Math.round(td/ta*100):0;
-      return {k:k,rows:rows,avg:avg};
+      return {k:k,rows:rows,avg:avg,pending:!real.length};
     })
     .filter(function(c){
       // ON-DUTY ONLY. (ALTR pushes names, not IDs — resolve those through the name index.)
@@ -590,16 +599,22 @@ function progRows(){
     var rk=PROG.dir[c.k]?c.k:(byName[nrm(c.k)]||c.k);
     var d=PROG.dir[rk]||{}; var nm=esc(d.n||c.k.toUpperCase());
     var av=d.p?('<img src="'+d.p+'" alt="">'):('<img alt="" style="visibility:hidden">');
-    var bars=c.rows.map(function(r){ return '<div class="pproj"><span>'+esc(r.project)+'</span><span>'+r.done+' / '+r.total+'</span></div><div class="pbar2"><i style="width:'+Math.min(100,r.pct)+'%"></i></div>'; }).join('');
-    var totDone=c.rows.reduce(function(sm,x){ return sm+(x.done||0); },0);
-    var totAll=c.rows.reduce(function(sm,x){ return sm+(x.total||0); },0);
-    return '<div class="prow'+(c.avg>=100?' full':'')+'">'+
+    var bars=c.rows.map(function(r){
+      var st=String(r.src||'')==='stale';
+      return '<div class="pproj"><span>'+esc(r.project)+'</span><span>'+(st?'syncing…':(r.done+' / '+r.total))+'</span></div>'+
+        '<div class="pbar2"><i style="width:'+(st?0:Math.min(100,r.pct))+'%"></i></div>';
+    }).join('');
+    var real=c.rows.filter(live);
+    var totDone=real.reduce(function(sm,x){ return sm+(x.done||0); },0);
+    var totAll=real.reduce(function(sm,x){ return sm+(x.total||0); },0);
+    var full=(!c.pending && c.avg>=100);
+    return '<div class="prow'+(full?' full':'')+(c.pending?' pending':'')+'">'+
       av+
       '<div class="pmain"><div class="pname">'+nm+'</div>'+
-        '<div class="psub">'+totDone+' of '+totAll+' this shift</div>'+
+        '<div class="psub">'+(c.pending?'waiting for their tool to report':(totDone+' of '+totAll+' this shift'))+'</div>'+
         bars+
       '</div>'+
-      '<div class="ppct'+(c.avg>=100?' full':'')+'">'+c.avg+'%<small>'+(c.avg>=100?'complete':'done')+'</small></div>'+
+      '<div class="ppct'+(full?' full':'')+'">'+(c.pending?'—':(c.avg+'%'))+'<small>'+(c.pending?'syncing':(full?'complete':'done'))+'</small></div>'+
     '</div>';
   }).join('');
 }
