@@ -68,6 +68,20 @@
   .kmenu .dd button:hover{background:var(--bg)}
   .kmenu .dd button.danger{color:#b91c1c}
   .kmenu .dd .sep{height:1px;background:var(--line);margin:4px 6px}
+  /* nested status submenu — same face as the flat items */
+  .kmenu .dd details.ksub summary{list-style:none;cursor:pointer;text-align:left;padding:8px 10px;border-radius:8px;font:700 12px 'Manrope',sans-serif;color:var(--ink2);white-space:nowrap}
+  .kmenu .dd details.ksub summary::-webkit-details-marker{display:none}
+  .kmenu .dd details.ksub summary:hover{background:var(--bg)}
+  .kmenu .dd details.ksub summary::after{content:' ▸';color:var(--ink3)}
+  .kmenu .dd details.ksub[open] summary::after{content:' ▾';color:var(--ink3)}
+  .kmenu .dd details.ksub>div{display:flex;flex-direction:column;gap:2px;padding-left:12px;margin-top:2px}
+  .kmenu .dd details.ksub>div button.on{background:rgba(225,29,116,.08);color:#9d1355;font-weight:800}
+  /* reason tags under the status line */
+  .rsn{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
+  .rsn span{font-size:10px;font-weight:800;border-radius:100px;padding:3px 9px;border:1px solid}
+  .rsn .r-pend{background:rgba(245,158,11,.08);color:#92400e;border-color:rgba(245,158,11,.4)}
+  .rsn .r-blk{background:rgba(239,68,68,.07);color:#b91c1c;border-color:rgba(239,68,68,.35)}
+  .rsn .r-pub{background:rgba(16,185,129,.08);color:#0f766e;border-color:rgba(16,185,129,.4)}
   .acct .btns,.model .btns{margin-top:8px}
   .pvwrap{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 18px 8px;box-shadow:0 1px 2px rgba(15,23,42,.05)}
   .pvrow{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
@@ -133,11 +147,11 @@ function drivePhoto(u){ u=String(u||''); if(!u) return ''; var m=u.match(/[-\w]{
 /* ── fetching layer: timeout + retry on READS (never on writes), local cache for instant paint,
    visibility-aware polling (pauses when the tab is hidden, refreshes on focus) ── */
 async function jFetch(url, tries){
-  tries=(tries==null)?2:tries;
+  tries=(tries==null)?1:tries;
   for(var a=0;a<=tries;a++){
     try{
       var ctl=(typeof AbortController!=='undefined')?new AbortController():null;
-      var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },10000):null;
+      var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },28000):null;
       var r=await fetch(url, ctl?{signal:ctl.signal}:undefined);
       if(tm) clearTimeout(tm);
       return await r.json();
@@ -221,6 +235,7 @@ var AVC=['#6366f1','#0ea5e9','#10b981','#f59e0b','#ec4899','#8b5cf6','#14b8a6','
 function kmenu(items){
   return '<details class="kmenu" onclick="event.stopPropagation()"><summary>⋯</summary><div class="dd">'+items.map(function(it){
     if(it==='---') return '<div class="sep"></div>';
+    if(it && it.raw) return it.raw;
     return '<button class="'+(it[2]||'')+'" onclick="this.closest(\'details\').removeAttribute(\'open\');'+it[1]+'">'+it[0]+'</button>';
   }).join('')+'</div></details>';
 }
@@ -600,7 +615,13 @@ function isG(r){ return ((r.meta&&r.meta.k)||'g')==='g'; }
 function GM(r){ var m=r.meta||{}; return { link:m.link||'', mem:m.mem||'', cat:m.cat||'Setter', act:m.act||'Medium', rules:m.rules||'', st:m.st||'can', adminc:m.adminc||'', notes:m.notes||'', posts:m.posts||[], cdate:m.cdate||'' }; }
 function CM(r){ var m=r.meta||{}; return { role:m.role||'Setter', src:m.src||'', stage:m.stage||'int', avail:m.avail||'', tz:m.tz||'', exp:m.exp||'', notes:m.notes||'', hist:m.hist||{}, cdate:m.cdate||'' }; }
 function nowHM(){ try{ return new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date()); }catch(e){ return '00:00'; } }
-function postsToday(g){ return (GM(g).posts||[]).filter(function(x){ return x.d===today() && x.s!=='rem'; }); }
+function postsToday(g){ return (GM(g).posts||[]).filter(function(x){ return x.d===today() && (x.s==='pub'||x.s==='pend'); }); }
+/* today's attempts by state — feeds the status line + reason tags (additive; cap logic untouched) */
+function dayStates(g){
+  var o={pub:0,pend:0,blk:0};
+  (GM(g).posts||[]).forEach(function(x){ if(x.d===today() && o[x.s]!=null) o[x.s]++; });
+  return o;
+}
 function lastPostMins(g){
   var ps=postsToday(g); if(!ps.length) return null;
   var pt=String(ps[ps.length-1].t||'00:00').split(':'), n=nowHM().split(':');
@@ -668,24 +689,43 @@ function renderGroups(){
     var m=GM(r), hdr=GSTS[m.st];
     if(hdr!==lastG){ out.push('<div class="sect"><b>'+hdr+'</b><span>'+gcnt[hdr]+'</span><i></i></div>'); lastG=hdr; }
     var pn=postsToday(r).length, mins=lastPostMins(r);
-    var pace = m.st==='no' ? '<span style="color:#b91c1c;font-weight:800">Do not post here'+(m.adminc?' · admin: '+esc(m.adminc):'')+'</span>'
-      : pn>=4 ? '<span style="color:#b91c1c;font-weight:800">Daily cap reached (4/4)</span>'
-      : (mins!=null&&mins<120) ? '<span style="color:#b45309;font-weight:800">'+pn+'/4 today · last post '+mins+' min ago — SOP says 1–2 h apart</span>'
-      : '<span style="color:#0f766e;font-weight:800">'+pn+'/4 today'+(mins!=null?' · last '+Math.round(mins/60*10)/10+' h ago':' · none yet')+'</span>';
+    var st8=dayStates(r), attempts=st8.pub+st8.pend+st8.blk;
+    /* STATUS LINE — the colour answers "why isn't this at 4/4?":
+       green complete · red fully blocked · amber partial mix · plain grey = genuinely not started */
+    var pace;
+    if(m.st==='no'){ pace='<span style="color:#b91c1c;font-weight:800">Do not post here'+(m.adminc?' · admin: '+esc(m.adminc):'')+'</span>'; }
+    else if(st8.pub>=4){ pace='<span style="color:#0f766e;font-weight:800">✅ Complete — 4/4 posted today</span>'; }
+    else if(!attempts){ pace='<span style="color:var(--ink3);font-weight:700">Not started — no attempts yet today</span>'; }
+    else if(st8.blk>0 && !st8.pub && !st8.pend){ pace='<span style="color:#b91c1c;font-weight:800">🚫 Blocked — FB limit hit, '+st8.pub+'/4 posted</span>'; }
+    else { pace='<span style="color:#b45309;font-weight:800">◐ In progress — '+st8.pub+'/4 posted'+
+      ((mins!=null&&mins>=0&&mins<120)?(' · last '+mins+' min ago (SOP: 1–2 h apart)'):'')+'</span>'; }
+    var rsn = attempts
+      ? '<div class="rsn">'+
+          (st8.pub?('<span class="r-pub">✓ '+st8.pub+' posted</span>'):'')+
+          (st8.pend?('<span class="r-pend">⏳ '+st8.pend+' pending approval</span>'):'')+
+          (st8.blk?('<span class="r-blk">🚫 '+st8.blk+' FB limit hit</span>'):'')+
+        '</div>'
+      : '';
     var canLog=(m.st!=='no'&&pn<4);
+    /* status submenu — active option highlighted, closes the whole ⋯ on pick */
+    var stSub={raw:'<details class="ksub"><summary>🔁 Change post status</summary><div>'+
+      [['can','✅ Can Post'],['appr','🟡 Approval Needed'],['no','🚫 No-Post']].map(function(o){
+        return '<button class="'+(m.st===o[0]?'on':'')+'" onclick="this.closest(\'.kmenu\').removeAttribute(\'open\');setGSt(\''+r.id+'\',\''+o[0]+'\')">'+o[1]+(m.st===o[0]?' ✓':'')+'</button>';
+      }).join('')+'</div></details>'};
     out.push('<div class="model'+(m.st==='no'?' low':'')+'"><div class="hd"><b>'+(m.link?('<a href="'+esc(m.link)+'" target="_blank" style="color:inherit">'+esc(r.handle)+' ↗</a>'):esc(r.handle))+'</b>'+
       kmenu([
         ['🟡 Log post — pending approval',"logPost('"+r.id+"','pend')"],
+        ['🚫 Log attempt — FB limit hit',"logBlocked('"+r.id+"')"],
         ['✅ Pending post got approved',"pendOk('"+r.id+"')"],
         ['🗑 Latest post was removed',"postRemoved('"+r.id+"')"],
         '---',
-        ['🔁 Change post status',"cycleSt('"+r.id+"')"],
+        stSub,
         ['📏 Edit rules / notes',"editG('"+r.id+"')"],
         '---',
         ['🗑 Delete (wrong entry)',"delAcct('"+r.id+"')",'danger']
       ])+'</div>'+
       '<div class="meta1">'+esc(m.cat)+' · '+esc(m.mem||'?')+' members · activity '+esc(m.act)+(m.rules?(' · rules: '+esc(m.rules)):'')+(m.notes?(' · '+esc(m.notes)):'')+'</div>'+
-      '<div class="last" style="margin-top:8px">'+pace+'</div>'+
+      '<div class="last" style="margin-top:8px">'+pace+'</div>'+rsn+
       '<div class="btns">'+
         '<button class="sched" '+(canLog?'':'disabled style="opacity:.45" ')+'onclick="logPost(\''+r.id+'\',\'pub\')">📣 Posted the recruitment message</button>'+
       '</div></div>');
@@ -747,7 +787,7 @@ function repLine(){
   var lines=['Facebook Outreach Update','','Date: '+d,'','Groups Found:','• Total groups found: '+G.length,'• New groups added: '+newG,'','Posts Made:'];
   var any=false;
   G.forEach(function(g){ var ps=(GM(g).posts||[]).filter(function(x){return x.d===d;}); if(!ps.length) return; any=true;
-    var st=ps.map(function(x){return x.s==='pub'?'Published':(x.s==='pend'?'Pending Approval':'Removed');});
+    var st=ps.map(function(x){return x.s==='pub'?'Published':(x.s==='pend'?'Pending Approval':(x.s==='blk'?'FB Limit':'Removed'));});
     lines.push('• '+g.handle+' — '+ps.length+' post'+(ps.length>1?'s':'')+' ('+st.join(', ')+')'); });
   if(!any) lines.push('• (none yet)');
   var sent=C.filter(function(r){return (CM(r).hist||{}).sent===d;}).length;
@@ -821,6 +861,23 @@ async function postRemoved(id){
   m.posts[ix].s='rem';
   var d=await saveMeta(r,m);
   if(d&&d.ok){ toast('Marked removed. If this keeps happening: stop posting here and tell Hayden (escalation rule).'); load(); }
+}
+async function setGSt(id, st){
+  var r=row(id); if(!r) return; var m=GM(r);
+  if(m.st===st){ toast('Already '+GSTS[st]+'.'); return; }
+  m.st=st;
+  if(st==='no'){ var a=prompt('Marking No-Post. Admin/moderator info, if you have it:', m.adminc||''); if(a!=null) m.adminc=a.trim(); }
+  var d=await saveMeta(r,m);
+  if(d&&d.ok){ toast('Status → '+GSTS[st]); load(); } else toast('Could not save.');
+}
+/* FB blocked the attempt — record it so the card explains the gap. Not a post: it never
+   consumes the daily cap and never counts as output. */
+async function logBlocked(id){
+  var r=row(id); if(!r) return; var m=GM(r);
+  m.posts=(m.posts||[]).concat([{d:today(),t:nowHM(),s:'blk',by:USER.id}]).slice(-60);
+  var d=await saveMeta(r,m);
+  if(d&&d.ok){ toast('🚫 FB limit logged — the card now shows why the count is short. Escalate to Hayden if the account got restricted.'); load(); }
+  else toast('Could not save.');
 }
 async function cycleSt(id){
   var r=row(id); if(!r) return; var m=GM(r);

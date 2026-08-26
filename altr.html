@@ -914,7 +914,8 @@ function livePoll(){
   if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA') && ae.type!=='checkbox') return;  // someone's typing
   refreshQuiet();
 }
-setInterval(livePoll, 10000);   // every 10s when idle & visible
+setInterval(livePoll, 45000);   /* was 10s. With a full ALTR team that was ~360 requests an
+     hour PER VA and a big part of what saturated the Apps Script quota on Aug 27. */
 document.addEventListener('visibilitychange', function(){ if(!document.hidden) livePoll(); });
 
 /* ===== Scheduled reels-count reminder alarm (PHT) ===== */
@@ -995,7 +996,7 @@ function reelsAlarmTick(){
   try{ if(localStorage.getItem(key)) return; localStorage.setItem(key,'1'); }catch(e){}
   fireReelsAlarm();
 }
-setInterval(reelsAlarmTick, 20000);   // check every 20s; fires once per scheduled slot per day
+setInterval(reelsAlarmTick, 60000);   // once a minute is plenty for a per-day alarm slot
 
 /* ---- LOGIN ---- */
 $('lpin').addEventListener('keydown', function(e){ if(e.key==='Enter') doLogin(); });
@@ -1077,7 +1078,7 @@ function renderPresence(users){
     return '<div class="pres-av'+(isMe?' me':'')+'" title="'+escAttr(nm)+(isMe?' (you)':'')+'" style="background:'+col+'">'+inner+'</div>';
   }).join('') + (extra>0?'<div class="pres-av more" title="'+extra+' more online">+'+extra+'</div>':'');
 }
-function startPresence(){ if(_presTimer) return; altrPingPresence(); altrLoadPresence(); _presTimer=setInterval(function(){ if(!document.hidden){ altrPingPresence(); altrLoadPresence(); } }, 20000); }
+function startPresence(){ if(_presTimer) return; altrPingPresence(); altrLoadPresence(); _presTimer=setInterval(function(){ if(!document.hidden){ altrPingPresence(); altrLoadPresence(); } }, 60000); }
 
 /* ================= INVESTIGATE MODAL ================= */
 window.openInvestigate=function(){
