@@ -23,6 +23,28 @@
   .hd b{font-size:14.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .dayb{font-size:11px;font-weight:900;color:#fff;background:#0f1419;border-radius:100px;padding:3px 10px}
   .plan{font-size:12px;color:var(--ink2);background:rgba(15,20,25,.04);border-radius:9px;padding:8px 10px;margin:9px 0;line-height:1.55}
+  /* ── Daily engagement quota — IG-gradient panel ── */
+  .eng{background:linear-gradient(135deg,#7b2ff7 0%,#e0218a 60%,#ff7eb3 100%);border-radius:16px;padding:16px 18px;color:#fff;margin-bottom:16px;box-shadow:0 10px 26px rgba(224,33,138,.22)}
+  .eng h3{font-family:'Sora',sans-serif;font-size:16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .eng h3 .pct{margin-left:auto;font-size:22px}
+  .engbar{height:14px;border-radius:8px;background:rgba(255,255,255,.25);overflow:hidden;margin:10px 0 2px}
+  .engbar i{display:block;height:100%;background:#fff;border-radius:8px;transition:width .6s cubic-bezier(.22,1,.36,1)}
+  .engcards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+  @media(max-width:560px){.engcards{grid-template-columns:1fr}}
+  .engc{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);border-radius:12px;padding:10px 12px}
+  .engc b{font-family:'Sora',sans-serif;font-size:19px;display:block}
+  .engc span{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;opacity:.85}
+  .engc button{margin-top:8px;border:none;border-radius:9px;padding:7px 13px;font-weight:800;cursor:pointer;background:#fff;color:#a21caf;font-size:12px}
+  .engc button:disabled{opacity:.55;cursor:default}
+  .engask{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:rgba(255,255,255,.16);border-radius:12px;padding:9px 12px;margin-top:10px}
+  .engask button{border:none;border-radius:9px;padding:7px 14px;font-weight:800;cursor:pointer;font-size:12px;background:#fff;color:#7b2ff7}
+  .engask input{flex:1;min-width:150px;border:none;border-radius:9px;padding:7px 10px;font:inherit;font-size:12px}
+  .engfeed{background:rgba(255,255,255,.12);border-radius:12px;padding:6px 12px;margin-top:10px;font-size:12px}
+  .engfeed>div{padding:5px 0;border-bottom:1px solid rgba(255,255,255,.18);display:flex;gap:8px;flex-wrap:wrap}
+  .engfeed>div:last-child{border-bottom:none}
+  .enghist{margin-top:9px;font-size:11px;opacity:.9;display:flex;gap:6px;flex-wrap:wrap}
+  .enghist span{background:rgba(255,255,255,.16);border-radius:100px;padding:2px 10px;font-weight:800}
+  .engreset{margin-top:10px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:9px;padding:6px 12px;font-weight:800;cursor:pointer;font-size:11.5px}
   .plan b{color:var(--ink)}
   .btns{display:flex;gap:6px;flex-wrap:wrap}
   .btns button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 11px;font-size:11.5px;font-weight:800;cursor:pointer;color:var(--ink2)}
@@ -85,6 +107,7 @@
     <div class="hdr"><div class="brand">📸 JMB <i>IG Reels — Moma</i> <span id="who" class="muted"></span></div></div>
     <div class="sub">Daily posting per the Moma SOP. Reels are spaced <b>2 hours</b>, trial reels <b>10 minutes</b> — the tool holds the next button until the gap has passed. Every post needs a screenshot. Audio: English track at <b>12% volume</b>, original character audio at 100%. Before posting, check <b>Shadowrocket</b> is toggled on.</div>
     <div id="stats" class="stats"></div>
+    <div id="eng"></div>
     <div id="grid"></div>
   </div>
 </div>
@@ -152,16 +175,16 @@ function drivePhoto(u){ u=String(u||''); if(!u) return ''; var m=u.match(/[-\w]{
 /* ── fetching layer: timeout + retry on READS (never on writes), local cache for instant paint,
    visibility-aware polling (pauses when the tab is hidden, refreshes on focus) ── */
 async function jFetch(url, tries){
-  tries=(tries==null)?2:tries;
-  for(var a=0;a<=tries;a++){
-    try{
-      var ctl=(typeof AbortController!=='undefined')?new AbortController():null;
-      var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },10000):null;
-      var r=await fetch(url, ctl?{signal:ctl.signal}:undefined);
-      if(tm) clearTimeout(tm);
-      return await r.json();
-    }catch(e){ if(a===tries) throw e; await new Promise(function(res){ setTimeout(res, 500*(a+1)); }); }
-  }
+  /* Delegates to the shared fetch layer (jmb-fetch.js): in-flight dedupe, a short
+     TTL cache, cross-tab sharing and ONE retry. Call sites are unchanged — this is
+     deliberately a drop-in so no tool logic had to be rewritten.
+     Falls back to a plain fetch if the shared file ever fails to load. */
+  if (window.JF) return JF.get(url, { ttl: (/action=(pa_list|emp_dir|john_pool|po_va_progress)/.test(url) ? 12000 : 0) });
+  const ctl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+  const tm = ctl ? setTimeout(()=>{ try{ctl.abort();}catch(_){} }, 28000) : null;
+  const r = await fetch(url, ctl?{signal:ctl.signal}:undefined);
+  if (tm) clearTimeout(tm);
+  return await r.json();
 }
 function cacheRows(){ try{ sessionStorage.setItem('dc_rows_'+PROJECT, JSON.stringify({t:Date.now(), rows:ROWS})); }catch(e){} }
 function paintCached(){ try{ var c=JSON.parse(sessionStorage.getItem('dc_rows_'+PROJECT)||'null');
@@ -599,11 +622,84 @@ function mWait(r,kind){ var last=mLastAt(r,kind); if(!last) return 0;
   var left=MOMA_GAP[kind]-(Date.now()-last); return left>0?left:0; }
 function mFmt(ms){ var m=Math.ceil(ms/60000); return m>=60?(Math.floor(m/60)+'h '+(m%60)+'m'):(m+'m'); }
 
+/* ══ DAILY ENGAGEMENT QUOTA — 5 likes + 1 comment = 100% ══
+   Engagement is a daily habit quota, not a counted output, so it lives in localStorage:
+   instant, survives refresh, auto-rolls at the shift boundary (vaKeyOf) and keeps the last
+   14 shifts as history chips. Outputs (reels, trials, carousels) stay proof-gated below. */
+var ENG_T={like:5,comment:1}, ENG_ASK=null;
+function engHM(){ try{ return new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date()); }catch(e){ return new Date().toTimeString().slice(0,5); } }
+function engKey(){ return 'moma_eng_'+String((USER&&USER.id)||'anon').toLowerCase(); }
+function engLoad(){
+  var st=null; try{ st=JSON.parse(localStorage.getItem(engKey())||'null'); }catch(e){}
+  if(!st||typeof st!=='object') st={key:'',likes:[],comments:[],hist:{}};
+  st.likes=st.likes||[]; st.comments=st.comments||[]; st.hist=st.hist||{};
+  var k=vaKeyOf(USER.id);
+  if(st.key!==k){
+    if(st.key&&(st.likes.length||st.comments.length))
+      st.hist[st.key]={l:st.likes.length,c:st.comments.length};
+    var ks=Object.keys(st.hist); if(ks.length>14){ ks.sort(); delete st.hist[ks[0]]; }
+    st.key=k; st.likes=[]; st.comments=[]; engSave(st);
+  }
+  return st;
+}
+function engSave(st){ try{ localStorage.setItem(engKey(), JSON.stringify(st)); }catch(e){} }
+function engAsk(kind){
+  var st=engLoad(), arr=(kind==='like')?st.likes:st.comments;
+  if(arr.length>=ENG_T[kind]){ toast((kind==='like'?'All 5 likes are':'The comment is')+' already logged for today ✅'); return; }
+  ENG_ASK=(ENG_ASK===kind)?null:kind; renderEng();
+}
+function engLog(kind, pt){
+  var st=engLoad(), arr=(kind==='like')?st.likes:st.comments;
+  if(arr.length>=ENG_T[kind]){ ENG_ASK=null; renderEng(); return; }
+  var note=(document.getElementById('eng-note')||{}).value||'';
+  arr.push({ t:engHM(), pt:pt, note:String(note).trim().slice(0,140), s:Date.now() });
+  engSave(st); ENG_ASK=null; renderEng();
+  var total=st.likes.length+st.comments.length;
+  toast((kind==='like'?'👍 Like':'💬 Comment')+' on a '+(pt==='reel'?'Reel':'Carousel')+' logged — '+Math.round(total/6*100)+'%'+(total>=6?' · daily quota complete! 🎉':''));
+}
+function engReset(){
+  if(!confirm('Start a fresh engagement day?\n\nToday\'s likes and comments will be cleared (past days stay in history).')) return;
+  var st=engLoad(); st.likes=[]; st.comments=[]; engSave(st); ENG_ASK=null; renderEng(); toast('Fresh day — 0%.');
+}
+function renderEng(){
+  var host=$('eng'); if(!host||!USER) return;
+  var st=engLoad(), L=st.likes.length, C=st.comments.length, total=L+C;
+  var pct=Math.min(100, Math.round(total/6*1000)/10);
+  var items=st.likes.map(function(x){ return Object.assign({k:'like'},x); })
+    .concat(st.comments.map(function(x){ return Object.assign({k:'comment'},x); }))
+    .sort(function(a,b){ return (a.s||0)-(b.s||0); });
+  var feed=items.length
+    ? '<div class="engfeed">'+items.map(function(x){
+        return '<div><b>'+x.t+'</b><span>'+(x.k==='like'?'👍 Like':'💬 Comment')+'</span><span>'+(x.pt==='reel'?'🎬 Reel':'🖼 Carousel')+'</span>'+(x.note?('<span style="opacity:.85;word-break:break-all;">'+esc(x.note)+'</span>'):'')+'</div>';
+      }).join('')+'</div>'
+    : '<div class="engfeed"><div style="opacity:.8;">No actions logged yet this shift.</div></div>';
+  var hk=Object.keys(st.hist).sort().reverse().slice(0,7);
+  var hist=hk.length?('<div class="enghist">'+hk.map(function(k){ var h=st.hist[k]; return '<span>'+esc(k)+' · '+((h.l||0)+(h.c||0))+'/6</span>'; }).join('')+'</div>'):'';
+  var ask=ENG_ASK
+    ? '<div class="engask"><b style="font-size:12px;">'+(ENG_ASK==='like'?'👍 Like':'💬 Comment')+' was on a…</b>'+
+      '<button onclick="engLog(\''+ENG_ASK+'\',\'reel\')">🎬 Reel</button>'+
+      '<button onclick="engLog(\''+ENG_ASK+'\',\'car\')">🖼 Carousel</button>'+
+      '<input id="eng-note" placeholder="Optional: post URL or note">'+
+      '<button style="background:rgba(255,255,255,.35);color:#fff;" onclick="ENG_ASK=null;renderEng();">✕</button></div>'
+    : '';
+  host.innerHTML=
+    '<div class="eng"><h3>💜 Daily Engagement — 5 likes + 1 comment <span class="pct">'+(pct%1?pct.toFixed(1):pct)+'%'+(total>=6?' ✅':'')+'</span></h3>'+
+    '<div class="engbar"><i style="width:'+pct+'%"></i></div>'+
+    '<div style="font-size:11px;opacity:.85;">'+total+' of 6 actions · each like +16.6% · the comment +16.7% · resets with your shift</div>'+
+    '<div class="engcards">'+
+      '<div class="engc"><b>👍 '+L+' / 5</b><span>Likes — Reels or Carousels</span><br><button onclick="engAsk(\'like\')" '+(L>=5?'disabled':'')+'>'+(L>=5?'✓ All likes done':'＋ Log a like')+'</button></div>'+
+      '<div class="engc"><b>💬 '+C+' / 1</b><span>Comment — Reel or Carousel</span><br><button onclick="engAsk(\'comment\')" '+(C>=1?'disabled':'')+'>'+(C>=1?'✓ Comment done':'＋ Log the comment')+'</button></div>'+
+    '</div>'+ask+feed+hist+
+    '<button class="engreset" onclick="engReset()">↺ Reset day</button></div>';
+}
 function render(){
   if(!USER) return;
+  renderEng();
   var doneAll=0, targetAll=0;
   MOMA_ACCOUNTS.forEach(function(a){ var r=mRow(a.handle);
-    doneAll+=mCount(r,'reel',a.reels)+mCount(r,'trial',a.trials); targetAll+=a.reels+a.trials; });
+    doneAll+=mCount(r,'reel',a.reels)+mCount(r,'trial',a.trials); targetAll+=a.reels+a.trials;
+    if(mCar(r)){ targetAll+=1; doneAll+=mCount(r,'car',1); }   // 🖼 With Carousel ON → 1 more output owed
+  });
   $('stats').innerHTML=
     '<div class="stat"><b>'+MOMA_ACCOUNTS.length+'</b><span>ACCOUNTS</span></div>'+
     '<div class="stat"><b class="g">'+doneAll+' / '+targetAll+'</b><span>POSTED TODAY</span></div>'+
@@ -616,7 +712,8 @@ function render(){
     byPhone[ph].forEach(function(a){
       var r=mRow(a.handle);
       var rd=mCount(r,'reel',a.reels), td=mCount(r,'trial',a.trials);
-      var full=(rd>=a.reels && td>=a.trials);
+      var cd=mCar(r)?mCount(r,'car',1):0;
+      var full=(rd>=a.reels && td>=a.trials && (!mCar(r)||cd>=1));
       var btns=[];
       for(var i=1;i<=a.reels;i++){
         var ok=mDone(r,'reel',i), nxt=(!ok && rd===(i-1)), w=nxt?mWait(r,'reel'):0;
@@ -632,13 +729,18 @@ function render(){
                    :'<button class="go" onclick="mPost(\''+a.handle+'\',\'trial\','+t+')">📷 Trial '+t+'</button>')
                  :'<button disabled style="opacity:.35" title="'+(rd<a.reels?'Post the main reels first':'Do the trial reels in order')+'">T'+t+'</button>'));
       }
+      if(mCar(r)){   // the 🖼 toggle adds a counted carousel output to this account's day
+        btns.push(mDone(r,'car',1)
+          ?'<button disabled style="opacity:.55">✓ Carousel</button>'
+          :'<button class="go" style="border-color:rgba(14,165,233,.5);color:#0369a1;background:rgba(14,165,233,.08)" onclick="mPost(\''+a.handle+'\',\'car\',1)">🖼 Carousel</button>');
+      }
       out.push('<div class="acct'+(full?' done-today':'')+'">'+
         '<div class="hd"><b>@'+esc(a.handle)+'</b>'+
           (mCar(r)
             ?'<span class="ph2" onclick="mCarToggle(\''+a.handle+'\')" title="Click to switch to No Carousel" style="background:#0ea5e914;color:#0369a1;border:1px solid #0ea5e93e;cursor:pointer;">🖼 With Carousel</span>'
             :'<span class="ph2" onclick="mCarToggle(\''+a.handle+'\')" title="Click to switch to With Carousel" style="background:#64748b14;color:#64748b;border:1px solid #64748b2e;cursor:pointer;">No Carousel</span>')+
           '<span class="ph2" style="background:#8b5cf614;color:#6d28d9;border:1px solid #8b5cf62e">'+esc(a.niche)+'</span>'+
-          '<span class="ph2" style="background:#0f141910;color:#0f1419;border:1px solid #0f141926">'+rd+'/'+a.reels+' reels'+(a.trials?(' · '+td+'/'+a.trials+' trials'):'')+'</span>'+
+          '<span class="ph2" style="background:#0f141910;color:#0f1419;border:1px solid #0f141926">'+rd+'/'+a.reels+' reels'+(a.trials?(' · '+td+'/'+a.trials+' trials'):'')+(mCar(r)?(' · '+cd+'/1 carousel'):'')+'</span>'+
         '</div>'+
         '<div class="meta1">Phone '+a.phone+' · niche is fixed — if the video doesn\'t match <b>'+esc(a.niche)+'</b>, stop and message management before posting.</div>'+
         (a.note?('<div class="meta1" style="color:#b45309;font-weight:700;">'+esc(a.note)+'</div>'):'')+
@@ -698,7 +800,7 @@ async function mPost(handle, kind, n){
   if(mDone(r,kind,n)){ toast('Already logged.'); return; }
   var wait=mWait(r,kind);
   if(wait){ toast('SOP spacing — wait '+mFmt(wait)+' before the next '+(kind==='reel'?'reel':'trial reel')+'.'); return; }
-  var task=(kind==='reel')?'Moma Reel Posting':'Moma Trial Reel Posting';
+  var task=(kind==='reel')?'Moma Reel Posting':(kind==='car'?'Moma Carousel Posting':'Moma Trial Reel Posting');
   try{ await bump(task+' — @'+handle, 1); }
   catch(e){ if(e && e.proofCancelled) return; toast('Connection error.'); return; }
   try{
@@ -706,7 +808,7 @@ async function mPost(handle, kind, n){
     var d;
     if(r){ d=await (await fetch(API+'?action=pa_update&id='+encodeURIComponent(r.id)+'&meta='+encodeURIComponent(JSON.stringify(meta))+'&_='+Date.now())).json(); }
     else { d=await (await fetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(handle)+'&status=active&meta='+encodeURIComponent(JSON.stringify(meta))+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now())).json(); }
-    if(d&&d.ok){ toast('+1 '+(kind==='reel'?'Reel':'Trial Reel')+' · @'+handle); load(); }
+    if(d&&d.ok){ toast('+1 '+(kind==='reel'?'Reel':(kind==='car'?'Carousel':'Trial Reel'))+' · @'+handle); load(); }
     else toast('Could not save.');
   }catch(e){ toast('Connection error.'); }
 }

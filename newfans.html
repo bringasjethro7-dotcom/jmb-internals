@@ -147,16 +147,16 @@ function drivePhoto(u){ u=String(u||''); if(!u) return ''; var m=u.match(/[-\w]{
 /* ── fetching layer: timeout + retry on READS (never on writes), local cache for instant paint,
    visibility-aware polling (pauses when the tab is hidden, refreshes on focus) ── */
 async function jFetch(url, tries){
-  tries=(tries==null)?1:tries;
-  for(var a=0;a<=tries;a++){
-    try{
-      var ctl=(typeof AbortController!=='undefined')?new AbortController():null;
-      var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },28000):null;
-      var r=await fetch(url, ctl?{signal:ctl.signal}:undefined);
-      if(tm) clearTimeout(tm);
-      return await r.json();
-    }catch(e){ if(a===tries) throw e; await new Promise(function(res){ setTimeout(res, 500*(a+1)); }); }
-  }
+  /* Delegates to the shared fetch layer (jmb-fetch.js): in-flight dedupe, a short
+     TTL cache, cross-tab sharing and ONE retry. Call sites are unchanged — this is
+     deliberately a drop-in so no tool logic had to be rewritten.
+     Falls back to a plain fetch if the shared file ever fails to load. */
+  if (window.JF) return JF.get(url, { ttl: (/action=(pa_list|emp_dir|john_pool|po_va_progress)/.test(url) ? 12000 : 0) });
+  const ctl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+  const tm = ctl ? setTimeout(()=>{ try{ctl.abort();}catch(_){} }, 28000) : null;
+  const r = await fetch(url, ctl?{signal:ctl.signal}:undefined);
+  if (tm) clearTimeout(tm);
+  return await r.json();
 }
 function cacheRows(){ try{ sessionStorage.setItem('dc_rows_'+PROJECT, JSON.stringify({t:Date.now(), rows:ROWS})); }catch(e){} }
 function paintCached(){ try{ var c=JSON.parse(sessionStorage.getItem('dc_rows_'+PROJECT)||'null');
