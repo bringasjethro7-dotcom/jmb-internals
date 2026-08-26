@@ -91,7 +91,7 @@
 
 <div class="wrap" id="app" style="display:none">
   <h1>𝕏 Project John — Warm-up Tracker <span style="font-size:12px;color:var(--ink3);font-weight:600" id="who"></span></h1>
-  <div class="sub">Each account follows the SOP day plan. <b>Every completed session counts +1 output instantly</b> — no waiting for the day to finish, and a takeover mid-day credits whoever completed each session. Randomize batches &amp; scroll times so every account looks human. <span style="opacity:.55">Build 2026-08-25a · wallboard counts sessions — if you don't see this line, press Ctrl+Shift+R.</span></div>
+  <div class="sub">Each account follows the SOP day plan. <b>Every completed session counts +1 output instantly</b> — no waiting for the day to finish, and a takeover mid-day credits whoever completed each session. Randomize batches &amp; scroll times so every account looks human. <span style="opacity:.55">Build 2026-08-26a · fewer false "server busy" errors — if you don't see this line, press Ctrl+Shift+R.</span></div>
   <div class="top" id="stats"></div>
   <div id="poolbar"></div>
   <div class="addbox">
@@ -116,16 +116,23 @@ var NAMES={}, SHIFTOF={}, PHOTOOF={};
 function drivePhoto(u){ u=String(u||''); if(!u) return ''; var m=u.match(/[-\w]{25,}/); return m?('https://drive.google.com/thumbnail?id='+m[0]+'&sz=w128'):u; }
 /* ── fetching layer: timeout + retry on READS (never on writes), local cache for instant paint,
    visibility-aware polling (pauses when the tab is hidden, refreshes on focus) ── */
+/* WHY THE TIMEOUT IS 28s AND NOT 10s (fix, Aug 26)
+   VAs were seeing "Server is busy" constantly. The server was usually fine — this function was
+   aborting at 10 SECONDS and calling it a failure. Apps Script regularly needs longer than that
+   on a cold cache or at shift change, so normal-but-slow responses were being thrown away.
+   Worse, it then retried twice: every slow request became THREE requests, so the tool was
+   manufacturing the very congestion it was complaining about. Longer patience, fewer retries,
+   and a real backoff between them. */
 async function jFetch(url, tries){
-  tries=(tries==null)?2:tries;
+  tries=(tries==null)?1:tries;
   for(var a=0;a<=tries;a++){
     try{
       var ctl=(typeof AbortController!=='undefined')?new AbortController():null;
-      var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },10000):null;
+      var tm=ctl?setTimeout(function(){ try{ctl.abort();}catch(_){} },28000):null;
       var r=await fetch(url, ctl?{signal:ctl.signal}:undefined);
       if(tm) clearTimeout(tm);
       return await r.json();
-    }catch(e){ if(a===tries) throw e; await new Promise(function(res){ setTimeout(res, 500*(a+1)); }); }
+    }catch(e){ if(a===tries) throw e; await new Promise(function(res){ setTimeout(res, 1500*(a+1)); }); }
   }
 }
 function cacheRows(){ try{ sessionStorage.setItem('dc_rows_'+PROJECT, JSON.stringify({t:Date.now(), rows:ROWS})); }catch(e){} }
@@ -742,17 +749,36 @@ function poolRender(){
         (POOL.free<50?'<span style="color:#f87171;">'+ic('warn')+'running low — ask the client for more targets</span>':'')+
       '</div></div>';
 }
+var _loading=false, _loadFails=0;
 async function load(){
+  /* ONE REQUEST AT A TIME. The 60s poll, the focus handler and the visibility handler could all
+     fire at once, so a slow response had three more requests stacked behind it. */
+  if(_loading) return;
+  _loading=true;
   poolLoad();
   var d=null;
   try{
     d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
   }catch(e){
-    $('grid').innerHTML='<div class="muted">Server is busy — retrying in 8s…</div>';
-    setTimeout(load, 8000);   // congestion, not a broken deployment — retry by itself
+    _loading=false; _loadFails++;
+    /* Keep the board on screen. Blanking it to an error message is what made a slow request feel
+       like an outage — the VA's accounts were still perfectly good to work from. */
+    var had=(ROWS&&ROWS.length)?true:paintCached();
+    if(had){ toast('Connection slow — showing your last loaded board. Retrying…'); }
+    else { $('grid').innerHTML='<div class="muted">Connection is slow — retrying…</div>'; }
+    setTimeout(load, Math.min(45000, 8000*_loadFails));   // back off instead of hammering
     return;
   }
-  if(!d||!d.ok){ $('grid').innerHTML='<div class="muted">Server returned an error ('+esc((d&&d.error)||'unknown')+') — retrying in 8s…</div>'; setTimeout(load, 8000); return; }
+  if(!d||!d.ok){
+    _loading=false; _loadFails++;
+    var busy=(d&&d.error==='BUSY');
+    var had2=(ROWS&&ROWS.length)?true:paintCached();
+    if(!had2) $('grid').innerHTML='<div class="muted">'+(busy?'Server is busy':'Server error ('+esc((d&&d.error)||'unknown')+')')+' — retrying…</div>';
+    else if(busy) toast('Server busy — your board is still up to date from the last load.');
+    setTimeout(load, Math.min(45000, 8000*_loadFails));
+    return;
+  }
+  _loading=false; _loadFails=0;
   ROWS=d.rows||[]; cacheRows();
   try{ render(); }
   catch(re){ $('grid').innerHTML='<div class="muted">Display error: '+esc(String(re&&re.message||re))+' — tell the admin (data loaded fine).</div>'; }
