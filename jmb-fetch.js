@@ -59,8 +59,19 @@
      API response. Reads hit the CDN; anything not published still falls through to
      Apps Script automatically, so this is safe to ship before the cron is running. */
   var FEED_BASE     = 'https://rvyrnkjqxnijxydloujk.supabase.co/storage/v1/object/public/feed/';
-  var FEED_ACTIONS  = { emp_dir:1, get_all_employees:1, pa_list:1, po_va_progress:1, get_tracker_projects:1 };
-  var FEED_MAX_AGE  = 180000;  // if the CDN copy is older than this, the cron is stuck — use the API
+  /* Per-action staleness limit, because the publisher runs two tiers. The volatile boards are
+     republished every minute; roster data every ten, to stay inside the Apps Script runtime
+     quota. A single 3-minute limit — which is what this used to be — marked every slow-tier
+     file permanently stale, so those reads fell back to Apps Script on EVERY request and the
+     CDN did nothing for them. Each limit is its cadence plus generous margin: past that, the
+     cron really has stopped and the API is the safer answer. */
+  var FEED_ACTIONS  = {
+    pa_list:              180000,   // published ~60s
+    po_va_progress:       180000,   // published ~60s
+    emp_dir:             1500000,   // published ~10min
+    get_all_employees:   1500000,   // published ~10min
+    get_tracker_projects:1500000    // published ~10min
+  };
   var feedDown      = 0;       // after a CDN failure, stop trying it for a while
 
   var mem   = {};              // url -> {t, data}
@@ -87,7 +98,7 @@
       if (k2 === 'action' || k2 === '_t' || k2 === '_' || k2 === '_c' || k2 === '_feed') continue;
       if (p[k2] !== '') return null;      // a real filter — the CDN copy would be wrong
     }
-    return FEED_BASE + a + '.json';
+    return { url: FEED_BASE + a + '.json', maxAge: FEED_ACTIONS[a] };
   }
 
   /* Returns parsed JSON, or null to mean "fall back to Apps Script". Never throws:
@@ -95,6 +106,7 @@
   function tryFeed(url) {
     var f = feedUrlFor(url);
     if (!f || Date.now() < feedDown) return Promise.resolve(null);
+    var maxAge = f.maxAge; f = f.url;
     var ctl = global.AbortController ? new global.AbortController() : null;
     var timer = ctl ? setTimeout(function () { try { ctl.abort(); } catch (e) {} }, 6000) : null;
     return fetch(f, ctl ? { signal: ctl.signal } : undefined)
@@ -102,7 +114,7 @@
         if (timer) clearTimeout(timer);
         if (!r.ok) return null;
         var lm = r.headers.get('last-modified');
-        if (lm && (Date.now() - new Date(lm).getTime()) > FEED_MAX_AGE) {
+        if (lm && (Date.now() - new Date(lm).getTime()) > maxAge) {
           stats.feedMiss++; return null;          // cron has stalled — get the truth from the API
         }
         return r.text().then(function (t) {
