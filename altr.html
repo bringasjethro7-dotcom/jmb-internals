@@ -808,6 +808,17 @@ body::after{ content:""; position:fixed; left:-120px; top:-120px; width:380px; h
   </div>
 </div>
 
+<script src="jmb-fetch.js"></script>
+<script>
+/* Small adapter so these two files can use the shared layer without rewriting their call sites.
+   If jmb-fetch.js is missing or blocked, this degrades to exactly the fetch+json they did
+   before — the tool keeps working, it just loses the CDN and the dedupe. */
+async function JFget(url){
+  if (window.JF) return JF.get(url);
+  var r = await fetch(url);
+  return await r.json();
+}
+</script>
 <script>
 /* ====== CONFIG ====== */
 var PORTAL_URL = "https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec"; // for employee ID+PIN login
@@ -2353,7 +2364,7 @@ var EMPDIR=[];
 async function loadEmpDir(){
   if(EMPDIR.length) return;
   try{
-    var r=await fetch(PORTAL_URL+'?action=get_all_employees&_='+Date.now()); var j=await r.json();
+    var j=await JFget(PORTAL_URL+'?action=get_all_employees&_='+Date.now());
     EMPDIR=((j&&j.employees)||[]).map(function(e){ return { id:String(e.employee_id||'').toUpperCase(), name:String(e.full_name||e.employee_id||'') }; })
       .filter(function(e){ return e.id; })
       .sort(function(a,b){ return a.id<b.id?-1:1; });
@@ -2521,7 +2532,7 @@ async function dcAutoPush(silent){
     /* ── HIGH-WATER GUARD ── read the portal's current ALTR numbers first. */
     var portal={};
     try{
-      var pv=await fetch(PORTAL+'?action=po_va_progress&_='+Date.now()).then(function(r){ return r.json(); });
+      var pv=await JFget(PORTAL+'?action=po_va_progress&_='+Date.now());
       ((pv&&pv.rows)||[]).forEach(function(r){
         if(!/^altr/i.test(String(r.project||''))) return;
         portal[String(r.employee_id||'').toLowerCase()]={ done:parseFloat(r.done)||0, total:parseFloat(r.total)||0 };
@@ -3536,7 +3547,7 @@ async function qaImportWeekly(){
   var week=parseInt(weekV,10); if(!(week>=1&&week<=4)){ toast('Week must be 1, 2, 3 or 4.'); return; }
   toast('Matching posters to employees…');
   var emps=[];
-  try{ var r=await fetch(PORTAL_URL+'?action=get_all_employees'); var j=await r.json(); emps=(j&&j.employees)||[]; }
+  try{ var j=await JFget(PORTAL_URL+'?action=get_all_employees'); emps=(j&&j.employees)||[]; }
   catch(e){ toast('Couldn’t load the employee directory.'); return; }
   if(!emps.length){ toast('No employees returned from the portal.'); return; }
   var matched=[], unmatched=[];

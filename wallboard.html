@@ -323,6 +323,17 @@
 <div id="codeOverlay"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="jmb-fetch.js"></script>
+<script>
+/* Small adapter so these two files can use the shared layer without rewriting their call sites.
+   If jmb-fetch.js is missing or blocked, this degrades to exactly the fetch+json they did
+   before — the tool keeps working, it just loses the CDN and the dedupe. */
+async function JFget(url){
+  if (window.JF) return JF.get(url);
+  var r = await fetch(url);
+  return await r.json();
+}
+</script>
 <script>
 /* ════ JMB VIRTUALS — OFFICE WALLBOARD (light · formal, matches jmbvirtuals.com) ════
    Edit COMPANY below. Stats you can't pull live (clients/satisfaction) are set here. */
@@ -412,7 +423,7 @@ function tickClock(){ var now=new Date();
   document.getElementById('dte').textContent=now.toLocaleDateString('en-US',{timeZone:'Asia/Manila',weekday:'long',month:'long',day:'numeric',year:'numeric'}); }
 setInterval(tickClock,1000); tickClock();
 
-async function loadEmployees(){ try{ var r=await fetch(APPS_SCRIPT_URL+'?action=get_all_employees&_='+Date.now()); var d=await r.json();
+async function loadEmployees(){ try{ var d=await JFget(APPS_SCRIPT_URL+'?action=get_all_employees&_='+Date.now());
   EMPLOYEES=(d.employees||[]).filter(function(e){ var s=String(e.status||'active').toLowerCase(); return s!=='inactive'&&s!=='resigned'&&s!=='terminated'&&s!=='archived'; }); indexEmployees(); }catch(e){} }
 async function loadAnns(){ try{ var r=await fetch(APPS_SCRIPT_URL+'?action=get_notifications&employee_id=&_='+Date.now()); var d=await r.json();
   ANNS=(d.notifications||[]).filter(function(n){ return n.title; }).slice(0,6); }catch(e){} }
@@ -528,8 +539,8 @@ function armAudioUnlock(){ ['pointerdown','keydown','touchstart','click'].forEac
 var PROG={rows:[],dir:{}};
 async function loadProgressData(){
   try{
-    var pv=await fetch(APPS_SCRIPT_URL+'?action=po_va_progress&_='+Date.now()).then(function(r){return r.json();}).catch(function(){return null;});
-    var ed=await fetch(APPS_SCRIPT_URL+'?action=emp_dir&_='+Date.now()).then(function(r){return r.json();}).catch(function(){return null;});
+    var pv=await JFget(APPS_SCRIPT_URL+'?action=po_va_progress&_='+Date.now()).catch(function(){return null;});
+    var ed=await JFget(APPS_SCRIPT_URL+'?action=emp_dir&_='+Date.now()).catch(function(){return null;});
     if(pv&&pv.ok) PROG.rows=pv.rows||[];
     if(ed&&ed.employees){ var m={}; ed.employees.forEach(function(e){ var ph=''; var mm=String(e.photo||'').match(/[-\w]{25,}/); if(mm) ph='https://drive.google.com/thumbnail?id='+mm[0]+'&sz=w200';
       m[String(e.employee_id).toLowerCase()]={n:e.full_name||e.employee_id,p:ph,s:String(e.shift||'').toLowerCase()}; }); PROG.dir=m; }
