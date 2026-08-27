@@ -51,9 +51,71 @@
   var RETRIES       = 1;       // one retry. Never three. See the history above.
   var BACKOFF_MS    = 1500;
 
+  /* ── FEED: reads served from Supabase CDN instead of Apps Script ──────────────
+     Measured Aug 27: Apps Script action=ping, which does no work whatsoever, costs
+     2.1-4.9s. Supabase CDN from the same page costs 0.13-0.19s. The ping is the floor
+     — it is charged before any of our code runs, so no cache or snapshot can beat it.
+     A cron republishes these actions to the CDN every minute, byte-identical to the
+     API response. Reads hit the CDN; anything not published still falls through to
+     Apps Script automatically, so this is safe to ship before the cron is running. */
+  var FEED_BASE     = 'https://rvyrnkjqxnijxydloujk.supabase.co/storage/v1/object/public/feed/';
+  var FEED_ACTIONS  = { emp_dir:1, get_all_employees:1, pa_list:1, po_va_progress:1, get_tracker_projects:1 };
+  var FEED_MAX_AGE  = 180000;  // if the CDN copy is older than this, the cron is stuck — use the API
+  var feedDown      = 0;       // after a CDN failure, stop trying it for a while
+
   var mem   = {};              // url -> {t, data}
   var live  = {};              // url -> Promise   (in-flight dedupe)
-  var stats = { sent: 0, served: 0, deduped: 0, cached: 0, failed: 0 };
+  var stats = { sent: 0, served: 0, deduped: 0, cached: 0, failed: 0, feed: 0, feedMiss: 0 };
+
+  /* Map an Apps Script read URL to its CDN twin — but ONLY when the request is the plain,
+     unparameterised form the cron publishes. pa_list with a ?project= filter, or any other
+     narrowing parameter, is a different payload and must still go to the API. Cache-busting
+     params are ignored because they do not change the response. */
+  function feedUrlFor(url) {
+    if (url.indexOf('/macros/s/') < 0) return null;
+    var q = url.split('?')[1]; if (!q) return null;
+    var p = {}, parts = q.split('&');
+    for (var i = 0; i < parts.length; i++) {
+      if (!parts[i]) continue;
+      var e = parts[i].indexOf('='), k = e < 0 ? parts[i] : parts[i].slice(0, e);
+      p[k] = e < 0 ? '' : parts[i].slice(e + 1);
+    }
+    var a = p.action;
+    if (!a || !FEED_ACTIONS[a]) return null;
+    for (var k2 in p) {
+      if (!Object.prototype.hasOwnProperty.call(p, k2)) continue;
+      if (k2 === 'action' || k2 === '_t' || k2 === '_' || k2 === '_c' || k2 === '_feed') continue;
+      if (p[k2] !== '') return null;      // a real filter — the CDN copy would be wrong
+    }
+    return FEED_BASE + a + '.json';
+  }
+
+  /* Returns parsed JSON, or null to mean "fall back to Apps Script". Never throws:
+     a CDN problem must degrade to the old behaviour, not break the tool. */
+  function tryFeed(url) {
+    var f = feedUrlFor(url);
+    if (!f || Date.now() < feedDown) return Promise.resolve(null);
+    var ctl = global.AbortController ? new global.AbortController() : null;
+    var timer = ctl ? setTimeout(function () { try { ctl.abort(); } catch (e) {} }, 6000) : null;
+    return fetch(f, ctl ? { signal: ctl.signal } : undefined)
+      .then(function (r) {
+        if (timer) clearTimeout(timer);
+        if (!r.ok) return null;
+        var lm = r.headers.get('last-modified');
+        if (lm && (Date.now() - new Date(lm).getTime()) > FEED_MAX_AGE) {
+          stats.feedMiss++; return null;          // cron has stalled — get the truth from the API
+        }
+        return r.text().then(function (t) {
+          if (!t || t.trim().charAt(0) === '<') return null;
+          try { var d = JSON.parse(t); stats.feed++; return d; } catch (e) { return null; }
+        });
+      })
+      .catch(function () {
+        if (timer) clearTimeout(timer);
+        feedDown = Date.now() + 60000;            // back off a minute before retrying the CDN
+        return null;
+      });
+  }
 
   /* Cross-tab channel: one tab's fetch result serves every other tab of the same
      VA. Most VAs keep the board open in more than one tab, so this is a real cut. */
@@ -121,7 +183,9 @@
         });
     };
 
-    var p = attempt(0)
+    /* CDN first, Apps Script only if the CDN cannot answer. */
+    var p = tryFeed(url)
+      .then(function (d) { return (d !== null) ? d : attempt(0); })
       .then(function (data) { if (ttl > 0) share(url, data); return data; })
       .finally(function () { delete live[url]; });
 
@@ -189,6 +253,7 @@
       return {
         sent: stats.sent, served: stats.served, cached: stats.cached,
         deduped: stats.deduped, failed: stats.failed,
+        from_cdn: stats.feed, cdn_stale: stats.feedMiss,
         requests_avoided: saved,
         saved_pct: (stats.sent + saved) ? Math.round(saved / (stats.sent + saved) * 100) : 0
       };
