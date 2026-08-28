@@ -9,102 +9,179 @@
 <style>
   :root{
     --ink:#262262; --ink-2:#3e3a7e; --hot:#f16623; --hot-2:#ff8a45;
-    --bg:#fdf6f0; --card:#ffffff; --field:#fbf7f3;
+    --bg:#fdf6f0; --card:#ffffff; --field:#fcf8f4;
     --t1:#2b2740; --t2:#6c6480; --t3:#9a92a8;
     --border:#efe2d6; --border-hi:rgba(241,102,35,.55);
     --g:#1d9e75; --r:#d94848;
   }
   *{ box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
   body{
-    margin:0; color:var(--t1); min-height:100vh;
+    margin:0; color:var(--t1); min-height:100vh; overflow-x:hidden;
     font-family:'Poppins',system-ui,-apple-system,sans-serif;
-    background:
-      radial-gradient(700px 520px at 88% -6%, rgba(255,170,110,.35), transparent 65%),
-      radial-gradient(640px 520px at -12% 22%, rgba(120,104,220,.14), transparent 60%),
-      radial-gradient(720px 560px at 50% 112%, rgba(255,196,150,.30), transparent 65%),
-      var(--bg);
-    background-attachment:fixed;
+    background:var(--bg);
   }
-  .wrap{ max-width:660px; margin:0 auto; padding:40px 20px 64px; position:relative; }
+  /* ── living background: drifting mesh orbs + dot grid + grain ── */
+  .bgfx{ position:fixed; inset:0; z-index:0; pointer-events:none; }
+  .orb{ position:absolute; border-radius:50%; filter:blur(70px); opacity:.75; }
+  .orb.o1{ width:640px; height:640px; right:-200px; top:-220px;
+    background:radial-gradient(circle at 35% 35%, #ffc08a, rgba(255,192,138,0) 68%);
+    animation:drift1 26s ease-in-out infinite alternate; }
+  .orb.o2{ width:560px; height:560px; left:-240px; top:16%;
+    background:radial-gradient(circle at 60% 40%, rgba(140,124,235,.5), rgba(140,124,235,0) 70%);
+    animation:drift2 32s ease-in-out infinite alternate; }
+  .orb.o3{ width:700px; height:700px; left:30%; bottom:-320px;
+    background:radial-gradient(circle at 50% 30%, rgba(255,170,110,.55), rgba(255,170,110,0) 70%);
+    animation:drift1 38s ease-in-out infinite alternate-reverse; }
+  @keyframes drift1{ from{ transform:translate(0,0) scale(1) } to{ transform:translate(-70px,50px) scale(1.12) } }
+  @keyframes drift2{ from{ transform:translate(0,0) scale(1.05) } to{ transform:translate(60px,-40px) scale(.94) } }
+  .bgfx .dots{ position:absolute; inset:0;
+    background-image:radial-gradient(rgba(38,34,98,.09) 1px, transparent 1.4px);
+    background-size:30px 30px;
+    -webkit-mask-image:radial-gradient(70% 60% at 50% 35%, #000, transparent);
+            mask-image:radial-gradient(70% 60% at 50% 35%, #000, transparent); }
+  .bgfx .grain{ position:absolute; inset:0; opacity:.5; mix-blend-mode:soft-light;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E"); }
+  /* brand ribbon along the very top, same gradient family as the portal rail */
+  .ribbon{ position:fixed; top:0; left:0; right:0; height:5px; z-index:5;
+    background:linear-gradient(100deg,#262262 0%,#3e2a5a 30%,#96473f 62%,#dd5f29 86%,#f16623 100%); }
 
-  /* decorative sparkles */
-  .spark{ position:absolute; color:var(--hot); font-weight:700; opacity:.7; user-select:none; pointer-events:none; }
+  .wrap{ max-width:680px; margin:0 auto; padding:46px 20px 64px; position:relative; z-index:1; }
 
-  .brand{ display:flex; align-items:center; gap:13px; margin-bottom:6px; }
-  .logo{
-    width:50px; height:50px; display:flex; align-items:center; justify-content:center;
-  }
-  .logo img{ width:50px; height:50px; object-fit:contain; filter:drop-shadow(0 6px 14px rgba(241,86,15,.35)); }
+  .spark{ position:absolute; color:var(--hot); font-weight:700; opacity:.6; user-select:none; pointer-events:none;
+    animation:twinkle 3.6s ease-in-out infinite; }
+  .spark:nth-child(2){ animation-delay:1.2s } .spark:nth-child(3){ animation-delay:2.2s }
+  @keyframes twinkle{ 0%,100%{ opacity:.25; transform:scale(.9) } 50%{ opacity:.75; transform:scale(1.08) } }
+
+  .brand{ display:flex; align-items:center; gap:13px; margin-bottom:6px; animation:rise .6s cubic-bezier(.2,.9,.3,1) both; }
+  .logo{ width:52px; height:52px; display:flex; align-items:center; justify-content:center; position:relative; }
+  .logo::before{ content:''; position:absolute; inset:-6px; border-radius:50%;
+    background:radial-gradient(circle, rgba(241,102,35,.28), transparent 70%); }
+  .logo img{ width:52px; height:52px; object-fit:contain; position:relative;
+    filter:drop-shadow(0 8px 18px rgba(241,86,15,.4)); }
   .brand b{ font-weight:700; font-size:16px; color:var(--ink); display:block; }
-  .brand small{ font-size:12px; color:var(--t3); letter-spacing:.14em; font-weight:600; }
+  .brand small{ font-size:11.5px; color:var(--t3); letter-spacing:.22em; font-weight:600; }
 
-  .kick{ margin:30px 0 0; color:var(--hot); font-weight:700; font-size:12.5px; letter-spacing:.28em; }
+  .kick{ margin:34px 0 0; color:var(--hot); font-weight:700; font-size:12.5px; letter-spacing:.3em;
+    display:flex; align-items:center; gap:12px; animation:rise .6s .08s cubic-bezier(.2,.9,.3,1) both; }
+  .kick::before{ content:''; width:34px; height:2px; background:linear-gradient(90deg,var(--hot),transparent); border-radius:2px; }
   h1{
     font-family:'Archivo Black',sans-serif; font-weight:400; letter-spacing:-.01em;
-    font-size:clamp(28px,5.4vw,38px); line-height:1.12; margin:10px 0 12px; color:var(--ink);
+    font-size:clamp(30px,5.8vw,42px); line-height:1.1; margin:12px 0 14px; color:var(--ink);
+    animation:rise .6s .14s cubic-bezier(.2,.9,.3,1) both;
   }
-  h1 em{ font-style:normal; color:var(--hot); }
-  .sub{ color:var(--t2); font-size:14.5px; line-height:1.65; margin:0 0 26px; }
+  h1 em{ font-style:normal;
+    background:linear-gradient(100deg,#f16623 10%,#ff9d5c 45%,#f16623 75%);
+    background-size:200% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+    animation:shine 5s linear infinite; }
+  @keyframes shine{ to{ background-position:-200% 0 } }
+  .sub{ color:var(--t2); font-size:14.5px; line-height:1.7; margin:0 0 28px; max-width:54ch;
+    animation:rise .6s .2s cubic-bezier(.2,.9,.3,1) both; }
+  @keyframes rise{ from{ opacity:0; transform:translateY(16px) } }
 
+  /* ── the card: glass over the mesh, gradient hairline, accent bar ── */
   .card{
-    background:var(--card); border:1px solid var(--border); border-radius:22px; padding:28px 26px 26px;
-    box-shadow:0 30px 70px -34px rgba(80,50,30,.35), 0 4px 16px -8px rgba(80,50,30,.12);
+    position:relative; border-radius:24px; padding:30px 28px 28px;
+    background:rgba(255,255,255,.82);
+    -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px);
+    border:1px solid rgba(255,255,255,.9);
+    box-shadow:
+      0 40px 90px -38px rgba(80,50,30,.45),
+      0 10px 30px -18px rgba(38,34,98,.18),
+      inset 0 1px 0 rgba(255,255,255,.9);
+    animation:rise .7s .26s cubic-bezier(.2,.9,.3,1) both;
   }
-  label{ display:block; font-size:11.5px; text-transform:uppercase; letter-spacing:.09em; color:var(--t2); margin:16px 0 7px; font-weight:600; }
+  .card::before{ content:''; position:absolute; left:28px; right:28px; top:0; height:4px; border-radius:0 0 6px 6px;
+    background:linear-gradient(90deg,var(--ink), #96473f, var(--hot)); opacity:.9; }
+
+  /* section mini-headers */
+  .sect{ display:flex; align-items:center; gap:10px; margin:26px 0 2px; }
+  .sect:first-of-type{ margin-top:6px; }
+  .sect b{ font-size:12px; letter-spacing:.18em; color:var(--ink); font-weight:700; }
+  .sect i{ width:26px; height:26px; border-radius:9px; font-style:normal; font-size:13px;
+    display:flex; align-items:center; justify-content:center; color:#fff;
+    background:linear-gradient(135deg,var(--ink),var(--ink-2)); box-shadow:0 6px 14px -6px rgba(38,34,98,.5); }
+  .sect::after{ content:''; flex:1; height:1px; background:linear-gradient(90deg,var(--border),transparent); }
+
+  label{ display:block; font-size:11.5px; text-transform:uppercase; letter-spacing:.09em; color:var(--t2); margin:15px 0 7px; font-weight:600; }
   label.req::after{ content:" *"; color:var(--hot); }
   input,select,textarea{
-    width:100%; background:var(--field); border:1px solid var(--border); border-radius:12px;
+    width:100%; background:var(--field); border:1px solid var(--border); border-radius:13px;
     color:var(--t1); padding:12px 15px; font-size:14.5px; font-family:inherit; outline:none;
-    transition:border-color .15s, box-shadow .15s;
+    box-shadow:inset 0 1px 2px rgba(80,50,30,.05);
+    transition:border-color .18s, box-shadow .18s, background .18s;
   }
-  input:focus,select:focus,textarea:focus{ border-color:var(--border-hi); box-shadow:0 0 0 4px rgba(241,102,35,.12); }
-  input::placeholder,textarea::placeholder{ color:#b9b0c4; }
+  input:hover,select:hover,textarea:hover{ border-color:#e2cdb9; }
+  input:focus,select:focus,textarea:focus{
+    border-color:var(--border-hi); background:#fff;
+    box-shadow:0 0 0 4px rgba(241,102,35,.13), 0 8px 20px -12px rgba(241,102,35,.35); }
+  input::placeholder,textarea::placeholder{ color:#bcb3c6; }
+  select{ appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23f16623' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 15px center; padding-right:38px; }
+  select:disabled{ opacity:.55; }
   textarea{ min-height:96px; resize:vertical; }
 
   .file{
     display:flex; align-items:center; gap:14px; background:var(--field);
-    border:1.5px dashed #e4c9b4; border-radius:14px; padding:12px 14px; transition:border-color .15s;
+    border:1.5px dashed #e0c3ab; border-radius:15px; padding:13px 15px;
+    transition:border-color .18s, background .18s;
   }
-  .file:hover{ border-color:var(--border-hi); }
+  .file:hover{ border-color:var(--border-hi); background:#fff; }
   .file-btn{
+    position:relative; overflow:hidden;
     background:linear-gradient(135deg,var(--hot),var(--hot-2)); border:none; border-radius:999px;
     padding:10px 20px; cursor:pointer; color:#fff; font-size:13px; font-weight:600; white-space:nowrap;
-    box-shadow:0 8px 18px -8px rgba(241,102,35,.7);
+    box-shadow:0 10px 22px -10px rgba(241,102,35,.75);
   }
   .file-name{ font-size:13px; color:var(--t2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .hint{ font-size:11.5px; color:var(--t3); margin-top:7px; }
 
   .submit{
-    width:100%; margin-top:26px; border:none; border-radius:999px; padding:16px;
-    background:linear-gradient(135deg,var(--hot) 20%,var(--hot-2));
+    position:relative; overflow:hidden; width:100%; margin-top:28px; border:none; border-radius:999px; padding:17px;
+    background:linear-gradient(135deg,var(--hot) 15%,var(--hot-2) 85%);
     color:#fff; font-size:15.5px; font-weight:700; cursor:pointer; font-family:inherit;
-    letter-spacing:.02em; box-shadow:0 16px 34px -12px rgba(241,102,35,.65);
-    transition:transform .12s, box-shadow .2s, opacity .15s;
+    letter-spacing:.02em; box-shadow:0 18px 40px -14px rgba(241,102,35,.7);
+    transition:transform .14s, box-shadow .22s, opacity .15s;
   }
-  .submit:hover{ transform:translateY(-2px); box-shadow:0 20px 40px -12px rgba(241,102,35,.75); }
+  .submit::after{ content:''; position:absolute; top:0; bottom:0; width:60px; left:-80px;
+    background:linear-gradient(100deg, transparent, rgba(255,255,255,.5), transparent);
+    transform:skewX(-18deg); transition:left .05s; }
+  .submit:hover{ transform:translateY(-2px); box-shadow:0 24px 48px -14px rgba(241,102,35,.8); }
+  .submit:hover::after{ left:calc(100% + 80px); transition:left .7s ease; }
   .submit:disabled{ opacity:.6; cursor:not-allowed; transform:none; }
 
   .msg{ margin-top:14px; padding:12px 15px; border-radius:12px; font-size:13.5px; display:none; }
   .msg.err{ background:rgba(217,72,72,.08); border:1px solid rgba(217,72,72,.35); color:#b23434; display:block; }
   .msg.ok{ background:rgba(29,158,117,.08); border:1px solid rgba(29,158,117,.35); color:#15805d; display:block; }
 
-  .done{ text-align:center; padding:48px 24px; display:none; background:var(--card); border:1px solid var(--border); border-radius:22px;
-    box-shadow:0 30px 70px -34px rgba(80,50,30,.35); }
+  .done{ text-align:center; padding:52px 26px; display:none; position:relative; border-radius:24px;
+    background:rgba(255,255,255,.85); -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px);
+    border:1px solid rgba(255,255,255,.9);
+    box-shadow:0 40px 90px -38px rgba(80,50,30,.45); }
   .done .check{
-    width:72px; height:72px; border-radius:50%; margin:0 auto 20px;
+    width:78px; height:78px; border-radius:50%; margin:0 auto 20px;
     background:linear-gradient(135deg,var(--hot),var(--hot-2));
     display:flex; align-items:center; justify-content:center;
-    box-shadow:0 16px 34px -12px rgba(241,102,35,.6);
+    box-shadow:0 18px 40px -12px rgba(241,102,35,.65);
+    animation:pop .5s cubic-bezier(.2,1.6,.4,1) both;
   }
-  .done h2{ margin:0 0 10px; font-family:'Archivo Black',sans-serif; font-weight:400; font-size:24px; color:var(--ink); }
-  .done p{ color:var(--t2); font-size:14.5px; line-height:1.65; }
+  @keyframes pop{ 0%{ transform:scale(.4); opacity:0 } 70%{ transform:scale(1.08) } 100%{ transform:scale(1); opacity:1 } }
+  .done h2{ margin:0 0 10px; font-family:'Archivo Black',sans-serif; font-weight:400; font-size:25px; color:var(--ink); }
+  .done p{ color:var(--t2); font-size:14.5px; line-height:1.7; max-width:46ch; margin:0 auto; }
 
-  .foot{ text-align:center; color:var(--t3); font-size:12px; margin-top:30px; }
+  .foot{ text-align:center; color:var(--t3); font-size:12px; margin-top:32px; }
   .row{ display:grid; grid-template-columns:1fr 1fr; gap:0 14px; }
-  @media (max-width:480px){ .card{ padding:22px 18px; } .row{ grid-template-columns:1fr; } }
+  @media (max-width:480px){ .card{ padding:24px 18px; } .row{ grid-template-columns:1fr; } }
+  @media (prefers-reduced-motion:reduce){ *{ animation:none !important; transition:none !important; } }
 </style>
 </head>
 <body>
+<div class="ribbon"></div>
+<div class="bgfx">
+  <div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div>
+  <div class="dots"></div><div class="grain"></div>
+</div>
 <div class="wrap">
   <div class="spark" style="top:26px;right:8px;font-size:26px;">+</div>
   <div class="spark" style="top:210px;left:-6px;font-size:18px;opacity:.45;">+</div>
@@ -120,6 +197,7 @@
     <h1>Join the <em>JMB Virtuals</em> team</h1>
     <p class="sub">Tell us a bit about yourself and upload your resume. If your resume passes our initial screening, we'll email you a link to a short skills assessment.</p>
     <div class="card">
+      <div class="sect"><i>1</i><b>ABOUT YOU</b></div>
       <div class="row">
         <div>
           <label class="req">Last name</label>
@@ -134,18 +212,28 @@
       <input id="f-email" type="email" placeholder="you@email.com" />
       <label>Phone / WhatsApp</label>
       <input id="f-phone" placeholder="+63 ..." />
-      <label class="req">House no. / Street / Barangay</label>
-      <input id="f-street" placeholder="123 Sampaguita St., Brgy. San Isidro" />
+      <div class="sect"><i>2</i><b>YOUR ADDRESS</b></div>
       <div class="row">
         <div>
-          <label class="req">City / Municipality</label>
-          <input id="f-city" placeholder="Quezon City" />
+          <label class="req">Province</label>
+          <select id="f-province"><option value="">Select province…</option></select>
         </div>
         <div>
-          <label class="req">Province</label>
-          <input id="f-province" placeholder="Metro Manila" />
+          <label class="req">City / Municipality</label>
+          <select id="f-city" disabled><option value="">Select province first…</option></select>
         </div>
       </div>
+      <div class="row">
+        <div>
+          <label class="req">Barangay</label>
+          <select id="f-brgy" disabled><option value="">Select city first…</option></select>
+        </div>
+        <div>
+          <label class="req">House no. / Street</label>
+          <input id="f-street" placeholder="123 Sampaguita St." />
+        </div>
+      </div>
+      <div class="sect"><i>3</i><b>THE ROLE</b></div>
       <label>Position you're applying for</label>
       <select id="f-position">
         <option value="">Select a role…</option>
@@ -204,6 +292,93 @@ function clearMsg(){ var m=$('msg'); m.className='msg'; m.textContent=''; }
 
 function emailValid(s){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s); }
 
+/* ── PH address dropdowns ─────────────────────────────────────────────
+   Provinces are embedded (PSGC list). Cities/municipalities are loaded per
+   province from the public PSGC API in the applicant's browser. If that
+   lookup ever fails (offline API, blocked, etc.) the city dropdown quietly
+   turns into a normal text box, so the form never gets stuck. */
+var PSGC='https://psgc.gitlab.io/api/';
+var PROVINCES=[
+  ['130000000','Metro Manila','r'],
+  ['140100000','Abra'],['160200000','Agusan Del Norte'],['160300000','Agusan Del Sur'],['060400000','Aklan'],
+  ['050500000','Albay'],['060600000','Antique'],['148100000','Apayao'],['037700000','Aurora'],['150700000','Basilan'],
+  ['030800000','Bataan'],['020900000','Batanes'],['041000000','Batangas'],['141100000','Benguet'],['087800000','Biliran'],
+  ['071200000','Bohol'],['101300000','Bukidnon'],['031400000','Bulacan'],['021500000','Cagayan'],['051600000','Camarines Norte'],
+  ['051700000','Camarines Sur'],['101800000','Camiguin'],['061900000','Capiz'],['052000000','Catanduanes'],['042100000','Cavite'],
+  ['072200000','Cebu'],['124700000','Cotabato'],['118200000','Davao De Oro'],['112300000','Davao Del Norte'],['112400000','Davao Del Sur'],
+  ['118600000','Davao Occidental'],['112500000','Davao Oriental'],['168500000','Dinagat Islands'],['082600000','Eastern Samar'],['067900000','Guimaras'],
+  ['142700000','Ifugao'],['012800000','Ilocos Norte'],['012900000','Ilocos Sur'],['063000000','Iloilo'],['023100000','Isabela'],
+  ['143200000','Kalinga'],['013300000','La Union'],['103500000','Lanao Del Norte'],['153600000','Lanao Del Sur'],['043400000','Laguna'],
+  ['083700000','Leyte'],['153800000','Maguindanao'],['174000000','Marinduque'],['054100000','Masbate'],['104200000','Misamis Occidental'],
+  ['104300000','Misamis Oriental'],['144400000','Mountain Province'],['064500000','Negros Occidental'],['074600000','Negros Oriental'],['084800000','Northern Samar'],
+  ['034900000','Nueva Ecija'],['025000000','Nueva Vizcaya'],['175100000','Occidental Mindoro'],['175200000','Oriental Mindoro'],['035400000','Pampanga'],
+  ['015500000','Pangasinan'],['175300000','Palawan'],['045600000','Quezon'],['025700000','Quirino'],['045800000','Rizal'],
+  ['175900000','Romblon'],['086000000','Samar'],['128000000','Sarangani'],['076100000','Siquijor'],['056200000','Sorsogon'],
+  ['126300000','South Cotabato'],['086400000','Southern Leyte'],['126500000','Sultan Kudarat'],['156600000','Sulu'],['166700000','Surigao Del Norte'],
+  ['166800000','Surigao Del Sur'],['036900000','Tarlac'],['157000000','Tawi-Tawi'],['037100000','Zambales'],['097200000','Zamboanga Del Norte'],
+  ['097300000','Zamboanga Del Sur'],['098300000','Zamboanga Sibugay']
+];
+var CITY_CACHE={}, BRGY_CACHE={};
+(function(){
+  var ps=$('f-province');
+  PROVINCES.forEach(function(p){
+    var o=document.createElement('option'); o.value=p[1]; o.dataset.code=p[0]; o.dataset.kind=p[2]||'p';
+    o.textContent=p[1]; ps.appendChild(o);
+  });
+  function resetSel(id, msg, disabled){
+    var el=$(id); if(!el || el.tagName!=='SELECT') return;
+    el.innerHTML='<option value="">'+msg+'</option>'; el.disabled=!!disabled;
+  }
+  function toTextInput(id, ph){
+    var el=$(id); if(!el || el.tagName!=='SELECT') return;
+    var inp=document.createElement('input');
+    inp.id=id; inp.placeholder=ph;
+    el.parentNode.replaceChild(inp, el);
+  }
+  function esc1(s){ return String(s).replace(/</g,'&lt;'); }
+
+  ps.addEventListener('change', function(){
+    resetSel('f-brgy','Select city first…', true);
+    if(!ps.value){ resetSel('f-city','Select province first…', true); return; }
+    var o=ps.options[ps.selectedIndex], code=o.dataset.code, kind=o.dataset.kind;
+    var url=PSGC+(kind==='r'?'regions/':'provinces/')+code+'/cities-municipalities/';
+    if(CITY_CACHE[code]){ fillCities(CITY_CACHE[code]); return; }
+    resetSel('f-city','Loading cities…', true);
+    fetch(url).then(function(r){ return r.json(); }).then(function(list){
+      var items=(list||[]).map(function(c){ return {n:c.name, c:c.code}; })
+        .sort(function(a,b){ return a.n<b.n?-1:1; });
+      if(!items.length) throw new Error('empty');
+      CITY_CACHE[code]=items; fillCities(items);
+    }).catch(function(){ toTextInput('f-city','Type your city / municipality'); toTextInput('f-brgy','Type your barangay'); });
+  });
+  function fillCities(items){
+    var cs=$('f-city'); if(!cs || cs.tagName!=='SELECT') return;
+    cs.innerHTML='<option value="">Select city / municipality…</option>'+
+      items.map(function(it){ return '<option data-code="'+it.c+'">'+esc1(it.n)+'</option>'; }).join('');
+    cs.disabled=false;
+    cs.onchange=cityChanged;
+  }
+  function cityChanged(){
+    var cs=$('f-city'); if(!cs || cs.tagName!=='SELECT') return;
+    if(!cs.value){ resetSel('f-brgy','Select city first…', true); return; }
+    var code=cs.options[cs.selectedIndex].dataset.code;
+    if(BRGY_CACHE[code]){ fillBrgys(BRGY_CACHE[code]); return; }
+    resetSel('f-brgy','Loading barangays…', true);
+    fetch(PSGC+'cities-municipalities/'+code+'/barangays/').then(function(r){ return r.json(); }).then(function(list){
+      var names=(list||[]).map(function(b){ return b.name; })
+        .sort(function(a,b){ return a.localeCompare(b, undefined, {numeric:true}); });
+      if(!names.length) throw new Error('empty');
+      BRGY_CACHE[code]=names; fillBrgys(names);
+    }).catch(function(){ toTextInput('f-brgy','Type your barangay'); });
+  }
+  function fillBrgys(names){
+    var bs=$('f-brgy'); if(!bs || bs.tagName!=='SELECT') return;
+    bs.innerHTML='<option value="">Select barangay…</option>'+
+      names.map(function(n){ return '<option>'+esc1(n)+'</option>'; }).join('');
+    bs.disabled=false;
+  }
+})();
+
 /* contractors can share a personal link: hr-apply.html?ref=Their+Name */
 try{
   var refParam = new URLSearchParams(location.search).get('ref');
@@ -216,11 +391,13 @@ async function submitApp(){
   if(!lname){ showMsg('Please enter your last name.','err'); return; }
   if(!fname){ showMsg('Please enter your first name.','err'); return; }
   var name = lname + ', ' + fname;
-  var street=$('f-street').value.trim(), city=$('f-city').value.trim(), province=$('f-province').value.trim();
-  if(!street){ showMsg('Please enter your house no. / street / barangay.','err'); return; }
-  if(!city){ showMsg('Please enter your city or municipality.','err'); return; }
-  if(!province){ showMsg('Please enter your province.','err'); return; }
-  var address = street + ', ' + city + ', ' + province;
+  var street=$('f-street').value.trim(), brgy=$('f-brgy').value.trim(),
+      city=$('f-city').value.trim(), province=$('f-province').value.trim();
+  if(!province){ showMsg('Please select your province.','err'); return; }
+  if(!city){ showMsg('Please select your city or municipality.','err'); return; }
+  if(!brgy){ showMsg('Please select your barangay.','err'); return; }
+  if(!street){ showMsg('Please enter your house no. / street.','err'); return; }
+  var address = street + ', Brgy. ' + brgy + ', ' + city + ', ' + province;
   if(!emailValid(email)){ showMsg('Please enter a valid email address.','err'); return; }
   if(!RESUME.b64){ showMsg('Please attach your resume (PDF or Word).','err'); return; }
 
@@ -232,7 +409,7 @@ async function submitApp(){
   var payload = {
     action:'apply', name:name, email:email,
     phone:$('f-phone').value.trim(), position:$('f-position').value,
-    address:address, city:city, province:province,
+    address:address, barangay:brgy, city:city, province:province,
     referral:referral, notes:notes,
     resume_b64:RESUME.b64, resume_name:RESUME.name, resume_type:RESUME.type
   };
