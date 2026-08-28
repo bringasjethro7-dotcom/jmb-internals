@@ -401,7 +401,14 @@ table tbody tr:hover td{background:rgba(255,107,26,.05)}
 var HR_URL     = "https://script.google.com/macros/s/AKfycbyf_V9JIV8x_MqT4eibw9okSWt9ZjyvEYM09nZBEMNLiiyximXIKX6ojc7aLpiRaffN/exec";
 var PORTAL_URL = "https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec";
 var ASSESS_URL = "https://internals.jmbvirtuals.com/hr-assess.html";   // digital exam page (in-office laptop)
-var ADMIN_PASS = "JMBeast_020298";
+/* ── ADMIN SIGN-IN — verified SERVER-SIDE, no password in this file ──
+   These pages live in a public repo and anyone can view-source the live site, so the
+   admin password must never appear here. The portal Apps Script checks it against a
+   Script Property (ADMIN_PASS) and answers yes/no. */
+async function verifyAdminPass(p){
+  try{ var r=await fetch('https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec?action=verify_admin&pass='+encodeURIComponent(p)+'&_='+Date.now()); var d=await r.json(); return !!(d&&d.ok); }
+  catch(e){ return false; }
+}
 function examLink(id,token){ return ASSESS_URL+'?id='+encodeURIComponent(id)+'&token='+encodeURIComponent(token); }
 function copyExamLink(e,id,token){
   if(e) e.stopPropagation();
@@ -413,9 +420,9 @@ function copyExamLink(e,id,token){
 }
 
 var USER=null, ISADMIN=false, STATE={candidates:[]}, _editId=null, _acctCandId=null, _empCache=null;
-var STAGES=['applied','screening','assessment','interview','offer','hired','rejected'];
-var STAGE_LABEL={applied:'Applied',screening:'Resume review',assessment:'Assessment',interview:'Interview',offer:'Offer',hired:'Hired',rejected:'Rejected'};
-var STAGE_COLOR={applied:'#0284c7',screening:'#7c3aed',assessment:'#22d3ee',interview:'#ffb066',offer:'#ff8a3c',hired:'#15803d',rejected:'#dc2626'};
+var STAGES=['applied','screening','assessment','interview','offer','hired','rejected','archived'];
+var STAGE_LABEL={applied:'Applied',screening:'Resume review',assessment:'Assessment',interview:'Interview',offer:'Offer',hired:'Hired',rejected:'Rejected',archived:'Archive'};
+var STAGE_COLOR={applied:'#0284c7',screening:'#7c3aed',assessment:'#22d3ee',interview:'#ffb066',offer:'#ff8a3c',hired:'#15803d',rejected:'#dc2626',archived:'#8b8b96'};
 var ONB_TASKS=['Signed contractor papers (agreements & policies)','Submitted requirements / IDs','Company email created','Portal account created','Tools access (tracker · chat · voice)','Assigned to team / manager','Orientation & SOP walkthrough','First task assigned'];
 
 function $(id){ return document.getElementById(id); }
@@ -434,7 +441,7 @@ async function doLogin(){
   err.style.display='none';
   if(!id||!pin){ err.textContent='Enter your contractor ID and PIN.'; err.style.display='block'; return; }
   if(id.toUpperCase()==='ADMIN'){
-    if(pin===ADMIN_PASS){ enterApp({full_name:'Admin (JMB Virtuals)',employee_id:'ADMIN'}, true); }
+    if(await verifyAdminPass(pin)){ enterApp({full_name:'Admin (JMB Virtuals)',employee_id:'ADMIN'}, true); }
     else { err.textContent='Invalid admin password.'; err.style.display='block'; }
     return;
   }
@@ -594,6 +601,8 @@ function candCard(c){
     if(rv==='attending') extra+='<span class="cbtn" style="cursor:default;border-color:#22c55e55;color:#15803d" onclick="event.stopPropagation()">✅ Attending</span>';
     else if(rv==='declined') extra+='<span class="cbtn" style="cursor:default;border-color:#dc262655;color:#dc2626" onclick="event.stopPropagation()">❌ Declined</span>';
     else extra+='<span class="cbtn" style="cursor:default;border-color:var(--line);color:var(--t3)" onclick="event.stopPropagation()">⏳ Awaiting RSVP</span>';
+    // no-show cleanup: quietly park them in Archive — NO email is sent
+    extra+='<button class="cbtn" style="border-color:#8b8b9655;color:#6b6b76" onclick="archiveCand(event,\''+c.id+'\')">🗄 Archive</button>';
   }
   // pass/fail for resume-review stage
   var actions='';
@@ -613,6 +622,17 @@ function candCard(c){
     +'<div class="cmeta">'+(c.source?'<span class="src">'+esc(c.source)+'</span>':'')+(c.applied?'<span>applied '+esc(String(c.applied).slice(0,10))+'</span>':'')+'</div>'
     +(extra?'<div class="crow">'+extra+'</div>':'')
     +actions+'</div>';
+}
+/* Archive = quiet parking for applicants who never took the assessment (or went silent).
+   Unlike Rejected, moving here NEVER sends an email — it just declutters the board. */
+function archiveCand(e, id){
+  e.stopPropagation();
+  var c=(STATE.candidates||[]).filter(function(x){return String(x.id)===String(id);})[0]; if(!c) return;
+  if(!confirm('Archive '+(c.name||'this applicant')+'? No email will be sent — they are just moved off the active pipeline.')) return;
+  c.stage='archived'; renderBoard();
+  apiPost({action:'candidate_stage', id:id, stage:'archived'})
+    .then(function(){ toast('Archived — no email sent.'); })
+    .catch(function(){ toast('Save failed'); });
 }
 async function screenCand(e, id, decision){
   e.stopPropagation();
