@@ -409,7 +409,7 @@ async function verifyAdminPass(p){
   try{ var r=await fetch('https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec?action=verify_admin&pass='+encodeURIComponent(p)+'&_='+Date.now()); var d=await r.json(); return !!(d&&d.ok); }
   catch(e){ return false; }
 }
-var USER=null, ISADMIN=false, TAB='mine', UNITS=[], BOARD=null;
+var USER=null, ISADMIN=false, TAB='mine', UNITS=[], BOARD=null, ADMIN_PIN='';
 function $(id){ return document.getElementById(id); }
 function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('on'); setTimeout(function(){ t.classList.remove('on'); },2200); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -430,7 +430,7 @@ async function signIn(){
   var err=$('si-err'); err.style.display='none';
   if(!id||!pin){ err.style.display='block'; err.textContent='Enter your ID and PIN.'; return; }
   if(id.toUpperCase()==='ADMIN'){
-    if(await verifyAdminPass(pin)){ USER={id:'ADMIN',name:'Admin'}; ISADMIN=true; start(); }
+    if(await verifyAdminPass(pin)){ ADMIN_PIN=pin; USER={id:'ADMIN',name:'Admin'}; ISADMIN=true; start(); }
     else { err.style.display='block'; err.textContent='Incorrect admin password.'; }
     return;
   }
@@ -507,11 +507,12 @@ async function loadResults(){
   var p=$('pane-results'); p.innerHTML='<div class="card">Loading results…</div>';
   var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
   try{
+    var _ap='&pass='+encodeURIComponent(ADMIN_PIN);   // admin-only endpoints: send the verified pass
     var qs='month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&_='+Date.now();
     var rs=await Promise.all([
-      fetch(PORTAL_URL+'?action=qa2_results&'+qs).then(function(r){return r.json();}),
-      fetch(PORTAL_URL+'?action=qa2_grades&month='+encodeURIComponent(m)+'&_='+Date.now()).then(function(r){return r.json();}),
-      fetch(PORTAL_URL+'?action=qa2_disputes&'+qs).then(function(r){return r.json();})
+      fetch(PORTAL_URL+'?action=qa2_results&'+qs+_ap).then(function(r){return r.json();}),
+      fetch(PORTAL_URL+'?action=qa2_grades&month='+encodeURIComponent(m)+_ap+'&_='+Date.now()).then(function(r){return r.json();}),
+      fetch(PORTAL_URL+'?action=qa2_disputes&'+qs+_ap).then(function(r){return r.json();})
     ]);
     var R=rs[0], G=rs[1], D=rs[2];
     if(!R||!R.ok){ p.innerHTML='<div class="warn">'+esc((R&&R.error)||'Could not load results')+'</div>'; return; }
