@@ -304,7 +304,7 @@ td{padding:11px 12px;border-bottom:1px solid rgba(15,23,42,.05)}
   <div id="signin" class="card" style="max-width:400px;margin:12vh auto;padding:30px 30px 26px;">
     <div class="av" style="width:44px;height:44px;font-size:15px;margin-bottom:14px;">QA</div>
     <h1 style="font-size:23px;font-weight:800;letter-spacing:-.6px;margin:0 0 3px;">QA Review</h1>
-    <div style="color:var(--t2);font-size:13px;margin-bottom:18px;">Sign in with your Employee ID and PIN.</div>
+    <div id="si-sub" style="color:var(--t2);font-size:13px;margin-bottom:18px;">Sign in with your Employee ID and PIN.</div>
     <div style="display:grid;gap:9px;">
       <input id="si-id" placeholder="Employee ID (or ADMIN)">
       <input id="si-pin" type="password" placeholder="PIN / password">
@@ -410,6 +410,16 @@ async function verifyAdminPass(p){
   catch(e){ return false; }
 }
 var USER=null, ISADMIN=false, TAB='mine', UNITS=[], BOARD=null, ADMIN_PIN='';
+/* Reviewer access gate. When a QA cycle's checking is CLOSED, set this to false so
+   only the admin can open the dashboard; VAs (reviewers) are refused at sign-in.
+   Flip back to true to reopen reviewing for the next cycle. */
+var QA_REVIEW_OPEN = false;
+document.addEventListener('DOMContentLoaded', function(){
+  var s=document.getElementById('si-sub'); if(!s) return;
+  s.textContent = QA_REVIEW_OPEN
+    ? 'Sign in with your Employee ID and PIN.'
+    : 'Reviewing is closed for this cycle — admin access only.';
+});
 function $(id){ return document.getElementById(id); }
 function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('on'); setTimeout(function(){ t.classList.remove('on'); },2200); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -432,6 +442,12 @@ async function signIn(){
   if(id.toUpperCase()==='ADMIN'){
     if(await verifyAdminPass(pin)){ ADMIN_PIN=pin; USER={id:'ADMIN',name:'Admin'}; ISADMIN=true; start(); }
     else { err.style.display='block'; err.textContent='Incorrect admin password.'; }
+    return;
+  }
+  // Reviewing closed → only admin may open the dashboard.
+  if(!QA_REVIEW_OPEN){
+    err.style.display='block';
+    err.textContent='QA reviewing is closed for this cycle. The dashboard is available to admins only.';
     return;
   }
   var b=$('si-btn'); b.disabled=true; b.textContent='Checking…';
