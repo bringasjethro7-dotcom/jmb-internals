@@ -334,11 +334,13 @@ td{padding:11px 12px;border-bottom:1px solid rgba(15,23,42,.05)}
         <button id="tab-mine" onclick="setTab('mine')">My review</button>
         <button id="tab-board" onclick="setTab('board')" style="display:none;">Assignment board</button>
         <button id="tab-results" onclick="setTab('results')" style="display:none;">Results</button>
+        <button id="tab-disputes" onclick="setTab('disputes')" style="display:none;">Disputes</button>
       </div>
     </div>
 
     <div id="pane-board" style="display:none;"></div>
     <div id="pane-results" style="display:none;"></div>
+    <div id="pane-disputes" style="display:none;"></div>
     <div id="pane-mine"></div>
   </div>
 </div>
@@ -500,16 +502,18 @@ function start(){
   $('who-av').textContent=initials(USER.name);
   $('f-month').value=curMonth();
   applyUrlParams();
-  if(ISADMIN){ $('tab-board').style.display=''; $('tab-results').style.display=''; setTab('board'); }
+  if(ISADMIN){ $('tab-board').style.display=''; $('tab-results').style.display=''; $('tab-disputes').style.display=''; setTab('board'); }
   else { setTab('mine'); if(needAgreement()) showAgreement(); }
 }
 function setTab(t){ TAB=t;
   $('pane-board').style.display=(t==='board')?'block':'none';
   $('pane-mine').style.display=(t==='mine')?'block':'none';
   $('pane-results').style.display=(t==='results')?'block':'none';
+  $('pane-disputes').style.display=(t==='disputes')?'block':'none';
   $('tab-mine').className=(t==='mine')?'on':'';
   $('tab-board').className=(t==='board')?'on':'';
   $('tab-results').className=(t==='results')?'on':'';
+  $('tab-disputes').className=(t==='disputes')?'on':'';
   reload();
 }
 function reload(){
@@ -517,7 +521,48 @@ function reload(){
   if(needAgreement()){ showAgreement(); return; }   // nothing loads until it is read
   if(TAB==='board') loadBoard();
   else if(TAB==='results') loadResults();
+  else if(TAB==='disputes') loadAllDisputes();
   else loadMine();
+}
+
+/* ── ALL DISPUTES (every week) ──────────────────────────────────────────────────────────────
+   The Results tab shows disputes for the selected WEEK only. This tab drops the week filter so
+   every open dispute a VA has filed this month — week 1 through 4 — is in one list to clear. */
+async function loadAllDisputes(){
+  var p=$('pane-disputes'); p.innerHTML='<div class="card">Loading disputes…</div>';
+  var m=$('f-month').value||curMonth();
+  try{
+    // No week param → qa2_disputes returns EVERY week for the month.
+    var D=await (await fetch(PORTAL_URL+'?action=qa2_disputes&month='+encodeURIComponent(m)+'&pass='+encodeURIComponent(ADMIN_PIN)+'&_='+Date.now())).json();
+    if(!D||!D.ok){ p.innerHTML='<div class="warn">'+esc((D&&D.error)||'Could not load disputes')+'</div>'; return; }
+    var rows=(D.rows||[]).slice().sort(function(a,b){
+      if((a.status==='open')!==(b.status==='open')) return a.status==='open'?-1:1;
+      return String(b.created_at||'').localeCompare(String(a.created_at||''));
+    });
+    var open=rows.filter(function(x){ return x.status==='open'; });
+    var h='<div class="card"><h3 style="margin:0 0 4px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--t3);font-weight:800;">Disputes · '+esc(m)+' · all weeks</h3>'
+      +'<div style="font-size:12.5px;color:var(--t2);margin-bottom:10px;">'
+      +'<b style="color:var(--red)">'+open.length+' open</b> · '+(rows.length-open.length)+' resolved · '+rows.length+' total</div>';
+    if(!rows.length){ h+='<div style="color:var(--t3);font-size:13.5px;padding:14px 0;">No disputes filed this month.</div></div>'; p.innerHTML=h; return; }
+    rows.forEach(function(d){
+      var st=d.status||'open', isOpen=st==='open';
+      h+='<div style="border:1px solid '+(isOpen?'rgba(220,38,38,.35)':'var(--line)')+';border-radius:11px;padding:12px 14px;margin-bottom:9px;'+(isOpen?'background:rgba(220,38,38,.03);':'')+'">'
+        +'<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;"><div>'
+        +'<b style="font-size:13.5px;">'+esc(d.name||d.employee_id)+'</b>'
+        +(d.week?' <span class="tag" style="background:var(--orange,#f26623);color:#fff;">Week '+esc(d.week)+'</span>':'')
+        +' disputes <b>'+esc(d.criterion)+'</b>'
+        +'<div style="font-size:11.5px;color:var(--t3);margin-top:2px;">'+esc(d.task||'')+(d.account?' · '+esc(d.account):'')+' · reviewed by '+esc(d.reviewer||'—')+(d.created_at?' · '+esc(d.created_at):'')+'</div>'
+        +(d.reason?'<div style="font-size:12.5px;color:var(--t2);margin-top:6px;">"'+esc(d.reason)+'"</div>':'')
+        +'</div><div style="display:flex;gap:7px;align-items:flex-start;flex-wrap:wrap;">'
+        +(isOpen
+          ? '<button class="btn g sm" onclick="resolveDispute(\''+esc(d.id)+'\',\'upheld\')">Uphold — VA is right</button>'
+            +'<button class="btn sm" onclick="resolveDispute(\''+esc(d.id)+'\',\'rejected\')">Reject — finding stands</button>'
+          : '<span class="pill '+(st==='upheld'?'done':'none')+'">'+esc(st)+'</span>')
+        +'</div></div></div>';
+    });
+    h+='<div style="font-size:11.5px;color:var(--t3);margin-top:4px;">Upholding flips that criterion to a pass, rewrites the week score, and docks the reviewer 10%. The VA is told either way.</div></div>';
+    p.innerHTML=h;
+  }catch(e){ p.innerHTML='<div class="warn">Network error loading disputes.</div>'; }
 }
 
 /* ── ADMIN: PLAN AND ASSIGN ──────────────────────────────────────────────────────────────── */
@@ -631,7 +676,7 @@ async function resolveDispute(id, outcome){
       +'&by='+encodeURIComponent(USER.name)+'&note='+encodeURIComponent(note)+'&_='+Date.now())).json();
     if(d&&d.ok) toast(outcome==='upheld'?('Upheld'+(d.score!==''?(' — score now '+d.score):'')):'Rejected — finding stands');
     else toast('Failed: '+((d&&d.error)||'unknown'));
-    loadResults();
+    reload();   // refresh whichever tab you're on (Results or Disputes)
   }catch(e){ toast('Failed: '+e.message); }
 }
 async function emailFindings(emp, name, nFails){
