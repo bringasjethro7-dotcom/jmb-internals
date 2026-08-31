@@ -410,16 +410,22 @@ async function verifyAdminPass(p){
   catch(e){ return false; }
 }
 var USER=null, ISADMIN=false, TAB='mine', UNITS=[], BOARD=null, ADMIN_PIN='';
-/* Reviewer access gate. When a QA cycle's checking is CLOSED, set this to false so
-   only the admin can open the dashboard; VAs (reviewers) are refused at sign-in.
-   Flip back to true to reopen reviewing for the next cycle. */
-var QA_REVIEW_OPEN = false;
-document.addEventListener('DOMContentLoaded', function(){
+/* Reviewer access gate. The admin opens/closes the tool from the admin console; this
+   dashboard reads that live state from the backend. Default is CLOSED, so VAs are
+   refused at sign-in until the admin opens the cycle. Admins can always sign in. */
+var QA_REVIEW_OPEN = false;   // cached; refreshed from the backend on load and at sign-in
+function _applyQaSub(){
   var s=document.getElementById('si-sub'); if(!s) return;
   s.textContent = QA_REVIEW_OPEN
     ? 'Sign in with your Employee ID and PIN.'
-    : 'Reviewing is closed for this cycle — admin access only.';
-});
+    : 'Reviewing is closed right now — admin access only.';
+}
+async function fetchQaOpen(){
+  try{ var r=await fetch(PORTAL_URL+'?action=qa_review_open_get&_='+Date.now());
+       var d=await r.json(); QA_REVIEW_OPEN=!!(d&&d.open); }catch(e){}
+  _applyQaSub(); return QA_REVIEW_OPEN;
+}
+document.addEventListener('DOMContentLoaded', fetchQaOpen);
 function $(id){ return document.getElementById(id); }
 function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('on'); setTimeout(function(){ t.classList.remove('on'); },2200); }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -444,10 +450,11 @@ async function signIn(){
     else { err.style.display='block'; err.textContent='Incorrect admin password.'; }
     return;
   }
-  // Reviewing closed → only admin may open the dashboard.
-  if(!QA_REVIEW_OPEN){
+  // Reviewing closed → only admin may open the dashboard. Check the LIVE state.
+  var openNow = await fetchQaOpen();
+  if(!openNow){
     err.style.display='block';
-    err.textContent='QA reviewing is closed for this cycle. The dashboard is available to admins only.';
+    err.textContent='QA reviewing is closed right now. The dashboard is available to admins only.';
     return;
   }
   var b=$('si-btn'); b.disabled=true; b.textContent='Checking…';
