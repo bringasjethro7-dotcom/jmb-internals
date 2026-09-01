@@ -545,7 +545,8 @@ async function loadAllDisputes(){
     var open=rows.filter(function(x){ return x.status==='open'; });
     var h='<div class="card"><h3 style="margin:0 0 4px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--t3);font-weight:800;">Disputes · '+esc(m)+' · all weeks</h3>'
       +'<div style="font-size:12.5px;color:var(--t2);margin-bottom:10px;">'
-      +'<b style="color:var(--red)">'+open.length+' open</b> · '+(rows.length-open.length)+' resolved · '+rows.length+' total</div>';
+      +'<b style="color:var(--red)">'+open.length+' open</b> · '+(rows.length-open.length)+' resolved · '+rows.length+' total</div>'
+      +((rows.length-open.length)>0?'<button class="btn p sm" onclick="emailDisputeResults()" style="margin-bottom:10px;">✉ Email results to VAs</button>':'');
     if(!rows.length){ var pm=_prevMon(m);
       h+='<div style="color:var(--t3);font-size:13.5px;padding:14px 0;">No disputes filed for <b>'+_monLabel(m)+'</b>.'
         +(pm?(' <span style="color:var(--t2)">Finalizing a previous cutoff?</span> <button class="btn sm" style="margin-left:4px;" onclick="switchDispMonth(\''+pm+'\')">View '+_monLabel(pm)+' instead</button>'):'')
@@ -657,6 +658,21 @@ async function loadResults(){
 /* Everyone at once. Dry first — the exact list of who gets what, and who is skipped and why —
    then send on confirmation. A batch that quietly drops people is how someone never learns
    their score, so skips are shown, not swallowed. */
+async function emailDisputeResults(){
+  var m=$('f-month').value||curMonth();
+  var u=PORTAL_URL+'?action=qa2_email_results&month='+encodeURIComponent(m)+'&pass='+encodeURIComponent(ADMIN_PIN);
+  try{
+    var d=await (await fetch(u+'&_='+Date.now())).json();
+    if(!d||!d.ok){ toast('Failed: '+((d&&d.error)||'unknown')); return; }
+    if(!d.sent_count){ toast('Nobody to email — no newly-resolved disputes'+(d.skipped&&d.skipped.length?(' ('+d.skipped.length+' skipped)'):'')); return; }
+    var lines=d.sent.map(function(x){ return '· '+x.name+' — '+x.count+' result'+(x.count===1?'':'s')+' ('+x.upheld+' upheld, '+x.rejected+' rejected) → '+x.to; }).join('\n');
+    var skips=(d.skipped&&d.skipped.length)?('\n\nSkipped:\n'+d.skipped.map(function(x){ return '· '+x.name+' — '+x.why; }).join('\n')):'';
+    if(!confirm('Email dispute results for '+_monLabel(m)+' to '+d.sent_count+' contractor(s)?\nOnly newly-resolved disputes are included — no one is emailed the same result twice.\n\n'+lines+skips)) return;
+    var r=await (await fetch(u+'&confirm=RUN&_='+Date.now())).json();
+    if(r&&r.ok) toast(r.sent_count+' email(s) sent'+(r.skipped&&r.skipped.length?(' · '+r.skipped.length+' skipped'):''));
+    else toast('Failed: '+((r&&r.error)||'unknown'));
+  }catch(e){ toast('Failed: '+e.message); }
+}
 async function emailAll(){
   var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
   var u=PORTAL_URL+'?action=qa2_email_all&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w);
