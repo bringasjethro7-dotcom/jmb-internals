@@ -335,12 +335,14 @@ td{padding:11px 12px;border-bottom:1px solid rgba(15,23,42,.05)}
         <button id="tab-board" onclick="setTab('board')" style="display:none;">Assignment board</button>
         <button id="tab-results" onclick="setTab('results')" style="display:none;">Results</button>
         <button id="tab-disputes" onclick="setTab('disputes')" style="display:none;">Disputes</button>
+        <button id="tab-panel" onclick="setTab('panel')" style="display:none;">🎲 Panel</button>
       </div>
     </div>
 
     <div id="pane-board" style="display:none;"></div>
     <div id="pane-results" style="display:none;"></div>
     <div id="pane-disputes" style="display:none;"></div>
+    <div id="pane-panel" style="display:none;"></div>
     <div id="pane-mine"></div>
   </div>
 </div>
@@ -411,7 +413,7 @@ async function verifyAdminPass(p){
   try{ var r=await fetch('https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec?action=verify_admin&pass='+encodeURIComponent(p)+'&_='+Date.now()); var d=await r.json(); return !!(d&&d.ok); }
   catch(e){ return false; }
 }
-var USER=null, ISADMIN=false, TAB='mine', UNITS=[], BOARD=null, ADMIN_PIN='';
+var USER=null, ISADMIN=false, ISPANEL=false, TAB='mine', UNITS=[], BOARD=null, ADMIN_PIN='';
 /* Reviewer access gate. The admin opens/closes the tool from the admin console; this
    dashboard reads that live state from the backend. Default is CLOSED, so VAs are
    refused at sign-in until the admin opens the cycle. Admins can always sign in. */
@@ -453,6 +455,18 @@ async function signIn(){
   if(id.toUpperCase()==='ADMIN'){
     if(await verifyAdminPass(pin)){ ADMIN_PIN=pin; USER={id:'ADMIN',name:'Admin'}; ISADMIN=true; start(); }
     else { err.style.display='block'; err.textContent='Incorrect admin password.'; }
+    return;
+  }
+  /* BLIND PANEL seat sign-in: ID = PANEL, PIN = the seat password (typed by the admin
+     at the panelist's desk). The seat identity comes back from the server. */
+  if(id.toUpperCase()==='PANEL'){
+    var openNowP = await fetchQaOpen();
+    if(!openNowP){ err.style.display='block'; err.textContent='QA reviewing is closed right now.'; return; }
+    try{
+      var pd=await (await fetch(PORTAL_URL+'?action=qa2_panel_login&pass='+encodeURIComponent(pin)+'&_='+Date.now())).json();
+      if(pd&&pd.ok){ USER={ id:pd.seat, name:pd.label||('Blind Panel '+String(pd.seat).slice(-1)) }; ISADMIN=false; ISPANEL=true; start(); }
+      else { err.style.display='block'; err.textContent='Incorrect panel password.'; }
+    }catch(e2){ err.style.display='block'; err.textContent='Network error — try again.'; }
     return;
   }
   // Reviewing closed → only admin may open the dashboard. Check the LIVE state.
@@ -505,7 +519,7 @@ function start(){
   $('who-av').textContent=initials(USER.name);
   $('f-month').value=curMonth();
   applyUrlParams();
-  if(ISADMIN){ $('tab-board').style.display=''; $('tab-results').style.display=''; $('tab-disputes').style.display=''; setTab('board'); }
+  if(ISADMIN){ $('tab-board').style.display=''; $('tab-results').style.display=''; $('tab-disputes').style.display=''; $('tab-panel').style.display=''; setTab('board'); }
   else { setTab('mine'); if(needAgreement()) showAgreement(); }
 }
 function setTab(t){ TAB=t;
@@ -513,15 +527,18 @@ function setTab(t){ TAB=t;
   $('pane-mine').style.display=(t==='mine')?'block':'none';
   $('pane-results').style.display=(t==='results')?'block':'none';
   $('pane-disputes').style.display=(t==='disputes')?'block':'none';
+  $('pane-panel').style.display=(t==='panel')?'block':'none';
   $('tab-mine').className=(t==='mine')?'on':'';
   $('tab-board').className=(t==='board')?'on':'';
   $('tab-results').className=(t==='results')?'on':'';
   $('tab-disputes').className=(t==='disputes')?'on':'';
+  if($('tab-panel')) $('tab-panel').className=(t==='panel')?'on':'';
   reload();
 }
 function reload(){
   VIEW_EMP='';
   if(needAgreement()){ showAgreement(); return; }   // nothing loads until it is read
+  if(TAB==='panel'){ loadPanel(); return; }
   if(TAB==='board') loadBoard();
   else if(TAB==='results') loadResults();
   else if(TAB==='disputes') loadAllDisputes();
@@ -546,7 +563,8 @@ async function loadAllDisputes(){
     var h='<div class="card"><h3 style="margin:0 0 4px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--t3);font-weight:800;">Disputes · '+esc(m)+' · all weeks</h3>'
       +'<div style="font-size:12.5px;color:var(--t2);margin-bottom:10px;">'
       +'<b style="color:var(--red)">'+open.length+' open</b> · '+(rows.length-open.length)+' resolved · '+rows.length+' total</div>'
-      +((rows.length-open.length)>0?'<button class="btn p sm" onclick="emailDisputeResults()" style="margin-bottom:10px;">✉ Email results to VAs</button>':'');
+      +((rows.length-open.length)>0?'<button class="btn p sm" onclick="emailDisputeResults()" style="margin-bottom:10px;margin-right:6px;">✉ Email results to VAs</button>':'')
+      +(open.length>0?'<button class="btn sm" onclick="viewOpenEvidence()" style="margin-bottom:10px;">🔍 View evidence (open cases)</button>':'');
     if(!rows.length){ var pm=_prevMon(m);
       h+='<div style="color:var(--t3);font-size:13.5px;padding:14px 0;">No disputes filed for <b>'+_monLabel(m)+'</b>.'
         +(pm?(' <span style="color:var(--t2)">Finalizing a previous cutoff?</span> <button class="btn sm" style="margin-left:4px;" onclick="switchDispMonth(\''+pm+'\')">View '+_monLabel(pm)+' instead</button>'):'')
@@ -658,6 +676,46 @@ async function loadResults(){
 /* Everyone at once. Dry first — the exact list of who gets what, and who is skipped and why —
    then send on confirmation. A batch that quietly drops people is how someone never learns
    their score, so skips are shown, not swallowed. */
+/* ── VIEW SCREENSHOT EVIDENCE FOR OPEN DISPUTES ──
+   For each open dispute, pull that VA's reviewed units for the disputed week (qa2_list) and show
+   the exact screenshots the reviewer saw, grouped by account — so a ruling can rest on the evidence. */
+function _evdCollect(b,acc){ if(!b)return; if(typeof b==='string'){ if(/^https?:\/\//.test(b))acc.push(b); return;} if(Array.isArray(b)){b.forEach(function(x){_evdCollect(x,acc);});return;} if(typeof b==='object'){Object.keys(b).forEach(function(k){_evdCollect(b[k],acc);});return;} }
+async function viewOpenEvidence(){
+  var m=$('f-month').value||curMonth();
+  var ov=document.getElementById('evd-ov'); if(ov) ov.remove();
+  ov=document.createElement('div'); ov.id='evd-ov';
+  ov.style.cssText='position:fixed;inset:0;background:#0b1020;z-index:100000;overflow:auto;color:#e8ecf4;font-family:system-ui,sans-serif;';
+  ov.innerHTML='<div style="padding:40px;text-align:center;">Loading evidence…</div>';
+  document.body.appendChild(ov);
+  try{
+    var dd=await (await fetch(PORTAL_URL+'?action=qa2_disputes&month='+encodeURIComponent(m)+'&pass='+encodeURIComponent(ADMIN_PIN)+'&_='+Date.now())).json();
+    var gg=await (await fetch(PORTAL_URL+'?action=get_all_qa_disputes&status=all&_='+Date.now())).json();
+    var wk={}; ((gg&&gg.disputes)||[]).forEach(function(x){ wk[x.id]=x.week; });
+    var open=((dd&&dd.rows)||[]).filter(function(x){return x.status==='open';})
+      .map(function(x){ return { emp:x.employee_id, name:String(x.name||x.employee_id).split(',')[0], acct:x.account||x.task||'', crit:x.criterion, week:wk[x.id]||'' }; });
+    if(!open.length){ ov.innerHTML='<div style="padding:40px;text-align:center;">No open disputes. <button onclick="document.getElementById(\'evd-ov\').remove()" style="margin-left:10px;">Close</button></div>'; return; }
+    var groups={}; open.forEach(function(o){ var k=o.emp+'|'+o.week+'|'+o.acct; (groups[k]=groups[k]||{emp:o.emp,name:o.name,week:o.week,acct:o.acct,crits:[]}).crits.push(o.crit); });
+    var pairs={}; Object.keys(groups).forEach(function(k){ pairs[groups[k].emp+'|'+groups[k].week]=1; });
+    var cache={};
+    for(const key of Object.keys(pairs)){ var pp=key.split('|'); try{ var d=await (await fetch(PORTAL_URL+'?action=qa2_list&month='+encodeURIComponent(m)+'&week='+pp[1]+'&employee_id='+encodeURIComponent(pp[0])+'&_='+Date.now())).json(); cache[key]=(d&&d.rows)||[]; }catch(e){ cache[key]=[]; } }
+    var order=Object.keys(groups).sort();
+    var html='<div style="position:sticky;top:0;background:#0b1020;border-bottom:1px solid #23304d;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;z-index:2;">'
+      +'<b style="font-size:16px;">QA Dispute Evidence — '+esc(_monLabel(m))+' (open cases)</b>'
+      +'<button onclick="document.getElementById(\'evd-ov\').remove()" style="background:#e8590c;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-weight:700;cursor:pointer;">Close</button></div>'
+      +'<div style="padding:18px 20px;max-width:1100px;margin:0 auto;">';
+    order.forEach(function(k){ var g=groups[k]; var units=(cache[g.emp+'|'+g.week]||[]).filter(function(u){return String(u.account).toLowerCase()===String(g.acct).toLowerCase();}); var imgs=[]; units.forEach(function(u){_evdCollect(u.blocks,imgs);}); imgs=imgs.filter(function(v,i,a){return a.indexOf(v)===i;});
+      var crs={}; g.crits.forEach(function(c){crs[c]=1;});
+      html+='<div style="margin:0 0 26px;border:1px solid #23304d;border-radius:12px;overflow:hidden;">'
+        +'<div style="background:#131c33;padding:12px 16px;"><div style="font-weight:800;font-size:15px;">'+esc(g.name)+' · Week '+esc(g.week)+' · <span style="color:#ffb257;">'+esc(g.acct)+'</span> <span style="color:#7c89a6;font-weight:600;">('+imgs.length+' shots)</span></div>'
+        +'<div style="font-size:12.5px;color:#9fb0d0;margin-top:5px;">Disputed: '+Object.keys(crs).map(esc).join(' · ')+'</div></div>'
+        +'<div style="display:flex;flex-wrap:wrap;gap:8px;padding:14px;background:#0f1626;">'
+        +(imgs.length?imgs.map(function(src){return '<a href="'+src+'" target="_blank" rel="noopener"><img src="'+src+'" loading="lazy" style="height:190px;border-radius:8px;border:1px solid #23304d;background:#1a2338;object-fit:cover;"></a>';}).join(''):'<div style="color:#7c89a6;font-size:13px;">No screenshots stored for this account/week.</div>')
+        +'</div></div>';
+    });
+    html+='</div>';
+    ov.innerHTML=html;
+  }catch(e){ ov.innerHTML='<div style="padding:40px;text-align:center;">Could not load evidence. <button onclick="document.getElementById(\'evd-ov\').remove()">Close</button></div>'; }
+}
 async function emailDisputeResults(){
   var m=$('f-month').value||curMonth();
   var u=PORTAL_URL+'?action=qa2_email_results&month='+encodeURIComponent(m)+'&pass='+encodeURIComponent(ADMIN_PIN);
@@ -922,6 +980,8 @@ async function loadMine(){
     var d=await (await fetch(PORTAL_URL+'?action=qa2_list&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+q+'&_='+Date.now())).json();
     if(!d||!d.ok){ p.innerHTML='<div class="warn">'+esc((d&&d.error)||'Could not load')+'</div>'; return; }
     ALL_UNITS=d.rows||[];
+    /* DOUBLE-BLIND: a panel seat never sees whose work this is — names become Case 1..N. */
+    if(ISPANEL){ var _cm={}, _ci=0; ALL_UNITS.forEach(function(u){ var k=String(u.employee_id||'').toUpperCase(); if(!_cm[k]) _cm[k]='Case '+(++_ci); u.full_name=_cm[k]; }); }
     if(!ALL_UNITS.length){ p.innerHTML='<div class="card" style="text-align:center;padding:44px 20px;">'+
       '<div class="av" style="width:46px;height:46px;font-size:16px;margin:0 auto 12px;">QA</div>'+
       '<b style="font-size:16px;">Nothing assigned to you</b>'+
@@ -996,7 +1056,7 @@ function renderMine(){
     }).join('')+'</div>';
   }
   h+='<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;">'+
-     '<div><b style="font-size:15px;">Reviewing '+esc(va.full_name)+'</b> <span style="color:var(--t3);">'+esc(va.employee_id)+'</span>'+
+     '<div><b style="font-size:15px;">Reviewing '+esc(va.full_name)+'</b> <span style="color:var(--t3);">'+(ISPANEL?'🎭 blind case':esc(va.employee_id))+'</span>'+
      '<div style="font-size:12px;color:var(--t2);margin-top:2px;">'+UNITS.length+' accounts · '+totalShots+' screenshots · '+doneN+' of '+UNITS.length+' checked</div></div>'+
      '<div>'+(ISADMIN?'<button class="btn sm" onclick="VIEW_EMP=\'\'; loadMine();" style="margin-right:6px;">Change VA</button>':'')+
      (submitted?'<span class="pill done">submitted</span>':
@@ -1367,6 +1427,50 @@ async function submitAll(){
     else { toast('Failed: '+((d&&d.error)||'unknown')); if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
   }catch(e){ toast('Failed: '+e.message); if(btn){ btn.disabled=false; btn.textContent='Submit review'; } }
 }
+
+/* ══ 🎲 BLIND PANEL (admin) — weekly seeded panel of five anonymous seats ══ */
+async function loadPanel(){
+  var p=$('pane-panel'); p.innerHTML='<div class="card">Building this week\'s blind panel…</div>';
+  var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
+  try{
+    var d=await (await fetch(PORTAL_URL+'?action=qa2_panel&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&pass='+encodeURIComponent(ADMIN_PIN)+'&_='+Date.now())).json();
+    if(!d||!d.ok){ p.innerHTML='<div class="warn">'+esc((d&&d.error)||'Could not build the panel')+'</div>'; return; }
+    var h='<div class="card"><b style="font-size:15px;">🎲 Blind Panel — '+esc(m)+' · Week '+esc(w)+'</b>'+
+      '<div class="sub" style="margin:4px 0 12px;">Seeded for this week — same five every time you open it. Seat these VAs, sign each desk in as PANEL with its seat password, then Apply.</div>';
+    h+=(d.seats||[]).map(function(sx){
+      return '<div style="border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:9px;">'+
+        '<b style="color:#e2560f;">'+esc(sx.seat)+'</b> — sits: <b>'+esc(sx.sits_name||'—')+'</b> <span style="color:var(--t3);">'+esc(sx.sits||'')+'</span>'+
+        '<div style="font-size:12.5px;color:var(--t2);margin-top:5px;">reviews ('+sx.reviewees.length+'): '+sx.reviewees.map(function(r){ return esc(r.name); }).join(' · ')+'</div></div>';
+    }).join('');
+    h+='<div style="border:1px solid rgba(226,86,15,.4);border-radius:12px;padding:12px 14px;margin-bottom:12px;">'+
+       '<b>👑 You review the leads:</b> <span style="color:var(--t2);">'+((d.leads&&d.leads.length)?d.leads.map(function(l){ return esc(l.name); }).join(' · '):'(no leads configured yet)')+'</span></div>';
+    h+='<button class="btn p" onclick="applyPanel()">✅ Apply panel for this week</button>'+
+       '<div class="sub" style="margin-top:8px;">Apply samples the week\'s proof and assigns every case to its seat (submitted reviews are never touched). Reviews land recorded as “Blind Panel N”.</div></div>';
+    h+='<div class="card"><b>🔑 Seat passwords</b><div class="sub" style="margin:4px 0 9px;">Only you ever see these. On review day, type each one at its desk yourself.</div>'+
+       [1,2,3,4,5].map(function(i){ return '<input type="password" id="pp'+i+'" placeholder="PANEL'+i+' password" style="margin:0 6px 8px 0;">'; }).join('')+
+       '<div><button class="btn" onclick="savePanelPass()">Save passwords</button> <span id="pp-msg" style="font-size:12px;color:var(--t3);"></span></div></div>';
+    p.innerHTML=h;
+  }catch(e){ p.innerHTML='<div class="warn">'+esc(e.message)+'</div>'; }
+}
+async function applyPanel(){
+  var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
+  if(!confirm('Apply the blind panel for '+m+' week '+w+'?\n\nThis samples the week and assigns every case to the PANEL seats (leads to you). Already-submitted reviews are never touched.')) return;
+  try{
+    var d=await (await fetch(PORTAL_URL+'?action=qa2_panel&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&confirm=RUN&pass='+encodeURIComponent(ADMIN_PIN)+'&_='+Date.now())).json();
+    if(d&&d.ok&&d.applied){ alert('✅ Panel applied.\nUnits per seat: '+JSON.stringify(d.applied.perSeat)+'\nYour lead units: '+d.applied.adminUnits); }
+    else alert('Failed: '+((d&&d.error)||'unknown'));
+  }catch(e){ alert('Network error — try again.'); }
+}
+async function savePanelPass(){
+  var qs=[1,2,3,4,5].map(function(i){ var v=($('pp'+i).value||'').trim(); return v?('p'+i+'='+encodeURIComponent(v)):''; }).filter(String).join('&');
+  if(!qs){ $('pp-msg').textContent='Nothing to save.'; return; }
+  try{
+    var d=await (await fetch(PORTAL_URL+'?action=qa2_panel_setpass&'+qs+'&pass='+encodeURIComponent(ADMIN_PIN)+'&_='+Date.now())).json();
+    $('pp-msg').textContent=(d&&d.ok)?('Saved '+d.updated+' password(s) ✅'):('Failed: '+((d&&d.error)||''));
+    [1,2,3,4,5].forEach(function(i){ $('pp'+i).value=''; });
+  }catch(e){ $('pp-msg').textContent='Network error.'; }
+}
+
 </script>
 </body>
 </html>
