@@ -1221,7 +1221,16 @@ async function loadPanel(){
   var p=$('pane-panel'); p.innerHTML='<div class="card">Building this week\'s blind panel…</div>';
   var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
   try{
-    var d=await (await fetch(PORTAL_URL+'?action=qa2_panel&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&pass='+encodeURIComponent(ADMIN_PIN)+'&_='+Date.now())).json();
+    /* Read as TEXT first: when Apps Script errors it answers with an HTML page, and surfacing
+       its first line beats the useless "Unexpected token '<'" JSON-parse error. */
+    var _rs=await fetch(PORTAL_URL+'?action=qa2_panel&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&pass='+encodeURIComponent(ADMIN_PIN)+'&_='+Date.now());
+    var _tx=await _rs.text(), d=null;
+    try{ d=JSON.parse(_tx); }
+    catch(_j){
+      var _snip=_tx.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,220);
+      p.innerHTML='<div class="warn"><b>The Apps Script answered with an error page, not data.</b> This usually means the script needs to be REDEPLOYED (new version), or it hit a runtime error/authorization prompt. Server said: <i>'+esc(_snip||'(empty response)')+'</i></div>';
+      return;
+    }
     if(!d||!d.ok){ p.innerHTML='<div class="warn">'+esc((d&&d.error)||'Could not build the panel')+'</div>'; return; }
     var h='<div class="card"><b style="font-size:15px;">🎲 Blind Panel — '+esc(m)+' · Week '+esc(w)+'</b>'+
       '<div class="sub" style="margin:4px 0 12px;">Seeded for this week — same five every time you open it. Seat these VAs, sign each desk in as PANEL with its seat password, then Apply.</div>';
