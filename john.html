@@ -923,17 +923,22 @@ async function jnGetList(id){
 }
 function jnSess(r){ return JN_SESSIONS; }   // all follow days: 3 sessions
 function sessMark(r,n){ return ((r&&r.meta)||{})['s'+n]; }
-/* SESSIONS DO NOT RESET DAILY (unlike every other lane in this tool). A session mark stays
-   valid across days until the account COMPLETES its required sessions — finishing the day
-   clears the marks, and only then does the account start over at Session 1.
-   Legacy guard: before this change, dayDone never cleared marks, so completed days left
-   stale s-marks behind. A mark dated on-or-before the last day-completion belongs to that
-   finished day and is ignored. This also auto-restores yesterday's partial progress: an
-   account that logged S1 on Aug 17 opens on S2 today, exactly where it left off. */
+/* SESSION MARKS LIVE FOR ONE SHIFT WINDOW ONLY (Sept 2026).
+   A completed day is untouched — finishing all sessions stamps meta.last and those marks are
+   consumed as before. But an INCOMPLETE day no longer carries over: if the account did not
+   finish its sessions by the VA's reset (☀ 8 AM / 🌙 8 PM, the same reset everything else in
+   this tool already uses), the partial marks expire and the account opens back at Session 1,
+   proof required — instead of resuming mid-day on stale evidence. The reset time itself and
+   all other reset behaviour are unchanged; this only expires leftover incomplete marks. */
 function sessOk(r,n){
   var m=sessMark(r,n); if(!m) return false;
   var last=((r&&r.meta)||{}).last;
   if(last && String(m).slice(0,10)<=String(last).slice(0,10)) return false;   // consumed by a completed day
+  /* expire marks from any shift window that has already ended */
+  var nightKey;
+  try{ nightKey=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-20*3600*1000))+'·PM'; }
+  catch(e){ nightKey=new Date(Date.now()-20*3600*1000).toISOString().slice(0,10)+'·PM'; }
+  if(m!==today()+'·AM' && m!==nightKey && m!==today()) return false;    // stale window → not started
   return true;
 }
 function sessDone(r){ var c=0; for(var i=1;i<=jnSess(r);i++) if(sessOk(r,i)) c++; return c; }
