@@ -549,21 +549,19 @@ async function loadProgressData(){
 }
 /* ── SHIFT WINDOW ──
    The board shows the shift that is ON DUTY right now, and nobody else:
-     07:00–18:59 PHT → morning shift   ·   19:00–06:59 PHT → night shift
+     08:00–19:59 PHT → morning shift   ·   20:00–07:59 PHT → night shift
    At 8 PM the morning team leaves the board and the night team starts from zero;
-   at 7 AM the reverse. Progress bars come from each tool's per-shift counters. */
+   at 8 AM the reverse. Progress bars come from each tool's per-shift counters. */
 function phtHour(){
   try{ return parseInt(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',hour12:false}).format(new Date()),10); }
   catch(e){ return new Date().getHours(); }
 }
-/* Shift boundaries for THE WALLBOARD ONLY — 7 AM and 7 PM PHT.
-   Deliberately a pair of constants rather than numbers scattered through the file: the old 8/20
-   appeared in four places and any one of them left behind would have put the header, the
-   countdown and the changeover out of step with each other.
-   This does NOT move the business day used for payroll and productivity, which still rolls at
-   08:00 PHT — changing that would re-date every worklog row ever written. It only decides which
-   team the board is showing. */
-var WB_AM=7, WB_PM=19;
+/* Shift boundaries — 8 AM and 8 PM PHT, matching the TOOLS and the server counters.
+   (Sept 2026 fix: the board used 7/19 while every tool resets at 8/20, so a night VA still
+   working 7–8 AM watched their bar vanish an hour before their run ended — "my progress reset
+   in the morning". One clock everywhere: the board now flips exactly when the counters do.)
+   This does NOT move the business day used for payroll, which still rolls at 08:00 PHT. */
+var WB_AM=8, WB_PM=20;
 function curShift(){ var h=phtHour(); return (h>=WB_AM && h<WB_PM) ? 'morning' : 'night'; }
 function shiftLabel(){ return curShift()==='night' ? 'Night shift' : 'Morning shift'; }
 function shiftResetIn(){
@@ -633,14 +631,14 @@ function pProgress(active){
   return '<div class="panel'+(active?' active':'')+'">'+
     '<div class="liveHead">'+
       '<div class="h">Team Progress <em>— '+shiftLabel()+'</em></div>'+
-      '<div class="m">'+(curShift()==='night'?'7 PM → 7 AM':'7 AM → 7 PM')+' · resets in <b>'+shiftResetIn()+'</b></div>'+
+      '<div class="m">'+(curShift()==='night'?'8 PM → 8 AM':'8 AM → 8 PM')+' · resets in <b>'+shiftResetIn()+'</b></div>'+
     '</div>'+
     '<div class="pgrid progslide-grid">'+progRows()+'</div>'+
   '</div>';
 }
 setInterval(function(){ loadProgressData(); }, 300000);   // 5 min
 loadProgressData();
-/* Shift changeover: the moment the clock crosses 7 AM / 7 PM, clear the outgoing team off the
+/* Shift changeover: the moment the clock crosses 8 AM / 8 PM, clear the outgoing team off the
    board and pull fresh data for the incoming one — no stale bars carried across the boundary. */
 var _lastShift=curShift();
 setInterval(function(){
@@ -657,7 +655,7 @@ setInterval(function(){
 /* ══ ATTENDANCE — this shift ══
    Who logged in for the shift that is running now, at what exact time, and whether that was
    on time or late. Morning shift starts 07:30, night 19:30 (15-min grace over the 07:15 rule),
-   and the board clears at each 7 AM / 7 PM boundary along with the progress slide. */
+   and the board clears at each 8 AM / 8 PM boundary along with the progress slide. */
 var ATT={ rows:[], loaded:false };
 function shiftStartHM(){ return (curShift()==='night') ? [19,30] : [7,30]; }
 function fmtHM(d){
