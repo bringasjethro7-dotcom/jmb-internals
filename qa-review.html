@@ -1234,11 +1234,28 @@ async function loadPanel(){
     if(!d||!d.ok){ p.innerHTML='<div class="warn">'+esc((d&&d.error)||'Could not build the panel')+'</div>'; return; }
     var h='<div class="card"><b style="font-size:15px;">🎲 Blind Panel — '+esc(m)+' · Week '+esc(w)+'</b>'+
       '<div class="sub" style="margin:4px 0 12px;">Seeded for this week — same five every time you open it. Seat these VAs, sign each desk in as PANEL with its seat password, then Apply.</div>';
+    var _picked=(d.picked||[]).map(function(x){ return String(x).toUpperCase(); });
     h+=(d.seats||[]).map(function(sx){
+      var star=_picked.indexOf(String(sx.sits||'').toUpperCase())>=0?' <span title="hand-picked by admin">⭐</span>':'';
       return '<div style="border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:9px;">'+
-        '<b style="color:#e2560f;">'+esc(sx.seat)+'</b> — sits: <b>'+esc(sx.sits_name||'—')+'</b> <span style="color:var(--t3);">'+esc(sx.sits||'')+'</span>'+
+        '<b style="color:#e2560f;">'+esc(sx.seat)+'</b> — sits: <b>'+esc(sx.sits_name||'—')+'</b>'+star+' <span style="color:var(--t3);">'+esc(sx.sits||'')+'</span>'+
         '<div style="font-size:12.5px;color:var(--t2);margin-top:5px;">reviews ('+sx.reviewees.length+'): '+sx.reviewees.map(function(r){ return esc(r.name); }).join(' · ')+'</div></div>';
     }).join('');
+    /* ── ✍️ CHOOSE THE PANEL — hand-pick any or all of the 5 reviewers; blank seats stay
+       seeded. Leads never appear here (the admin reviews them personally). ── */
+    var roster=[];
+    (d.seats||[]).forEach(function(sx){ if(sx.sits) roster.push({id:sx.sits,name:sx.sits_name||sx.sits});
+      (sx.reviewees||[]).forEach(function(r){ roster.push(r); }); });
+    roster.sort(function(a,b){ return String(a.name).localeCompare(String(b.name)); });
+    var optHtml='<option value="">— auto (seeded) —</option>'+roster.map(function(r){
+      return '<option value="'+esc(r.id)+'">'+esc(r.name)+' ('+esc(r.id)+')</option>'; }).join('');
+    h+='<div class="card"><b>✍️ Choose the panel</b>'+
+       '<div class="sub" style="margin:4px 0 9px;">Hand-pick this week\'s reviewers. Leave a seat on “auto” and the seeded shuffle fills it. Save, and the panel above rebuilds around your picks.</div>'+
+       [1,2,3,4,5].map(function(i){ var pv=_picked[i-1]||'';
+         return '<select id="pk'+i+'" style="margin:0 6px 8px 0;min-width:180px;">'+optHtml.replace('value="'+pv+'"','value="'+pv+'" selected')+'</select>'; }).join('')+
+       '<div style="margin-top:4px;"><button class="btn p" onclick="savePanelPicks()">Save picks</button> '+
+       '<button class="btn" onclick="clearPanelPicks()">Reset to seeded</button> '+
+       '<span id="pk-msg" style="font-size:12px;color:var(--t3);"></span></div></div>';
     h+='<div style="border:1px solid rgba(226,86,15,.4);border-radius:12px;padding:12px 14px;margin-bottom:12px;">'+
        '<b>👑 You review the leads:</b> <span style="color:var(--t2);">'+((d.leads&&d.leads.length)?d.leads.map(function(l){ return esc(l.name); }).join(' · '):'(no leads configured yet)')+'</span></div>';
     h+='<button class="btn p" onclick="applyPanel()">✅ Apply panel for this week</button>'+
@@ -1248,6 +1265,25 @@ async function loadPanel(){
        '<div><button class="btn" onclick="savePanelPass()">Save passwords</button> <span id="pp-msg" style="font-size:12px;color:var(--t3);"></span></div></div>';
     p.innerHTML=h;
   }catch(e){ p.innerHTML='<div class="warn">'+esc(e.message)+'</div>'; }
+}
+async function savePanelPicks(){
+  var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
+  var ids=[1,2,3,4,5].map(function(i){ return ($('pk'+i)||{value:''}).value; }).filter(Boolean);
+  var uniq=ids.filter(function(v,i){ return ids.indexOf(v)===i; });
+  if(uniq.length!==ids.length){ toast('The same person is picked twice — each seat needs a different reviewer.'); return; }
+  try{
+    var d=await (await fetch(PORTAL_URL+'?action=qa2_set_panel&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&reviewers='+encodeURIComponent(ids.join(','))+'&pass='+encodeURIComponent(ADMIN_PIN)+'&_='+Date.now())).json();
+    if(d&&d.ok){ toast('✅ Panel picks saved — rebuilding…'); loadPanel(); }
+    else toast('Failed: '+((d&&(d.message||d.error))||'unknown'));
+  }catch(e){ toast('Network error — try again.'); }
+}
+async function clearPanelPicks(){
+  var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
+  try{
+    var d=await (await fetch(PORTAL_URL+'?action=qa2_set_panel&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&clear=1&pass='+encodeURIComponent(ADMIN_PIN)+'&_='+Date.now())).json();
+    if(d&&d.ok){ toast('Back to the seeded panel.'); loadPanel(); }
+    else toast('Failed: '+((d&&d.error)||'unknown'));
+  }catch(e){ toast('Network error — try again.'); }
 }
 async function applyPanel(){
   var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
