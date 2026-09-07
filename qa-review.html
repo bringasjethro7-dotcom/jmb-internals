@@ -1256,8 +1256,28 @@ async function loadPanel(){
        '<div style="margin-top:4px;"><button class="btn p" onclick="savePanelPicks()">Save picks</button> '+
        '<button class="btn" onclick="clearPanelPicks()">Reset to seeded</button> '+
        '<span id="pk-msg" style="font-size:12px;color:var(--t3);"></span></div></div>';
+    /* 👑 Public story: the admin reviews the leads. 🤫 Private reality: each lead can be
+       quietly handed to a panel seat — the case lands in that seat's queue as an ordinary
+       anonymous "Case N", recorded as "Blind Panel N". Only this admin page shows the truth. */
+    var _lm=d.leadmap||{};
     h+='<div style="border:1px solid rgba(226,86,15,.4);border-radius:12px;padding:12px 14px;margin-bottom:12px;">'+
-       '<b>👑 You review the leads:</b> <span style="color:var(--t2);">'+((d.leads&&d.leads.length)?d.leads.map(function(l){ return esc(l.name); }).join(' · '):'(no leads configured yet)')+'</span></div>';
+       '<b>👑 You review the leads:</b> <span style="color:var(--t2);">'+((d.leads&&d.leads.length)?d.leads.map(function(l){ return esc(l.name); }).join(' · '):'(no leads configured yet)')+'</span>'+
+       ((d.leads&&d.leads.length)?(
+       '<div style="margin-top:10px;padding-top:10px;border-top:1px dashed rgba(226,86,15,.3);">'+
+         '<div style="font-size:12px;color:var(--t3);margin-bottom:7px;">🤫 <b>Quiet reassignment</b> — only you can see this. A rerouted lead lands in that seat\'s queue as a normal anonymous case; the line above is what everyone else believes.</div>'+
+         d.leads.map(function(l){
+           var cur=String(_lm[l.id]||'');
+           return '<div style="margin-bottom:6px;font-size:13px;">'+esc(l.name)+' → '+
+             '<select class="lm-pick" data-lead="'+esc(l.id)+'" style="min-width:150px;">'+
+               '<option value=""'+(cur?'':' selected')+'>👑 Me (default)</option>'+
+               [1,2,3,4,5].map(function(i){ var s='PANEL'+i;
+                 return '<option value="'+s+'"'+(cur===s?' selected':'')+'>Blind Panel '+i+'</option>'; }).join('')+
+             '</select>'+(cur?' <span title="currently rerouted">🤫</span>':'')+'</div>';
+         }).join('')+
+         '<button class="btn" onclick="saveLeadmap()">Save quietly</button> '+
+         '<span id="lm-msg" style="font-size:12px;color:var(--t3);"></span>'+
+       '</div>'):'')+
+       '</div>';
     h+='<button class="btn p" onclick="applyPanel()">✅ Apply panel for this week</button>'+
        '<div class="sub" style="margin-top:8px;">Apply samples the week\'s proof and assigns every case to its seat (submitted reviews are never touched). Reviews land recorded as “Blind Panel N”.</div></div>';
     h+='<div class="card"><b>🔑 Seat passwords</b><div class="sub" style="margin:4px 0 9px;">Only you ever see these. On review day, type each one at its desk yourself.</div>'+
@@ -1282,6 +1302,16 @@ async function clearPanelPicks(){
   try{
     var d=await (await fetch(PORTAL_URL+'?action=qa2_set_panel&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&clear=1&pass='+encodeURIComponent(ADMIN_PIN)+'&_='+Date.now())).json();
     if(d&&d.ok){ toast('Back to the seeded panel.'); loadPanel(); }
+    else toast('Failed: '+((d&&d.error)||'unknown'));
+  }catch(e){ toast('Network error — try again.'); }
+}
+async function saveLeadmap(){
+  var m=$('f-month').value||curMonth(), w=$('f-week').value||'1';
+  var map={};
+  document.querySelectorAll('.lm-pick').forEach(function(s){ if(s.value) map[s.getAttribute('data-lead')]=s.value; });
+  try{
+    var d=await (await fetch(PORTAL_URL+'?action=qa2_set_leadmap&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&map='+encodeURIComponent(JSON.stringify(map))+'&pass='+encodeURIComponent(ADMIN_PIN)+'&_='+Date.now())).json();
+    if(d&&d.ok){ var el=$('lm-msg'); if(el) el.textContent='Saved 🤫 — takes effect on the next Apply.'; }
     else toast('Failed: '+((d&&d.error)||'unknown'));
   }catch(e){ toast('Network error — try again.'); }
 }
