@@ -1315,7 +1315,7 @@ async function saveLeadmap(){
   document.querySelectorAll('.lm-pick').forEach(function(s){ if(s.value) map[s.getAttribute('data-lead')]=s.value; });
   try{
     var d=await (await fetch(PORTAL_URL+'?action=qa2_set_leadmap&month='+encodeURIComponent(m)+'&week='+encodeURIComponent(w)+'&map='+encodeURIComponent(JSON.stringify(map))+'&pass='+encodeURIComponent(ADMIN_PIN)+'&_='+Date.now())).json();
-    if(d&&d.ok){ var el=$('lm-msg'); if(el) el.textContent='Saved 🤫 — takes effect on the next Apply.'; }
+    if(d&&d.ok){ var el=$('lm-msg'); if(el){ var mv=d.moved&&Object.keys(d.moved).length; el.textContent = mv ? ('Saved 🤫 — '+Object.keys(d.moved).length+' lead(s) rerouted, live now.') : 'Saved 🤫 — applies when this week\'s panel is applied.'; } }
     else toast('Failed: '+((d&&d.error)||'unknown'));
   }catch(e){ toast('Network error — try again.'); }
 }
