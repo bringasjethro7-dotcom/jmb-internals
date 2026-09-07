@@ -359,7 +359,7 @@ function _applyQaSub(){
   var s=document.getElementById('si-sub'); if(!s) return;
   s.textContent = QA_REVIEW_OPEN
     ? 'Sign in with your Employee ID and PIN. Panelists: type PANEL as the ID, plus your seat password.'
-    : 'Reviewing is closed right now — admin access only.';
+    : 'Reviewing is closed right now — admin and panel access only. Panelists: ID = PANEL, plus your seat password.';
 }
 async function fetchQaOpen(){
   try{ var r=await fetch(PORTAL_URL+'?action=qa_review_open_get&_='+Date.now());
@@ -400,8 +400,9 @@ async function signIn(){
      panelists kept landing in the employee lookup ("Employee not found") by typing the
      seat number after the word. The seat still comes ONLY from the password. */
   if(/^(BLIND\s*)?PANEL\s*[1-5]?$/i.test(id)){
-    var openNowP = await fetchQaOpen();
-    if(!openNowP){ err.style.display='block'; err.textContent='QA reviewing is closed right now.'; return; }
+    /* Panel seats sign in like the admin does — the open/closed switch gates ordinary VAs
+       only. The seat password is already the credential; closing the cycle shouldn't lock
+       the panel out of a session the admin is running. */
     try{
       var pd=await (await fetch(PORTAL_URL+'?action=qa2_panel_login&pass='+encodeURIComponent(pin)+'&_='+Date.now())).json();
       if(pd&&pd.ok){ USER={ id:pd.seat, name:pd.label||('Blind Panel '+String(pd.seat).slice(-1)) }; ISADMIN=false; ISPANEL=true; start(); }
