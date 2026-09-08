@@ -34,10 +34,15 @@ a{color:#ea580c}
 var EXEC='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
 try{
   var q=new URLSearchParams(location.search);
-  var token=q.get('t')||'', i=q.get('i')||'0', g=q.get('g')||'';
+  var token=q.get('t')||'', i=q.get('i')||'0', g=q.get('g')||'', shot=q.get('shot')||'';
   if(!/^qd-[A-Za-z0-9_-]+$/.test(token)) throw new Error('bad token');
-  if(g==='1'){
-    // 📸 sampled-screenshots gallery (desktop-only, expiring)
+  if(shot==='1'){
+    // 🖼️ single screenshot, token-gated (expires after 24h)
+    var f=q.get('f')||'0', s=q.get('s')||'0';
+    if(!/^\d{1,3}$/.test(f)||!/^\d{1,3}$/.test(s)) throw new Error('bad index');
+    location.replace(EXEC+'?action=qa2_shot&token='+encodeURIComponent(token)+'&f='+encodeURIComponent(f)+'&s='+encodeURIComponent(s));
+  } else if(g==='1'){
+    // sampled-screenshots gallery (desktop-only, expiring)
     location.replace(EXEC+'?action=qa2_evidence_page&token='+encodeURIComponent(token));
   } else {
     if(!/^\d{1,3}$/.test(i)) throw new Error('bad index');
