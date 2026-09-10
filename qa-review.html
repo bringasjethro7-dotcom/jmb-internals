@@ -508,10 +508,11 @@ async function loadAllDisputes(){
         +(isOpen
           ? '<button class="btn g sm" onclick="resolveDispute(\''+esc(d.id)+'\',\'upheld\')">Uphold — VA is right</button>'
             +'<button class="btn sm" onclick="resolveDispute(\''+esc(d.id)+'\',\'rejected\')">Reject — finding stands</button>'
+            +'<button class="btn sm" title="Apply to every open dispute of this exact finding" onclick="resolveBulk(\''+encodeURIComponent(d.criterion)+'\',\'upheld\')" style="color:#0f766e;border-color:rgba(15,118,110,.4);">⇊ Uphold ALL like this</button>'
           : '<span class="pill '+(st==='upheld'?'done':'none')+'">'+esc(st)+'</span>')
         +'</div></div></div>';
     });
-    h+='<div style="font-size:11.5px;color:var(--t3);margin-top:4px;">Upholding flips that criterion to a pass, rewrites the week score, and docks the reviewer 10%. The VA is told either way.</div></div>';
+    h+='<div style="font-size:11.5px;color:var(--t3);margin-top:4px;">Upholding flips that criterion to a pass, rewrites the week score, and docks the reviewer 10%. The VA is told either way. <b>“Uphold ALL like this”</b> resolves every open dispute with the exact same finding text at once.</div></div>';
     p.innerHTML=h;
   }catch(e){ p.innerHTML='<div class="warn">Network error loading disputes.</div>'; }
 }
@@ -662,6 +663,19 @@ async function resolveDispute(id, outcome){
     if(d&&d.ok) toast(outcome==='upheld'?('Upheld'+(d.score!==''?(' — score now '+d.score):'')):'Rejected — finding stands');
     else toast('Failed: '+((d&&d.error)||'unknown'));
     reload();   // refresh whichever tab you're on (Results or Disputes)
+  }catch(e){ toast('Failed: '+e.message); }
+}
+async function resolveBulk(critEnc, outcome){
+  var crit=decodeURIComponent(critEnc||'');
+  var note='';
+  if(outcome==='rejected'){ note=prompt('REJECT every open dispute for this finding?\n\n"'+crit+'"\n\nOptional note to the VAs:')||''; if(note===null) return; }
+  else if(!confirm('UPHOLD every open dispute for this finding?\n\n"'+crit+'"\n\nEach affected VA\'s finding flips to pass and their week score is rewritten. This applies across all VAs who disputed it.')) return;
+  try{
+    var d=await (await fetch(PORTAL_URL+'?action=qa2_resolve_bulk&criterion='+encodeURIComponent(crit)+'&outcome='+encodeURIComponent(outcome)
+      +'&by='+encodeURIComponent(USER.name)+'&note='+encodeURIComponent(note)+'&pass='+encodeURIComponent(ADMIN_PIN)+'&_='+Date.now())).json();
+    if(d&&d.ok) toast('✅ '+outcome+' '+d.resolved+' of '+d.matched+' dispute(s) for this finding.'+(d.failed?(' '+d.failed+' failed.'):''));
+    else toast('Failed: '+((d&&(d.message||d.error))||'unknown'));
+    reload();
   }catch(e){ toast('Failed: '+e.message); }
 }
 async function emailFindings(emp, name, nFails){
