@@ -495,6 +495,23 @@ async function loadAllDisputes(){
       h+='<div style="color:var(--t3);font-size:13.5px;padding:14px 0;">No disputes filed for <b>'+_monLabel(m)+'</b>.'
         +(pm?(' <span style="color:var(--t2)">Finalizing a previous cutoff?</span> <button class="btn sm" style="margin-left:4px;" onclick="switchDispMonth(\''+pm+'\')">View '+_monLabel(pm)+' instead</button>'):'')
         +'</div></div>'; p.innerHTML=h; return; }
+    /* ── GROUP BY FINDING — resolve a whole category (all VAs) in one click ── */
+    if(open.length){
+      var grp={};
+      open.forEach(function(d){ var k=String(d.criterion||''); (grp[k]=grp[k]||[]).push(d); });
+      var keys=Object.keys(grp).sort(function(a,b){ return grp[b].length-grp[a].length; });
+      h+='<div style="border:1px solid rgba(15,118,110,.35);border-radius:12px;padding:12px 14px;margin:6px 0 16px;background:rgba(15,118,110,.04);">'
+        +'<div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#0f766e;font-weight:800;margin-bottom:8px;">Resolve a whole finding at once ('+keys.length+' finding'+(keys.length!==1?'s':'')+' disputed)</div>';
+      keys.forEach(function(k){
+        var n=grp[k].length;
+        h+='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 0;border-top:1px solid rgba(15,118,110,.12);">'
+          +'<div style="flex:1;min-width:200px;font-size:13px;"><b>'+esc(k)+'</b> <span style="color:var(--t3);">· '+n+' open</span></div>'
+          +'<button class="btn g sm" onclick="resolveBulk(\''+encodeURIComponent(k)+'\',\'upheld\')">⇊ Uphold all '+n+'</button>'
+          +'<button class="btn sm" onclick="resolveBulk(\''+encodeURIComponent(k)+'\',\'rejected\')" style="color:#b91c1c;border-color:rgba(185,28,28,.4);">Reject all '+n+'</button>'
+          +'</div>';
+      });
+      h+='<div style="font-size:11px;color:var(--t3);margin-top:8px;">Upholding flips that finding to a pass for every VA who disputed it and rewrites their week scores. Below is the same list, case by case.</div></div>';
+    }
     rows.forEach(function(d){
       var st=d.status||'open', isOpen=st==='open';
       h+='<div style="border:1px solid '+(isOpen?'rgba(220,38,38,.35)':'var(--line)')+';border-radius:11px;padding:12px 14px;margin-bottom:9px;'+(isOpen?'background:rgba(220,38,38,.03);':'')+'">'
