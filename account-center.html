@@ -232,6 +232,7 @@ select.ctl{background:var(--card);border:1px solid var(--line2);border-radius:9p
       <button class="ib" id="scrape-btn" style="display:none" onclick="scrapeVisible()">Scrape visible</button>
       <button class="ib" id="scrape-all-btn" onclick="scrapeAllIG()">Scrape all IG</button>
       <button class="ib" onclick="loadAll(true)" title="Refresh">Refresh</button>
+      <button class="ib" onclick="openReports()" title="Lifecycle · growth · per-VA · client summary" style="background:linear-gradient(135deg,#8b5cf6,#ec4899);color:#fff;border:none;">📊 Reports</button>
     </div>
     <div class="kpis" id="kpis"></div>
     <!-- Per-platform breakdown (Overview only): active vs inactive, click to open that platform. -->
@@ -744,6 +745,146 @@ window.addEventListener('focus', function(){ if(AUTH && document.getElementById(
   }
   document.getElementById('g-pin').addEventListener('keydown',function(e){ if(e.key==='Enter') gateGo(); });
   document.getElementById('g-pass').addEventListener('keydown',function(e){ if(e.key==='Enter') gateGo(); });
+})();
+</script>
+
+<!-- ═════ REPORTS (in-tool) — lifecycle · growth · per-VA · client summary ═════ -->
+<style>
+#rep-ov{ position:fixed; inset:0; z-index:9000; background:#f4f6fa; overflow:auto; }
+.rep-head{ position:sticky; top:0; z-index:2; display:flex; align-items:center; gap:10px; padding:12px 18px;
+  background:#fff; border-bottom:1px solid #e8eaef; }
+.rep-head b{ font-size:15px } .rep-head button{ font:800 12.5px 'Manrope',sans-serif; border-radius:9px; padding:8px 13px; cursor:pointer; border:1px solid #e8eaef; background:#fff; }
+.rep-head button.pv{ background:linear-gradient(135deg,#ff6b1a,#e83d00); color:#fff; border:none; }
+#rep-prog{ height:5px; background:#e9edf3; overflow:hidden; } #rep-prog>i{ display:block; height:100%; width:0; background:linear-gradient(90deg,#ff6b1a,#8b5cf6); transition:width .3s; }
+#rep-body{ max-width:1040px; margin:0 auto; padding:18px 18px 60px; }
+.rep-sec{ background:#fff; border:1px solid #e8eaef; border-radius:16px; padding:18px 20px; margin:14px 0; }
+.rep-sec h2{ font-size:16px; margin:0 0 2px } .rep-sec .hs{ color:#5b6473; font-size:12px; margin:0 0 12px }
+.rep-k{ display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:10px; margin:4px 0 12px }
+.rep-k .b{ background:#f7f8fc; border-radius:11px; padding:11px 12px } .rep-k .v{ font-size:22px; font-weight:800 } .rep-k .l{ font-size:10.5px; color:#5b6473 }
+.rep-br{ display:flex; align-items:center; gap:8px; margin:4px 0 } .rep-br .bar{ height:11px; border-radius:6px; min-width:2px }
+.rep-tb{ width:100%; border-collapse:collapse; font-size:12.5px } .rep-tb th,.rep-tb td{ padding:6px 8px; border-bottom:1px solid #f0f2f5; text-align:left } .rep-tb td.n,.rep-tb th.n{ text-align:right }
+.rep-call{ border-left:3px solid #e11d48; background:#fff1f2; color:#9f1239; font-weight:700; font-size:12.5px; border-radius:8px; padding:9px 12px; margin-top:10px }
+.rep-call.win{ border-color:#10b981; background:#ecfdf5; color:#065f46 }
+.rep-pill{ padding:2px 8px; border-radius:20px; font-size:11px; font-weight:800 } .rep-pill.g{ background:#dcfce7;color:#166534 }.rep-pill.m{ background:#fef3c7;color:#92400e }.rep-pill.b{ background:#fee2e2;color:#991b1b }
+.rep-muted{ color:#98a1b0; font-size:12px }
+@media print{ body *{ visibility:hidden } #rep-ov,#rep-ov *{ visibility:visible } #rep-ov{ position:absolute; background:#fff } .noprint{ display:none !important } .rep-sec{ break-inside:avoid } }
+</style>
+<div id="rep-ov">
+  <div class="rep-head noprint">
+    <b>Account Reports</b> <span id="rep-status" class="rep-muted"></span>
+    <span style="flex:1"></span>
+    <button class="pv" onclick="window.print()">🖨 Save as PDF</button>
+    <button onclick="runReports()">↻ Refresh</button>
+    <button onclick="closeReports()">✕ Close</button>
+  </div>
+  <div id="rep-prog" class="noprint"><i></i></div>
+  <div id="rep-body"></div>
+</div>
+<script>
+(function(){
+  'use strict';
+  var RAPI='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
+  var RPROJ=[
+    {p:'Reddit',n:'Reddit — Altz',metric:'karma'},{p:'Reddit - Casey',n:'Reddit — Casey',metric:'karma'},
+    {p:'Reddit - MeG',n:'Reddit — MeG',metric:'karma'},{p:'John',n:'X — John',metric:'fol'},
+    {p:'Project Arlo',n:'IG — Dream IRL',metric:'fol'},{p:'IG Reels - Moma',n:'IG — Moma',metric:'fol'},
+    {p:'Ember Management',n:'Snapchat — Ember',metric:'fol'}
+  ];
+  var RDEAD=['banned','tempban','suspended'], MLBL={karma:'karma',fol:'followers'};
+  function e(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function d10(s){return String(s||'').slice(0,10);} function T(s){s=d10(s);return s?new Date(s+'T00:00:00').getTime():null;}
+  function med(a){if(!a.length)return null;a=a.slice().sort(function(x,y){return x-y;});return a[Math.floor(a.length/2)];}
+  function av(a){if(!a.length)return null;return Math.round(a.reduce(function(x,y){return x+y;},0)/a.length);}
+  function getJSON(u,t){t=t||5;return fetch(u).then(function(r){return r.json();}).catch(function(err){if(t<=1)throw err;return new Promise(function(z){setTimeout(z,1500);}).then(function(){return getJSON(u,t-1);});});}
+  function byP(p){for(var i=0;i<RPROJ.length;i++)if(RPROJ[i].p===p)return RPROJ[i];return{n:p,metric:'karma'};}
+  function prog(pc,msg){document.getElementById('rep-prog').style.display='block';document.getElementById('rep-prog').firstChild.style.width=pc+'%';document.getElementById('rep-status').textContent=msg||'';}
+
+  function analyze(cfg,rows){
+    var rec={proj:cfg.p,total:rows.length,alive:0,dead:0,statuses:{},
+      death:{'Day 0–2 · Creation':0,'Day 3–7 · Early warm-up':0,'Day 8–14 · Late warm-up':0,'Day 15–30 · Posting':0,'Day 31+ · Established':0},
+      mv:[],sv:[],lead:[]};
+    rows.forEach(function(r){
+      var s=String(r.status||'?').toLowerCase(); rec.statuses[s]=(rec.statuses[s]||0)+1;
+      var dead=RDEAD.indexOf(s)>=0; if(dead)rec.dead++; else rec.alive++;
+      var m=(r.meta&&r.meta[cfg.metric]!=null)?parseInt(r.meta[cfg.metric],10):null;
+      if(!dead&&m!=null&&!isNaN(m)){rec.mv.push(m);rec.lead.push({h:r.handle,v:m,o:(r.assigned_to||r.created_by||'')});}
+      if(dead){var c=T(r.meta&&r.meta.cdate),l=T(r.meta&&r.meta.last);var sv=null;
+        if(c!=null&&l!=null&&l>=c) sv=Math.round((l-c)/86400000);
+        if(sv==null||sv<=2)rec.death['Day 0–2 · Creation']++;   /* unknown dates fold into Creation (Jethro) */
+        else if(sv<=7)rec.death['Day 3–7 · Early warm-up']++; else if(sv<=14)rec.death['Day 8–14 · Late warm-up']++;
+        else if(sv<=30)rec.death['Day 15–30 · Posting']++; else rec.death['Day 31+ · Established']++;
+        if(sv!=null)rec.sv.push(sv);}
+    });
+    rec.banRate=rec.total?Math.round(rec.dead/rec.total*1000)/10:0;
+    rec.avgM=av(rec.mv); rec.medSurv=med(rec.sv); rec.lead.sort(function(a,b){return b.v-a.v;});
+    return rec;
+  }
+  function bar(label,val,max,color,extra){var w=max?Math.round(val/max*100):0;
+    return '<div class="rep-br"><div style="width:150px;flex:0 0 150px">'+e(label)+'</div><div style="flex:1"><div class="bar" style="width:'+w+'%;background:'+color+'"></div></div><div style="width:78px;text-align:right;font-weight:800">'+val+(extra||'')+'</div></div>';}
+  function nameOf(id){id=String(id||'').toLowerCase(); try{ if(window.DATA&&DATA.names&&DATA.names[id])return DATA.names[id]; }catch(_e){} return id||'—';}
+
+  function renderProject(rec,cfg){
+    var order=['Day 0–2 · Creation','Day 3–7 · Early warm-up','Day 8–14 · Late warm-up','Day 15–30 · Posting','Day 31+ · Established'];
+    var shown=order.filter(function(k){return rec.death[k]>0;});
+    var maxd=Math.max.apply(null,shown.map(function(k){return rec.death[k];}).concat([1]));
+    var dc={'Day 0–2 · Creation':'#f59e0b','Day 3–7 · Early warm-up':'#fb7185','Day 8–14 · Late warm-up':'#e11d48','Day 15–30 · Posting':'#a855f7','Day 31+ · Established':'#6366f1'};
+    var warm=(rec.death['Day 3–7 · Early warm-up']||0)+(rec.death['Day 8–14 · Late warm-up']||0), wp=rec.dead?Math.round(warm/rec.dead*100):0;
+    var h='<div class="rep-sec"><h2>'+e(cfg.n)+'</h2><p class="hs">'+rec.total+' accounts · '+MLBL[cfg.metric]+' tracked</p><div class="rep-k">'+
+      '<div class="b"><div class="v" style="color:#ff6b1a">'+rec.total+'</div><div class="l">Total</div></div>'+
+      '<div class="b"><div class="v" style="color:#10b981">'+rec.alive+'</div><div class="l">Not banned</div></div>'+
+      '<div class="b"><div class="v" style="color:#e11d48">'+rec.dead+'</div><div class="l">Banned</div></div>'+
+      '<div class="b"><div class="v" style="color:#e11d48">'+rec.banRate+'%</div><div class="l">Ban rate</div></div>'+
+      '<div class="b"><div class="v" style="color:#8b5cf6">'+(rec.medSurv==null?'—':rec.medSurv+'d')+'</div><div class="l">Median survival</div></div>'+
+      '<div class="b"><div class="v">'+(rec.avgM==null?'—':rec.avgM.toLocaleString())+'</div><div class="l">Avg '+MLBL[cfg.metric]+'</div></div></div>';
+    if(rec.dead){ h+='<h3 style="font-size:13px;margin:6px 0 8px">Where accounts die</h3>';
+      shown.forEach(function(k){h+=bar(k,rec.death[k],maxd,dc[k],' · '+Math.round(rec.death[k]/rec.dead*100)+'%');});
+      if(warm>0)h+='<div class="rep-call">'+wp+'% of bans ('+warm+' of '+rec.dead+') happen during warm-up (day 3–14).</div>'; }
+    if(rec.lead.length){ h+='<h3 style="font-size:13px;margin:14px 0 8px">Top '+MLBL[cfg.metric]+' — not-banned accounts</h3><table class="rep-tb"><tr><th>Account</th><th>VA</th><th class="n">'+MLBL[cfg.metric]+'</th></tr>';
+      rec.lead.slice(0,8).forEach(function(x){h+='<tr><td>'+e(x.h||'—')+'</td><td>'+e(nameOf(x.o))+'</td><td class="n">'+x.v.toLocaleString()+'</td></tr>';}); h+='</table>'; }
+    return h+'</div>';
+  }
+  function renderSummary(recs){
+    var tot=0,al=0,de=0; recs.forEach(function(r){tot+=r.total;al+=r.alive;de+=r.dead;});
+    var rate=tot?Math.round(de/tot*1000)/10:0;
+    var rk=recs.filter(function(r){return r.total>0;}).sort(function(a,b){return a.banRate-b.banRate;});
+    var mx=Math.max.apply(null,rk.map(function(r){return r.banRate;}).concat([1]));
+    var h='<div class="rep-sec"><h2>Client summary — all projects</h2><p class="hs">Generated '+new Date().toISOString().slice(0,10)+'</p><div class="rep-k">'+
+      '<div class="b"><div class="v" style="color:#ff6b1a">'+tot+'</div><div class="l">Accounts total</div></div>'+
+      '<div class="b"><div class="v" style="color:#10b981">'+al+'</div><div class="l">Not banned</div></div>'+
+      '<div class="b"><div class="v" style="color:#e11d48">'+de+'</div><div class="l">Banned</div></div>'+
+      '<div class="b"><div class="v" style="color:#e11d48">'+rate+'%</div><div class="l">Overall ban rate</div></div></div>'+
+      '<h3 style="font-size:13px;margin:6px 0 8px">Ban rate by project (lower is better)</h3>';
+    rk.forEach(function(r){var c=r.banRate<40?'#10b981':(r.banRate<65?'#f59e0b':'#e11d48');h+=bar(byP(r.proj).n,r.banRate,mx,c,'%');});
+    if(rk.length>1){h+='<div class="rep-call win">✔ Winning: <b>'+e(byP(rk[0].proj).n)+'</b> — lowest ban rate ('+rk[0].banRate+'%).</div>';
+      var w=rk[rk.length-1]; h+='<div class="rep-call">⚠ Losing: <b>'+e(byP(w.proj).n)+'</b> — highest ban rate ('+w.banRate+'%). Prioritise SOP fixes here.</div>';}
+    return h+'</div>';
+  }
+  function renderVAs(vm){
+    var rows=Object.keys(vm).map(function(id){var v=vm[id];return{name:nameOf(id),total:v.total,alive:v.alive,dead:v.dead,surv:v.total?Math.round(v.alive/v.total*100):0,k:v.kn?Math.round(v.karma/v.kn):null};}).filter(function(v){return v.total>=2;}).sort(function(a,b){return b.surv-a.surv||b.total-a.total;});
+    if(!rows.length)return '';
+    var h='<div class="rep-sec"><h2>Per-VA scorecards</h2><p class="hs">VAs with 2+ accounts</p><table class="rep-tb"><tr><th>VA</th><th class="n">Accts</th><th class="n">Alive</th><th class="n">Banned</th><th class="n">Survival</th><th class="n">Avg karma</th></tr>';
+    rows.forEach(function(v){var p=v.surv>=60?'g':(v.surv>=35?'m':'b');h+='<tr><td>'+e(v.name)+'</td><td class="n">'+v.total+'</td><td class="n">'+v.alive+'</td><td class="n">'+v.dead+'</td><td class="n"><span class="rep-pill '+p+'">'+v.surv+'%</span></td><td class="n">'+(v.k==null?'—':v.k.toLocaleString())+'</td></tr>';});
+    return h+'</table></div>';
+  }
+
+  window.openReports=function(){ document.getElementById('rep-ov').style.display='block'; if(!window._repDone) runReports(); };
+  window.closeReports=function(){ document.getElementById('rep-ov').style.display='none'; };
+  window.runReports=async function(){
+    prog(3,'Loading team names…');
+    try{ var em=await getJSON(RAPI+'?action=get_all_employees&_='+Date.now(),3); window.DATA=window.DATA||{}; DATA.names=DATA.names||{};
+      ((em&&(em.employees||em.rows||em))||[]).forEach(function(x){var id=String(x.employee_id||x.id||'').toLowerCase();if(id)DATA.names[id]=x.full_name||x.name||id;}); }catch(_e){}
+    var recs=[], vm={};
+    for(var i=0;i<RPROJ.length;i++){ var cfg=RPROJ[i];
+      prog(5+Math.round(i/RPROJ.length*90),'Loading '+cfg.n+' … ('+(i+1)+'/'+RPROJ.length+')');
+      var rows=[]; try{ var j=await getJSON(RAPI+'?action=pa_list&project='+encodeURIComponent(cfg.p)+'&_='+Date.now(),5); rows=(j&&j.rows)||[]; }catch(_e){}
+      recs.push(analyze(cfg,rows));
+      rows.forEach(function(r){var o=String(r.assigned_to||r.created_by||'').toLowerCase();if(!o)return;var v=vm[o]||(vm[o]={total:0,alive:0,dead:0,karma:0,kn:0});v.total++;var dead=RDEAD.indexOf(String(r.status||'').toLowerCase())>=0;if(dead)v.dead++;else{v.alive++;var k=(r.meta&&r.meta.karma!=null)?parseInt(r.meta.karma,10):null;if(k!=null&&!isNaN(k)){v.karma+=k;v.kn++;}}});
+      var html=renderSummary(recs); recs.forEach(function(r){html+=renderProject(r,byP(r.proj));}); html+=renderVAs(vm);
+      document.getElementById('rep-body').innerHTML=html;
+    }
+    window._repDone=true; prog(100,'Done — '+recs.length+' projects · use “Save as PDF”.');
+    setTimeout(function(){document.getElementById('rep-prog').style.display='none';},1200);
+  };
 })();
 </script>
 </body>
