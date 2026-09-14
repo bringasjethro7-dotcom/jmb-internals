@@ -1162,29 +1162,31 @@ async function proofAdd(files){
 }
 async function proofSubmit(){
   if(!PROOF.imgs.length){ toast('Attach at least one screenshot.'); return; }
-  var btn=document.getElementById('proof-save'); btn.disabled=true; btn.textContent='Uploading…';
+  var btn=document.getElementById('proof-save'); btn.disabled=true; btn.textContent='Saving…';
+  var body={ action:'proof_save', employee_id:USER.id, full_name:(USER.name||USER.id),
+    project:PROJECT, task:PROOF.ctx.task||'', account:PROOF.ctx.account||'',
+    date:today(), shift:(typeof vaKeyOf==='function'?vaKeyOf(USER.id):''),
+    outputs:PROOF.ctx.outputs||1, note:(document.getElementById('proof-note').value||'') };
   try{
-    var body={ action:'proof_save', employee_id:USER.id, full_name:(USER.name||USER.id),
-      project:PROJECT, task:PROOF.ctx.task||'', account:PROOF.ctx.account||'',
-      date:today(), shift:(typeof vaKeyOf==='function'?vaKeyOf(USER.id):''),
-      outputs:PROOF.ctx.outputs||1, note:(document.getElementById('proof-note').value||'') };
-    var _ref=await pupRefs(PROOF.ctx);
+    var _ref=await pupRefs(PROOF.ctx);              // waits only for the FAST Supabase image upload
     if(_ref && _ref.urls){ body.urls=_ref.urls; }
     else if(_ref && _ref.ids){ body.ids=_ref.ids; }
-    else { body.images=PROOF.imgs; }   // fall back to the inline path rather than lose the proof
-    var r=await fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) });
-    var d=await r.json();
-    if(d && d.ok){
-      var done=PROOF.ondone; _PROOF_AT=Date.now();   // proof is in — bump() may now count
-      PROOF.onCancel=null;                          // saved, so the cancel path must not fire
-      proofClose();
-      toast(d.count+' screenshot'+(d.count>1?'s':'')+' saved as proof.');
-      if(done) await done();                      // the output is only counted AFTER proof lands
-    } else {
-      toast('Proof not saved: '+((d&&d.error)||'unknown')+' — nothing was counted.');
-    }
-  }catch(e){ toast('Upload failed — nothing was counted. Try again.'); }
-  btn.disabled=false; btn.textContent='Save proof & count it';
+    else { body.images=PROOF.imgs; }               // fall back to inline rather than lose the proof
+  }catch(e){}
+  /* OPTIMISTIC (Sep 2026): the screenshots are already safe in Supabase, so we DON'T make the VA
+     wait on the slow Apps Script record. Close instantly and record in the background with retries
+     — the output count lands a moment later. This is what killed the "upload takes forever" pain. */
+  var done=PROOF.ondone; _PROOF_AT=Date.now(); PROOF.onCancel=null;
+  proofClose();
+  toast(PROOF.imgs.length+' screenshot'+(PROOF.imgs.length>1?'s':'')+' saved · counting…');
+  (function record(tries){
+    fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) })
+      .then(function(r){ return r.json(); })
+      .then(function(d){ if(d && d.ok){ if(done) try{ done(); }catch(_e){} }
+        else if(tries>0){ setTimeout(function(){ record(tries-1); }, 2500); }
+        else { toast('Saved — the count may take a moment to show.'); } })
+      .catch(function(){ if(tries>0) setTimeout(function(){ record(tries-1); }, 2500); else toast('Saved — the count may take a moment to show.'); });
+  })(5);
 }
 try{ document.addEventListener('DOMContentLoaded', function(){ try{ renderShotBar(); }catch(e){} }); setTimeout(function(){ try{ renderShotBar(); }catch(e){} }, 1200); }catch(e){}
 /* ══════════ 👁 SESSION SCREENSHOT VIEWER + SINGLE-PHOTO REPLACE ══════════

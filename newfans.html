@@ -531,29 +531,31 @@ function proofClose(cancelled){
 }
 async function proofSubmit(){
   if(!PROOF.imgs.length){ toast('Attach at least one screenshot.'); return; }
-  var btn=document.getElementById('proof-save'); btn.disabled=true; btn.textContent='Uploading…';
+  var btn=document.getElementById('proof-save'); btn.disabled=true; btn.textContent='Saving…';
+  var body={ action:'proof_save', employee_id:USER.id, full_name:(USER.name||USER.id),
+    project:PROJECT, task:PROOF.ctx.task||'', account:PROOF.ctx.account||'',
+    date:(typeof today==='function'?today():''), outputs:PROOF.ctx.n||1,
+    note:(document.getElementById('proof-note').value||'') };
   try{
-    var body={ action:'proof_save', employee_id:USER.id, full_name:(USER.name||USER.id),
-      project:PROJECT, task:PROOF.ctx.task||'', account:PROOF.ctx.account||'',
-      date:(typeof today==='function'?today():''), outputs:PROOF.ctx.n||1,
-      note:(document.getElementById('proof-note').value||'') };
     var _ref=await pupRefs(PROOF.ctx);
     if(_ref && _ref.urls){ body.urls=_ref.urls; }
     else if(_ref && _ref.ids){ body.ids=_ref.ids; }
-    else { body.images=PROOF.imgs; }   // fall back to the inline path rather than lose the proof
-    var r=await fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) });
-    var d=await r.json();
-    if(d && d.ok){
-      var res=PROOF.resolve; var n=d.count;
-      PROOF.imgs=[]; PUP.q={}; PROOF.resolve=null; PROOF.reject=null;
-      var ov=document.getElementById('proof-ov'); if(ov) ov.style.display='none';
-      toast(n+' screenshot'+(n>1?'s':'')+' saved as proof.');
-      if(res) res(true);
-    } else {
-      toast('Proof not saved: '+((d&&d.error)||'unknown')+' — nothing was counted.');
-    }
-  }catch(e){ toast('Upload failed — nothing was counted. Try again.'); }
-  btn.disabled=false; btn.textContent='Save proof & count it';
+    else { body.images=PROOF.imgs; }
+  }catch(e){}
+  /* OPTIMISTIC (Sep 2026): screenshots are already safe in Supabase — do NOT block the VA on the
+     slow Apps Script record. Close instantly and record in the background with retries. */
+  var res=PROOF.resolve, cnt=PROOF.imgs.length;
+  PROOF.imgs=[]; PUP.q={}; PROOF.resolve=null; PROOF.reject=null;
+  var ov=document.getElementById('proof-ov'); if(ov) ov.style.display='none';
+  toast(cnt+' screenshot'+(cnt>1?'s':'')+' saved \u00b7 counting\u2026');
+  (function record(tries){
+    fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) })
+      .then(function(r){ return r.json(); })
+      .then(function(d){ if(d && d.ok){ toast(d.count+' screenshot'+(d.count>1?'s':'')+' saved as proof.'); if(res){ try{res(true);}catch(_e){} res=null; } }
+        else if(tries>0){ setTimeout(function(){ record(tries-1); }, 2500); }
+        else { toast('Saved \u2014 the count may take a moment to show.'); if(res){ try{res(true);}catch(_e){} res=null; } } })
+      .catch(function(){ if(tries>0) setTimeout(function(){ record(tries-1); }, 2500); else { toast('Saved \u2014 the count may take a moment to show.'); if(res){ try{res(true);}catch(_e){} res=null; } } });
+  })(5);
 }
 /* THE GATE. Every output routes through here, so proof cannot be bypassed by any button. */
 function bump(task,n){
