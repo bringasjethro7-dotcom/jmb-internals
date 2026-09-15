@@ -959,7 +959,17 @@ function _dataUrlToBlob(d){
   for(var i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i);
   return new Blob([a],{type:m[1]});
 }
-async function psUpload(dataUrl, emp, task){
+/* Cap any promise so a flaky connection can never hang a screenshot for minutes. */
+function _withTimeout(promise, ms, label){
+  return new Promise(function(resolve,reject){
+    var done=false, t=setTimeout(function(){ if(!done){ done=true; reject(new Error((label||'op')+' timed out')); } }, ms);
+    Promise.resolve(promise).then(function(v){ if(!done){ done=true; clearTimeout(t); resolve(v); } },
+                                  function(e){ if(!done){ done=true; clearTimeout(t); reject(e); } });
+  });
+}
+/* One Supabase upload attempt (bounded). Each call builds a fresh unique path, so retries
+   never collide. */
+async function _psUploadOnce(dataUrl, emp, task){
   var sb=psb(); if(!sb) throw new Error('no client');
   var blob=_dataUrlToBlob(dataUrl); if(!blob) throw new Error('bad image');
   var d=new Date(), ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
@@ -969,11 +979,22 @@ async function psUpload(dataUrl, emp, task){
   var label = String(task || (typeof PROJECT!=='undefined' ? PROJECT : '') || 'proof');
   var safe = label.replace(/[^A-Za-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40) || 'proof';
   var path=(emp||'unknown')+'/'+ym+'/'+safe+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+'.jpg';
-  var up=await sb.storage.from(PSUPA_BUCKET).upload(path, blob, { contentType:'image/jpeg', upsert:false });
+  var up=await _withTimeout(sb.storage.from(PSUPA_BUCKET).upload(path, blob, { contentType:'image/jpeg', upsert:false }), 15000, 'upload');
   if(up.error) throw up.error;
   var u=sb.storage.from(PSUPA_BUCKET).getPublicUrl(path).data.publicUrl;
   if(!u) throw new Error('no url');
   return u;
+}
+/* Supabase upload with up to 3 fast attempts. A transient blip (the #1 cause of "uploads often
+   fail") is retried on Supabase — the fast path — instead of dropping straight to the slow
+   Apps Script base64 fallback. Rebuild the client between tries in case it went stale. */
+async function psUpload(dataUrl, emp, task){
+  var last;
+  for(var attempt=0; attempt<3; attempt++){
+    try{ return await _psUploadOnce(dataUrl, emp, task); }
+    catch(e){ last=e; _psb=null; if(attempt<2) await new Promise(function(r){ setTimeout(r, 700*(attempt+1)); }); }
+  }
+  throw last || new Error('upload failed');
 }
 var PUP={ q:{} };
 function pupKey(d){ return d.length+'|'+d.slice(-24); }
@@ -985,10 +1006,12 @@ function pupStart(dataUrl, ctx){
   st.p = psUpload(dataUrl, emp, tk)
     .then(function(u){ st.state='done'; st.url=u; pupPaint(); return st; })
     .catch(function(){
-      return fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      /* Last resort only: Supabase failed all retries. Post the image through the backend, but
+         bounded so it can't hang — if this also fails, mark it failed and let Save retry. */
+      return _withTimeout(fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
           body: JSON.stringify({ action:'proof_img', employee_id:emp, task:tk,
             date:(typeof today==='function'?today():''), image:dataUrl }) })
-        .then(function(r){ return r.json(); })
+        .then(function(r){ return r.json(); }), 25000, 'backend upload')
         .then(function(d){
           if(d && d.ok && d.id){ st.state='done'; st.id=d.id; }
           else { st.state='fail'; st.err=(d&&d.error)||'upload'; }
