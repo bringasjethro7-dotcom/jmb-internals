@@ -875,6 +875,7 @@ async function shotForCreate(id){
   var img=shotGrab();
   if(!img){ toast('Could not read the window — re-pick it.'); shotStop(); return; }
   SHOTTRAY[k].push(img);
+  try{ pupStart(img, {task:'Reddit Account Creation'}); }catch(_p){}   // start the upload NOW, not at Save
   toast('📷 '+SHOTTRAY[k].length+'/'+SHOT.max+' captured.');
   renderCreateCount(id);
 }
@@ -883,10 +884,13 @@ function shotPickCreate(id){
   if(SHOTTRAY[k].length>=SHOT.max){ toast('5 screenshots is the max.'); return; }
   var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.multiple=true;
   inp.onchange=async function(){
-    for(var i=0;i<inp.files.length;i++){
-      if(SHOTTRAY[k].length>=SHOT.max) break;
-      try{ SHOTTRAY[k].push(await proofCompress(inp.files[i])); }catch(e){}
-    }
+    // Compress all picked files CONCURRENTLY and start each upload the moment it's ready —
+    // no more one-file-blocks-the-next, and the uploads run in the background before Save.
+    var room=Math.max(0, SHOT.max-SHOTTRAY[k].length);
+    var files=Array.prototype.slice.call(inp.files, 0, room);
+    await Promise.all(files.map(async function(f){
+      try{ var im=await proofCompress(f); SHOTTRAY[k].push(im); try{ pupStart(im,{task:'Reddit Account Creation'}); }catch(_p){} }catch(e){}
+    }));
     toast('📎 '+SHOTTRAY[k].length+'/'+SHOT.max+' attached.');
     renderCreateCount(id);
   };
@@ -910,11 +914,13 @@ function shotPickFile(id, phk, n){
   if(SHOTTRAY[key].length>=SHOT.max){ toast('5 screenshots is the max for one session.'); return; }
   var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.multiple=true;
   inp.onchange=async function(){
-    var added=0, skipped=0;
-    for(var i=0;i<inp.files.length;i++){
-      if(SHOTTRAY[key].length>=SHOT.max){ skipped++; continue; }
-      try{ SHOTTRAY[key].push(await proofCompress(inp.files[i])); added++; }catch(e){ skipped++; }
-    }
+    var room=Math.max(0, SHOT.max-SHOTTRAY[key].length);
+    var files=Array.prototype.slice.call(inp.files, 0, room);
+    var skipped=Math.max(0, inp.files.length-room), added=0;
+    // concurrent compress + immediate background upload (was sequential + no head start)
+    await Promise.all(files.map(async function(f){
+      try{ var im=await proofCompress(f); SHOTTRAY[key].push(im); added++; try{ pupStart(im,{task:''}); }catch(_p){} }catch(e){ skipped++; }
+    }));
     toast('📎 '+added+' attached ('+SHOTTRAY[key].length+'/'+SHOT.max+')'+
           (skipped?(' · '+skipped+' skipped — tray is full'):'')+' for session '+n+'.');
     renderShotCount(id, phk, n);
