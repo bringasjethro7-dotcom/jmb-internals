@@ -340,6 +340,37 @@ td{padding:11px 12px;border-bottom:1px solid rgba(15,23,42,.05)}
 
 <script>
 var PORTAL_URL = "https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec";
+
+/* ══ APPS SCRIPT HICCUP GUARD ══
+   Google's web-app endpoint intermittently answers a perfectly good request with HTTP 404 and an
+   HTML error page instead of JSON. Every call on this page does `(await fetch(...)).json()`, so
+   that page arrived as "Unexpected token '<', \"<!DOCTYPE \"... is not valid JSON" — which reads
+   like the QA data is corrupt when nothing is wrong with it.
+   This wraps fetch for backend calls only: if the reply is HTML, it retries twice with a short
+   backoff (the endpoint usually answers correctly on the next try), and if it still will not,
+   it throws a sentence a human can act on instead of a parser error. */
+(function(){
+  var _fetch = window.fetch;
+  function isBackend(u){ return String(u||'').indexOf('script.google.com/macros/') >= 0; }
+  window.fetch = function(input, init){
+    var url = (typeof input === 'string') ? input : ((input && input.url) || '');
+    if (!isBackend(url)) return _fetch.apply(this, arguments);
+    var self = this, args = arguments;
+    return (async function(){
+      for (var i = 0; i < 3; i++) {
+        var resp;
+        try { resp = await _fetch.apply(self, args); }
+        catch(netErr){ if (i === 2) throw netErr; await new Promise(function(r){ setTimeout(r, 1200 * (i+1)); }); continue; }
+        var txt = '';
+        try { txt = await resp.clone().text(); } catch(_e){ return resp; }
+        if (txt.trim().charAt(0) !== '<') return resp;          // genuine JSON — pass it through untouched
+        if (i < 2) await new Promise(function(r){ setTimeout(r, 1200 * (i+1)); });
+      }
+      try { if (typeof toast === 'function') toast('QA backend is having a moment — try again shortly.'); } catch(_t){}
+      throw new Error('QA backend temporarily unavailable (Google returned an error page instead of data). Nothing is wrong with your review — please try again in a moment.');
+    })();
+  };
+})();
 /* Same admin password as the QA Computer — taken from there rather than set
    separately, so there is only ever one thing to change. */
 /* ── ADMIN SIGN-IN — verified SERVER-SIDE, no password in this file ──
