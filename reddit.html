@@ -414,6 +414,15 @@ var GROUPS=[
  {k:'ban',  n:'Banned',    c:'#64748b', st:['banned']}
 ];
 var END_REASONS=['Permanently suspended','Shadowbanned','Locked — could not recover','Other'];
+/* Stage typed into the sheet as its display name ("Medium + DMs", "Spam Recovery")? Map it to the key
+   so the card gets its colour, plan and session buttons. The backend does the same from rc-2026-10-04e. */
+var ST_ALIAS={ newlycreated:'new', newcreated:'new', creationstage:'creation', standby:'creationstandby', warmup:'warming', warmingup:'warming',
+  commentfarm:'comment', commentfarming:'comment', comments:'comment', nsfwcomment:'nsfw', nsfwcomments:'nsfw', day1posting:'day1', dayone:'day1', dayoneposting:'day1',
+  earlyposting:'early', earlydms:'earlydm', earlyplusdms:'earlydm', earlywithdms:'earlydm', mediumdm:'medium', mediumdms:'medium', mediumplusdms:'medium',
+  spamrecovery:'recovery', spamfilter:'recovery', spamfilterrecovery:'recovery', spam:'recovery', tempbanned:'tempban', temporaryban:'tempban', temporarybanned:'tempban',
+  temporarilybanned:'tempban', ban:'banned', permanentlybanned:'banned', permaban:'banned', suspended:'banned', dead:'banned' };
+function statusKey(v){ var raw=String(v==null?'':v).trim(), k=raw.toLowerCase().replace(/[^a-z0-9]/g,''); if(!k) return ''; if(ORDER.indexOf(k)>=0) return k; return ST_ALIAS[k]||raw.toLowerCase(); }
+function normRows(rows){ (rows||[]).forEach(function(r){ r.status=statusKey(r.status); }); return rows; }
 function phase(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return PH[i]; return null; }
 function phaseIx(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return i; return -1; }
 function stageMeta(k){
@@ -643,7 +652,7 @@ async function load(){
     await loadCover();
     var d=await jget(API+'?'+qs({action:'pa_list', project:PROJECT})+'&_='+Date.now(), 10000);
     if(!d||!d.ok) throw new Error((d&&d.error)||'load');
-    var rows=(d.rows||[]).map(function(r){ r.project=r.project||PROJECT; return r; });
+    var rows=normRows((d.rows||[]).map(function(r){ r.project=r.project||PROJECT; return r; }));
     if(isAdmin()){ ALL[PROJECT]=rows; }
     ROWS=scope(rows);
     try{ sessionStorage.setItem('rc_rows_'+PROJECT, JSON.stringify({t:Date.now(), rows:rows})); }catch(e){}
@@ -659,7 +668,7 @@ async function load(){
 }
 function paintCached(){
   try{ var c=JSON.parse(sessionStorage.getItem('rc_rows_'+PROJECT)||'null');
-    if(c && c.rows && (Date.now()-c.t)<10*60*1000){ if(isAdmin()) ALL[PROJECT]=c.rows; ROWS=scope(c.rows); renderView(); } }catch(e){}
+    if(c && c.rows && (Date.now()-c.t)<10*60*1000){ normRows(c.rows); if(isAdmin()) ALL[PROJECT]=c.rows; ROWS=scope(c.rows); renderView(); } }catch(e){}
 }
 /* All three bases — admin views (Accounts "all bases", Pipeline, Insights) and the base counts. */
 async function loadAll(force){
@@ -668,7 +677,7 @@ async function loadAll(force){
   await Promise.all(BASES.map(async function(b){
     try{
       var d=await jget(API+'?'+qs({action:'pa_list', project:b.id})+'&_='+Date.now(), 10000);
-      var rows=((d&&d.rows)||[]).map(function(r){ r.project=r.project||b.id; return r; });
+      var rows=normRows(((d&&d.rows)||[]).map(function(r){ r.project=r.project||b.id; return r; }));
       if(isAdmin()) ALL[b.id]=rows;
       BASECOUNT[b.id]=rows.filter(function(r){ return r.status!=='banned' && (isAdmin() || owner(r)===me); }).length;
     }catch(e){}
