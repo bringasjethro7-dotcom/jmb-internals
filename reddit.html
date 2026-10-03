@@ -597,19 +597,29 @@ async function signIn(){
 function signOut(){ try{ sessionStorage.removeItem('reddit_user'); }catch(e){} location.reload(); }
 
 /* ── directory ── */
+/* Deactivated in the admin console (or removed from the roster) → gone from every list here:
+   team progress, VA pickers, coverage, rest days, the per-VA tables. Their accounts are NOT hidden —
+   the owner gets a prompt to move them to an active VA. */
+var GONE={}, DIR_READY=false;
+var INACTIVE_RE=/^(inactive|deactivated|deactivate|disabled|resigned|terminated|offboarding|offboarded|separated|dismissed|archived|former|ex[- ]?employee)$/i;
+function isGone(id){ id=String(id||'').toLowerCase(); if(!id || OWNERS.indexOf(id)>=0) return false; return !!(GONE[id] || (DIR_READY && !NAMES[id])); }
+function goneHolders(rows){ var g={}; (rows||[]).forEach(function(r){ var o=owner(r); if(!isDead(r) && isGone(o)) (g[o]=g[o]||[]).push(r); }); return g; }
 async function loadNames(){
   try{
     var c=JSON.parse(sessionStorage.getItem('jmb_empdir')||'null');
-    if(c && c.N && (Date.now()-c.t)<30*60*1000){ NAMES=c.N; SHIFTOF=c.S||{}; PHOTOOF=c.P||{}; }
+    if(c && c.N && c.G && (Date.now()-c.t)<30*60*1000){ NAMES=c.N; SHIFTOF=c.S||{}; PHOTOOF=c.P||{}; GONE=c.G||{}; DIR_READY=true; }
   }catch(e){}
   try{
     var d=await jget(API+'?action=emp_dir&_='+Date.now(), 60000);
     if(!d || !d.employees || !d.employees.length) throw new Error('empty');
+    GONE={};
     d.employees.forEach(function(e){
       var k=String(e.employee_id).toLowerCase();
       NAMES[k]=e.full_name||e.employee_id; SHIFTOF[k]=String(e.shift||'').toLowerCase(); PHOTOOF[k]=drivePhoto(e.photo||'');
+      if(e.active===false || INACTIVE_RE.test(String(e.status||'').trim())) GONE[k]=1;
     });
-    try{ sessionStorage.setItem('jmb_empdir', JSON.stringify({N:NAMES,S:SHIFTOF,P:PHOTOOF,t:Date.now()})); }catch(_p){}
+    DIR_READY=true;
+    try{ sessionStorage.setItem('jmb_empdir', JSON.stringify({N:NAMES,S:SHIFTOF,P:PHOTOOF,G:GONE,t:Date.now()})); }catch(_p){}
     paintTop(); renderView();
   }catch(e){ setTimeout(loadNames, 15000); }
 }
@@ -841,6 +851,11 @@ function vToday(){
       '. <b>'+OFF.uncovered+' account'+(OFF.uncovered===1?'':'s')+'</b> still need someone — or a client-approved hold.</div>'+
       '<button class="btn sm dark" onclick="go(\'coverage\')">Decide now</button></div>';
   }
+  if(admin){
+    var gh=goneHolders(ALL[PROJECT]||ROWS), gk=Object.keys(gh);
+    if(gk.length) h+='<div class="banner bad">'+IC.swap+'<div style="flex:1"><b>'+gk.map(function(k){ return esc(vaName(k)); }).join(', ')+'</b> '+(gk.length===1?'is':'are')+' deactivated in the admin console but still '+(gk.length===1?'owns':'own')+' <b>'+gk.reduce(function(s,k){ return s+gh[k].length; },0)+' live account'+(gk.reduce(function(s,k){ return s+gh[k].length; },0)===1?'':'s')+'</b> on '+esc(baseOf(PROJECT).n)+'. Move them to an active VA.</div>'+
+      gk.map(function(k){ return '<button class="btn sm dark" onclick="xferOpen(\''+jsq(k)+'\')">Move '+esc(firstName(k))+'\'s '+gh[k].length+'</button>'; }).join('')+'</div>';
+  }
   var covering=mineWork.filter(function(r){ return owner(r)!==me; });
   if(covering.length){
     var whose={}; covering.forEach(function(r){ var o=owner(r); whose[o]=(whose[o]||0)+1; });
@@ -869,7 +884,7 @@ function vToday(){
   // team progress — owner only
   if(admin){
     var by={}; ROWS.forEach(function(r){ var k=worksFor(r)||'—'; (by[k]=by[k]||[]).push(r); });
-    var list=Object.keys(by).map(function(k){ var q=progOf(by[k],k); q.k=k; q.n=by[k].filter(function(r){ return !isDead(r); }).length; return q; })
+    var list=Object.keys(by).filter(function(k){ return !isGone(k); }).map(function(k){ var q=progOf(by[k],k); q.k=k; q.n=by[k].filter(function(r){ return !isDead(r); }).length; return q; })
       .filter(function(o){ return o.tot>0 || o.n>0; })
       .sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
     if(list.length){
@@ -931,13 +946,13 @@ function vToday(){
 function kpi(l,v,s,c){ return '<div class="card kpi"><span class="k-bar" style="background:'+c+'"></span><div class="k-l">'+esc(l)+'</div><div class="k-v">'+v+'</div><div class="k-s">'+esc(s)+'</div></div>'; }
 function vaOptions(sel, withMine){
   var ids={}; (isAdmin()?allRows().concat(ROWS):ROWS).forEach(function(r){ var o=owner(r); if(o) ids[o]=1; var c=coverOf(r); if(c && c!=='__hold__') ids[c]=1; });
-  var ks=Object.keys(ids).sort(function(a,b){ return vaName(a).localeCompare(vaName(b)); });
+  var ks=Object.keys(ids).filter(function(k){ return !isGone(k); }).sort(function(a,b){ return vaName(a).localeCompare(vaName(b)); });
   return (withMine?'<option value="all"'+(sel==='all'?' selected':'')+'>Everyone</option><option value="mine"'+(sel==='mine'?' selected':'')+'>Mine</option>':'')+
     ks.map(function(k){ return '<option value="'+esc(k)+'"'+(sel===k?' selected':'')+'>'+esc(vaName(k))+'</option>'; }).join('');
 }
 function allVaIds(){
   var ids={}; Object.keys(NAMES).forEach(function(k){ ids[k]=1; }); allRows().concat(ROWS).forEach(function(r){ var o=owner(r); if(o) ids[o]=1; });
-  delete ids['admin']; return Object.keys(ids).sort(function(a,b){ return vaName(a).localeCompare(vaName(b)); });
+  delete ids['admin']; return Object.keys(ids).filter(function(k){ return !isGone(k); }).sort(function(a,b){ return vaName(a).localeCompare(vaName(b)); });
 }
 
 /* ── one account card ── */
@@ -1244,7 +1259,7 @@ var COLS=[
   {k:'model',   n:'Model',       v:function(r){ return String(r.model||'').toLowerCase(); }, h:function(r){ return esc(r.model||'—'); }},
   {k:'device',  n:'Phone',       v:function(r){ return String(r.device||'').toLowerCase(); }, h:function(r){ return esc(r.device||'—'); }},
   {k:'niche',   n:'Niche',       v:function(r){ return String(r.niche||'').toLowerCase(); }, h:function(r){ return esc(r.niche||'—'); }},
-  {k:'va',      n:'VA',          admin:true, v:function(r){ return vaName(owner(r)).toLowerCase(); }, h:function(r){ return esc(vaName(owner(r))); }},
+  {k:'va',      n:'VA',          admin:true, v:function(r){ return vaName(owner(r)).toLowerCase(); }, h:function(r){ return esc(vaName(owner(r)))+(isGone(owner(r))?' <span class="flag r">deactivated</span>':''); }},
   {k:'email',   n:'Email',       v:function(r){ return String(r.email||''); }, h:function(r){ return esc(r.email||'—'); }},
   {k:'created', n:'Created',     v:function(r){ var d=createdAt(r); return d?d.getTime():0; }, h:function(r){ var d=createdAt(r); return d?(esc(createdExact(r)?fmtDT(d):fmtD(d))):'—'; }},
   {k:'age',     n:'Age',         num:true, v:function(r){ var a=ageDays(r); return a==null?-1:a; }, h:function(r){ var a=ageDays(r); return a==null?'—':a+'d'; }},
@@ -1524,12 +1539,12 @@ function vPipeline(){
 
   // VA × stage, split by method
   var by={}; all.forEach(function(r){ var k=owner(r)||'—'; (by[k]=by[k]||[]).push(r); });
-  var vas=Object.keys(by).sort(function(a,b){ return by[b].length-by[a].length; });
+  var vas=Object.keys(by).filter(function(k){ return !isGone(k) || by[k].some(function(r){ return !isDead(r); }); }).sort(function(a,b){ return by[b].length-by[a].length; });
   h+='<div class="sec-h"><b>Accounts per VA × method</b><span>live accounts each VA holds on each method · current owner</span><hr></div>';
   h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th>'+lanes.map(function(m){ return '<th style="color:'+methodColor(m)+'">'+esc(m||'Not tagged')+'</th>'; }).join('')+'<th>Banned 30d</th><th>Total alive</th></tr></thead><tbody>'+
     vas.map(function(k){ var list=by[k], alive=list.filter(function(r){ return !isDead(r); });
       var b30=list.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<30; }).length;
-      return '<tr class="r" onclick="DB.va=\''+jsq(k)+'\';DB.all='+(PL.all?'true':'false')+';DB.life=\'all\';DB.meth=\'all\';go(\'accounts\')"><td class="c1">'+esc(vaName(k))+'</td>'+
+      return '<tr class="r" onclick="DB.va=\''+jsq(k)+'\';DB.all='+(PL.all?'true':'false')+';DB.life=\'all\';DB.meth=\'all\';go(\'accounts\')"><td class="c1">'+esc(vaName(k))+(isGone(k)?' <span class="flag r">deactivated</span>':'')+'</td>'+
         lanes.map(function(m){ var n=alive.filter(function(r){ return methodOf(r)===m; }).length; return '<td class="num" style="'+(n?'font-weight:800;color:'+methodColor(m):'color:var(--ink4)')+'">'+(n||'·')+'</td>'; }).join('')+
         '<td class="num" style="'+(b30?'color:#b91c1c;font-weight:800':'color:var(--ink4)')+'">'+(b30||'·')+'</td><td class="num" style="font-weight:800">'+alive.length+'</td></tr>';
     }).join('')+'</tbody></table></div>';
@@ -1837,7 +1852,10 @@ function vCoverage(){
     if(noAcc.length) h+='<p class="muted" style="font-size:12px;margin-top:10px">Also off today, no Reddit accounts: '+noAcc.map(function(o){ return esc(firstName(o.employee_id))+' ('+esc(o.type)+')'; }).join(', ')+'.</p>';
   }
   // manual cover for an absence that isn't in the leave system yet
-  var holders={}; rows.forEach(function(r){ var ow=owner(r); if(ow && coverable(r)) holders[ow]=(holders[ow]||0)+1; });
+  var holders={}; rows.forEach(function(r){ var ow=owner(r); if(ow && coverable(r) && !isGone(ow)) holders[ow]=(holders[ow]||0)+1; });
+  var gh=goneHolders(rows), gk=Object.keys(gh);
+  if(gk.length) h+='<div class="banner bad" style="margin-top:14px">'+IC.swap+'<div style="flex:1"><b>Deactivated but still holding accounts:</b> '+gk.map(function(k){ return esc(vaName(k))+' ('+gh[k].length+')'; }).join(', ')+'. Move them for good — a cover only lasts a day.</div>'+
+    gk.map(function(k){ return '<button class="btn sm dark" onclick="xferOpen(\''+jsq(k)+'\')">Move '+esc(firstName(k))+'\'s</button>'; }).join('')+'</div>';
   h+='<div class="sec-h"><b>Someone else can\'t work today?</b><span>sudden absence not filed yet</span><hr></div>'+
     '<div class="card pad row"><select class="sel" id="cv-man">'+Object.keys(holders).sort(function(a,b){ return vaName(a).localeCompare(vaName(b)); }).map(function(k){ return '<option value="'+esc(k)+'">'+esc(vaName(k))+' · '+holders[k]+' accounts</option>'; }).join('')+'</select>'+
     '<button class="btn sm pri" onclick="cvOpen($(\'cv-man\').value,\'one\')">Reassign…</button><button class="btn sm sec" onclick="cvOpen($(\'cv-man\').value,\'split\')">Split…</button><button class="btn sm sec" onclick="cvOpen($(\'cv-man\').value,\'hold\')">Hold…</button></div>';
@@ -1912,10 +1930,11 @@ async function cvQuickHold(from){
 async function cvLift(idsCsv){ var ids=String(idsCsv).split(',').filter(Boolean); if(await setCover(ids,'')){ toast('Lifted.'); renderView(); loadOff(); } }
 
 /* Permanent transfer — a VA leaving the project. Ownership moves for good; history keeps both names. */
-function xferOpen(){
+function xferOpen(preset){
   var rows=ALL[PROJECT]||ROWS, holders={}; rows.forEach(function(r){ var o=owner(r); if(o) holders[o]=(holders[o]||0)+1; });
+  preset=String(preset||'').toLowerCase();
   openModal('<div class="md-h"><h3>Permanent transfer · '+esc(baseOf(PROJECT).n)+'</h3><p>For a VA leaving the project. Ownership moves for good; output already earned stays where it was earned, and every move is written to each account\'s history.</p></div><div class="md-b">'+
-    '<div class="f2"><div class="fld"><label>From (departing VA)</label><select class="sel" id="xf-from">'+Object.keys(holders).sort(function(a,b){ return vaName(a).localeCompare(vaName(b)); }).map(function(k){ return '<option value="'+esc(k)+'">'+esc(vaName(k))+' · '+holders[k]+'</option>'; }).join('')+'</select></div>'+
+    '<div class="f2"><div class="fld"><label>From (departing VA)</label><select class="sel" id="xf-from">'+Object.keys(holders).sort(function(a,b){ return (isGone(b)-isGone(a)) || vaName(a).localeCompare(vaName(b)); }).map(function(k){ return '<option value="'+esc(k)+'"'+(k===preset?' selected':'')+'>'+esc(vaName(k))+(isGone(k)?' (deactivated)':'')+' · '+holders[k]+'</option>'; }).join('')+'</select></div>'+
     '<div class="fld"><label>To</label><select class="sel" id="xf-to">'+allVaIds().map(function(k){ return '<option value="'+esc(k)+'">'+esc(vaName(k))+'</option>'; }).join('')+'</select></div></div>'+
     '<label class="chk"><input type="checkbox" id="xf-dead"> Include banned and temp-banned accounts</label>'+
     '</div><div class="md-f"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn dark" id="xf-go" onclick="xferGo()">Transfer permanently</button></div>');
@@ -1972,7 +1991,7 @@ function vSettings(){
     '<input class="inp" type="date" value="'+esc(SET.process_start||SOP_START)+'" onchange="SET.process_start=this.value"></div>';
   // rest days
   if(!SET.rest_days) SET.rest_days={};
-  var holders={}; allRows().forEach(function(r){ if(!isDead(r)){ var o=owner(r); if(o && OWNERS.indexOf(o)<0) holders[o]=1; } });
+  var holders={}; allRows().forEach(function(r){ if(!isDead(r)){ var o=owner(r); if(o && OWNERS.indexOf(o)<0 && !isGone(o)) holders[o]=1; } });
   var vas=Object.keys(holders).sort(function(a,b){ return vaName(a).localeCompare(vaName(b)); });
   var DN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   h+='<div class="card pad"><div class="ch-h"><b>Rest days</b><span>Coverage uses these first. "Auto" = learned from attendance (the weekday they almost never clock in). Anyone who clocks in is never treated as off.</span></div>'+
