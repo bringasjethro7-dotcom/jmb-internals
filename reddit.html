@@ -344,9 +344,8 @@ svg text{font-family:'Inter',sans-serif}
 var API='https://script.google.com/macros/s/AKfycbwc0seQ11rMc_9GeAE34jVPYDDsFkMqNhpGCiW8D1qIFu9bZ_e6Aa3SHR8vt8Fq04g5mA/exec';
 var BASES=[
   { id:'Reddit',         n:'Altz',  c:'#ff6b1a' },
-  { id:'Reddit - Casey', n:'Casey', c:'#0ea5e9' },
-  { id:'Reddit - MeG',   n:'MeG',   c:'#a855f7' }
-];
+  { id:'Reddit - Casey', n:'Casey', c:'#0ea5e9' }
+];   // MeG removed Oct 4 2026 — that operation ended; its rows stay in the sheet, off the board
 /* Only these two see other VAs' accounts, output and analytics (Jeth, Oct 4 2026). */
 var OWNERS=['jmbeast','admin'];
 var PROJECT=(function(){
@@ -359,7 +358,7 @@ var PROJECT=(function(){
   return 'Reddit';
 })();
 var USER=null, ROWS=[], ALL={}, ALL_AT=0, NAMES={}, SHIFTOF={}, PHOTOOF={}, COVER={}, OFF=null, EVENTS=null, EVENTS_AT=0;
-var CFG={ phones:[], models:{}, niches:[], process_start:'2026-10-01' };
+var CFG={ phones:[], models:{}, niches:[], process_start:'2026-10-01', rest_days:{}, methods:['Vysor','Jailbroken','Blaze+'] };
 var VIEW='today', BASECOUNT={};
 var SOP_START='2026-10-01';
 
@@ -515,6 +514,14 @@ function modelsFor(project){
   (ALL[project]||(project===PROJECT?ROWS:[])).forEach(function(r){ var m=String(r.model||'').trim(); if(m && !set[m.toLowerCase()]){ set[m.toLowerCase()]=1; out.push(m); } });
   return out;
 }
+/* METHODS — three ways of running an account (Oct 4 2026): same ladder, different approach. This is
+   the research question — which approach keeps accounts alive and moves them up fastest — so every
+   account carries one, and the board, the database and Insights all group and compare by it. */
+var METHOD_C={ 'vysor':'#0ea5e9', 'jailbroken':'#a855f7', 'blaze+':'#ff6b1a' };
+function methodsList(){ return ((CFG.methods&&CFG.methods.length)?CFG.methods:['Vysor','Jailbroken','Blaze+']).slice(); }
+function methodOf(r){ return String((r&&r.method)||'').trim(); }
+function methodColor(m){ m=String(m||'').toLowerCase(); if(METHOD_C[m]) return METHOD_C[m]; if(!m) return '#94a3b8'; var h=0; for(var i=0;i<m.length;i++) h=(h*31+m.charCodeAt(i))>>>0; return ['#14b8a6','#f59e0b','#ec4899','#6366f1'][h%4]; }
+function methodPill(m, small){ var c=methodColor(m); return '<span class="pill" style="background:'+c+'16;color:'+c+';'+(small?'font-size:10.5px;padding:2px 8px':'')+'"><i style="width:7px;height:7px;border-radius:50%;background:'+c+';display:inline-block"></i>'+esc(m||'No method')+'</span>'; }
 function phoneList(activeOnly){ return (CFG.phones||[]).filter(function(p){ return p && p.label && (!activeOnly || p.active!==false); }); }
 
 /* ── network ── */
@@ -578,7 +585,7 @@ async function loadNames(){
   }catch(e){ setTimeout(loadNames, 15000); }
 }
 async function loadCfg(){
-  try{ var d=await jget(API+'?action=rc_cfg_get&_='+Date.now(), 30000); if(d && d.cfg){ CFG=d.cfg; if(!CFG.models) CFG.models={}; if(!CFG.phones) CFG.phones=[]; if(!CFG.niches) CFG.niches=[]; } }catch(e){}
+  try{ var d=await jget(API+'?action=rc_cfg_get&_='+Date.now(), 30000); if(d && d.cfg){ CFG=d.cfg; if(!CFG.models) CFG.models={}; if(!CFG.phones) CFG.phones=[]; if(!CFG.niches) CFG.niches=[]; if(!CFG.methods||!CFG.methods.length) CFG.methods=['Vysor','Jailbroken','Blaze+']; } }catch(e){}
 }
 
 /* ── data ── */
@@ -746,7 +753,7 @@ function askNumber(title, body, cur){
 }
 
 /* ═══════════ TODAY — the work board ═══════════ */
-var TD={ grp:'all', q:'', va:'mine' };
+var TD={ grp:'all', q:'', va:'mine', m:'all', by:'method' };
 /* Session-unit counting, unchanged from v2: every workable account = 2 sessions per shift
    (Warming → Super Strong, incl. Recovery). A fresh creation adds 1 to the target the moment it
    is logged and counts when its setup is finished. Banned / temp-banned mid-shift keep the
@@ -798,7 +805,7 @@ function vToday(){
   if(admin && OFF && OFF.uncovered>0){
     var offN=(OFF.off||[]).filter(function(o){ return o.accounts && Object.keys(o.accounts).length; });
     h+='<div class="banner warn">'+IC.swap+'<div style="flex:1"><b>'+offN.length+' VA'+(offN.length===1?' is':'s are')+' off today</b> — '+
-      offN.map(function(o){ return esc(firstName(o.employee_id))+' ('+esc(o.type)+')'; }).join(', ')+
+      offN.map(function(o){ return esc(firstName(o.employee_id))+' ('+esc(o.type)+(o.basis==='usual day off'?', usual day off':'')+')'; }).join(', ')+
       '. <b>'+OFF.uncovered+' account'+(OFF.uncovered===1?'':'s')+'</b> still need someone — or a client-approved hold.</div>'+
       '<button class="btn sm dark" onclick="go(\'coverage\')">Decide now</button></div>';
   }
@@ -857,22 +864,34 @@ function vToday(){
     }).join('')+'</div><div class="sp"></div>'+
     (admin?'<select class="sel" onchange="TD.va=this.value;renderView()">'+vaOptions(TD.va,true)+'</select>':'')+
     '<div class="search">'+IC.search+'<input class="inp" id="td-q" placeholder="Search username, model, phone…" value="'+esc(TD.q)+'" oninput="TD.q=this.value;renderView()"></div></div>';
+  // method row — the three approaches, plus anything not tagged yet
+  var mcount={}; board.forEach(function(r){ var m=methodOf(r)||''; mcount[m]=(mcount[m]||0)+1; });
+  var mkeys=methodsList().concat(Object.keys(mcount).filter(function(m){ return m && methodsList().indexOf(m)<0; }));
+  h+='<div class="tbar"><span class="lbl">Method</span><div class="chips">'+
+    '<button class="chip '+(TD.m==='all'?'sel':'')+'" onclick="TD.m=\'all\';renderView()">All</button>'+
+    mkeys.map(function(m){ var c=methodColor(m); return '<button class="chip '+(TD.m===m?'sel':'')+'" onclick="TD.m=\''+jsq(m)+'\';renderView()"><i style="background:'+c+'"></i>'+esc(m)+' '+(mcount[m]||0)+'</button>'; }).join('')+
+    (mcount['']?'<button class="chip '+(TD.m===''?'sel':'')+'" onclick="TD.m=\'\';renderView()" style="'+(TD.m===''?'':'color:#b45309')+'">Not tagged '+mcount['']+'</button>':'')+
+    '</div><div class="sp"></div><div class="seg" style="width:auto"><button class="'+(TD.by==='method'?'on':'')+'" onclick="TD.by=\'method\';renderView()">Group by method</button><button class="'+(TD.by==='stage'?'on':'')+'" onclick="TD.by=\'stage\';renderView()">Group by stage</button></div></div>';
 
   var rows=board.filter(function(r){
+    if(TD.m!=='all' && methodOf(r)!==TD.m) return false;
     if(TD.grp==='att') return needsAttention(r);
     if(TD.grp!=='all') return groupOf(r.status).k===TD.grp;
     return true;
   });
   var q=TD.q.trim().toLowerCase();
-  if(q) rows=rows.filter(function(r){ return [r.handle,r.model,r.device,r.niche,r.email,vaName(owner(r))].join(' ').toLowerCase().indexOf(q)>=0; });
+  if(q) rows=rows.filter(function(r){ return [r.handle,r.method,r.model,r.device,r.niche,r.email,vaName(owner(r))].join(' ').toLowerCase().indexOf(q)>=0; });
   if(!board.length){ return h+'<div class="card empty">No accounts yet. Create one on your assigned iPhone, then tap <b>Log new account</b> right away — the SOP says the account is logged the moment it exists.</div>'; }
   if(!rows.length) return h+'<div class="card empty">Nothing matches this filter.</div>';
-  rows.sort(function(a,b){ return stageOrd(a.status)-stageOrd(b.status) || (isHeld(a)-isHeld(b)) || daysIn(b)-daysIn(a) || String(a.handle).localeCompare(String(b.handle)); });
+  var mOrd=function(r){ var m=methodOf(r); var i=mkeys.indexOf(m); return m?(i<0?50:i):99; };
+  rows.sort(function(a,b){ return (TD.by==='method'?(mOrd(a)-mOrd(b)):0) || stageOrd(a.status)-stageOrd(b.status) || (isHeld(a)-isHeld(b)) || daysIn(b)-daysIn(a) || String(a.handle).localeCompare(String(b.handle)); });
   var out=[], last='';
   rows.forEach(function(r){
-    var sm=stageMeta(r.status);
-    if(sm.n!==last){ var n=rows.filter(function(x){ return stageMeta(x.status).n===sm.n; }).length;
-      out.push('</div><div class="sec-h"><i style="width:10px;height:10px;border-radius:50%;background:'+sm.c+'"></i><b>'+esc(sm.n)+'</b><span>'+n+'</span><hr></div><div class="grid">'); last=sm.n; }
+    var key, label, col, n;
+    if(TD.by==='method'){ key=methodOf(r); label=key||'Not tagged yet — set the method'; col=methodColor(key); n=rows.filter(function(x){ return methodOf(x)===key; }).length; }
+    else { var sm=stageMeta(r.status); key=sm.n; label=sm.n; col=sm.c; n=rows.filter(function(x){ return stageMeta(x.status).n===key; }).length; }
+    if(key!==last || !out.length){
+      out.push('</div><div class="sec-h"><i style="width:10px;height:10px;border-radius:50%;background:'+col+'"></i><b>'+esc(label)+'</b><span>'+n+'</span><hr></div><div class="grid">'); last=key; }
     out.push(cardHtml(r));
   });
   return h+'<div class="grid">'+out.join('')+'</div>';
@@ -899,6 +918,7 @@ function stageSelect(r, cls){
 }
 function chipsHtml(r, withVa){
   var c=[];
+  c.push(methodOf(r)?methodPill(methodOf(r),true):'<span class="chip" style="background:#fff8eb;color:#92400e;cursor:pointer" onclick="editRec(\''+jsq(r.id)+'\')" title="Tag the method">'+IC.tag+' set method</span>');
   if(r.model) c.push('<span class="chip" title="Model">'+IC.user+' '+esc(r.model)+'</span>');
   if(r.device) c.push('<span class="chip" title="Created on">'+IC.phone+' '+esc(r.device)+'</span>');
   if(r.niche) c.push('<span class="chip" title="Persona niche">'+IC.tag+' '+esc(r.niche)+'</span>');
@@ -1125,6 +1145,7 @@ function newAccount(){
     '<div class="md-b">'+
       '<div class="seg" style="margin-bottom:14px"><button id="na-s0" class="on" onclick="naSeed(false)">Just created</button><button id="na-s1" onclick="naSeed(true)">Already existing account</button></div>'+
       '<div class="fld"><label>Reddit username</label><input class="inp" id="na-u" placeholder="u/username" autocomplete="off"></div>'+
+      '<div class="fld"><label>Method — how this account is run</label><div class="seg" id="na-meth">'+methodsList().map(function(m){ return '<button type="button" data-m="'+esc(m)+'" onclick="naMeth(this)" style="color:'+methodColor(m)+'">'+esc(m)+'</button>'; }).join('')+'</div></div>'+
       '<div class="f2"><div class="fld"><label>Model</label>'+
         '<select class="sel" id="na-m" onchange="naModel()">'+(models.length?'':'<option value="">— none set yet —</option>')+models.map(function(x){ return '<option>'+esc(x)+'</option>'; }).join('')+'<option value="__new">＋ Other…</option></select>'+
         '<input class="inp" id="na-m2" placeholder="Model name" style="display:none;margin-top:6px" oninput="naModel()"></div>'+
@@ -1145,6 +1166,7 @@ function newAccount(){
     '<div class="md-f"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn pri" id="na-go" onclick="naSave()">'+IC.plus+' Save account</button></div>');
   naModel();
 }
+function naMeth(b){ NA.method=b.getAttribute('data-m'); document.querySelectorAll('#na-meth button').forEach(function(x){ x.classList.toggle('on', x===b); }); }
 function naSeed(on){ NA.seed=on; $('na-s0').classList.toggle('on',!on); $('na-s1').classList.toggle('on',on); $('na-seed').style.display=on?'block':'none'; $('na-chk').style.display=on?'none':'block'; }
 function naModelVal(){ var s=$('na-m'); if(!s) return ''; if(s.value==='__new'){ $('na-m2').style.display='block'; return ($('na-m2').value||'').trim(); } $('na-m2').style.display='none'; return s.value; }
 function naModel(){ var e=$('na-e'); if(!e) return; var sug=suggestEmail(naModelVal()); if(!e.value || e.dataset.auto==='1'){ e.value=sug; e.dataset.auto='1'; } e.oninput=function(){ e.dataset.auto='0'; }; }
@@ -1152,6 +1174,7 @@ async function naSave(){
   var u=($('na-u').value||'').trim().replace(/^\/?u\//i,''), model=naModelVal(), dev=($('na-d').value||'').trim(), niche=($('na-n').value||'').trim(), email=($('na-e').value||'').trim().toLowerCase();
   if(!u){ toast('Type the username.'); return; }
   if(!/^[A-Za-z0-9_-]{3,20}$/.test(u)){ toast('That doesn\'t look like a Reddit username (3–20 letters, numbers, _ or -).'); return; }
+  if(!NA.method){ toast('Pick the method — Vysor, Jailbroken or Blaze+.'); return; }
   if(!model){ toast('Pick the model this account is for.'); return; }
   if(!dev && !NA.seed){ toast('Pick the iPhone it was created on.'); return; }
   if(email && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(email)){ toast('Check the email address.'); return; }
@@ -1164,7 +1187,7 @@ async function naSave(){
   if(!NA.seed){ meta.setup=setup; if(full){ meta.cdone=1; meta.cstamp=vaKeyOf(USER.id); meta.cdoneAt=phtStamp(); } }
   var b=$('na-go'); b.disabled=true; b.textContent='Saving…';
   try{
-    var d=await api({ action:'pa_add', project:PROJECT, handle:u, status:st, model:model, device:dev, niche:niche, email:email, meta:JSON.stringify(meta), employee_id:USER.id, by:USER.id });
+    var d=await api({ action:'pa_add', project:PROJECT, handle:u, status:st, method:NA.method, model:model, device:dev, niche:niche, email:email, meta:JSON.stringify(meta), employee_id:USER.id, by:USER.id });
     if(d && d.ok){
       if(full) await bump('Reddit Account Creation',1);
       closeModal();
@@ -1180,10 +1203,11 @@ async function naSave(){
 }
 
 /* ═══════════ ACCOUNTS — the database (Airtable-style grid) ═══════════ */
-var DB={ q:'', life:'alive', grp:'', model:'', phone:'', va:'all', all:false, sort:'created', dir:-1, groupBy:'' };
+var DB={ q:'', life:'alive', grp:'', model:'', phone:'', va:'all', all:false, sort:'created', dir:-1, groupBy:'method', meth:'all' };
 var COLS=[
   {k:'handle',  n:'Account',     v:function(r){ return String(r.handle||'').toLowerCase(); }, h:function(r){ return esc(r.handle); }, c1:true},
   {k:'stage',   n:'Stage',       v:function(r){ return stageOrd(r.status); }, h:function(r){ var s=stageMeta(r.status); return '<span class="pill" style="background:'+s.c+'18;color:'+s.c+'"><i style="width:7px;height:7px;border-radius:50%;background:'+s.c+';display:inline-block"></i>'+esc(s.n)+'</span>'+(isHeld(r)?' <span class="chip" style="font-size:10px">hold</span>':''); }},
+  {k:'method',  n:'Method',      v:function(r){ var m=methodOf(r); var i=methodsList().indexOf(m); return m?(i<0?50:i):99; }, h:function(r){ return methodPill(methodOf(r),true); }},
   {k:'base',    n:'Base',        all:true, v:function(r){ return baseOf(r.project).n; }, h:function(r){ var b=baseOf(r.project); return '<span class="pill" style="background:'+b.c+'14;color:'+b.c+'">'+esc(b.n)+'</span>'; }},
   {k:'model',   n:'Model',       v:function(r){ return String(r.model||'').toLowerCase(); }, h:function(r){ return esc(r.model||'—'); }},
   {k:'device',  n:'Phone',       v:function(r){ return String(r.device||'').toLowerCase(); }, h:function(r){ return esc(r.device||'—'); }},
@@ -1205,6 +1229,7 @@ function dbRows(){
     if(DB.life==='alive' && isDead(r)) return false;
     if(DB.life==='dead' && !isDead(r)) return false;
     if(DB.grp && groupOf(r.status).k!==DB.grp) return false;
+    if(DB.meth!=='all' && methodOf(r)!==DB.meth) return false;
     if(DB.model && String(r.model||'')!==DB.model) return false;
     if(DB.phone && String(r.device||'')!==DB.phone) return false;
     if(isAdmin() && DB.va!=='all' && owner(r)!==DB.va) return false;
@@ -1227,22 +1252,28 @@ function vAccounts(){
   h+='<div class="tbar">'+
     '<div class="seg" style="width:auto">'+[['alive','Alive'],['dead','Banned'],['all','All']].map(function(x){ return '<button class="'+(DB.life===x[0]?'on':'')+'" onclick="DB.life=\''+x[0]+'\';renderView()">'+x[1]+'</button>'; }).join('')+'</div>'+
     '<select class="sel" onchange="DB.grp=this.value;renderView()"><option value="">All stages</option>'+GROUPS.map(function(g){ return '<option value="'+g.k+'"'+(DB.grp===g.k?' selected':'')+'>'+g.n+'</option>'; }).join('')+'</select>'+
+    '<select class="sel" onchange="DB.meth=this.value;renderView()"><option value="all">All methods</option>'+methodsList().map(function(m){ return '<option'+(DB.meth===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'<option value=""'+(DB.meth===''?' selected':'')+'>Not tagged</option></select>'+
     '<select class="sel" onchange="DB.model=this.value;renderView()"><option value="">All models</option>'+models.map(function(m){ return '<option'+(DB.model===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select>'+
     '<select class="sel" onchange="DB.phone=this.value;renderView()"><option value="">All phones</option>'+phones.map(function(m){ return '<option'+(DB.phone===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select>'+
     (admin?'<select class="sel" onchange="DB.va=this.value;renderView()"><option value="all">All VAs</option>'+vaOptions(DB.va,false)+'</select>':'')+
-    '<select class="sel" onchange="DB.groupBy=this.value;renderView()" title="Group rows"><option value="">No grouping</option>'+[['stage','Group: Stage'],['model','Group: Model'],['device','Group: Phone'],['va','Group: VA'],['niche','Group: Niche']].concat(admin&&DB.all?[['base','Group: Base']]:[]).filter(function(x){ return admin||x[0]!=='va'; }).map(function(x){ return '<option value="'+x[0]+'"'+(DB.groupBy===x[0]?' selected':'')+'>'+x[1]+'</option>'; }).join('')+'</select>'+
+    '<select class="sel" onchange="DB.groupBy=this.value;renderView()" title="Group rows"><option value="">No grouping</option>'+[['method','Group: Method'],['stage','Group: Stage'],['model','Group: Model'],['device','Group: Phone'],['va','Group: VA'],['niche','Group: Niche']].concat(admin&&DB.all?[['base','Group: Base']]:[]).filter(function(x){ return admin||x[0]!=='va'; }).map(function(x){ return '<option value="'+x[0]+'"'+(DB.groupBy===x[0]?' selected':'')+'>'+x[1]+'</option>'; }).join('')+'</select>'+
     (admin?'<label class="chip" style="cursor:pointer;background:var(--s1);border:1px solid var(--line)"><input type="checkbox" '+(DB.all?'checked':'')+' onchange="DB.all=this.checked;if(DB.all)loadAll().then(renderView);renderView()" style="accent-color:var(--o)"> All bases</label>':'')+
     '<div class="sp"></div><div class="search">'+IC.search+'<input class="inp" id="db-q" placeholder="Search…" value="'+esc(DB.q)+'" oninput="DB.q=this.value;renderView()"></div>'+
     '<span class="muted" style="font-weight:700;font-size:12px">'+rows.length+' record'+(rows.length===1?'':'s')+'</span></div>';
+  var untagged=rows.filter(function(r){ return !methodOf(r); }).length;
+  if(admin && untagged) h+='<div class="banner warn">'+IC.tag+'<div style="flex:1"><b>'+untagged+'</b> of these records have no method yet. Tag them so Insights can compare Vysor, Jailbroken and Blaze+.</div>'+
+    '<select class="sel" id="bulk-m">'+methodsList().map(function(m){ return '<option>'+esc(m)+'</option>'; }).join('')+'</select><button class="btn sm dark" onclick="bulkMethod()">Tag the '+untagged+' shown</button></div>';
   if(!rows.length) return h+'<div class="card empty">No records match.</div>';
   var th='<tr>'+cols.map(function(c){ return '<th class="'+(c.c1?'c1':'')+'" onclick="dbSort(\''+c.k+'\')">'+esc(c.n)+(DB.sort===c.k?'<span class="ar">'+(DB.dir>0?'▲':'▼')+'</span>':'')+'</th>'; }).join('')+'</tr>';
   function tr(r){ return '<tr class="r'+(isDead(r)?' dead':'')+'" onclick="openRec(\''+jsq(r.id)+'\')">'+cols.map(function(c){ return '<td class="'+(c.c1?'c1':'')+(c.num?' num':'')+'">'+c.h(r)+'</td>'; }).join('')+'</tr>'; }
   var body='';
   if(DB.groupBy){
-    var gf={ stage:function(r){ return stageMeta(r.status).n; }, model:function(r){ return r.model||'(no model)'; }, device:function(r){ return r.device||'(phone not recorded)'; },
+    var gf={ method:function(r){ return methodOf(r)||'Not tagged'; }, stage:function(r){ return stageMeta(r.status).n; }, model:function(r){ return r.model||'(no model)'; }, device:function(r){ return r.device||'(phone not recorded)'; },
              va:function(r){ return vaName(owner(r)); }, niche:function(r){ return r.niche||'(no niche)'; }, base:function(r){ return baseOf(r.project).n; } }[DB.groupBy];
     var g={}, order=[]; rows.forEach(function(r){ var k=gf(r); if(!g[k]){ g[k]=[]; order.push(k); } g[k].push(r); });
-    if(DB.groupBy==='stage') order.sort(function(a,b){ return stageOrd(g[a][0].status)-stageOrd(g[b][0].status); }); else order.sort();
+    if(DB.groupBy==='stage') order.sort(function(a,b){ return stageOrd(g[a][0].status)-stageOrd(g[b][0].status); });
+    else if(DB.groupBy==='method'){ var ml=methodsList(); order.sort(function(a,b){ var ia=ml.indexOf(a), ib=ml.indexOf(b); return (ia<0?(a==='Not tagged'?99:50):ia)-(ib<0?(b==='Not tagged'?99:50):ib); }); }
+    else order.sort();
     order.forEach(function(k){
       var list=g[k], dead=list.filter(isDead).length;
       body+='<tr class="grp"><td colspan="'+cols.length+'">'+esc(k)+' <span class="muted" style="font-weight:700">· '+list.length+(dead?(' · '+dead+' banned ('+Math.round(dead/list.length*100)+'%)'):'')+'</span></td></tr>'+list.map(tr).join('');
@@ -1252,10 +1283,10 @@ function vAccounts(){
 }
 function dbSort(k){ if(DB.sort===k) DB.dir=-DB.dir; else { DB.sort=k; DB.dir=(k==='handle'||k==='model'||k==='device'||k==='niche'||k==='va'||k==='email')?1:-1; } renderView(); }
 function exportCsv(){
-  var rows=dbRows(), cols=['base','handle','status','model','device','niche','va','email','created','age_days','stage_since','karma','last_worked','banned_on','ban_reason'];
+  var rows=dbRows(), cols=['base','handle','status','method','model','device','niche','va','email','created','age_days','stage_since','karma','last_worked','banned_on','ban_reason'];
   var lines=[cols.join(',')].concat(rows.map(function(r){
     var c=createdAt(r), s=stageSince(r), e=endedAt(r);
-    return [baseOf(r.project).n, r.handle, stageMeta(r.status).n, r.model, r.device, r.niche, vaName(owner(r)), r.email,
+    return [baseOf(r.project).n, r.handle, stageMeta(r.status).n, methodOf(r), r.model, r.device, r.niche, vaName(owner(r)), r.email,
       c?phtStamp(c):'', ageDays(r), s?phtStamp(s):'', karmaOf(r), lastWorked(r), e?phtStamp(e):'', r.end_reason]
       .map(function(v){ v=(v==null?'':String(v)); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(',');
   }));
@@ -1333,6 +1364,7 @@ function editRec(id){
   var admin=isAdmin(), phones=phoneList(false), models=modelsFor(r.project);
   openModal('<div class="md-h"><h3>Edit '+esc(r.handle)+'</h3><p>Every change is written to the account\'s history.</p></div><div class="md-b">'+
     (admin?'<div class="fld"><label>Username</label><input class="inp" id="ed-h" value="'+esc(r.handle)+'"></div>':'')+
+    '<div class="fld"><label>Method</label><select class="sel" id="ed-me"><option value="">— not tagged —</option>'+methodsList().concat(methodOf(r)&&methodsList().indexOf(methodOf(r))<0?[methodOf(r)]:[]).map(function(m){ return '<option'+(methodOf(r)===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select></div>'+
     '<div class="f2"><div class="fld"><label>Model</label><input class="inp" id="ed-m" list="ed-ml" value="'+esc(r.model||'')+'"><datalist id="ed-ml">'+models.map(function(x){ return '<option value="'+esc(x)+'">'; }).join('')+'</datalist></div>'+
     '<div class="fld"><label>Created on (iPhone)</label><input class="inp" id="ed-d" list="ed-dl" value="'+esc(r.device||'')+'"><datalist id="ed-dl">'+phones.map(function(x){ return '<option value="'+esc(x.label)+'">'; }).join('')+'</datalist></div></div>'+
     '<div class="f2"><div class="fld"><label>Niche</label><input class="inp" id="ed-n" value="'+esc(r.niche||'')+'"></div>'+
@@ -1345,7 +1377,7 @@ async function editSave(id){
   var r=rowById(id); if(!r) return;
   var f={}, v=function(x){ var el=$(x); return el?String(el.value||'').trim():null; };
   var h=v('ed-h'); if(h!=null && h && h!==r.handle) f.handle=h.replace(/^\/?u\//i,'');
-  [['model','ed-m'],['device','ed-d'],['niche','ed-n'],['email','ed-e']].forEach(function(p){ var x=v(p[1]); if(x!=null && x!==String(r[p[0]]||'')) f[p[0]]=x; });
+  [['method','ed-me'],['model','ed-m'],['device','ed-d'],['niche','ed-n'],['email','ed-e']].forEach(function(p){ var x=v(p[1]); if(x!=null && x!==String(r[p[0]]||'')) f[p[0]]=x; });
   var va=v('ed-va'); if(va && va!==owner(r)) f.assigned_to=va;
   var no=v('ed-no'); if(no!==String(r.notes||'')) f.notes=no;
   if(!Object.keys(f).length){ closeModal(); return; }
@@ -1356,12 +1388,24 @@ async function editSave(id){
 }
 
 /* ═══════════ PIPELINE — where every account sits right now ═══════════ */
-var PL={ all:true };
+var PL={ all:true, meth:'all' };
+async function bulkMethod(){
+  var m=$('bulk-m').value, ids=dbRows().filter(function(r){ return !methodOf(r); }).map(function(r){ return r.id; });
+  if(!ids.length) return;
+  if(!(await confirmBox('Tag '+ids.length+' account(s) as '+m+'?', 'Only the untagged records in the current filter. Each change goes into the account\'s history.', 'Tag them'))) return;
+  var ok=0, fail=0; toast('Tagging '+ids.length+'…');
+  for(var i=0;i<ids.length;i+=5){
+    await Promise.all(ids.slice(i,i+5).map(async function(id){ try{ var d=await upd(id,{ method:m }); if(d&&d.ok){ ok++; patchLocal(id,{ method:m }); } else fail++; }catch(e){ fail++; } }));
+  }
+  EVENTS_AT=0; toast(ok+' tagged as '+m+(fail?' · '+fail+' failed — retry':'')); renderView();
+}
 function vPipeline(){
   var rows=PL.all?allRows():(ALL[PROJECT]||ROWS);
   if(!rows.length) return '<div class="card empty">Loading accounts…</div>';
+  if(PL.meth!=='all') rows=rows.filter(function(r){ return methodOf(r)===PL.meth; });
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Pipeline</h2><p>Every live account by stage — average days in stage tells you where accounts get stuck.</p></div>'+
-    '<div class="seg" style="width:auto"><button class="'+(PL.all?'on':'')+'" onclick="PL.all=true;renderView()">All bases</button><button class="'+(!PL.all?'on':'')+'" onclick="PL.all=false;renderView()">'+esc(baseOf(PROJECT).n)+' only</button></div></div>';
+    '<div class="seg" style="width:auto"><button class="'+(PL.all?'on':'')+'" onclick="PL.all=true;renderView()">All bases</button><button class="'+(!PL.all?'on':'')+'" onclick="PL.all=false;renderView()">'+esc(baseOf(PROJECT).n)+' only</button></div>'+
+    '<select class="sel" onchange="PL.meth=this.value;renderView()"><option value="all">All methods</option>'+methodsList().map(function(m){ return '<option'+(PL.meth===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'<option value=""'+(PL.meth===''?' selected':'')+'>Not tagged</option></select></div>';
   // flow last 7 days
   var wk=rows.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)<7; }).length;
   var bwk=rows.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<7; }).length;
@@ -1378,7 +1422,7 @@ function vPipeline(){
     return '<div class="kcol"><div class="kh"><i style="background:'+sm.c+'"></i><div>'+esc(sm.n)+'<small>'+(k==='banned'?'last 30 days':(list.length?'avg '+avg+'d in stage':'empty'))+'</small></div><em>'+list.length+'</em></div>'+
       '<div class="kl">'+list.slice(0,60).map(function(r){
         var s=stageSince(r);
-        return '<div class="kc" onclick="openRec(\''+jsq(r.id)+'\')"><b>'+esc(r.handle)+'</b><small>'+esc(r.model||'—')+' · '+esc(firstName(owner(r)))+(PL.all?' · '+esc(baseOf(r.project).n):'')+'</small>'+
+        return '<div class="kc" onclick="openRec(\''+jsq(r.id)+'\')"><b>'+esc(r.handle)+'</b><small><b style="display:inline;font-size:10.5px;color:'+methodColor(methodOf(r))+'">'+esc(methodOf(r)||'—')+'</b> · '+esc(r.model||'—')+' · '+esc(firstName(owner(r)))+(PL.all?' · '+esc(baseOf(r.project).n):'')+'</small>'+
           '<div style="display:flex;justify-content:space-between;margin-top:4px"><small>'+esc(r.device||'')+'</small><small style="font-weight:800;color:var(--ink2)">'+(s?dayDiff(s)+'d':'')+'</small></div></div>';
       }).join('')+(list.length>60?'<div class="muted" style="font-size:11px;text-align:center;padding:6px">+'+(list.length-60)+' more — see Accounts</div>':'')+'</div></div>';
   }).join('')+'</div>';
@@ -1397,10 +1441,11 @@ function vPipeline(){
    The question this page answers: when accounts die, is it the PLATFORM (a ban wave — bans spread
    across many models, VAs and phones on the same days) or something in OUR process (bans piling up
    on one model, one VA or one phone while everyone else is fine)? */
-var INS={ base:'all', range:30, dim:'model' };
-var DIMS=[['model','Model'],['va','VA'],['device','Phone'],['base','Base'],['niche','Niche'],['process','Process']];
+var INS={ base:'all', range:30, dim:'method' };
+var DIMS=[['method','Method'],['model','Model'],['va','VA'],['device','Phone'],['base','Base'],['niche','Niche'],['process','Process']];
 var PAL=['#ff6b1a','#f43f5e','#a855f7','#0ea5e9','#14b8a6','#f59e0b','#94a3b8'];
 function dimVal(r, dim){
+  if(dim==='method') return methodOf(r)||'(not tagged)';
   if(dim==='model') return r.model||'(no model)';
   if(dim==='va') return vaName(owner(r));
   if(dim==='device') return r.device||'(phone not recorded)';
@@ -1482,6 +1527,7 @@ function vInsights(){
   var surv14=elig.filter(function(r){ var a=ageDays(r); return !isDead(r) || (a!=null && a>14); }).length;
   h+='<div class="kpis">'+kpi('Alive now',alive,D.rows.length+' ever logged','#a855f7')+kpi('Created',created,'in this range','#ff6b1a')+kpi('Banned',D.bans.length,'in this range','#ef4444')+
     kpi('Ban rate',rate+'%','bans ÷ accounts exposed','#f43f5e')+kpi('Median life',med==null?'—':med+'d','created → banned','#0ea5e9')+kpi('Alive at day 14',elig.length?pct(surv14,elig.length)+'%':'—',elig.length+' accounts old enough','#10b981')+'</div>';
+  h+=methodCompare(D);
   // alerts
   h+='<div class="ig" style="margin-top:12px"><div class="card pad s8"><div class="ch-h"><b>Bans per day</b><span>stacked by '+dimLabel(INS.dim).toLowerCase()+' · ▲ wave · ● concentrated</span><div class="sp" style="flex:1"></div>'+
     '<select class="sel" onchange="INS.dim=this.value;renderView()">'+DIMS.map(function(d){ return '<option value="'+d[0]+'"'+(INS.dim===d[0]?' selected':'')+'>By '+d[1].toLowerCase()+'</option>'; }).join('')+'</select></div>'+
@@ -1501,6 +1547,53 @@ function vInsights(){
   return h;
 }
 function afterInsights(){}
+/* ── METHOD COMPARISON — the research view ──
+   Same ladder, three approaches. For each: how many accounts, how many died, how long they live,
+   how many survive the first week, how many reach posting and how fast. Best value per column is
+   highlighted. All-time within the base filter; untagged accounts are shown separately. */
+function methodCompare(D){
+  var P1=phaseIx('day1'), firstPost={};
+  (EVENTS||[]).forEach(function(e){ if(phaseIx(e.to)>=P1){ var t=parseTs(e.at); if(t && (!firstPost[e.account_id] || t<firstPost[e.account_id])) firstPost[e.account_id]=t; } });
+  var reached=function(r){ return !!firstPost[r.id] || phaseIx(r.status)>=P1 || phaseIx(M(r).prev)>=P1; };
+  var ms=methodsList(), rowsBy={}; ms.forEach(function(m){ rowsBy[m]=[]; }); rowsBy['']=[];
+  D.rows.forEach(function(r){ var m=methodOf(r); if(!rowsBy[m]) rowsBy[m]=[]; rowsBy[m].push(r); });
+  var keys=Object.keys(rowsBy).filter(function(k){ return k && rowsBy[k].length; });
+  ms.forEach(function(m){ if(keys.indexOf(m)<0) keys.unshift(m); });
+  keys=ms.concat(keys.filter(function(k){ return ms.indexOf(k)<0; }));
+  var stats=keys.map(function(m){
+    var rows=rowsBy[m]||[], dead=rows.filter(isDead), n=rows.length;
+    var lives=dead.map(ageDays).filter(function(x){ return x!=null; });
+    var el7=rows.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)>=7; });
+    var s7=el7.filter(function(r){ var a=ageDays(r); return !isDead(r)||(a!=null&&a>7); }).length;
+    var ttp=rows.map(function(r){ var t=firstPost[r.id], c=createdAt(r); return (t&&c)?Math.max(0,dayDiff(c,t)):null; }).filter(function(x){ return x!=null; });
+    var inR=D.bans.filter(function(b){ return methodOf(b.r)===m; }).length;
+    return { m:m, n:n, alive:n-dead.length, dead:dead.length, rate:n?dead.length/n:null, med:median(lives), s7:el7.length?s7/el7.length:null, el7:el7.length,
+             post:n?rows.filter(reached).length/n:null, ttp:median(ttp), ttpN:ttp.length, inR:inR };
+  });
+  function best(key, low){ var v=stats.filter(function(s){ return s.n>=3 && s[key]!=null; }).map(function(s){ return s[key]; }); if(v.length<2) return null; return low?Math.min.apply(null,v):Math.max.apply(null,v); }
+  var B={ rate:best('rate',true), med:best('med'), s7:best('s7'), post:best('post'), ttp:best('ttp',true) };
+  function cell(s,key,txt){ var hi=(B[key]!=null && s[key]===B[key] && s.n>=3); return '<td class="num" style="'+(hi?'font-weight:800;color:#047857;background:#ecfdf5':'')+'">'+txt+'</td>'; }
+  var untagged=(rowsBy['']||[]).length;
+  return '<div class="card pad" style="margin-top:12px"><div class="ch-h"><b>Method comparison</b><span>Vysor vs Jailbroken vs Blaze+ — same ladder, different approach · best in each column is green (needs 3+ accounts)</span></div>'+
+    '<div class="row" style="gap:12px;margin-bottom:12px;align-items:stretch">'+stats.map(function(s){
+      var c=methodColor(s.m);
+      return '<div class="card" style="flex:1 1 200px;padding:13px 15px;border-top:3px solid '+c+'"><div class="row" style="justify-content:space-between"><b style="color:'+c+';font-size:14px">'+esc(s.m)+'</b><span class="muted" style="font-size:11.5px;font-weight:700">'+s.n+' account'+(s.n===1?'':'s')+'</span></div>'+
+        '<div class="row" style="gap:16px;margin-top:8px">'+
+          '<div><div class="lbl">Alive</div><div class="h-d" style="font-size:20px;font-weight:800">'+s.alive+'</div></div>'+
+          '<div><div class="lbl">Ban rate</div><div class="h-d" style="font-size:20px;font-weight:800;color:'+(s.rate>0.3?'#b91c1c':'inherit')+'">'+(s.rate==null?'—':Math.round(s.rate*100)+'%')+'</div></div>'+
+          '<div><div class="lbl">Reached posting</div><div class="h-d" style="font-size:20px;font-weight:800">'+(s.post==null?'—':Math.round(s.post*100)+'%')+'</div></div>'+
+        '</div></div>';
+    }).join('')+'</div>'+
+    '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Method</th><th>Accounts</th><th>Alive</th><th>Banned</th><th>Ban rate</th><th>Median life</th><th>Alive at day 7</th><th>Reached posting</th><th>Days to posting</th><th>Bans in range</th></tr></thead><tbody>'+
+    stats.map(function(s){
+      return '<tr class="r" onclick="DB.meth=\''+jsq(s.m)+'\';DB.all=true;DB.life=\'all\';DB.va=\'all\';DB.model=\'\';DB.phone=\'\';go(\'accounts\')"><td class="c1">'+methodPill(s.m,true)+'</td><td class="num">'+s.n+'</td><td class="num">'+s.alive+'</td><td class="num">'+s.dead+'</td>'+
+        cell(s,'rate',s.rate==null?'—':(Math.round(s.rate*1000)/10)+'%')+cell(s,'med',s.med==null?'—':s.med+'d')+
+        cell(s,'s7',s.s7==null?'too new':Math.round(s.s7*100)+'% of '+s.el7)+cell(s,'post',s.post==null?'—':Math.round(s.post*100)+'%')+
+        cell(s,'ttp',s.ttp==null?'—':s.ttp+'d <span class="muted">('+s.ttpN+')</span>')+'<td class="num">'+(s.inR||'·')+'</td></tr>';
+    }).join('')+'</tbody></table></div>'+
+    (untagged?'<p class="muted" style="font-size:11.5px;margin-top:8px">'+untagged+' account'+(untagged===1?' has':'s have')+' no method yet and '+(untagged===1?'is':'are')+' left out — tag them in Accounts (filter "Not tagged" → Tag the shown).</p>':'')+
+    '<p class="muted" style="font-size:11.5px;margin-top:4px">"Days to posting" counts from creation to the first move into Day 1 Posting, from the history log — it fills in as accounts climb. Small groups swing a lot; compare once each method has 15–20 accounts.</p></div>';
+}
 function banChart(D, marks){
   var dim=INS.dim, tot={};
   D.bans.forEach(function(b){ var k=dimVal(b.r,dim); tot[k]=(tot[k]||0)+1; });
@@ -1613,7 +1706,7 @@ function offIds(){ var s={}; ((OFF&&OFF.off)||[]).forEach(function(o){ s[String(
 function vCoverage(){
   if(!isAdmin()) return '<div class="card empty">Owner only.</div>';
   var rows=ALL[PROJECT]||ROWS, offs=offIds();
-  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Coverage</h2><p>Business day '+esc(fmtD(parseTs(today())))+' · who\'s off comes from approved leave and rest days in the admin console.</p></div>'+
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Coverage</h2><p>Business day '+esc(fmtD(parseTs(today())))+' · anyone who clocked in today is never listed. Off = approved leave, a rest day you set in Settings, or their usual day off from attendance.</p></div>'+
     '<button class="btn sec" onclick="loadOff();toast(\'Refreshing…\')">Refresh</button><button class="btn sec" onclick="xferOpen()">'+IC.swap+' Permanent transfer</button></div>';
   if(!OFF) h+='<div class="card empty">Checking leave and rest days…</div>';
   else {
@@ -1633,7 +1726,7 @@ function vCoverage(){
         }).join('');
         var here=acc[PROJECT], openHere=here?Math.max(0,here.total-here.covered-here.held):0;
         h+='<div class="card offc"><div class="top">'+avHtml(id,40)+'<div style="flex:1;min-width:0"><div style="font-weight:800">'+esc(vaName(id))+'</div>'+
-          '<span class="chip" style="margin-top:3px;'+(o.kind==='leave'?'background:#fff1f2;color:#9f1239':'background:#f0f9ff;color:#075985')+'">'+esc(o.type)+'</span></div></div>'+lines+
+          '<span class="chip" style="margin-top:3px;'+(o.kind==='leave'?'background:#fff1f2;color:#9f1239':'background:#f0f9ff;color:#075985')+'">'+esc(o.type)+'</span>'+(o.basis?' <span class="muted" style="font-size:11px;font-weight:600" title="'+esc(o.basis==='usual day off'?'Learned from attendance: they almost never clock in on this weekday. Set their real rest days in Settings if this is wrong.':(o.basis==='set in Settings'?'Rest day you set in Settings':'From an approved leave request'))+'">· '+esc(o.basis)+'</span>':'')+'</div></div>'+lines+
           (here?'<div class="row"><button class="btn sm pri" onclick="cvOpen(\''+jsq(id)+'\',\'one\')">'+IC.swap+' Reassign…</button>'+
             '<button class="btn sm sec" onclick="cvOpen(\''+jsq(id)+'\',\'split\')">Split across VAs…</button>'+
             '<button class="btn sm sec" onclick="cvQuickHold(\''+jsq(id)+'\')" title="Client approved: leave them untouched today">'+IC.pause+' Hold today</button></div>'
@@ -1768,12 +1861,59 @@ function vSettings(){
       list.map(function(m,i){ return '<span class="chip">'+esc(m)+' <a href="#" onclick="SET.models[\''+jsq(b.id)+'\'].splice('+i+',1);renderView();return false" style="color:var(--ink3);text-decoration:none">×</a></span>'; }).join('')+
       '<input class="inp" style="width:140px;padding:4px 9px;font-size:12px" placeholder="+ add model" onkeydown="if(event.key===\'Enter\'&&this.value.trim()){(SET.models[\''+jsq(b.id)+'\']=SET.models[\''+jsq(b.id)+'\']||[]).push(this.value.trim());renderView();}"></div></div>';
   }).join('')+'<div class="hint muted" style="font-size:11px">Models already used on accounts are offered automatically too.</div></div>';
+  if(!SET.methods || !SET.methods.length) SET.methods=['Vysor','Jailbroken','Blaze+'];
+  h+='<div class="card pad s6"><div class="ch-h"><b>Methods</b><span>how an account is run — every account is tagged with one</span></div><div class="chips">'+
+    SET.methods.map(function(m,i){ return '<span class="chip" style="background:'+methodColor(m)+'16;color:'+methodColor(m)+'">'+esc(m)+(SET.methods.length>1?' <a href="#" onclick="SET.methods.splice('+i+',1);renderView();return false" style="color:inherit;text-decoration:none;opacity:.6">×</a>':'')+'</span>'; }).join('')+
+    '<input class="inp" style="width:150px;padding:4px 9px;font-size:12px" placeholder="+ add method" onkeydown="if(event.key===\'Enter\'&&this.value.trim()){SET.methods.push(this.value.trim());renderView();}"></div>'+
+    '<div class="hint muted" style="font-size:11px;margin-top:6px">Renaming a method here does not retag existing accounts.</div></div>';
   h+='<div class="card pad s6"><div class="ch-h"><b>Persona niches</b><span>suggestions in the log form</span></div><div class="chips">'+
     (SET.niches||[]).map(function(m,i){ return '<span class="chip">'+esc(m)+' <a href="#" onclick="SET.niches.splice('+i+',1);renderView();return false" style="color:var(--ink3);text-decoration:none">×</a></span>'; }).join('')+
     '<input class="inp" style="width:150px;padding:4px 9px;font-size:12px" placeholder="+ add niche" onkeydown="if(event.key===\'Enter\'&&this.value.trim()){SET.niches.push(this.value.trim());renderView();}"></div></div>';
   h+='<div class="card pad s6"><div class="ch-h"><b>iPhone process start</b><span>splits "before" vs "iPhone process" in Insights</span></div>'+
-    '<input class="inp" type="date" value="'+esc(SET.process_start||SOP_START)+'" onchange="SET.process_start=this.value"></div></div>';
+    '<input class="inp" type="date" value="'+esc(SET.process_start||SOP_START)+'" onchange="SET.process_start=this.value"></div>';
+  // rest days
+  if(!SET.rest_days) SET.rest_days={};
+  var holders={}; allRows().forEach(function(r){ if(!isDead(r)){ var o=owner(r); if(o && OWNERS.indexOf(o)<0) holders[o]=1; } });
+  var vas=Object.keys(holders).sort(function(a,b){ return vaName(a).localeCompare(vaName(b)); });
+  var DN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  h+='<div class="card pad"><div class="ch-h"><b>Rest days</b><span>Coverage uses these first. "Auto" = learned from attendance (the weekday they almost never clock in). Anyone who clocks in is never treated as off.</span></div>'+
+    (vas.length?vas.map(function(k){
+      var set=SET.rest_days[k], auto=!(set && set.length!==undefined);
+      return '<div class="row" style="padding:7px 0;border-top:1px solid var(--line)">'+avHtml(k,28)+'<b style="min-width:170px;font-size:13px">'+esc(vaName(k))+'</b><div class="chips">'+
+        DN.map(function(d,i){ var on=!auto && set.indexOf(i)>=0; return '<button class="chip'+(on?' sel':'')+'" onclick="restTog(\''+jsq(k)+'\','+i+')">'+d+'</button>'; }).join('')+'</div>'+
+        (auto?'<span class="chip" style="background:#f0f9ff;color:#075985">Auto</span>':'<a href="#" style="font-size:11.5px;color:var(--ink3)" onclick="delete SET.rest_days[\''+jsq(k)+'\'];renderView();return false">use Auto</a>')+'</div>';
+    }).join(''):'<div class="muted">Loading VAs…</div>')+'</div>';
+  // clean-up
+  h+='<div class="card pad"><div class="ch-h"><b>Clean-up · old banned accounts</b><span>banned before '+esc(fmtD(parseTs(SET.process_start||SOP_START)))+' (old process, every base incl. MeG)</span></div>'+
+    (CLEAN===null?'<div class="muted">Counting…</div>':(CLEAN.error?'<div class="muted">Could not count: '+esc(CLEAN.error)+'</div>':
+      (CLEAN.count?'<div class="row"><div style="flex:1;font-size:13px"><b>'+CLEAN.count+'</b> banned account'+(CLEAN.count===1?'':'s')+' — '+Object.keys(CLEAN.per||{}).map(function(p){ return esc(baseOf(p).n.replace('Reddit - ',''))+' '+CLEAN.per[p]; }).join(' · ')+
+        '<div class="muted" style="font-size:11.5px;margin-top:3px">They move to a "ProjectAccounts_Archive" tab in the sheet — off the board and out of the analysis, but not destroyed.</div></div>'+
+        '<button class="btn dark" onclick="cleanGo()">'+IC.trash+' Archive them</button></div>'
+      :'<div class="muted">Nothing to clean — no banned accounts from before that date.</div>')))+'</div></div>';
+  if(CLEAN===null) cleanCount();
   return h;
+}
+function restTog(k,i){
+  var set=SET.rest_days[k]; if(!(set && set.length!==undefined)) set=SET.rest_days[k]=[];
+  var p=set.indexOf(i); if(p>=0) set.splice(p,1); else set.push(i);
+  renderView();
+}
+var CLEAN=null, _cleanBusy=false;
+async function cleanCount(){
+  if(_cleanBusy) return; _cleanBusy=true;
+  try{ var d=await api({ action:'rc_archive_banned', by:USER.id, before:(CFG.process_start||SOP_START) }); CLEAN=(d&&d.ok)?d:{error:(d&&d.error)||'unknown'}; }
+  catch(e){ CLEAN={error:'connection'}; }
+  _cleanBusy=false; if(VIEW==='settings') renderView();
+}
+async function cleanGo(){
+  if(!CLEAN || !CLEAN.count) return;
+  if(!(await confirmBox('Archive '+CLEAN.count+' banned accounts?', 'Every Reddit account banned before '+esc(fmtD(parseTs(CFG.process_start||SOP_START)))+' moves to the ProjectAccounts_Archive tab. The board, Accounts and Insights then only show the new process.', 'Archive', true))) return;
+  toast('Archiving…');
+  try{
+    var d=await api({ action:'rc_archive_banned', by:USER.id, before:(CFG.process_start||SOP_START), confirm:'ARCHIVE' });
+    if(d && d.ok){ toast(d.archived+' banned account'+(d.archived===1?'':'s')+' archived.'); CLEAN=null; EVENTS_AT=0; ALL_AT=0; await loadAll(true); load(); renderView(); }
+    else toast('Could not archive: '+((d&&d.error)||'unknown'));
+  }catch(e){ toast('Connection error — nothing was changed if this shows twice.'); }
 }
 async function setSave(){
   var b=$('set-go'); b.disabled=true; b.textContent='Saving…';
