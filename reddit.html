@@ -265,6 +265,12 @@ table.db tr.dead td{color:var(--ink3)}
 .sl-ct{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--ink3);padding:0 2px 2px}
 .sl-ct b{font-family:'Sora',sans-serif;font-size:16px;color:var(--ink)}
 .sl-c .kc{padding:7px 9px}
+.sl-g.pb{min-width:100%}
+.sl-g.pb .sl-h{border-top-left-radius:0}
+.sl-g.pb .sl-c{max-height:250px}
+.pb-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:6px}
+.pb-cards .kc{padding:6px 8px}
+.pb-cards .kc b{font-size:12px}
 
 /* ── insights ── */
 .ig{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
@@ -1472,7 +1478,7 @@ function vPipeline(){
     v.forEach(function(x){ if(x.a===lo) mark[k+'|'+x.m]='fast'; else if(x.a===hi) mark[k+'|'+x.m]='slow'; });
   });
 
-  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Pipeline <span class="gtxt">by method</span></h2><p>Same ladder, three approaches — where each method\'s accounts sit, how fast they move, and where they get stuck.</p></div>'+
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Pipeline <span class="gtxt">by method</span></h2><p>Same ladder, three approaches — stages down the side, methods across the top, like an Airtable board.</p></div>'+
     '<div class="seg" style="width:auto"><button class="'+(PL.all?'on':'')+'" onclick="PL.all=true;renderView()">All bases</button><button class="'+(!PL.all?'on':'')+'" onclick="PL.all=false;renderView()">'+esc(baseOf(PROJECT).n)+' only</button></div></div>';
 
   // method summary cards
@@ -1489,41 +1495,28 @@ function vPipeline(){
   }).join('')+'</div>';
   if(untagged.length) h+='<div class="banner warn" style="margin-top:8px">'+IC.tag+'<div style="flex:1"><b>'+untagged.length+'</b> account'+(untagged.length===1?' has':'s have')+' no method yet, so '+(untagged.length===1?'it sits':'they sit')+' in the grey "Not tagged" lane.</div><button class="btn sm dark" onclick="DB.meth=\'\';DB.all=true;DB.life=\'alive\';DB.va=\'all\';go(\'accounts\')">Tag them</button></div>';
 
-  // 1. side by side
-  h+='<div class="sec-h"><b>Side by side</b><span>accounts in each stage · share of that method\'s live accounts · average days there — green = fastest through the stage, amber = slowest</span><hr></div>';
-  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Stage</th>'+lanes.map(function(m){ return '<th style="color:'+methodColor(m)+';min-width:170px">'+esc(m||'Not tagged')+'</th>'; }).join('')+'</tr></thead><tbody>'+
-    cols.map(function(k){
-      var sm=stageMeta(k);
-      return '<tr><td class="c1"><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+'">'+esc(sm.n)+'</span>'+(k==='banned'?' <span class="muted" style="font-size:10.5px">30d</span>':'')+'</td>'+
-        lanes.map(function(m){
-          var l=plStageRows(byM[m]||[],k), n=l.length, base=k==='banned'?Math.max(1,S[m].alive+n):Math.max(1,S[m].alive), sh=n/base, a=plAvg(l), mk=mark[k+'|'+m];
-          if(!n) return '<td style="color:var(--ink4)">·</td>';
-          return '<td style="'+(mk==='fast'?'background:#ecfdf5':(mk==='slow'?'background:#fff8eb':''))+'"><div class="row" style="gap:8px;flex-wrap:nowrap"><b class="num" style="min-width:22px">'+n+'</b>'+
-            '<div class="prog" style="min-width:60px"><i style="width:'+Math.min(100,sh*100)+'%;background:'+methodColor(m)+'"></i></div>'+
-            '<span class="muted num" style="font-size:11px;font-weight:700;white-space:nowrap">'+Math.round(sh*100)+'%'+(a!=null&&k!=='banned'?' · '+a+'d':'')+'</span>'+
-            (mk==='fast'?'<span class="flag g" title="Fastest method through this stage">fast</span>':(mk==='slow'?'<span class="flag a" title="Slowest method through this stage">slow</span>':''))+'</div></td>';
-        }).join('')+'</tr>';
-    }).join('')+
-    '<tr class="grp"><td class="c1">Alive total</td>'+lanes.map(function(m){ return '<td class="num">'+S[m].alive+'</td>'; }).join('')+'</tr>'+
-  '</tbody></table></div>';
-
-  // 2. the pipelines — swimlanes on one shared grid so the stage columns line up
-  h+='<div class="sec-h"><b>The pipelines</b><span>one lane per method · scroll sideways · click a card for its history</span><hr>'+
-    '<select class="sel" onchange="PL.meth=this.value;renderView()"><option value="all">All lanes</option>'+lanes.map(function(m){ return '<option value="'+esc(m)+'"'+(PL.meth===m?' selected':'')+'>'+esc(m||'Not tagged')+'</option>'; }).join('')+'</select></div>';
-  var gcols='150px repeat('+cols.length+', 190px)';
-  h+='<div class="sl"><div class="sl-g" style="grid-template-columns:'+gcols+'">'+
-    '<div class="sl-h sl-corner">Method</div>'+cols.map(function(k){ var sm=stageMeta(k); return '<div class="sl-h"><i style="background:'+sm.c+'"></i>'+esc(sm.n)+(k==='banned'?' <small>30d</small>':'')+'</div>'; }).join('');
-  show.forEach(function(m){
-    var c=methodColor(m), s=S[m];
-    h+='<div class="sl-l" style="border-left:4px solid '+c+'"><b style="color:'+c+'">'+esc(m||'Not tagged')+'</b><small>'+s.alive+' alive</small><small><span style="color:#047857">+'+s.c7+'</span> / <span style="color:#b91c1c">−'+s.b7+'</span> this week</small></div>';
-    cols.forEach(function(k){
+  // THE BOARD — Airtable-style: stages down the side, methods across the top, accounts in the cells.
+  // Each cell also carries the comparison: how many, what share of that method's live stock, average
+  // days in the stage, and a green "fast" / amber "slow" mark against the other methods.
+  var showLanes=PL.meth==='all'?lanes:lanes.filter(function(m){ return m===PL.meth; });
+  h+='<div class="sec-h"><b>The board</b><span>stages down, methods across · each cell: accounts · share of that method\'s live accounts · average days in the stage · green = fastest through it, amber = slowest</span><hr>'+
+    '<select class="sel" onchange="PL.meth=this.value;renderView()"><option value="all">All methods</option>'+lanes.map(function(m){ return '<option value="'+esc(m)+'"'+(PL.meth===m?' selected':'')+'>'+esc(m||'Not tagged')+'</option>'; }).join('')+'</select></div>';
+  h+='<div class="sl"><div class="sl-g pb" style="grid-template-columns:170px repeat('+showLanes.length+', minmax(250px,1fr))">'+
+    '<div class="sl-h sl-corner">Stage</div>'+showLanes.map(function(m){ var c=methodColor(m);
+      return '<div class="sl-h" style="border-top:3px solid '+c+'"><i style="background:'+c+'"></i><span style="color:'+c+'">'+esc(m||'Not tagged')+'</span><small style="margin-left:auto">'+S[m].alive+' alive</small></div>'; }).join('');
+  cols.forEach(function(k){
+    var sm=stageMeta(k), tot=0; showLanes.forEach(function(m){ tot+=plStageRows(byM[m]||[],k).length; });
+    h+='<div class="sl-l" style="border-left:4px solid '+sm.c+'"><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+';align-self:flex-start">'+esc(sm.n)+'</span><small>'+tot+' account'+(tot===1?'':'s')+(k==='banned'?' · last 30 days':'')+'</small></div>';
+    showLanes.forEach(function(m){
       var l=plStageRows(byM[m]||[],k).sort(function(a,b){ var x=stageSince(a), y=stageSince(b); return (x?x.getTime():0)-(y?y.getTime():0); });
-      var a=plAvg(l), mk=mark[k+'|'+m];
-      h+='<div class="sl-c" style="background:'+c+'08">'+
-        (l.length?'<div class="sl-ct"><b>'+l.length+'</b>'+(a!=null&&k!=='banned'?'<span>avg '+a+'d</span>':'')+(mk==='fast'?'<span class="flag g">fast</span>':(mk==='slow'?'<span class="flag a">slow</span>':''))+'</div>':'<div class="sl-ct" style="color:var(--ink4)">·</div>')+
-        l.slice(0,25).map(function(r){ var st=stageSince(r);
-          return '<div class="kc" onclick="openRec(\''+jsq(r.id)+'\')"><b>'+esc(r.handle)+'</b><div style="display:flex;justify-content:space-between;gap:6px"><small>'+esc(r.model||'—')+' · '+esc(firstName(owner(r)))+(PL.all?' · '+esc(baseOf(r.project).n):'')+'</small><small style="font-weight:800;color:var(--ink2)">'+(st?dayDiff(st)+'d':'')+'</small></div></div>'; }).join('')+
-        (l.length>25?'<div class="muted" style="font-size:11px;text-align:center;padding:4px">+'+(l.length-25)+' more</div>':'')+
+      var n=l.length, base=k==='banned'?Math.max(1,S[m].alive+n):Math.max(1,S[m].alive), a=plAvg(l), mk=mark[k+'|'+m], c=methodColor(m);
+      h+='<div class="sl-c" style="background:'+(mk==='fast'?'#f0fdf4':(mk==='slow'?'#fffbeb':c+'06'))+'">'+
+        (n?'<div class="sl-ct"><b>'+n+'</b><span>'+Math.round(n/base*100)+'%</span>'+(a!=null&&k!=='banned'?'<span>· avg '+a+'d</span>':'')+
+            (mk==='fast'?'<span class="flag g" title="Fastest method through this stage">fast</span>':(mk==='slow'?'<span class="flag a" title="Slowest method through this stage">slow</span>':''))+'</div>'+
+           '<div class="pb-cards">'+l.slice(0,40).map(function(r){ var st=stageSince(r);
+             return '<div class="kc" onclick="openRec(\''+jsq(r.id)+'\')" title="'+esc((r.model||'—')+' · '+vaName(owner(r))+(PL.all?' · '+baseOf(r.project).n:''))+'"><b>'+esc(r.handle)+'</b><div style="display:flex;justify-content:space-between;gap:4px"><small>'+esc(firstName(owner(r)))+'</small><small style="font-weight:800;color:var(--ink2)">'+(st?dayDiff(st)+'d':'')+'</small></div></div>'; }).join('')+'</div>'+
+           (n>40?'<div class="muted" style="font-size:11px;text-align:center;padding:4px">+'+(n-40)+' more</div>':'')
+         :'<div class="sl-ct" style="color:var(--ink4)">·</div>')+
       '</div>';
     });
   });
