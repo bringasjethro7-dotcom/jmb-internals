@@ -251,6 +251,20 @@ table.db tr.dead td{color:var(--ink3)}
 .kc:hover{box-shadow:var(--sh2)}
 .kc b{display:block;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kc small{color:var(--ink3);font-weight:600;font-size:10.5px}
+/* method swimlanes — one shared grid so the stage columns line up across methods */
+.sl{overflow:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--s1);box-shadow:var(--sh1);max-height:calc(100vh - 180px)}
+.sl-g{display:grid;min-width:max-content}
+.sl-h{position:sticky;top:0;z-index:3;background:#f8f9fc;padding:10px 10px 9px;border-bottom:1px solid var(--line2);border-left:1px solid var(--line);font-weight:800;font-size:11.5px;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.sl-h i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.sl-h small{color:var(--ink3);font-weight:700}
+.sl-corner{left:0;z-index:5;border-left:none;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;font-size:10.5px}
+.sl-l{position:sticky;left:0;z-index:2;background:var(--s1);padding:12px 12px;border-bottom:1px solid var(--line2);display:flex;flex-direction:column;gap:3px}
+.sl-l b{font-size:14px}
+.sl-l small{font-size:11px;color:var(--ink3);font-weight:700}
+.sl-c{padding:8px;border-bottom:1px solid var(--line2);border-left:1px solid var(--line);max-height:300px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.sl-ct{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--ink3);padding:0 2px 2px}
+.sl-ct b{font-family:'Sora',sans-serif;font-size:16px;color:var(--ink)}
+.sl-c .kc{padding:7px 9px}
 
 /* ── insights ── */
 .ig{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
@@ -519,7 +533,16 @@ function modelsFor(project){
    account carries one, and the board, the database and Insights all group and compare by it. */
 var METHOD_C={ 'vysor':'#0ea5e9', 'jailbroken':'#a855f7', 'blaze+':'#ff6b1a' };
 function methodsList(){ return ((CFG.methods&&CFG.methods.length)?CFG.methods:['Vysor','Jailbroken','Blaze+']).slice(); }
-function methodOf(r){ return String((r&&r.method)||'').trim(); }
+/* Typed straight into the Google Sheet as "vysor", "BLAZE+ " etc.? Snap it to the canonical name so it
+   lands in the right lane instead of starting a fourth method. */
+function methodOf(r){
+  var v=String((r&&r.method)||'').trim(); if(!v) return '';
+  var lv=v.toLowerCase().replace(/\s+/g,''), ml=methodsList();
+  for(var i=0;i<ml.length;i++){ if(ml[i].toLowerCase().replace(/\s+/g,'')===lv) return ml[i]; }
+  if(lv==='blaze'||lv==='blazeplus') { for(var j=0;j<ml.length;j++) if(/^blaze/i.test(ml[j])) return ml[j]; }
+  if(lv==='jailbreak'||lv==='jb') { for(var k=0;k<ml.length;k++) if(/^jail/i.test(ml[k])) return ml[k]; }
+  return v;
+}
 function methodColor(m){ m=String(m||'').toLowerCase(); if(METHOD_C[m]) return METHOD_C[m]; if(!m) return '#94a3b8'; var h=0; for(var i=0;i<m.length;i++) h=(h*31+m.charCodeAt(i))>>>0; return ['#14b8a6','#f59e0b','#ec4899','#6366f1'][h%4]; }
 function methodPill(m, small){ var c=methodColor(m); return '<span class="pill" style="background:'+c+'16;color:'+c+';'+(small?'font-size:10.5px;padding:2px 8px':'')+'"><i style="width:7px;height:7px;border-radius:50%;background:'+c+';display:inline-block"></i>'+esc(m||'No method')+'</span>'; }
 function phoneList(activeOnly){ return (CFG.phones||[]).filter(function(p){ return p && p.label && (!activeOnly || p.active!==false); }); }
@@ -608,7 +631,7 @@ async function load(){
     if(isAdmin()){ ALL[PROJECT]=rows; }
     ROWS=scope(rows);
     try{ sessionStorage.setItem('rc_rows_'+PROJECT, JSON.stringify({t:Date.now(), rows:rows})); }catch(e){}
-    BASECOUNT[PROJECT]=isAdmin()?rows.length:ROWS.length;
+    BASECOUNT[PROJECT]=(isAdmin()?rows:ROWS).filter(function(r){ return r.status!=='banned'; }).length;   // banned accounts never count in a total
     if(_retryT){ clearTimeout(_retryT); _retryT=null; }
     autoGraduate();
     paintTop(); renderView();
@@ -631,7 +654,7 @@ async function loadAll(force){
       var d=await jget(API+'?'+qs({action:'pa_list', project:b.id})+'&_='+Date.now(), 10000);
       var rows=((d&&d.rows)||[]).map(function(r){ r.project=r.project||b.id; return r; });
       if(isAdmin()) ALL[b.id]=rows;
-      BASECOUNT[b.id]=isAdmin()?rows.length:rows.filter(function(r){ return owner(r)===me; }).length;
+      BASECOUNT[b.id]=rows.filter(function(r){ return r.status!=='banned' && (isAdmin() || owner(r)===me); }).length;
     }catch(e){}
   }));
   ALL_AT=Date.now(); paintTop();
@@ -791,7 +814,10 @@ function needsAttention(r){
 }
 function vToday(){
   var me=myId(), admin=isAdmin();
-  var board = admin ? (TD.va==='all'?ROWS:ROWS.filter(function(r){ return worksFor(r)===(TD.va==='mine'?me:TD.va); })) : ROWS;
+  /* Banned accounts leave the board a week after the ban — the record stays in Accounts and Insights,
+     but they never pad a count or clutter the day's work. */
+  var onBoard=function(r){ if(!isDead(r)) return true; var e=endedAt(r); return !!(e && dayDiff(e)<7); };
+  var board = (admin ? (TD.va==='all'?ROWS:ROWS.filter(function(r){ return worksFor(r)===(TD.va==='mine'?me:TD.va); })) : ROWS).filter(onBoard);
   var mineWork=ROWS.filter(function(r){ return worksFor(r)===me; });
   var hr=parseInt(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',hour12:false}).format(new Date()),10);
   var greet=hr<12?'Good morning':(hr<18?'Good afternoon':'Good evening');
@@ -829,7 +855,7 @@ function vToday(){
   h+='<div class="kpis">'+
     '<div class="card kpi"><div class="ringw"><div class="ring" style="--v:'+p.pct+'" data-t="'+p.pct+'%"></div><div><div class="k-l">'+(admin&&TD.va==='all'?'Team sessions':'Sessions today')+'</div><div class="k-v">'+p.done+'<span style="font-size:15px;color:var(--ink3)"> / '+p.tot+'</span></div><div class="k-s">2 per account · resets at your shift start</div></div></div></div>'+
     kpi('Created this shift', createdToday, 'setup finished & counted', '#ff6b1a')+
-    kpi('Active accounts', active, scopeRows.length+' on the board', '#a855f7')+
+    kpi('Active accounts', active, 'banned ones are not counted', '#a855f7')+
     kpi('Needs attention', att, 'recovery · temp ban · unfinished · stuck karma', att?'#ef4444':'#10b981')+
     (admin?kpi('Banned · 7 days', bannedWk, 'see Insights for the pattern', '#64748b'):'')+
   '</div>';
@@ -1260,6 +1286,7 @@ function vAccounts(){
     (admin?'<label class="chip" style="cursor:pointer;background:var(--s1);border:1px solid var(--line)"><input type="checkbox" '+(DB.all?'checked':'')+' onchange="DB.all=this.checked;if(DB.all)loadAll().then(renderView);renderView()" style="accent-color:var(--o)"> All bases</label>':'')+
     '<div class="sp"></div><div class="search">'+IC.search+'<input class="inp" id="db-q" placeholder="Search…" value="'+esc(DB.q)+'" oninput="DB.q=this.value;renderView()"></div>'+
     '<span class="muted" style="font-weight:700;font-size:12px">'+rows.length+' record'+(rows.length===1?'':'s')+'</span></div>';
+  if(admin && DB.life==='dead' && rows.length) h+='<div class="banner info">'+IC.trash+'<div style="flex:1">Don\'t want these old bans in the tool? Remove them all (or only the old-process ones) in one go — new bans keep being recorded.</div><button class="btn sm dark" onclick="CLEAN=null;go(\'settings\')">Open Clean-up</button></div>';
   var untagged=rows.filter(function(r){ return !methodOf(r); }).length;
   if(admin && untagged) h+='<div class="banner warn">'+IC.tag+'<div style="flex:1"><b>'+untagged+'</b> of these records have no method yet. Tag them so Insights can compare Vysor, Jailbroken and Blaze+.</div>'+
     '<select class="sel" id="bulk-m">'+methodsList().map(function(m){ return '<option>'+esc(m)+'</option>'; }).join('')+'</select><button class="btn sm dark" onclick="bulkMethod()">Tag the '+untagged+' shown</button></div>';
@@ -1388,7 +1415,6 @@ async function editSave(id){
 }
 
 /* ═══════════ PIPELINE — where every account sits right now ═══════════ */
-var PL={ all:true, meth:'all' };
 async function bulkMethod(){
   var m=$('bulk-m').value, ids=dbRows().filter(function(r){ return !methodOf(r); }).map(function(r){ return r.id; });
   if(!ids.length) return;
@@ -1399,40 +1425,120 @@ async function bulkMethod(){
   }
   EVENTS_AT=0; toast(ok+' tagged as '+m+(fail?' · '+fail+' failed — retry':'')); renderView();
 }
-function vPipeline(){
-  var rows=PL.all?allRows():(ALL[PROJECT]||ROWS);
-  if(!rows.length) return '<div class="card empty">Loading accounts…</div>';
-  if(PL.meth!=='all') rows=rows.filter(function(r){ return methodOf(r)===PL.meth; });
-  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Pipeline</h2><p>Every live account by stage — average days in stage tells you where accounts get stuck.</p></div>'+
-    '<div class="seg" style="width:auto"><button class="'+(PL.all?'on':'')+'" onclick="PL.all=true;renderView()">All bases</button><button class="'+(!PL.all?'on':'')+'" onclick="PL.all=false;renderView()">'+esc(baseOf(PROJECT).n)+' only</button></div>'+
-    '<select class="sel" onchange="PL.meth=this.value;renderView()"><option value="all">All methods</option>'+methodsList().map(function(m){ return '<option'+(PL.meth===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'<option value=""'+(PL.meth===''?' selected':'')+'>Not tagged</option></select></div>';
-  // flow last 7 days
-  var wk=rows.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)<7; }).length;
-  var bwk=rows.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<7; }).length;
+/* ═══════════ PIPELINE — one pipeline per method, side by side ═══════════
+   Vysor, Jailbroken and Blaze+ climb the same ladder with a different approach. The page answers
+   "where is each method's stock, how fast does it move, and where does it get stuck?":
+     1. Side by side — every stage as a row, every method as a column: how many accounts sit there,
+        what share of that method's live stock that is, and how long they have been there.
+        The fastest method through each progression stage is marked green, the slowest amber.
+     2. The pipelines — one swimlane per method with the same stage columns lined up underneath each
+        other, so the three flows can be read against each other card by card. */
+var PL={ all:true, meth:'all' };
+var PL_PROGRESS=['warming','comment','nsfw','day1','early','earlydm','medium','recovery','tempban'];   // shorter = better
+function plStageRows(rows, k){
+  var list=rows.filter(function(r){ return r.status===k || (k==='creation'&&r.status==='creationstandby'); });
+  if(k==='banned') list=list.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<30; });
+  return list;
+}
+function plAvg(list){ if(!list.length) return null; return Math.round(list.reduce(function(s,r){ var x=stageSince(r); return s+(x?dayDiff(x):0); },0)/list.length*10)/10; }
+function plSummary(rows){
   var alive=rows.filter(function(r){ return !isDead(r); }).length;
-  h+='<div class="kpis">'+kpi('Alive now',alive,rows.length+' ever logged','#a855f7')+kpi('Created · 7 days',wk,'logged on the board','#ff6b1a')+kpi('Banned · 7 days',bwk,'marked banned','#ef4444')+
-    kpi('Net change · 7 days',(wk-bwk>=0?'+':'')+(wk-bwk),'created minus banned',(wk-bwk)>=0?'#10b981':'#ef4444')+'</div>';
+  var c7=rows.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)<7; }).length;
+  var b7=rows.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<7; }).length;
+  var s30=addDays(today(),-29), b30=rows.filter(function(r){ var e=endedAt(r); return e && phtDate(e)>=s30; }).length;
+  var ex=rows.filter(function(r){ var e=endedAt(r); return !e || phtDate(e)>=s30; }).length;
+  var P1=phaseIx('day1'), post=rows.filter(function(r){ return phaseIx(r.status)>=P1 || phaseIx(M(r).prev)>=P1; }).length;
+  return { n:rows.length, alive:alive, c7:c7, b7:b7, net:c7-b7, rate30:ex?b30/ex:null, post:rows.length?post/rows.length:null };
+}
+function vPipeline(){
+  var all=PL.all?allRows():(ALL[PROJECT]||ROWS);
+  if(!all.length) return '<div class="card empty">Loading accounts…</div>';
+  var ml=methodsList(), lanes=ml.slice();
+  var untagged=all.filter(function(r){ return !methodOf(r); });
+  all.forEach(function(r){ var m=methodOf(r); if(m && lanes.indexOf(m)<0) lanes.push(m); });
+  if(untagged.length) lanes.push('');
+  var byM={}; lanes.forEach(function(m){ byM[m]=all.filter(function(r){ return methodOf(r)===m; }); });
+  var show=PL.meth==='all'?lanes:lanes.filter(function(m){ return m===PL.meth; });
   var cols=ORDER.filter(function(k){ return k!=='creationstandby'; });
-  h+='<div class="kb" style="margin-top:14px">'+cols.map(function(k){
-    var sm=stageMeta(k);
-    var list=rows.filter(function(r){ return r.status===k || (k==='creation'&&r.status==='creationstandby'); });
-    if(k==='banned') list=list.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<30; });
-    var avg=list.length?Math.round(list.reduce(function(s,r){ var x=stageSince(r); return s+(x?dayDiff(x):0); },0)/list.length):0;
-    list.sort(function(a,b){ var x=stageSince(a), y=stageSince(b); return (x?x.getTime():0)-(y?y.getTime():0); });
-    return '<div class="kcol"><div class="kh"><i style="background:'+sm.c+'"></i><div>'+esc(sm.n)+'<small>'+(k==='banned'?'last 30 days':(list.length?'avg '+avg+'d in stage':'empty'))+'</small></div><em>'+list.length+'</em></div>'+
-      '<div class="kl">'+list.slice(0,60).map(function(r){
-        var s=stageSince(r);
-        return '<div class="kc" onclick="openRec(\''+jsq(r.id)+'\')"><b>'+esc(r.handle)+'</b><small><b style="display:inline;font-size:10.5px;color:'+methodColor(methodOf(r))+'">'+esc(methodOf(r)||'—')+'</b> · '+esc(r.model||'—')+' · '+esc(firstName(owner(r)))+(PL.all?' · '+esc(baseOf(r.project).n):'')+'</small>'+
-          '<div style="display:flex;justify-content:space-between;margin-top:4px"><small>'+esc(r.device||'')+'</small><small style="font-weight:800;color:var(--ink2)">'+(s?dayDiff(s)+'d':'')+'</small></div></div>';
-      }).join('')+(list.length>60?'<div class="muted" style="font-size:11px;text-align:center;padding:6px">+'+(list.length-60)+' more — see Accounts</div>':'')+'</div></div>';
+  var S={}; lanes.forEach(function(m){ S[m]=plSummary(byM[m]); });
+
+  // fastest / slowest per progression stage (methods with 2+ accounts in the stage)
+  var mark={};
+  PL_PROGRESS.forEach(function(k){
+    var v=ml.map(function(m){ var l=plStageRows(byM[m]||[],k); return { m:m, a:l.length>=2?plAvg(l):null }; }).filter(function(x){ return x.a!=null; });
+    if(v.length<2) return;
+    var lo=Math.min.apply(null,v.map(function(x){ return x.a; })), hi=Math.max.apply(null,v.map(function(x){ return x.a; }));
+    if(hi-lo<1) return;
+    v.forEach(function(x){ if(x.a===lo) mark[k+'|'+x.m]='fast'; else if(x.a===hi) mark[k+'|'+x.m]='slow'; });
+  });
+
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Pipeline <span class="gtxt">by method</span></h2><p>Same ladder, three approaches — where each method\'s accounts sit, how fast they move, and where they get stuck.</p></div>'+
+    '<div class="seg" style="width:auto"><button class="'+(PL.all?'on':'')+'" onclick="PL.all=true;renderView()">All bases</button><button class="'+(!PL.all?'on':'')+'" onclick="PL.all=false;renderView()">'+esc(baseOf(PROJECT).n)+' only</button></div></div>';
+
+  // method summary cards
+  h+='<div class="row" style="gap:12px;align-items:stretch;margin-bottom:6px">'+lanes.map(function(m){
+    var s=S[m], c=methodColor(m), on=(PL.meth===m);
+    return '<div class="card" onclick="PL.meth=(PL.meth===\''+jsq(m)+'\'?\'all\':\''+jsq(m)+'\');renderView()" style="cursor:pointer;flex:1 1 210px;padding:13px 15px;border-top:3px solid '+c+';'+(on?'box-shadow:0 0 0 2px '+c+'55,var(--sh2)':'')+(m===''?';opacity:.75':'')+'">'+
+      '<div class="row" style="justify-content:space-between"><b style="color:'+c+';font-size:14.5px">'+esc(m||'Not tagged')+'</b><span class="muted" style="font-size:11px;font-weight:700">'+(on?'showing only this ✓':'click to focus')+'</span></div>'+
+      '<div class="row" style="gap:16px;margin-top:8px">'+
+        '<div><div class="lbl">Alive</div><div class="h-d" style="font-size:21px;font-weight:800">'+s.alive+'</div></div>'+
+        '<div><div class="lbl">7 days</div><div style="font-weight:800;font-size:13px;margin-top:4px"><span style="color:#047857">+'+s.c7+'</span> / <span style="color:#b91c1c">−'+s.b7+'</span></div></div>'+
+        '<div><div class="lbl">Ban rate 30d</div><div class="h-d" style="font-size:21px;font-weight:800">'+(s.rate30==null?'—':Math.round(s.rate30*100)+'%')+'</div></div>'+
+        '<div><div class="lbl">Reached posting</div><div class="h-d" style="font-size:21px;font-weight:800">'+(s.post==null?'—':Math.round(s.post*100)+'%')+'</div></div>'+
+      '</div></div>';
   }).join('')+'</div>';
-  // VA × stage matrix
-  var by={}; rows.forEach(function(r){ var k=owner(r)||'—'; (by[k]=by[k]||[]).push(r); });
+  if(untagged.length) h+='<div class="banner warn" style="margin-top:8px">'+IC.tag+'<div style="flex:1"><b>'+untagged.length+'</b> account'+(untagged.length===1?' has':'s have')+' no method yet, so '+(untagged.length===1?'it sits':'they sit')+' in the grey "Not tagged" lane.</div><button class="btn sm dark" onclick="DB.meth=\'\';DB.all=true;DB.life=\'alive\';DB.va=\'all\';go(\'accounts\')">Tag them</button></div>';
+
+  // 1. side by side
+  h+='<div class="sec-h"><b>Side by side</b><span>accounts in each stage · share of that method\'s live accounts · average days there — green = fastest through the stage, amber = slowest</span><hr></div>';
+  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Stage</th>'+lanes.map(function(m){ return '<th style="color:'+methodColor(m)+';min-width:170px">'+esc(m||'Not tagged')+'</th>'; }).join('')+'</tr></thead><tbody>'+
+    cols.map(function(k){
+      var sm=stageMeta(k);
+      return '<tr><td class="c1"><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+'">'+esc(sm.n)+'</span>'+(k==='banned'?' <span class="muted" style="font-size:10.5px">30d</span>':'')+'</td>'+
+        lanes.map(function(m){
+          var l=plStageRows(byM[m]||[],k), n=l.length, base=k==='banned'?Math.max(1,S[m].alive+n):Math.max(1,S[m].alive), sh=n/base, a=plAvg(l), mk=mark[k+'|'+m];
+          if(!n) return '<td style="color:var(--ink4)">·</td>';
+          return '<td style="'+(mk==='fast'?'background:#ecfdf5':(mk==='slow'?'background:#fff8eb':''))+'"><div class="row" style="gap:8px;flex-wrap:nowrap"><b class="num" style="min-width:22px">'+n+'</b>'+
+            '<div class="prog" style="min-width:60px"><i style="width:'+Math.min(100,sh*100)+'%;background:'+methodColor(m)+'"></i></div>'+
+            '<span class="muted num" style="font-size:11px;font-weight:700;white-space:nowrap">'+Math.round(sh*100)+'%'+(a!=null&&k!=='banned'?' · '+a+'d':'')+'</span>'+
+            (mk==='fast'?'<span class="flag g" title="Fastest method through this stage">fast</span>':(mk==='slow'?'<span class="flag a" title="Slowest method through this stage">slow</span>':''))+'</div></td>';
+        }).join('')+'</tr>';
+    }).join('')+
+    '<tr class="grp"><td class="c1">Alive total</td>'+lanes.map(function(m){ return '<td class="num">'+S[m].alive+'</td>'; }).join('')+'</tr>'+
+  '</tbody></table></div>';
+
+  // 2. the pipelines — swimlanes on one shared grid so the stage columns line up
+  h+='<div class="sec-h"><b>The pipelines</b><span>one lane per method · scroll sideways · click a card for its history</span><hr>'+
+    '<select class="sel" onchange="PL.meth=this.value;renderView()"><option value="all">All lanes</option>'+lanes.map(function(m){ return '<option value="'+esc(m)+'"'+(PL.meth===m?' selected':'')+'>'+esc(m||'Not tagged')+'</option>'; }).join('')+'</select></div>';
+  var gcols='150px repeat('+cols.length+', 190px)';
+  h+='<div class="sl"><div class="sl-g" style="grid-template-columns:'+gcols+'">'+
+    '<div class="sl-h sl-corner">Method</div>'+cols.map(function(k){ var sm=stageMeta(k); return '<div class="sl-h"><i style="background:'+sm.c+'"></i>'+esc(sm.n)+(k==='banned'?' <small>30d</small>':'')+'</div>'; }).join('');
+  show.forEach(function(m){
+    var c=methodColor(m), s=S[m];
+    h+='<div class="sl-l" style="border-left:4px solid '+c+'"><b style="color:'+c+'">'+esc(m||'Not tagged')+'</b><small>'+s.alive+' alive</small><small><span style="color:#047857">+'+s.c7+'</span> / <span style="color:#b91c1c">−'+s.b7+'</span> this week</small></div>';
+    cols.forEach(function(k){
+      var l=plStageRows(byM[m]||[],k).sort(function(a,b){ var x=stageSince(a), y=stageSince(b); return (x?x.getTime():0)-(y?y.getTime():0); });
+      var a=plAvg(l), mk=mark[k+'|'+m];
+      h+='<div class="sl-c" style="background:'+c+'08">'+
+        (l.length?'<div class="sl-ct"><b>'+l.length+'</b>'+(a!=null&&k!=='banned'?'<span>avg '+a+'d</span>':'')+(mk==='fast'?'<span class="flag g">fast</span>':(mk==='slow'?'<span class="flag a">slow</span>':''))+'</div>':'<div class="sl-ct" style="color:var(--ink4)">·</div>')+
+        l.slice(0,25).map(function(r){ var st=stageSince(r);
+          return '<div class="kc" onclick="openRec(\''+jsq(r.id)+'\')"><b>'+esc(r.handle)+'</b><div style="display:flex;justify-content:space-between;gap:6px"><small>'+esc(r.model||'—')+' · '+esc(firstName(owner(r)))+(PL.all?' · '+esc(baseOf(r.project).n):'')+'</small><small style="font-weight:800;color:var(--ink2)">'+(st?dayDiff(st)+'d':'')+'</small></div></div>'; }).join('')+
+        (l.length>25?'<div class="muted" style="font-size:11px;text-align:center;padding:4px">+'+(l.length-25)+' more</div>':'')+
+      '</div>';
+    });
+  });
+  h+='</div></div>';
+
+  // VA × stage, split by method
+  var by={}; all.forEach(function(r){ var k=owner(r)||'—'; (by[k]=by[k]||[]).push(r); });
   var vas=Object.keys(by).sort(function(a,b){ return by[b].length-by[a].length; });
-  h+='<div class="sec-h"><b>Accounts per VA × stage</b><span>current owner</span><hr></div>';
-  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th>'+GROUPS.map(function(g){ return '<th style="color:'+g.c+'">'+g.n+'</th>'; }).join('')+'<th>Total</th></tr></thead><tbody>'+
-    vas.map(function(k){ var list=by[k];
-      return '<tr class="r" onclick="DB.va=\''+jsq(k)+'\';DB.all='+(PL.all?'true':'false')+';DB.life=\'all\';go(\'accounts\')"><td class="c1">'+esc(vaName(k))+'</td>'+GROUPS.map(function(g){ var n=list.filter(function(r){ return g.st.indexOf(r.status)>=0; }).length; return '<td class="num" style="'+(n?'font-weight:800;color:'+g.c:'color:var(--ink4)')+'">'+(n||'·')+'</td>'; }).join('')+'<td class="num" style="font-weight:800">'+list.length+'</td></tr>';
+  h+='<div class="sec-h"><b>Accounts per VA × method</b><span>live accounts each VA holds on each method · current owner</span><hr></div>';
+  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th>'+lanes.map(function(m){ return '<th style="color:'+methodColor(m)+'">'+esc(m||'Not tagged')+'</th>'; }).join('')+'<th>Banned 30d</th><th>Total alive</th></tr></thead><tbody>'+
+    vas.map(function(k){ var list=by[k], alive=list.filter(function(r){ return !isDead(r); });
+      var b30=list.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<30; }).length;
+      return '<tr class="r" onclick="DB.va=\''+jsq(k)+'\';DB.all='+(PL.all?'true':'false')+';DB.life=\'all\';DB.meth=\'all\';go(\'accounts\')"><td class="c1">'+esc(vaName(k))+'</td>'+
+        lanes.map(function(m){ var n=alive.filter(function(r){ return methodOf(r)===m; }).length; return '<td class="num" style="'+(n?'font-weight:800;color:'+methodColor(m):'color:var(--ink4)')+'">'+(n||'·')+'</td>'; }).join('')+
+        '<td class="num" style="'+(b30?'color:#b91c1c;font-weight:800':'color:var(--ink4)')+'">'+(b30||'·')+'</td><td class="num" style="font-weight:800">'+alive.length+'</td></tr>';
     }).join('')+'</tbody></table></div>';
   return h;
 }
@@ -1884,12 +1990,19 @@ function vSettings(){
         (auto?'<span class="chip" style="background:#f0f9ff;color:#075985">Auto</span>':'<a href="#" style="font-size:11.5px;color:var(--ink3)" onclick="delete SET.rest_days[\''+jsq(k)+'\'];renderView();return false">use Auto</a>')+'</div>';
     }).join(''):'<div class="muted">Loading VAs…</div>')+'</div>';
   // clean-up
-  h+='<div class="card pad"><div class="ch-h"><b>Clean-up · old banned accounts</b><span>banned before '+esc(fmtD(parseTs(SET.process_start||SOP_START)))+' (old process, every base incl. MeG)</span></div>'+
-    (CLEAN===null?'<div class="muted">Counting…</div>':(CLEAN.error?'<div class="muted">Could not count: '+esc(CLEAN.error)+'</div>':
-      (CLEAN.count?'<div class="row"><div style="flex:1;font-size:13px"><b>'+CLEAN.count+'</b> banned account'+(CLEAN.count===1?'':'s')+' — '+Object.keys(CLEAN.per||{}).map(function(p){ return esc(baseOf(p).n.replace('Reddit - ',''))+' '+CLEAN.per[p]; }).join(' · ')+
-        '<div class="muted" style="font-size:11.5px;margin-top:3px">They move to a "ProjectAccounts_Archive" tab in the sheet — off the board and out of the analysis, but not destroyed.</div></div>'+
-        '<button class="btn dark" onclick="cleanGo()">'+IC.trash+' Archive them</button></div>'
-      :'<div class="muted">Nothing to clean — no banned accounts from before that date.</div>')))+'</div></div>';
+  var perTxt=function(c){ return Object.keys(c.per||{}).map(function(p){ return esc(baseOf(p).n.replace('Reddit - ',''))+' '+c.per[p]; }).join(' · '); };
+  var cleanRow=function(c, which, title, sub){
+    if(!c) return '';
+    if(c.error) return '<div class="muted">Could not count: '+esc(c.error)+'</div>';
+    return '<div class="row" style="padding:10px 0;border-top:1px solid var(--line)"><div style="flex:1;font-size:13px"><b>'+esc(title)+'</b> — '+(c.count?('<b>'+c.count+'</b> account'+(c.count===1?'':'s')+' · '+perTxt(c)):'none')+
+      '<div class="muted" style="font-size:11.5px;margin-top:3px">'+sub+'</div></div>'+
+      (c.count?'<button class="btn '+(which==='all'?'dark':'sec')+'" onclick="cleanGo(\''+which+'\')">'+IC.trash+' Remove '+c.count+'</button>':'')+'</div>';
+  };
+  h+='<div class="card pad"><div class="ch-h"><b>Clean-up · banned accounts</b><span>removed from the board, the totals and Insights · kept in a "ProjectAccounts_Archive" tab in the sheet, not destroyed · every base incl. MeG</span></div>'+
+    (CLEAN===null?'<div class="muted">Counting…</div>':
+      cleanRow(CLEAN.all,'all','Every banned account so far','Start the ban record fresh from today — only bans from now on are recorded and analysed.')+
+      cleanRow(CLEAN.old,'old','Only the old process','Banned before '+esc(fmtD(parseTs(SET.process_start||SOP_START)))+'. Keeps bans since the iPhone process started.'))+
+    '<div class="muted" style="font-size:11.5px;margin-top:8px">Going forward: a banned account stays on the Today board for 7 days, then only shows in Accounts (Banned filter) and Insights. Banned accounts are never counted in any total.</div></div></div>';
   if(CLEAN===null) cleanCount();
   return h;
 }
@@ -1899,19 +2012,24 @@ function restTog(k,i){
   renderView();
 }
 var CLEAN=null, _cleanBusy=false;
+function cleanCut(which){ return which==='all' ? addDays(phtDate(),1) : (CFG.process_start||SOP_START); }   // 'all' = everything banned up to and including today
 async function cleanCount(){
   if(_cleanBusy) return; _cleanBusy=true;
-  try{ var d=await api({ action:'rc_archive_banned', by:USER.id, before:(CFG.process_start||SOP_START) }); CLEAN=(d&&d.ok)?d:{error:(d&&d.error)||'unknown'}; }
-  catch(e){ CLEAN={error:'connection'}; }
+  var one=async function(which){ try{ var d=await api({ action:'rc_archive_banned', by:USER.id, before:cleanCut(which) }); return (d&&d.ok)?d:{error:(d&&d.error)||'unknown'}; }catch(e){ return {error:'connection'}; } };
+  var a=await one('all'), o=await one('old');
+  CLEAN={ all:a, old:o };
   _cleanBusy=false; if(VIEW==='settings') renderView();
 }
-async function cleanGo(){
-  if(!CLEAN || !CLEAN.count) return;
-  if(!(await confirmBox('Archive '+CLEAN.count+' banned accounts?', 'Every Reddit account banned before '+esc(fmtD(parseTs(CFG.process_start||SOP_START)))+' moves to the ProjectAccounts_Archive tab. The board, Accounts and Insights then only show the new process.', 'Archive', true))) return;
-  toast('Archiving…');
+async function cleanGo(which){
+  var c=CLEAN&&CLEAN[which]; if(!c || !c.count) return;
+  var msg=which==='all'
+    ? 'All '+c.count+' banned accounts leave the board, the totals and Insights. From now on only new bans are recorded. They are kept in the ProjectAccounts_Archive tab of the sheet, in case one ever needs looking up.'
+    : 'The '+c.count+' accounts banned before '+esc(fmtD(parseTs(CFG.process_start||SOP_START)))+' leave the board, the totals and Insights. They are kept in the ProjectAccounts_Archive tab.';
+  if(!(await confirmBox('Remove '+c.count+' banned accounts?', msg, 'Remove them', true))) return;
+  toast('Removing…');
   try{
-    var d=await api({ action:'rc_archive_banned', by:USER.id, before:(CFG.process_start||SOP_START), confirm:'ARCHIVE' });
-    if(d && d.ok){ toast(d.archived+' banned account'+(d.archived===1?'':'s')+' archived.'); CLEAN=null; EVENTS_AT=0; ALL_AT=0; await loadAll(true); load(); renderView(); }
+    var d=await api({ action:'rc_archive_banned', by:USER.id, before:cleanCut(which), confirm:'ARCHIVE' });
+    if(d && d.ok){ toast(d.archived+' banned account'+(d.archived===1?'':'s')+' removed from the tool.'); CLEAN=null; EVENTS_AT=0; ALL_AT=0; await loadAll(true); load(); renderView(); }
     else toast('Could not archive: '+((d&&d.error)||'unknown'));
   }catch(e){ toast('Connection error — nothing was changed if this shows twice.'); }
 }
