@@ -2397,23 +2397,27 @@ function vHealth(){
 }
 
 /* ══════════ PRODUCTIVITY & QA (owner only · Oct 5 2026) ══════════
-   Productivity + QA = 50% of each VA's overall scorecard. Two parts:
-   • TASK TIMES — learning phase. No speed score yet. The board times every session, DM round, account
-     creation and health-check look (VA presses Start / Finish). This tab shows the typical time per
-     task × stage × method; the owner sets a target per cell once it has enough samples. Suggested
-     target = the 75th percentile (a time 3 of 4 real runs already meet), so nobody has to rush to hit it.
-   • QA — the owner's daily score out of 10 per VA. Rules suggest it (hidden bans, health check missed or
-     late, stages skipped, sessions finished in seconds); the owner's number is final.
-   The ledger shape (RcTasks, RcDaily) is tool-agnostic so ALTR Media can reuse it. */
-var PQ={ tab:'times', range:'7', day:'', st:null, dd:null, loading:false, key:'', tg:{} };
-var PQ_MIN=10;    // samples before a cell suggests a target
+   Reddit Central's share of each VA's overall scorecard: Productivity + QA + Results = 50%
+   (20 / 20 / 10 by default — Settings → Scorecard weights). Three tabs:
+   • SCORECARD — the month per VA: productivity (on-time completion), QA (your daily scores),
+     results (survival, ban rate, stage progress, karma growth vs the team), the weighted total, and
+     the points out of 50. Published to the portal scorecard every morning by the day close, or by
+     hand with "Publish now".
+   • TASK TIMES — week one is learning: VAs press Start / Finish on every task. After it, each task's
+     TEAM TIME = the team's median from that week, per stage and per method, locked. You can
+     override any cell. Finishing faster than the team time earns nothing extra.
+   • QA — your daily score out of 10 per VA, suggested by rules; your number is final.
+   The ledger shape (RcTasks, RcDaily, ScorecardExt) is tool-agnostic so ALTR Media can reuse it. */
+var PQ={ tab:'score', range:'7', day:'', month:'', st:null, dd:null, tgt:null, sc:null, scLoading:false, loading:false, key:'', tg:{} };
+var PQ_MIN=10;    // runs before a task's team time is learned
 var QA_RULES=[
   { k:'hidden_ban', n:'Hidden ban — a health check found one of their accounts banned that they never tagged', d:2, u:'each' },
   { k:'hc_missing', n:'Daily health check not finished', d:1, u:'' },
   { k:'hc_late',    n:'Health check started after 8:15 (AM or PM shift)', d:0.5, u:'' },
   { k:'skip',       n:'Stage skipped, or promoted before the stage\'s days were up', d:1, u:'each' },
+  { k:'tagging',    n:'Accounts not tagged right — method or model missing, or a new account without its phone', d:0.5, u:'each · max 2' },
   { k:'quick',      n:'Session or DMs finished within 20 seconds of starting', d:0.5, u:'each · max 2' },
-  { k:'fast',       n:'Under 35% of the team\'s usual time for that task (once it has '+PQ_MIN+'+ samples)', d:0.5, u:'each · max 2' }
+  { k:'fast',       n:'Under 35% of the team time for that task (once it is learned)', d:0.5, u:'each · max 2' }
 ];
 function pqRule(k){ for(var i=0;i<QA_RULES.length;i++) if(QA_RULES[i].k===k) return QA_RULES[i]; return { d:0 }; }
 function dAdd(d,n){ var x=new Date(d+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+n); return x.toISOString().slice(0,10); }
@@ -2434,19 +2438,28 @@ async function pqLoad(force){
     var res=await Promise.all([
       jget(API+'?'+qs({ action:'rc_task_stats', by:USER.id, from:from, to:today(), day:day })+'&_='+Date.now(), 0),
       jget(API+'?'+qs({ action:'rc_day_get', by:USER.id, from:mFrom, to:day })+'&_='+Date.now(), 0),
+      jget(API+'?'+qs({ action:'rc_targets', by:USER.id })+'&_='+Date.now(), 0).catch(function(){ return null; }),
       loadEvents()
     ]);
     PQ.st=(res[0]&&res[0].ok)?res[0]:{ error:(res[0]&&res[0].error)||'unknown', groups:[], vas:[], rows:[] };
     PQ.dd=(res[1]&&res[1].ok)?(res[1].rows||[]):[];
+    PQ.tgt=(res[2]&&res[2].ok)?res[2]:null;
     PQ.key=key;
   }catch(e){ PQ.st={ error:'connection', groups:[], vas:[], rows:[] }; PQ.dd=[]; }
   PQ.loading=false; if(VIEW==='prod') renderView();
+}
+async function pqLoadSc(force){
+  if(PQ.scLoading || !isAdmin()) return;
+  var m=PQ.month||today().slice(0,7); if(!force && PQ.sc && PQ.sc.month===m) return;
+  PQ.scLoading=true; if(force) PQ.sc=null; if(VIEW==='prod') renderView();
+  try{ var d=await jget(API+'?'+qs({ action:'rc_scorecard', by:USER.id, month:m })+'&_='+Date.now(), 0); PQ.sc=(d&&d.ok)?d:{ error:(d&&d.error)||'unknown', month:m, rows:[] }; }
+  catch(e){ PQ.sc={ error:'connection', month:m, rows:[] }; }
+  PQ.scLoading=false; if(VIEW==='prod') renderView();
 }
 function pqG(kind, stage, meth){
   var gs=(PQ.st&&PQ.st.groups)||[], st=(kind==='creation'||kind==='healthcheck')?'':stage;
   for(var i=0;i<gs.length;i++){ var g=gs[i]; if(g.kind===kind && g.stage===st && g.method===meth) return g; } return null;
 }
-function pqSuggest(g){ var v=g.p75||g.median; if(!v) return null; var step=v<120?5:30; return Math.ceil(v/step)*step; }
 function pqTasks(){
   var t=[{ kind:'creation', stage:'', n:'Account creation', s:'Start creating → counted (+1)' }];
   PH.forEach(function(p){ if(p.task) t.push({ kind:'session', stage:p.k, n:'Session · '+p.n, s:p.plan }); });
@@ -2456,19 +2469,21 @@ function pqTasks(){
   return t;
 }
 function pqKey(t, meth){ return t.kind+'|'+((t.kind==='creation'||t.kind==='healthcheck')?'':t.stage)+'|'+meth; }
-function pqTargetOf(key){ if(Object.prototype.hasOwnProperty.call(PQ.tg,key)) return PQ.tg[key]; var t=(CFG.targets||{})[key]; return t==null?null:t; }
+function pqOwn(key){ if(Object.prototype.hasOwnProperty.call(PQ.tg,key)) return PQ.tg[key]; var t=(CFG.targets||{})[key]; return (t==null||t==='')?null:+t; }
+function pqAuto(key){ var a=PQ.tgt&&PQ.tgt.auto&&PQ.tgt.auto[key]; return a&&a.secs?a:null; }
+function pqTeamTime(key){ var o=pqOwn(key); if(o!=null) return o; var a=pqAuto(key); return a?a.secs:null; }
 function pqCell(task, meth){
-  var g=pqG(task.kind, task.stage, meth), key=pqKey(task, meth), tg=pqTargetOf(key);
-  var sug=(g && g.n>=PQ_MIN)?pqSuggest(g):null;
-  var h=g?'<div class="pq-med">'+fmtSecs(g.median)+'</div><div class="pq-sub" title="middle half of all runs · number of timed runs'+(g.parallel?' · share run while another timer was going':'')+'">'+fmtSecs(g.p25)+'–'+fmtSecs(g.p75)+' · n='+g.n+(g.parallel?' · '+g.parallel+'% parallel':'')+'</div>'
-         :'<div class="pq-sub" style="margin-top:4px">no runs yet</div>';
-  h+='<div class="pq-t"><input class="'+(tg!=null?'set':'')+'" value="'+(tg!=null?fmtSecs(tg):'')+'" placeholder="target" data-k="'+esc(key)+'" onchange="pqTarget(this)" title="Target time — m:ss, or minutes (e.g. 6.5). Clear it to remove.">'+
-    (sug!=null && tg==null?'<button class="pq-sug" onclick="pqUse(\''+jsq(key)+'\','+sug+')" title="75th percentile — 3 of 4 runs already meet it">use '+fmtSecs(sug)+'</button>'
-      :((!g||g.n<PQ_MIN)?'<span class="pq-lrn">learning '+(g?g.n:0)+'/'+PQ_MIN+'</span>':''))+'</div>';
+  var g=pqG(task.kind, task.stage, meth), key=pqKey(task, meth), own=pqOwn(key), auto=pqAuto(key);
+  var h=g?'<div class="pq-med">'+fmtSecs(g.median)+'</div><div class="pq-sub" title="typical (median) time in the period · middle half of runs · number of timed runs">'+fmtSecs(g.p25)+'–'+fmtSecs(g.p75)+' · n='+g.n+(g.parallel?' · '+g.parallel+'% parallel':'')+'</div>'
+         :'<div class="pq-sub" style="margin-top:4px">no runs in this period</div>';
+  var tt=auto?'<span class="pq-lrn" style="background:#ecfdf5;color:#047857" title="Team median from '+esc(auto.src||'week 1')+' · '+auto.n+' runs · locked">team '+fmtSecs(auto.secs)+'</span>'
+     :(function(){ var L=(PQ.tgt&&PQ.tgt.learn)||{}, n=g?g.n:0;
+        if(L.learning!==false) return '<span class="pq-lrn" title="Week one: the team time is set from this week\'s runs when it ends">learning · '+n+' run'+(n===1?'':'s')+'</span>';
+        return '<span class="pq-lrn" title="Gets its team time once it has '+PQ_MIN+' runs">'+(n<PQ_MIN?'needs '+(PQ_MIN-n)+' more':'locks tomorrow')+'</span>'; })();
+  h+='<div class="pq-t">'+tt+'<input class="'+(own!=null?'set':'')+'" value="'+(own!=null?fmtSecs(own):'')+'" placeholder="'+(auto?'edit':'set')+'" data-k="'+esc(key)+'" onchange="pqTarget(this)" title="Your own team time for this task — m:ss or minutes. Clear it to go back to the learned one."></div>';
   return '<td class="pq-cell">'+h+'</td>';
 }
 function pqTarget(inp){ var k=inp.getAttribute('data-k'), v=parseSecs(inp.value); if(typeof v==='number' && isNaN(v)){ toast('Type the time as m:ss (6:30) or minutes (6.5).'); return; } PQ.tg[k]=v; renderView(); }
-function pqUse(k,v){ PQ.tg[k]=v; renderView(); }
 async function pqSaveTargets(){
   var n=Object.keys(PQ.tg).length; if(!n) return;
   var cfg=JSON.parse(JSON.stringify(CFG)); cfg.targets=cfg.targets||{};
@@ -2476,33 +2491,86 @@ async function pqSaveTargets(){
   try{
     var r=await fetch(API, { method:'POST', body:JSON.stringify({ action:'rc_cfg_set', by:USER.id, cfg:cfg }) }); var d=await r.json();
     if(!(d&&d.ok)) d=await api({ action:'rc_cfg_set', by:USER.id, cfg:JSON.stringify(cfg) });
-    if(d&&d.ok&&d.cfg){ CFG=d.cfg; if(!CFG.targets) CFG.targets=cfg.targets; PQ.tg={}; toast(n+' target'+(n===1?'':'s')+' saved.'); renderView(); }
+    if(d&&d.ok&&d.cfg){ CFG=d.cfg; if(!CFG.targets) CFG.targets=cfg.targets; PQ.tg={}; PQ.sc=null; toast(n+' team time'+(n===1?'':'s')+' saved.'); renderView(); }
     else toast('Could not save: '+((d&&d.error)||'unknown'));
   }catch(e){ toast('Connection error.'); }
 }
 function vProd(){
   if(!isAdmin()) return '<div class="card empty">Owner only.</div>';
-  if(!PQ.day) PQ.day=today();
+  if(!PQ.day) PQ.day=today(); if(!PQ.month) PQ.month=today().slice(0,7);
   if(!PQ.st && !PQ.loading) pqLoad();
-  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Productivity <span class="gtxt">&amp; QA</span></h2><p>Half of each VA\'s overall scorecard. QA is scored daily from today; productivity is still <b>learning how long each task takes</b> before any target is set.</p></div>'+
-    '<button class="btn sec" onclick="pqLoad(true)">'+IC.hist+' Refresh</button></div>';
-  h+='<div class="seg" style="width:auto;display:inline-flex;margin-bottom:14px;white-space:nowrap"><button class="'+(PQ.tab==='times'?'on':'')+'" onclick="PQ.tab=\'times\';renderView()">Task times · learning</button><button class="'+(PQ.tab==='qa'?'on':'')+'" onclick="PQ.tab=\'qa\';renderView()">QA · daily score</button></div>';
-  if(PQ.st && PQ.st.error) h+='<div class="banner warn">'+IC.doc+'<div>'+(/unknown|action/i.test(PQ.st.error)?'Deploy the Reddit backend <b>rc-2026-10-05c</b> (New version) — this tab reads the new task-time and QA sheets.':'Could not load: '+esc(PQ.st.error))+'</div></div>';
+  if(PQ.tab==='score' && !PQ.sc && !PQ.scLoading) pqLoadSc();
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Productivity <span class="gtxt">&amp; QA</span></h2><p>Reddit Central\'s half of each VA\'s overall scorecard — productivity, QA and results, worked out from the board.</p></div>'+
+    '<button class="btn sec" onclick="pqLoad(true);if(PQ.tab===\'score\')pqLoadSc(true)">'+IC.hist+' Refresh</button></div>';
+  h+='<div class="seg" style="width:auto;display:inline-flex;margin-bottom:14px;white-space:nowrap">'+[['score','Scorecard · 50%'],['times','Task times'],['qa','QA · daily score']].map(function(x){
+    return '<button class="'+(PQ.tab===x[0]?'on':'')+'" onclick="PQ.tab=\''+x[0]+'\';renderView()">'+x[1]+'</button>'; }).join('')+'</div>';
+  if(PQ.st && PQ.st.error) h+='<div class="banner warn">'+IC.doc+'<div>'+(/unknown|action/i.test(PQ.st.error)?'Deploy the Reddit backend <b>rc-2026-10-05d</b> (New version) — this tab reads the new task-time, QA and scorecard sheets.':'Could not load: '+esc(PQ.st.error))+'</div></div>';
+  if(PQ.tab==='score') return h+pqScore();
   if(!PQ.st) return h+'<div class="card empty">Loading…</div>';
   return h+(PQ.tab==='qa'?pqQA():pqTimes());
 }
+/* ── SCORECARD: the month per VA ── */
+function pqMonthOpts(){ var ps=(CFG.process_start||'2026-10-01').slice(0,7), out=[], m=today().slice(0,7), g=0; while(m>=ps && g++<24){ out.push(m); var d=new Date(m+'-01T00:00:00Z'); d.setUTCMonth(d.getUTCMonth()-1); m=d.toISOString().slice(0,7); } return out; }
+function pqPart(label, p){
+  if(!p) return '';
+  var sc=p.score, pct=function(x){ return x==null?'—':Math.round(x*100)+'%'; }, val=label==='Karma'?((p.va==null?'—':(Math.round(p.va*10)/10)+'/wk')+' vs '+(p.team==null?'—':(Math.round(p.team*10)/10)+'/wk')):(pct(p.va)+' vs '+pct(p.team));
+  return '<span class="qf '+(sc==null?'':(sc>=95?'g':(sc>=80?'a':'r')))+'" title="'+esc(label)+': this VA vs the team · '+p.n+' account'+(p.n===1?'':'s')+(sc==null?' · not enough accounts yet':'')+'">'+esc(label)+' '+val+(sc==null?'':' <b>'+Math.round(sc)+'</b>')+'</span>';
+}
+function pqScore(){
+  var S=PQ.sc, m=PQ.month||today().slice(0,7);
+  var h='<div class="tbar"><span class="lbl">Month</span><select class="sel" onchange="PQ.month=this.value;PQ.sc=null;pqLoadSc(true)" style="width:auto">'+pqMonthOpts().map(function(x){ return '<option value="'+x+'"'+(x===m?' selected':'')+'>'+esc(new Date(x+'-01T00:00:00+08:00').toLocaleDateString('en-US',{ month:'long', year:'numeric', timeZone:'Asia/Manila' }))+'</option>'; }).join('')+'</select><div class="sp"></div>'+
+    (S&&S.ok?'<span class="muted" style="font-size:12px">'+(S.published?'Sent to the portal '+esc(fmtDT(parseTs(S.published))):'Not sent to the portal yet')+'</span> <button class="btn sm pri" onclick="pqPublish()">Publish now</button>':'')+'</div>';
+  if(!S || PQ.scLoading) return h+'<div class="card empty">Working out the month…</div>';
+  if(S.error) return h+'<div class="banner warn">'+IC.doc+'<div>'+(/unknown|action/i.test(S.error)?'Deploy the Reddit backend <b>rc-2026-10-05d</b> (New version) to get the scorecard.':'Could not load: '+esc(S.error))+'</div></div>';
+  var W=S.weights||{ p:20, q:20, r:10 }, L=S.learn||{};
+  h+='<div class="kpis">'+
+    kpi('Productivity', W.p+'%', 'on-time completion of every task due', '#0ea5e9')+
+    kpi('QA', W.q+'%', 'your daily scores out of 10', '#a855f7')+
+    kpi('Results', W.r+'%', 'how their accounts perform vs the team', '#10b981')+
+    kpi('Team times', L.learning?'learning':(S.targets_n||0)+' set', L.learning?(L.start?'week 1: '+fmtD(parseTs(L.start))+' – '+fmtD(parseTs(L.end)):'starts with the first timed task'):'locked from week 1 · override in Task times', L.learning?'#f59e0b':'#10b981')+'</div>';
+  if(L.learning) h+='<div class="banner info">'+IC.hour+'<div><b>Week one is still learning.</b> Until a task has its team time, a finished task counts in full — productivity is plain completion for now. Speed starts to matter only after the team times lock.</div></div>';
+  if(S.waves && S.waves.length) h+='<div class="banner info">🌊<div><b>Ban wave'+(S.waves.length===1?'':'s')+' this month:</b> '+S.waves.map(function(d){ return esc(fmtD(parseTs(d))); }).join(', ')+'. Bans on those days count half in each VA\'s ban rate.</div></div>';
+  var rows=S.rows||[];
+  if(!rows.length) return h+'<div class="card empty">No VA activity recorded for this month yet.</div>';
+  var col=function(v){ return v==null?'var(--ink4)':(v>=90?'#047857':(v>=75?'#b45309':'#b91c1c')); }, num=function(v){ return v==null?'—':(Math.round(v*10)/10); };
+  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th><th>Productivity</th><th>QA</th><th>Results</th><th>Reddit score</th><th>Points</th></tr></thead><tbody>'+
+    rows.map(function(o){
+      var P=o.productivity||{}, Q=o.quality||{}, R=o.results||{}, rp=R.parts||{};
+      return '<tr><td class="c1"><b>'+esc(o.name||vaName(o.va))+'</b><div class="pq-sub">'+(o.days||0)+' working day'+(o.days===1?'':'s')+'</div></td>'+
+        '<td style="white-space:normal;min-width:170px"><div class="pq-med" style="color:'+col(P.score)+'">'+num(P.score)+'</div><div class="pq-sub">sessions '+(P.done||0)+'/'+(P.due||0)+' · check '+(P.hc_done||0)+'/'+(P.hc_due||0)+(P.extra?' · +'+P.extra+' other':'')+'</div>'+
+          ((P.slow||P.quick)?'<div class="pq-sub">'+(P.slow?P.slow+' over team time':'')+(P.slow&&P.quick?' · ':'')+(P.quick?'<span style="color:#b91c1c">'+P.quick+' in seconds</span>':'')+'</div>':'')+'</td>'+
+        '<td><div class="pq-med" style="color:'+col(Q.score)+'">'+num(Q.score)+'</div><div class="pq-sub">'+(Q.days||0)+' day'+(Q.days===1?'':'s')+' scored</div></td>'+
+        '<td style="white-space:normal;min-width:220px"><div class="pq-med" style="color:'+col(R.score)+'">'+num(R.score)+'</div><div style="margin-top:3px">'+pqPart('Survival',rp.survival)+pqPart('Ban rate',rp.ban)+pqPart('Progress',rp.progress)+pqPart('Karma',rp.karma)+
+          (Object.keys(rp).length?'':'<span class="pq-sub">accounts still too young</span>')+'</div></td>'+
+        '<td><div class="pq-med" style="font-size:18px;color:'+col(o.total)+'">'+num(o.total)+'</div><div class="pq-sub">out of 100</div></td>'+
+        '<td><div class="pq-med">'+num(o.points)+'<span class="muted" style="font-size:11px"> / '+num(o.max||0)+'</span></div><div class="pq-sub">of the overall</div></td></tr>';
+    }).join('')+'</tbody></table></div>';
+  h+='<details class="card pad" style="margin-top:14px"><summary style="cursor:pointer;font-weight:800">How each part is worked out</summary><div style="font-size:13px;line-height:1.65;margin-top:8px">'+
+    '<b>Productivity</b> — every task due counts: both sessions on each working account, the health-check list, plus each creation and DM round done. Done at or under the team time = full credit, slower = team time ÷ actual, not done = 0. Faster than the team time earns nothing extra; finishing within 20 seconds earns half. The day close counts the board every morning, so a VA who never opens the tool still has the day\'s work due.<br>'+
+    '<b>QA</b> — the average of your daily scores out of 10 (QA tab), × 10.<br>'+
+    '<b>Results</b> — the average of four comparisons with the team (100 = at or better than the team): <i>survival</i> (accounts they created not banned within 30 days, once 7+ days old), <i>ban rate</i> (bans on accounts they run; bans on a ban-wave day count half), <i>stage progress</i> (Comment Farm → NSFW within 7 days), <i>karma growth</i> per account per week (from the karma recorded every morning). Each needs a few accounts before it counts.<br>'+
+    '<b>Reddit score</b> = the three, weighted '+W.p+' / '+W.q+' / '+W.r+'. <b>Points</b> = what it adds to the overall scorecard. The portal reads the three parts and uses its own weights for the month — keep them the same.</div></details>';
+  return h;
+}
+async function pqPublish(){
+  var m=PQ.month||today().slice(0,7);
+  if(!(await confirmBox('Send '+m+' to the portal scorecard?', 'Productivity, QA and Results for every Reddit VA go to the portal now. It also happens by itself every morning.', 'Publish'))) return;
+  try{ var d=await api({ action:'rc_sc_publish', by:USER.id, month:m }); if(d&&d.ok){ toast(d.count+' VA'+(d.count===1?'':'s')+' sent to the portal scorecard.'); PQ.sc=null; pqLoadSc(true); } else toast('Could not publish: '+((d&&d.error)||'unknown')); }
+  catch(e){ toast('Connection error.'); }
+}
 function pqTimes(){
-  var st=PQ.st, ms=methodsList().slice(), tasks=pqTasks();
+  var st=PQ.st, ms=methodsList().slice(), tasks=pqTasks(), L=(PQ.tgt&&PQ.tgt.learn)||{};
   if((st.groups||[]).some(function(g){ return g.method==='(none)' && g.kind!=='healthcheck'; })) ms.push('(none)');
-  var cells=0, set=0; tasks.forEach(function(t){ (t.one?['(none)']:ms).forEach(function(m){ cells++; if(pqTargetOf(pqKey(t,m))!=null) set++; }); });
+  var cells=0, set=0; tasks.forEach(function(t){ (t.one?['(none)']:ms).forEach(function(m){ cells++; if(pqTeamTime(pqKey(t,m))!=null) set++; }); });
   var nt=Object.keys(PQ.tg).length;
-  var h='<div class="banner info">'+IC.hour+'<div style="flex:1"><b>Learning phase — nothing here is scored yet.</b> VAs press Start and Finish on every session, DM round and new account, so the tool sees real times per stage and per method (Vysor, Jailbroken and Blaze+ run on different devices). '+
-    'When a cell has '+PQ_MIN+'+ runs it suggests a target at the 75th percentile — a time most runs already meet, so nobody rushes to hit it. Runs far <i>faster</i> than usual go to QA as possible skipped steps, never as a win.</div></div>';
+  var h='<div class="banner info">'+IC.hour+'<div style="flex:1"><b>'+(L.learning===false?'Team times are locked from week one.':'Week one is learning.')+'</b> VAs press Start and Finish on every session, DM round and new account. '+
+    (L.start?'Learning week: <b>'+esc(fmtD(parseTs(L.start)))+' – '+esc(fmtD(parseTs(L.end)))+'</b>. ':'')+
+    'After it each task\'s <b>team time</b> = the team\'s median from that week, per stage and per method (Vysor, Jailbroken and Blaze+ run on different devices). A rarer task gets its team time once it has '+PQ_MIN+' runs. Type in a cell to override it.</div></div>';
   h+='<div class="kpis">'+kpi('Timed runs', st.total||0, 'since '+fmtD(parseTs(pqFrom())), '#0ea5e9')+
     kpi('Finished in seconds', st.quick||0, 'not counted · see QA', (st.quick?'#ef4444':'#10b981'))+
-    kpi('Targets set', set+' / '+cells, set?'productivity can start':'set them when the cells are ready', '#a855f7')+'</div>';
+    kpi('Team times', set+' / '+cells, L.learning===false?'learned or set':'learning', '#a855f7')+'</div>';
   h+='<div class="tbar"><span class="lbl">Period</span><div class="chips">'+[['7','7 days'],['14','14 days'],['all','Since process start']].map(function(x){ return '<button class="chip '+(PQ.range===x[0]?'sel':'')+'" onclick="PQ.range=\''+x[0]+'\';pqLoad(true)">'+x[1]+'</button>'; }).join('')+'</div><div class="sp"></div>'+
-    (nt?'<button class="btn sm sec" onclick="PQ.tg={};renderView()">Discard</button> <button class="btn sm pri" onclick="pqSaveTargets()">Save '+nt+' target'+(nt===1?'':'s')+'</button>':'')+'</div>';
+    (nt?'<button class="btn sm sec" onclick="PQ.tg={};renderView()">Discard</button> <button class="btn sm pri" onclick="pqSaveTargets()">Save '+nt+' change'+(nt===1?'':'s')+'</button>':'')+'</div>';
   h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Task</th>'+ms.map(function(m){ return '<th>'+(m==='(none)'?'Not tagged':methodPill(m,true))+'</th>'; }).join('')+'</tr></thead><tbody>'+
     tasks.map(function(t){
       return '<tr><td class="c1" title="'+esc(t.s||'')+'"><b>'+esc(t.n)+'</b><div class="pq-sub" style="max-width:260px;overflow:hidden;text-overflow:ellipsis">'+esc(t.s||'')+'</div></td>'+
@@ -2517,7 +2585,7 @@ function pqTimes(){
   });
   var vk=Object.keys(V).filter(function(k){ return !isGone(k) && OWNERS.indexOf(k)<0; }).sort(function(a,b){ return vaName(a).localeCompare(vaName(b)); });
   var kinds=[['creation','Creation'],['session','Sessions'],['dms','DMs'],['healthcheck','Health check']];
-  h+='<details class="card pad" style="margin-top:16px"><summary style="cursor:pointer;font-weight:800">Per VA vs the team’s usual time <span class="muted" style="font-weight:600;font-size:12px">· owner only · not scored</span></summary>'+
+  h+='<details class="card pad" style="margin-top:16px"><summary style="cursor:pointer;font-weight:800">Per VA vs the team’s usual time <span class="muted" style="font-weight:600;font-size:12px">· owner only</span></summary>'+
     '<p class="muted" style="font-size:12px;margin:8px 0 10px">1.0× = the team\'s usual time for the same task, stage and method. Well under 1× (red) is worth a look — fast can mean skipped steps. Over 1.5× (amber) may need coaching or a slower device.</p>'+
     (vk.length?'<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th><th>Runs</th>'+kinds.map(function(k){ return '<th>'+k[1]+'</th>'; }).join('')+'</tr></thead><tbody>'+
       vk.map(function(k){ var o=V[k]; return '<tr><td class="c1">'+esc(vaName(k))+'</td><td class="num">'+o.n+'</td>'+kinds.map(function(kd){ var x=o.kinds[kd[0]]; if(!x) return '<td class="num muted">·</td>'; var r=x.s/x.w;
@@ -2563,8 +2631,10 @@ function pqFlags(va, day, dr, L){
   var rows=((PQ.st&&PQ.st.rows)||[]).filter(function(x){ return String(x.va).toLowerCase()===va && (x.kind==='session'||x.kind==='dms'); });
   var q=rows.filter(function(x){ return x.secs!=null && x.secs<20; }).length;
   if(q) F.push({ k:'quick', t:q+' finished within 20 s', d:Math.min(2,q*pqRule('quick').d), c:'r' });
-  var fast=rows.filter(function(x){ if(x.secs==null || x.secs<20) return false; var g=pqG(x.kind,x.stage,x.method); return g && g.n>=PQ_MIN && x.secs<g.median*0.35; }).length;
-  if(fast) F.push({ k:'fast', t:fast+' far faster than usual', d:Math.min(2,fast*pqRule('fast').d), c:'a' });
+  var fast=rows.filter(function(x){ if(x.secs==null || x.secs<20) return false; var tt=pqTeamTime(x.kind+'|'+x.stage+'|'+(x.method||'(none)')); return tt && x.secs<tt*0.35; }).length;
+  if(fast) F.push({ k:'fast', t:fast+' far under the team time', d:Math.min(2,fast*pqRule('fast').d), c:'a' });
+  var ps=CFG.process_start||'2026-10-01', untag=allRows().filter(function(r){ return owner(r)===va && !isDead(r) && (!methodOf(r) || !r.model || (cdateOf(r)>=ps && !r.device)); });
+  if(untag.length) F.push({ k:'tagging', t:untag.length+' account'+(untag.length===1?'':'s')+' missing tags', d:Math.min(2,untag.length*pqRule('tagging').d), c:'a', tip:untag.slice(0,12).map(function(r){ return r.handle+': '+[!methodOf(r)?'method':'',!r.model?'model':'',(cdateOf(r)>=ps&&!r.device)?'phone':''].filter(String).join(', '); }).join('\n') });
   (EVENTS||[]).forEach(function(e){
     if(e.kind!=='stage' || String(e.by||'').toLowerCase()!==va || bizDayOf(e.at)!==day) return;
     var a=phaseIx(e.from), b=phaseIx(e.to); if(a<0 || b<0 || b<=a) return;
@@ -2581,7 +2651,7 @@ function pqQA(){
     '<input class="inp" type="date" value="'+esc(day)+'" max="'+today()+'" onchange="PQ.day=this.value||today();pqLoad(true);renderView()" style="width:auto">'+
     '<button class="btn sm sec" '+(day>=today()?'disabled':'')+' onclick="PQ.day=dAdd(PQ.day,1);pqLoad(true);renderView()">›</button>'+
     (day!==today()?' <button class="btn sm sec" onclick="PQ.day=today();pqLoad(true);renderView()">Today</button>':'')+
-    '<div class="sp"></div><span class="muted" style="font-size:12px">Business day · '+esc(fmtD(parseTs(day)))+'</span></div>';
+    '<div class="sp"></div><span class="muted" style="font-size:12px">Business day · '+esc(fmtD(parseTs(day)))+'</span> <button class="btn sm sec" onclick="pqFillAll()" title="Save the suggested score for every VA who worked and has no score yet">Fill suggested for everyone</button></div>';
   h+='<details class="card pad" style="margin-bottom:12px"><summary style="cursor:pointer;font-weight:800">How the QA score works</summary><div style="font-size:13px;line-height:1.6;margin-top:8px">'+
     'You score each VA <b>out of 10</b> for the day — your number is final. The <b>suggested</b> score starts at 10 and takes off what the rules found:'+
     '<table class="db" style="margin-top:8px"><tbody>'+QA_RULES.map(function(r){ return '<tr><td class="c1">'+esc(r.n)+'</td><td class="num" style="font-weight:800;color:#b91c1c">−'+r.d+'</td><td class="muted" style="font-size:11.5px">'+esc(r.u)+'</td></tr>'; }).join('')+'</tbody></table>'+
@@ -2595,7 +2665,7 @@ function pqQA(){
       var hc=L.off?'<span class="flag" style="background:#f1f2f7;color:var(--ink3)">'+esc(L.off)+'</span>':(L.nodata?'<span class="muted">no data</span>':(L.hcA?(L.hcD+'/'+L.hcA+(dr&&dr.hc_first_at?' <span class="muted" style="font-size:11px">· '+esc(fmtT(parseTs(dr.hc_first_at)))+'</span>':'')):'<span class="muted">—</span>'));
       return '<tr data-va="'+esc(va)+'"><td class="c1">'+esc(vaName(va))+(SHIFTOF[va]==='night'?' 🌙':'')+'</td>'+
         '<td class="num">'+(L.nodata?'—':(L.done+'/'+L.due))+'</td><td class="num">'+(L.nodata?'—':(L.cre||'·'))+'</td><td>'+hc+'</td>'+
-        '<td style="white-space:normal;max-width:300px;min-width:180px">'+(F.length?F.map(function(f){ return '<span class="qf '+f.c+'" title="−'+f.d+'">'+esc(f.t)+' <b>−'+f.d+'</b></span>'; }).join(''):'<span class="qf g">'+IC.check+' clean</span>')+'</td>'+
+        '<td style="white-space:normal;max-width:300px;min-width:180px">'+(F.length?F.map(function(f){ return '<span class="qf '+f.c+'" title="'+esc(f.tip?f.tip:('−'+f.d))+'">'+esc(f.t)+' <b>−'+f.d+'</b></span>'; }).join(''):'<span class="qf g">'+IC.check+' clean</span>')+'</td>'+
         '<td class="num" style="font-weight:800;color:'+(sug>=9?'#047857':(sug>=7?'#b45309':'#b91c1c'))+'">'+sug+'</td>'+
         '<td><input class="qa-sc'+(sc!==''?' saved':'')+'" id="qa-s-'+esc(va)+'" type="number" min="0" max="10" step="0.5" value="'+esc(sc)+'" placeholder="'+sug+'"></td>'+
         '<td style="max-width:none"><input class="qa-nt" id="qa-n-'+esc(va)+'" value="'+esc(dr&&dr.qa_note||'')+'" placeholder="optional"></td>'+
@@ -2618,10 +2688,17 @@ async function pqSave(va, sug){
     toast(firstName(va)+' · '+v+'/10 saved'); renderView();
   }catch(e){ toast('Connection error.'); }
 }
+async function pqFillAll(){
+  var day=PQ.day||today(), list=pqVAs(day).map(function(va){ var dr=pqRow(va,day), L=pqLive(va,day); if(L.off || L.nodata || (dr && dr.qa_score!=='' && dr.qa_score!=null)) return null;
+    if(!(L.due>0 || L.hcA>0 || L.cre>0)) return null; var F=pqFlags(va,day,dr,L); return { va:va, sug:Math.max(0, Math.round((10-F.reduce(function(s,f){ return s+f.d; },0))*2)/2) }; }).filter(Boolean);
+  if(!list.length){ toast('Everyone who worked already has a score.'); return; }
+  if(!(await confirmBox('Fill '+list.length+' score'+(list.length===1?'':'s')+'?', list.map(function(x){ return esc(vaName(x.va))+' → <b>'+x.sug+'</b>'; }).join('<br>')+'<br><br>Only VAs who worked and have no score yet. You can change any of them after.', 'Save all'))) return;
+  for(var i=0;i<list.length;i++){ var si=$('qa-s-'+list[i].va); if(si) si.value=''; await pqSave(list[i].va, list[i].sug); }
+}
 /* A ban the owner never tagged, found by the health check = a QA hit for the account's owner. */
 function qaHit(r, how){
   if(!isAdmin() || !r) return; var va=owner(r); if(!va || OWNERS.indexOf(va)>=0) return;
-  try{ api({ action:'rc_qa_flag', by:USER.id, va:va, date:today(), flag:JSON.stringify({ type:'hidden_ban', label:'Hidden ban: '+r.handle, deduct:pqRule('hidden_ban').d, account:r.handle, how:how||'' }) }).then(function(){ PQ.key=''; PQ.st=null; }).catch(function(){}); }catch(e){}
+  try{ api({ action:'rc_qa_flag', by:USER.id, va:va, date:today(), flag:JSON.stringify({ type:'hidden_ban', label:'Hidden ban: '+r.handle, deduct:pqRule('hidden_ban').d, account:r.handle, how:how||'' }) }).then(function(){ PQ.key=''; PQ.st=null; PQ.sc=null; }).catch(function(){}); }catch(e){}
 }
 
 /* ═══════════ COVERAGE — owner only ═══════════
@@ -2809,6 +2886,11 @@ function vSettingsLists(){
     '<input class="inp" style="width:150px;padding:4px 9px;font-size:12px" placeholder="+ add niche" onkeydown="if(event.key===\'Enter\'&&this.value.trim()){SET.niches.push(this.value.trim());renderView();}"></div></div>';
   h+='<div class="card pad s6"><div class="ch-h"><b>iPhone process start</b><span>splits "before" vs "iPhone process" in Insights</span></div>'+
     '<input class="inp" type="date" value="'+esc(SET.process_start||SOP_START)+'" onchange="SET.process_start=this.value"></div>';
+  var sw=SET.sc_weights||(SET.sc_weights={ p:20, q:20, r:10 }), swT=(+sw.p||0)+(+sw.q||0)+(+sw.r||0);
+  h+='<div class="card pad s6"><div class="ch-h"><b>Scorecard weights</b><span>the Reddit Central share of each VA\'s overall scorecard</span></div>'+
+    '<div class="f2" style="grid-template-columns:repeat(3,1fr)">'+[['p','Productivity'],['q','QA'],['r','Results']].map(function(x){
+      return '<div class="fld"><label>'+x[1]+' %</label><input class="inp" type="number" min="0" max="100" step="0.5" value="'+esc(sw[x[0]])+'" onchange="SET.sc_weights.'+x[0]+'=parseFloat(this.value)||0;renderView()"></div>'; }).join('')+'</div>'+
+    '<div class="hint" style="'+(swT===50?'':'color:#b45309;font-weight:700')+'">Total '+swT+'%'+(swT===50?' ✓':' — the plan is 50%')+'. Use the same numbers for Productivity, QA and Results in the admin console\'s scorecard weights for the month.</div></div>';
   // rest days
   if(!SET.rest_days) SET.rest_days={};
   var holders={}; allRows().forEach(function(r){ if(!isDead(r)){ var o=owner(r); if(o && OWNERS.indexOf(o)<0 && !isGone(o)) holders[o]=1; } });
