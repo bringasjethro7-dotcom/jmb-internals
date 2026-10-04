@@ -2495,6 +2495,10 @@ async function pqSaveTargets(){
     else toast('Could not save: '+((d&&d.error)||'unknown'));
   }catch(e){ toast('Connection error.'); }
 }
+/* The live backend answers an action it doesn't know with the sign-in path (MISSING_PARAMS),
+   so "unknown action" never shows up as such — judge by the build it reports instead. */
+function pqOldBE(err){ return (BE_BUILD && BE_BUILD<'rc-2026-10-05d') || /unknown|action|MISSING_PARAMS|NOT_FOUND/i.test(String(err||'')); }
+function pqDeployMsg(){ return '<div class="banner warn">'+IC.doc+'<div><b>The Reddit backend needs updating.</b> This page is the new version'+(BE_BUILD?', but the backend is still <b>'+esc(BE_BUILD)+'</b>':'')+'. Open the Reddit Central Apps Script, paste the new <b>reddit-apps-script.gs</b>, then Deploy → Manage deployments → ✏️ → Version: <b>New version</b> → Deploy. Then press Refresh here.</div></div>'; }
 function vProd(){
   if(!isAdmin()) return '<div class="card empty">Owner only.</div>';
   if(!PQ.day) PQ.day=today(); if(!PQ.month) PQ.month=today().slice(0,7);
@@ -2504,7 +2508,8 @@ function vProd(){
     '<button class="btn sec" onclick="pqLoad(true);if(PQ.tab===\'score\')pqLoadSc(true)">'+IC.hist+' Refresh</button></div>';
   h+='<div class="seg" style="width:auto;display:inline-flex;margin-bottom:14px;white-space:nowrap">'+[['score','Scorecard · 50%'],['times','Task times'],['qa','QA · daily score']].map(function(x){
     return '<button class="'+(PQ.tab===x[0]?'on':'')+'" onclick="PQ.tab=\''+x[0]+'\';renderView()">'+x[1]+'</button>'; }).join('')+'</div>';
-  if(PQ.st && PQ.st.error) h+='<div class="banner warn">'+IC.doc+'<div>'+(/unknown|action/i.test(PQ.st.error)?'Deploy the Reddit backend <b>rc-2026-10-05d</b> (New version) — this tab reads the new task-time, QA and scorecard sheets.':'Could not load: '+esc(PQ.st.error))+'</div></div>';
+  if(pqOldBE(PQ.st&&PQ.st.error) || (PQ.sc && pqOldBE(PQ.sc.error))) return h+pqDeployMsg();
+  if(PQ.st && PQ.st.error) h+='<div class="banner warn">'+IC.doc+'<div>Could not load: '+esc(PQ.st.error)+'</div></div>';
   if(PQ.tab==='score') return h+pqScore();
   if(!PQ.st) return h+'<div class="card empty">Loading…</div>';
   return h+(PQ.tab==='qa'?pqQA():pqTimes());
@@ -2519,9 +2524,9 @@ function pqPart(label, p){
 function pqScore(){
   var S=PQ.sc, m=PQ.month||today().slice(0,7);
   var h='<div class="tbar"><span class="lbl">Month</span><select class="sel" onchange="PQ.month=this.value;PQ.sc=null;pqLoadSc(true)" style="width:auto">'+pqMonthOpts().map(function(x){ return '<option value="'+x+'"'+(x===m?' selected':'')+'>'+esc(new Date(x+'-01T00:00:00+08:00').toLocaleDateString('en-US',{ month:'long', year:'numeric', timeZone:'Asia/Manila' }))+'</option>'; }).join('')+'</select><div class="sp"></div>'+
-    (S&&S.ok?'<span class="muted" style="font-size:12px">'+(S.published?'Sent to the portal '+esc(fmtDT(parseTs(S.published))):'Not sent to the portal yet')+'</span> <button class="btn sm pri" onclick="pqPublish()">Publish now</button>':'')+'</div>';
+    (S&&S.ok&&!pqOldBE()?'<span class="muted" style="font-size:12px">'+(S.published?'Sent to the portal '+esc(fmtDT(parseTs(S.published))):'Not sent to the portal yet')+'</span> <button class="btn sm pri" onclick="pqPublish()">Publish now</button>':'')+'</div>';
   if(!S || PQ.scLoading) return h+'<div class="card empty">Working out the month…</div>';
-  if(S.error) return h+'<div class="banner warn">'+IC.doc+'<div>'+(/unknown|action/i.test(S.error)?'Deploy the Reddit backend <b>rc-2026-10-05d</b> (New version) to get the scorecard.':'Could not load: '+esc(S.error))+'</div></div>';
+  if(S.error) return h+(pqOldBE(S.error)?pqDeployMsg():'<div class="banner warn">'+IC.doc+'<div>Could not load: '+esc(S.error)+'</div></div>');
   var W=S.weights||{ p:20, q:20, r:10 }, L=S.learn||{};
   h+='<div class="kpis">'+
     kpi('Productivity', W.p+'%', 'on-time completion of every task due', '#0ea5e9')+
