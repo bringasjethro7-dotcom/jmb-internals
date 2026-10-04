@@ -71,7 +71,7 @@ button{cursor:pointer}
 .tabs button.on::after{content:'';position:absolute;left:10px;right:10px;bottom:-1px;height:3px;border-radius:3px 3px 0 0;background:var(--grad)}
 .tabs .badge{background:var(--bad);color:#fff;font-size:10px;font-weight:800;border-radius:100px;padding:1px 6px;min-width:18px;text-align:center}
 main{max-width:1320px;margin:0 auto;padding:20px 18px 80px}
-.view{animation:vIn .25s ease}
+.view.vin{animation:vIn .25s ease}
 @keyframes vIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 
 /* ── building blocks ── */
@@ -175,6 +175,38 @@ main{max-width:1320px;margin:0 auto;padding:20px 18px 80px}
 .km .dd button:hover{background:var(--s3);color:var(--ink)}
 .km .dd button.danger{color:#b91c1c}
 .km .dd hr{border:none;height:1px;background:var(--line);margin:4px 6px}
+
+/* ── Today as an Airtable-style list: one account per row, grouped by stage ── */
+.lt{background:var(--s1);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh1)}
+.lh,.lr{display:grid;grid-template-columns:minmax(150px,1.3fr) 140px 100px minmax(80px,.7fr) 56px minmax(140px,1.2fr) minmax(230px,1.9fr) 34px;gap:10px;align-items:center;padding:9px 14px}
+.lr .msub{display:none}
+.lh{background:#f8f9fc;border-bottom:1px solid var(--line2);font-size:10.5px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;border-radius:var(--r) var(--r) 0 0}
+.lg{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--s3);border-bottom:1px solid var(--line);font-size:12.5px}
+.lg i{width:9px;height:9px;border-radius:50%;background:var(--gc);display:inline-block}
+.lg span{color:var(--ink3);font-weight:700;font-size:11.5px}
+.lr{position:relative;border-bottom:1px solid var(--line);background:var(--s1)}
+.lr:last-child{border-bottom:none;border-radius:0 0 var(--r) var(--r)}
+.lr:hover{background:#fcfaff}
+.lr::before{content:'';position:absolute;left:0;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;background:var(--sc,#cbd5e1)}
+.lr.dim{opacity:.6}
+.lr .cell{min-width:0;font-size:12px}
+.lr .an{font-weight:800;font-size:13.5px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lr .an:hover{text-decoration:underline;text-decoration-color:var(--ink4)}
+.lr .sub{font-size:11px;color:var(--ink3);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+.lr .acts{margin:0;gap:5px}
+.lr .ses{padding:5px 9px;font-size:11px}
+.lr .note{margin:0;padding:4px 8px;font-size:11px;display:inline-block}
+.lr .gate{margin:0}
+.lr .stg{max-width:100%}
+.lr.moved{animation:rowFlash 1.8s ease}
+@keyframes rowFlash{0%,25%{background:#f3e8ff;box-shadow:inset 0 0 0 2px #c4b5fd}100%{background:var(--s1);box-shadow:none}}
+@media(max-width:1080px){
+  .lr .msub{display:inline}
+  .lh{display:none}
+  .lr{grid-template-columns:1fr auto 34px;grid-template-areas:"a s m" "p p p" "t t t";row-gap:7px}
+  .lr>.c-acc{grid-area:a}.lr>.c-stg{grid-area:s}.lr>.c-menu{grid-area:m}.lr>.c-prog{grid-area:p}.lr>.c-act{grid-area:t}
+  .lr>.c-meth,.lr>.c-va,.lr>.c-age{display:none}
+}
 
 /* ── team progress (admin) ── */
 .tp{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
@@ -560,6 +592,28 @@ function methodOf(r){
 }
 function methodColor(m){ m=String(m||'').toLowerCase(); if(METHOD_C[m]) return METHOD_C[m]; if(!m) return '#94a3b8'; var h=0; for(var i=0;i<m.length;i++) h=(h*31+m.charCodeAt(i))>>>0; return ['#14b8a6','#f59e0b','#ec4899','#6366f1'][h%4]; }
 function methodPill(m, small){ var c=methodColor(m); return '<span class="pill" style="background:'+c+'16;color:'+c+';'+(small?'font-size:10.5px;padding:2px 8px':'')+'"><i style="width:7px;height:7px;border-radius:50%;background:'+c+';display:inline-block"></i>'+esc(m||'No method')+'</span>'; }
+/* An account whose MODEL belongs to the other base (e.g. a Casey account typed into the Altz rows of the
+   sheet). Model → base comes from Settings → Models per base, plus the base's own name ("Casey"). */
+function modelBaseMap(){
+  var m={}; BASES.forEach(function(b){ ((CFG.models||{})[b.id]||[]).forEach(function(x){ m[String(x).toLowerCase().trim()]=b.id; }); m[b.n.toLowerCase()]=b.id; });
+  delete m['altz']; return m;
+}
+function wrongBase(r){ var mb=modelBaseMap()[String(r.model||'').toLowerCase().trim()]; return (mb && r.project && mb!==r.project)?mb:''; }
+function wrongBaseBanner(rows){
+  if(!isAdmin()) return '';
+  var w=(rows||[]).filter(function(r){ return !isDead(r) && wrongBase(r); }); if(!w.length) return '';
+  var to={}; w.forEach(function(r){ var t=wrongBase(r); to[t]=(to[t]||0)+1; });
+  return '<div class="banner warn">'+IC.swap+'<div style="flex:1"><b>'+w.length+' account'+(w.length===1?'':'s')+'</b> on '+esc(baseOf(PROJECT).n)+' '+(w.length===1?'is':'are')+' for '+
+    Object.keys(to).map(function(t){ return esc(baseOf(t).n)+' models ('+to[t]+')'; }).join(', ')+' — '+(w.length===1?'it was':'they were')+' filed under the wrong base.</div>'+
+    '<button class="btn sm dark" onclick="fixBases()">Move to the right base</button></div>';
+}
+async function fixBases(){
+  var w=(ALL[PROJECT]||ROWS).filter(function(r){ return !isDead(r) && wrongBase(r); }); if(!w.length) return;
+  if(!(await confirmBox('Move '+w.length+' account(s) to the right base?', w.slice(0,12).map(function(r){ return esc(r.handle)+' ('+esc(r.model)+') → '+esc(baseOf(wrongBase(r)).n); }).join('<br>')+(w.length>12?'<br>…':''), 'Move them'))) return;
+  var ok=0, fail=0; toast('Moving '+w.length+'…');
+  for(var i=0;i<w.length;i+=5){ await Promise.all(w.slice(i,i+5).map(async function(r){ try{ var d=await upd(r.id,{ project:wrongBase(r) }); if(d&&d.ok) ok++; else fail++; }catch(e){ fail++; } })); }
+  toast(ok+' moved'+(fail?' · '+fail+' failed (deploy rc-2026-10-04g?)':'')); ALL_AT=0; EVENTS_AT=0; await loadAll(true); load();
+}
 function phoneList(activeOnly){ return (CFG.phones||[]).filter(function(p){ return p && p.label && (!activeOnly || p.active!==false); }); }
 
 /* ── network ── */
@@ -722,14 +776,15 @@ function paintTop(){
 }
 function tabsFor(){
   var t=[['today','Today'],['accounts','Accounts']];
-  if(isAdmin()) t=t.concat([['pipeline','Pipeline'],['insights','Insights'],['coverage','Coverage'],['settings','Settings']]);
+  if(isAdmin()) t=t.concat([['pipeline','Pipeline'],['insights','Insights'],['health','Health check'],['coverage','Coverage'],['settings','Settings']]);
   return t;
 }
 function paintTabs(){
   var h=$('tabs'); if(!h) return;
   var unc=(OFF&&OFF.uncovered)||0;
   h.innerHTML=tabsFor().map(function(t){
-    return '<button class="'+(VIEW===t[0]?'on':'')+'" onclick="go(\''+t[0]+'\')">'+t[1]+(t[0]==='coverage'&&unc?' <span class="badge">'+unc+'</span>':'')+'</button>';
+    var hp=(t[0]==='health' && typeof hcProblems==='function')?hcProblems().length:0;
+    return '<button class="'+(VIEW===t[0]?'on':'')+'" onclick="go(\''+t[0]+'\')">'+t[1]+(t[0]==='coverage'&&unc?' <span class="badge">'+unc+'</span>':'')+(hp?' <span class="badge">'+hp+'</span>':'')+'</button>';
   }).join('');
 }
 function go(v){
@@ -745,6 +800,27 @@ function setBase(id){
   if(isAdmin() && ALL[id]) ROWS=ALL[id];
   paintTop(); renderView(); load();
 }
+var _lastView='', _movedId='';
+function flipRows(v, before){
+  var moved=_movedId; _movedId='';
+  var els=v.querySelectorAll('[data-rid]'); if(!els.length || els.length>600) return;
+  var anim=[];
+  els.forEach(function(el){
+    var id=el.getAttribute('data-rid'), old=before[id]; if(old==null) return;
+    var nb=el.getBoundingClientRect(), dy=old.t-nb.top, dx=old.l-nb.left; if(Math.abs(dy)<2 && Math.abs(dx)<2) return;
+    el.style.transition='none'; el.style.transform='translate('+dx+'px,'+dy+'px)'; if(id===moved){ el.style.position='relative'; el.style.zIndex='6'; }
+    anim.push(el);
+  });
+  if(anim.length){ void v.offsetHeight;
+    requestAnimationFrame(function(){ anim.forEach(function(el){ el.style.transition='transform .6s cubic-bezier(.2,.8,.2,1)'; el.style.transform=''; });
+      setTimeout(function(){ anim.forEach(function(el){ el.style.transition=''; el.style.zIndex=''; }); }, 650); });
+  }
+  if(moved){
+    var m=v.querySelector('[data-rid="'+moved+'"]');
+    if(m){ m.classList.add('moved');
+      setTimeout(function(){ var b=m.getBoundingClientRect(); if(b.top<90 || b.bottom>window.innerHeight) m.scrollIntoView({ behavior:'smooth', block:'center' }); }, 620); }
+  }
+}
 function renderView(){
   var v=$('view'); if(!v || !USER) return;
   var html='';
@@ -754,12 +830,19 @@ function renderView(){
     else if(VIEW==='pipeline') html=vPipeline();
     else if(VIEW==='insights') html=vInsights();
     else if(VIEW==='coverage') html=vCoverage();
+    else if(VIEW==='health') html=vHealth();
     else if(VIEW==='settings') html=vSettings();
   }catch(e){ html='<div class="card empty">Something went wrong drawing this view: '+esc(e&&e.message)+'</div>'; console.error(e); }
   var keep=document.activeElement && document.activeElement.id;
   var pos=keep && document.activeElement.selectionStart;
-  v.innerHTML='<div class="view">'+html+'</div>';
+  /* FLIP: remember where every account row was, redraw, then slide each row from its old spot to
+     its new one — a stage change visibly carries the row into its new group, like Airtable. */
+  var before={}, fresh=(VIEW!==_lastView);
+  if(!fresh){ try{ v.querySelectorAll('[data-rid]').forEach(function(el){ var b=el.getBoundingClientRect(); before[el.getAttribute('data-rid')]={ t:b.top, l:b.left }; }); }catch(_f){} }
+  v.innerHTML='<div class="view'+(fresh?' vin':'')+'">'+html+'</div>';
+  _lastView=VIEW;
   if(keep && $(keep)){ var el=$(keep); el.focus(); try{ if(pos!=null) el.setSelectionRange(pos,pos); }catch(_s){} }
+  try{ flipRows(v, before); }catch(_f){}
   if(VIEW==='insights') try{ afterInsights(); }catch(e){}
 }
 function start(){
@@ -772,7 +855,7 @@ function start(){
   paintTop(); paintCached();
   if(!ROWS.length) $('view').innerHTML='<div class="grid"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>';
   loadNames(); loadCfg().then(renderView); load(); loadAll(); smartPoll();
-  if(isAdmin()) loadOff();
+  if(isAdmin()){ loadOff(); loadHealth(); }
   if(VIEW==='insights') loadAll().then(loadEvents).then(renderView);
 }
 
@@ -801,7 +884,7 @@ function askNumber(title, body, cur){
 }
 
 /* ═══════════ TODAY — the work board ═══════════ */
-var TD={ grp:'all', q:'', va:'mine', m:'all', by:'method' };
+var TD={ grp:'all', q:'', va:'mine', m:'all', by:'stage' };   // stage by default — the method is on every card
 /* Session-unit counting, unchanged from v2: every workable account = 2 sessions per shift
    (Warming → Super Strong, incl. Recovery). A fresh creation adds 1 to the target the moment it
    is logged and counts when its setup is finished. Banned / temp-banned mid-shift keep the
@@ -865,6 +948,8 @@ function vToday(){
     if(gk.length) h+='<div class="banner bad">'+IC.swap+'<div style="flex:1"><b>'+gk.map(function(k){ return esc(vaName(k)); }).join(', ')+'</b> '+(gk.length===1?'is':'are')+' deactivated in the admin console but still '+(gk.length===1?'owns':'own')+' <b>'+gk.reduce(function(s,k){ return s+gh[k].length; },0)+' live account'+(gk.reduce(function(s,k){ return s+gh[k].length; },0)===1?'':'s')+'</b> on '+esc(baseOf(PROJECT).n)+'. Move them to an active VA.</div>'+
       gk.map(function(k){ return '<button class="btn sm dark" onclick="xferOpen(\''+jsq(k)+'\')">Move '+esc(firstName(k))+'\'s '+gh[k].length+'</button>'; }).join('')+'</div>';
   }
+  if(admin) h+=wrongBaseBanner(ALL[PROJECT]||ROWS);
+  if(admin) h+=hcBanner();
   var covering=mineWork.filter(function(r){ return owner(r)!==me; });
   if(covering.length){
     var whose={}; covering.forEach(function(r){ var o=owner(r); whose[o]=(whose[o]||0)+1; });
@@ -927,7 +1012,7 @@ function vToday(){
     '<button class="chip '+(TD.m==='all'?'sel':'')+'" onclick="TD.m=\'all\';renderView()">All</button>'+
     mkeys.map(function(m){ var c=methodColor(m); return '<button class="chip '+(TD.m===m?'sel':'')+'" onclick="TD.m=\''+jsq(m)+'\';renderView()"><i style="background:'+c+'"></i>'+esc(m)+' '+(mcount[m]||0)+'</button>'; }).join('')+
     (mcount['']?'<button class="chip '+(TD.m===''?'sel':'')+'" onclick="TD.m=\'\';renderView()" style="'+(TD.m===''?'':'color:#b45309')+'">Not tagged '+mcount['']+'</button>':'')+
-    '</div><div class="sp"></div><div class="seg" style="width:auto"><button class="'+(TD.by==='method'?'on':'')+'" onclick="TD.by=\'method\';renderView()">Group by method</button><button class="'+(TD.by==='stage'?'on':'')+'" onclick="TD.by=\'stage\';renderView()">Group by stage</button></div></div>';
+    '</div><div class="sp"></div><div class="seg" style="width:auto"><button class="'+(TD.by==='stage'?'on':'')+'" onclick="TD.by=\'stage\';renderView()">Group by stage</button><button class="'+(TD.by==='method'?'on':'')+'" onclick="TD.by=\'method\';renderView()">Group by method</button></div></div>';
 
   var rows=board.filter(function(r){
     if(TD.m!=='all' && methodOf(r)!==TD.m) return false;
@@ -941,16 +1026,67 @@ function vToday(){
   if(!rows.length) return h+'<div class="card empty">Nothing matches this filter.</div>';
   var mOrd=function(r){ var m=methodOf(r); var i=mkeys.indexOf(m); return m?(i<0?50:i):99; };
   rows.sort(function(a,b){ return (TD.by==='method'?(mOrd(a)-mOrd(b)):0) || stageOrd(a.status)-stageOrd(b.status) || (isHeld(a)-isHeld(b)) || daysIn(b)-daysIn(a) || String(a.handle).localeCompare(String(b.handle)); });
-  var out=[], last='';
+  var out=[], last=null;
   rows.forEach(function(r){
     var key, label, col, n;
     if(TD.by==='method'){ key=methodOf(r); label=key||'Not tagged yet — set the method'; col=methodColor(key); n=rows.filter(function(x){ return methodOf(x)===key; }).length; }
     else { var sm=stageMeta(r.status); key=sm.n; label=sm.n; col=sm.c; n=rows.filter(function(x){ return stageMeta(x.status).n===key; }).length; }
-    if(key!==last || !out.length){
-      out.push('</div><div class="sec-h"><i style="width:10px;height:10px;border-radius:50%;background:'+col+'"></i><b>'+esc(label)+'</b><span>'+n+'</span><hr></div><div class="grid">'); last=key; }
-    out.push(cardHtml(r));
+    if(key!==last){ out.push('<div class="lg" style="--gc:'+col+'"><i></i><b>'+esc(label)+'</b><span>'+n+'</span></div>'); last=key; }
+    out.push(rowHtml(r));
   });
-  return h+'<div class="grid">'+out.join('')+'</div>';
+  var head='<div class="lh"><div>Account</div><div>Stage</div><div>Method</div><div>'+(admin?'VA':'Model')+'</div><div>Age</div><div>Progress</div><div>Today</div><div></div></div>';
+  return h+'<div class="lt">'+head+out.join('')+'</div>';
+}
+/* One account = one row (Airtable-style). Same logic as the old tile, laid out in columns:
+   account · stage · method · VA/model · age · progress/status · today's actions · menu. */
+function rowHtml(r){
+  var st=r.status, sm=stageMeta(st), p=phase(st), held=isHeld(r), m=M(r), id=jsq(r.id), admin=isAdmin();
+  var age=ageDays(r), din=daysIn(r);
+  var cv=coverOf(r), me=myId(), ow=owner(r);
+  var tag=cv==='__hold__'?' · <span style="color:#075985">on hold today</span>':(cv?' · <span style="color:#9a3412">'+esc(cv===me?('covering for '+firstName(ow)):(ow===me?('with '+firstName(cv)+' today'):(firstName(ow)+' → '+firstName(cv))))+'</span>':'');
+  var sub=[r.model, r.device, r.niche].filter(Boolean).map(esc).join(' · ');
+  var prog='', act='';
+  if(st==='new'){
+    var ok3=!!(m.setup||{}).cred;
+    if(m.cdone) prog='<span class="note g">'+IC.check+' Counted · to Creation tomorrow</span>';
+    else { prog='<span class="note w">Save email + password, then count it</span>';
+      act=setupBtn(r,'cred','Email + password saved')+'<button class="ses up" '+(ok3?'onclick="finishCreation(\''+id+'\',this)"':'disabled title="Tick Email + password saved first"')+'>'+IC.check+' Mark created (+1)</button>'; }
+  } else if(st==='creation'||st==='creationstandby'){
+    var ready=din>=4;
+    prog='<div class="gate"><b style="color:'+(ready?'#047857':'var(--ink2)')+'">Day '+Math.min(din+1,4)+'/4'+(ready?' · ready ✓':'')+'</b><div class="prog"><i style="width:'+Math.min(100,(din+1)/4*100)+'%"></i></div></div>';
+    act=ready?'<button class="ses up" onclick="promote(\''+id+'\',\'warming\')">'+IC.up+' Move to Warming</button>':'<span class="muted" style="font-size:11px">Standby — no sessions</span>';
+  } else if(st==='tempban'){
+    prog='<span class="note w">Temp ban — check daily</span>';
+    act='<button class="ses ok2" onclick="liftBack(\''+id+'\')">'+IC.check+' Lifted → '+esc(stageMeta(m.prev||'warming').n)+'</button>';
+  } else if(st==='banned'){
+    var e=endedAt(r);
+    prog='<span class="note b" title="'+esc(r.end_reason||'')+'">'+IC.ban+' Banned'+(e?' '+esc(fmtD(e)):'')+(r.end_reason?' · '+esc(String(r.end_reason).split(':')[0]):'')+'</span>';
+  } else if(st==='recovery'){
+    prog='<span class="note i" title="10 min active browsing · upvote 2–4 posts · reply to 2–3 comments. No posting until clear.">Recovery — browse, upvote, reply only</span>';
+    act=held?'':sesBtn(r,1)+sesBtn(r,2)+'<button class="ses ok2" onclick="liftBack(\''+id+'\')">'+IC.check+' Cleared</button>';
+  } else if(p){
+    var ix=phaseIx(st), next=PH[ix+1], km=karmaOf(r), can=true;
+    if(p.dur){ can=din>=p.dur; prog='<div class="gate" title="'+esc(p.plan)+'"><b style="color:'+(can?'#047857':'var(--ink2)')+'">Day '+Math.min(din+1,p.dur)+'/'+p.dur+(can?' · ready ✓':'')+'</b><div class="prog"><i style="width:'+Math.min(100,(din+1)/p.dur*100)+'%"></i></div></div>'; }
+    else if(p.karma){ var kk=km||0; can=kk>=p.karma; var stuck=!can&&din>=p.maxDur;
+      prog='<div class="gate" title="'+esc(p.plan)+'"><b style="color:'+(can?'#047857':(stuck?'#b91c1c':'var(--ink2)'))+'">'+kk+'/'+p.karma+' karma'+(can?' ✓':(stuck?' · 7d+':''))+'</b><div class="prog"><i style="width:'+Math.min(100,kk/p.karma*100)+'%"></i></div></div>'; }
+    else prog='<span class="muted" title="'+esc(p.plan)+'" style="font-size:11.5px;font-weight:600">'+din+'d in stage'+(km!=null?' · '+km+' karma':'')+' · <u style="text-decoration-style:dotted;cursor:help">plan</u></span>';
+    if(!held){
+      act=(p.task?sesBtn(r,1)+sesBtn(r,2):'')+
+        (p.dms?'<button class="ses dm" onclick="dmsDone(\''+id+'\')">'+IC.mail+' DMs'+(markOkAny(m.dm,worksFor(r),owner(r))?' ✓':'')+'</button>':'')+
+        (p.karma&&!can?'<button class="ses" onclick="setKarma(\''+id+'\')">'+IC.star+' Karma</button>':'')+
+        (next&&can?'<button class="ses up" onclick="promote(\''+id+'\',\''+next.k+'\')" title="Promote to '+esc(next.n)+'">'+IC.up+' '+esc(next.n)+'</button>':'');
+    }
+  }
+  if(held){ prog='<span class="note i">'+IC.pause+' On hold today</span>'; act=''; }
+  return '<div class="lr'+(isDead(r)?' dim':'')+'" data-rid="'+esc(r.id)+'" style="--sc:'+sm.c+'">'+
+    '<div class="cell c-acc"><div class="an" onclick="openRec(\''+id+'\')" title="Open record">'+esc(r.handle)+'</div><div class="sub"><span class="msub" style="color:'+methodColor(methodOf(r))+';font-weight:800">'+esc(methodOf(r)||'no method')+' · </span>'+(sub||'<span style="opacity:.6">—</span>')+tag+'</div></div>'+
+    '<div class="cell c-stg">'+stageSelect(r)+'</div>'+
+    '<div class="cell c-meth">'+(methodOf(r)?methodPill(methodOf(r),true):'<span class="chip" style="background:#fff8eb;color:#92400e;cursor:pointer;font-size:10.5px" onclick="editRec(\''+id+'\')">set method</span>')+'</div>'+
+    '<div class="cell c-va">'+(admin?esc(firstName(ow)):esc(r.model||'—'))+'</div>'+
+    '<div class="cell c-age num" title="'+esc(createdAt(r)?'Created '+fmtDT(createdAt(r)):'')+'">'+(age!=null?age+'d':'—')+'</div>'+
+    '<div class="cell c-prog">'+prog+'</div>'+
+    '<div class="cell c-act"><div class="acts">'+act+'</div></div>'+
+    '<div class="cell c-menu">'+menuHtml(r)+'</div></div>';
 }
 function kpi(l,v,s,c){ return '<div class="card kpi"><span class="k-bar" style="background:'+c+'"></span><div class="k-l">'+esc(l)+'</div><div class="k-v">'+v+'</div><div class="k-s">'+esc(s)+'</div></div>'; }
 function vaOptions(sel, withMine){
@@ -1023,12 +1159,12 @@ function cardHtml(r){
   var head='<div class="hd"><div class="hn" onclick="openRec(\''+jsq(r.id)+'\')" title="Open record">'+esc(r.handle)+'</div>'+stageSelect(r)+menuHtml(r)+'</div>';
   var body='';
   if(st==='new'){
-    var su=m.setup||{}, ok3=su.cred&&su.avatar&&su.bio;
+    var su=m.setup||{}, ok3=!!su.cred;   // only the credentials step — avatar/bio are NOT part of creation (owner, Oct 4)
     body=m.cdone
       ? '<div class="note g">'+IC.check+' Setup finished · counted as +1 creation. Moves to Creation standby tomorrow.</div>'
-      : '<div class="note w">Finish the SOP setup to count this creation.</div>'+
-        '<div class="acts">'+setupBtn(r,'cred','Email + password saved')+setupBtn(r,'avatar','Avatar set')+setupBtn(r,'bio','Bio written')+'</div>'+
-        '<div class="acts"><button class="ses up" '+(ok3?'onclick="finishCreation(\''+jsq(r.id)+'\',this)"':'disabled title="Tick all three first"')+'>'+IC.check+' Mark created (+1)</button></div>';
+      : '<div class="note w">Save the email and password in the credential store, then count this creation.</div>'+
+        '<div class="acts">'+setupBtn(r,'cred','Email + password saved')+
+        '<button class="ses up" '+(ok3?'onclick="finishCreation(\''+jsq(r.id)+'\',this)"':'disabled title="Tick Email + password saved first"')+'>'+IC.check+' Mark created (+1)</button></div>';
   } else if(st==='creation'||st==='creationstandby'){
     var din=daysIn(r), ready=din>=4, nBan=ROWS.filter(isDead).length;
     body='<div class="gate"><b style="color:'+(ready?'#047857':'var(--ink2)')+'">Day '+Math.min(din+1,4)+'/4'+(ready?' · ready ✓':'')+'</b><div class="prog"><i style="width:'+Math.min(100,(din+1)/4*100)+'%"></i></div></div>'+
@@ -1117,18 +1253,23 @@ async function setKarma(id){
   if(await saveMeta(r,{ karma:v, mday:today() })){ toast('Karma '+v+(v>=50&&r.status==='comment'?' — 50 reached, NSFW unlocked!':'')); renderView(); }
 }
 async function moveTo(r, next, extra, msg){
-  var prev=r.status;
-  var d=await upd(r.id, Object.assign({ status:next }, extra||{}));
-  if(d && d.ok){
-    r.status=next; r.stage_at=phtStamp();
-    if(extra && extra.meta){ try{ r.meta=JSON.parse(extra.meta); }catch(e){} }
-    if(next==='banned'){ r.ended_at=phtStamp(); r.end_reason=(extra&&extra.end_reason)||''; }
-    if(prev==='banned' && next!=='banned'){ r.ended_at=''; r.end_reason=''; }
-    EVENTS_AT=0; toast(msg||('Moved to '+stageMeta(next).n)); renderView(); setTimeout(load, 1500);
-    if($('drawer').classList.contains('on') && $('drawer').getAttribute('data-id')===r.id) openRec(r.id);
-    return true;
-  }
-  toast('Could not update: '+((d&&d.error)||'unknown')); renderView(); return false;
+  /* Optimistic: the row moves to its new stage at once (and glides there — see flipRows); the save
+     runs behind it. If the server refuses, the row moves back and says why. */
+  var prev={ status:r.status, stage_at:r.stage_at, meta:r.meta, ended_at:r.ended_at, end_reason:r.end_reason };
+  var patch={ status:next, stage_at:phtStamp() };
+  if(extra && extra.meta){ try{ patch.meta=JSON.parse(extra.meta); }catch(e){} }
+  if(next==='banned'){ patch.ended_at=phtStamp(); patch.end_reason=(extra&&extra.end_reason)||''; }
+  if(prev.status==='banned' && next!=='banned'){ patch.ended_at=''; patch.end_reason=''; }
+  patchLocal(r.id, patch); for(var k in patch) r[k]=patch[k];
+  _movedId=r.id; renderView();
+  var drawerOn=$('drawer').classList.contains('on') && $('drawer').getAttribute('data-id')===r.id;
+  if(drawerOn) openRec(r.id);
+  var d=null; try{ d=await upd(r.id, Object.assign({ status:next }, extra||{})); }catch(e){ d=null; }
+  if(d && d.ok){ EVENTS_AT=0; toast(msg||('Moved to '+stageMeta(next).n)); setTimeout(load, 1500); return true; }
+  patchLocal(r.id, prev); for(var k2 in prev) r[k2]=prev[k2];
+  _movedId=r.id; renderView(); if(drawerOn) openRec(r.id);
+  toast('Could not save — moved back. '+((d&&d.error)||'Connection error'));
+  return false;
 }
 async function changeStage(id, sel){
   var r=rowById(id); if(!r) return; var next=sel.value, prev=sel.getAttribute('data-prev');
@@ -1137,7 +1278,6 @@ async function changeStage(id, sel){
   if(next==='tempban'||next==='recovery'){ sel.value=prev; return next==='tempban'?toTempBan(id):toRecovery(id); }
   var extra={};
   if(phase(next)){ extra.meta=JSON.stringify(Object.assign({}, M(r), { pstart:today() })); }
-  sel.disabled=true;
   await moveTo(r, next, extra);
 }
 async function promote(id, nextk){
@@ -1213,10 +1353,7 @@ function newAccount(){
       '<div class="fld"><label>Company email</label><input class="inp" id="na-e" placeholder="model01@jmbvirtuals.com"><div class="hint">Password goes in the credential store — never here.</div></div></div>'+
       '<div id="na-seed" style="display:none"><div class="f2"><div class="fld"><label>Created on</label><input class="inp" type="date" id="na-cd" value="'+today()+'"></div>'+
         '<div class="fld"><label>Current stage</label><select class="sel" id="na-st">'+ORDER.filter(function(k){ return k!=='new'&&k!=='creationstandby'&&k!=='banned'; }).map(function(k){ return '<option value="'+k+'">'+esc(stageMeta(k).n)+'</option>'; }).join('')+'</select></div></div></div>'+
-      '<div id="na-chk"><div class="lbl" style="margin:4px 0 7px">SOP setup — tick what\'s done (all three counts the creation now)</div>'+
-        '<label class="chk"><input type="checkbox" id="na-c1"> Email and password saved in the credential store</label>'+
-        '<label class="chk"><input type="checkbox" id="na-c2"> Avatar set</label>'+
-        '<label class="chk"><input type="checkbox" id="na-c3"> Bio written — unique, not copy-pasted</label></div>'+
+      '<div id="na-chk"><label class="chk"><input type="checkbox" id="na-c1" checked> Email and password saved in the credential store — counts the creation now</label></div>'+
       '<div class="hint" style="margin-top:6px">Stamped as '+esc(fmtDT(parseTs(phtStamp())))+' PHT · logged by '+esc(vaName(myId()))+(isAdmin()?'':'')+'</div>'+
     '</div>'+
     '<div class="md-f"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn pri" id="na-go" onclick="naSave()">'+IC.plus+' Save account</button></div>');
@@ -1236,8 +1373,8 @@ async function naSave(){
   if(email && !/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(email)){ toast('Check the email address.'); return; }
   var st='new', cd=today(), ctime=phtStamp().slice(11,16), setup={};
   if(NA.seed){ st=$('na-st').value||'creation'; cd=$('na-cd').value||today(); ctime=''; }
-  else setup={ cred:$('na-c1').checked, avatar:$('na-c2').checked, bio:$('na-c3').checked };
-  var full=!NA.seed && setup.cred && setup.avatar && setup.bio;
+  else setup={ cred:$('na-c1').checked };
+  var full=!NA.seed && setup.cred;
   var meta={ cdate:cd, pstart:(st==='new'||st==='creation')?cd:today(), added:vaKeyOf(USER.id) };
   if(ctime) meta.ctime=ctime;
   if(!NA.seed){ meta.setup=setup; if(full){ meta.cdone=1; meta.cstamp=vaKeyOf(USER.id); meta.cdoneAt=phtStamp(); } }
@@ -1247,7 +1384,7 @@ async function naSave(){
     if(d && d.ok){
       if(full) await bump('Reddit Account Creation',1);
       closeModal();
-      toast(full?'Saved · +1 Reddit Account Creation counted':(NA.seed?'Saved → '+stageMeta(st).n:'Saved to Newly created — finish the setup ticks to count it'));
+      toast(full?'Saved · +1 Reddit Account Creation counted':(NA.seed?'Saved → '+stageMeta(st).n:'Saved to Newly created — tick Email + password saved to count it'));
       if(model && !modelsFor(PROJECT).some(function(x){ return x.toLowerCase()===model.toLowerCase(); })){ (CFG.models[PROJECT]=CFG.models[PROJECT]||[]).push(model); }
       load();
     } else {
@@ -1259,7 +1396,7 @@ async function naSave(){
 }
 
 /* ═══════════ ACCOUNTS — the database (Airtable-style grid) ═══════════ */
-var DB={ q:'', life:'alive', grp:'', model:'', phone:'', va:'all', all:false, sort:'created', dir:-1, groupBy:'method', meth:'all' };
+var DB={ q:'', life:'alive', grp:'', model:'', phone:'', va:'all', all:false, sort:'created', dir:-1, groupBy:'stage', meth:'all' };   // stage by default (owner, Oct 4)
 var COLS=[
   {k:'handle',  n:'Account',     v:function(r){ return String(r.handle||'').toLowerCase(); }, h:function(r){ return esc(r.handle); }, c1:true},
   {k:'stage',   n:'Stage',       v:function(r){ return stageOrd(r.status); }, h:function(r){ var s=stageMeta(r.status); return '<span class="pill" style="background:'+s.c+'18;color:'+s.c+'"><i style="width:7px;height:7px;border-radius:50%;background:'+s.c+';display:inline-block"></i>'+esc(s.n)+'</span>'+(isHeld(r)?' <span class="chip" style="font-size:10px">hold</span>':''); }},
@@ -1322,7 +1459,7 @@ function vAccounts(){
     '<select class="sel" id="bulk-m">'+methodsList().map(function(m){ return '<option>'+esc(m)+'</option>'; }).join('')+'</select><button class="btn sm dark" onclick="bulkMethod()">Tag the '+untagged+' shown</button></div>';
   if(!rows.length) return h+'<div class="card empty">No records match.</div>';
   var th='<tr>'+cols.map(function(c){ return '<th class="'+(c.c1?'c1':'')+'" onclick="dbSort(\''+c.k+'\')">'+esc(c.n)+(DB.sort===c.k?'<span class="ar">'+(DB.dir>0?'▲':'▼')+'</span>':'')+'</th>'; }).join('')+'</tr>';
-  function tr(r){ return '<tr class="r'+(isDead(r)?' dead':'')+'" onclick="openRec(\''+jsq(r.id)+'\')">'+cols.map(function(c){ return '<td class="'+(c.c1?'c1':'')+(c.num?' num':'')+'">'+c.h(r)+'</td>'; }).join('')+'</tr>'; }
+  function tr(r){ return '<tr class="r'+(isDead(r)?' dead':'')+'" data-rid="'+esc(r.id)+'" onclick="openRec(\''+jsq(r.id)+'\')">'+cols.map(function(c){ return '<td class="'+(c.c1?'c1':'')+(c.num?' num':'')+'">'+c.h(r)+'</td>'; }).join('')+'</tr>'; }
   var body='';
   if(DB.groupBy){
     var gf={ method:function(r){ return methodOf(r)||'Not tagged'; }, stage:function(r){ return stageMeta(r.status).n; }, model:function(r){ return r.model||'(no model)'; }, device:function(r){ return r.device||'(phone not recorded)'; },
@@ -1463,7 +1600,7 @@ async function bulkMethod(){
         The fastest method through each progression stage is marked green, the slowest amber.
      2. The pipelines — one swimlane per method with the same stage columns lined up underneath each
         other, so the three flows can be read against each other card by card. */
-var PL={ all:true, meth:'all' };
+var PL={ all:false, meth:'all' };   // follows the Altz / Casey switcher; 'All bases' is opt-in
 var PL_PROGRESS=['warming','comment','nsfw','day1','early','earlydm','medium','recovery','tempban'];   // shorter = better
 function plStageRows(rows, k){
   var list=rows.filter(function(r){ return r.status===k || (k==='creation'&&r.status==='creationstandby'); });
@@ -1503,7 +1640,7 @@ function vPipeline(){
   });
 
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Pipeline <span class="gtxt">by method</span></h2><p>Same ladder, three approaches — stages down the side, methods across the top, like an Airtable board.</p></div>'+
-    '<div class="seg" style="width:auto"><button class="'+(PL.all?'on':'')+'" onclick="PL.all=true;renderView()">All bases</button><button class="'+(!PL.all?'on':'')+'" onclick="PL.all=false;renderView()">'+esc(baseOf(PROJECT).n)+' only</button></div></div>';
+    '<div class="seg" style="width:auto"><button class="'+(!PL.all?'on':'')+'" onclick="PL.all=false;renderView()">'+esc(baseOf(PROJECT).n)+' only</button><button class="'+(PL.all?'on':'')+'" onclick="PL.all=true;renderView()">All bases</button></div></div>';
 
   // method summary cards
   h+='<div class="row" style="gap:12px;align-items:stretch;margin-bottom:6px">'+lanes.map(function(m){
@@ -1517,6 +1654,7 @@ function vPipeline(){
         '<div><div class="lbl">Reached posting</div><div class="h-d" style="font-size:21px;font-weight:800">'+(s.post==null?'—':Math.round(s.post*100)+'%')+'</div></div>'+
       '</div></div>';
   }).join('')+'</div>';
+  h+=wrongBaseBanner(ALL[PROJECT]||ROWS);
   if(untagged.length) h+='<div class="banner warn" style="margin-top:8px">'+IC.tag+'<div style="flex:1"><b>'+untagged.length+'</b> account'+(untagged.length===1?' has':'s have')+' no method yet, so '+(untagged.length===1?'it sits':'they sit')+' in the grey "Not tagged" lane.</div><button class="btn sm dark" onclick="DB.meth=\'\';DB.all=true;DB.life=\'alive\';DB.va=\'all\';go(\'accounts\')">Tag them</button></div>';
 
   // THE BOARD — Airtable-style: stages down the side, methods across the top, accounts in the cells.
@@ -1538,7 +1676,7 @@ function vPipeline(){
         (n?'<div class="sl-ct"><b>'+n+'</b><span>'+Math.round(n/base*100)+'%</span>'+(a!=null&&k!=='banned'?'<span>· avg '+a+'d</span>':'')+
             (mk==='fast'?'<span class="flag g" title="Fastest method through this stage">fast</span>':(mk==='slow'?'<span class="flag a" title="Slowest method through this stage">slow</span>':''))+'</div>'+
            '<div class="pb-cards">'+l.slice(0,40).map(function(r){ var st=stageSince(r);
-             return '<div class="kc" onclick="openRec(\''+jsq(r.id)+'\')" title="'+esc((r.model||'—')+' · '+vaName(owner(r))+(PL.all?' · '+baseOf(r.project).n:''))+'"><b>'+esc(r.handle)+'</b><div style="display:flex;justify-content:space-between;gap:4px"><small>'+esc(firstName(owner(r)))+'</small><small style="font-weight:800;color:var(--ink2)">'+(st?dayDiff(st)+'d':'')+'</small></div></div>'; }).join('')+'</div>'+
+             return '<div class="kc" data-rid="'+esc(r.id)+'" onclick="openRec(\''+jsq(r.id)+'\')" title="'+esc((r.model||'—')+' · '+vaName(owner(r))+(PL.all?' · '+baseOf(r.project).n:''))+'"><b>'+esc(r.handle)+'</b><div style="display:flex;justify-content:space-between;gap:4px"><small>'+esc(firstName(owner(r)))+'</small><small style="font-weight:800;color:var(--ink2)">'+(st?dayDiff(st)+'d':'')+'</small></div></div>'; }).join('')+'</div>'+
            (n>40?'<div class="muted" style="font-size:11px;text-align:center;padding:4px">+'+(n-40)+' more</div>':'')
          :'<div class="sl-ct" style="color:var(--ink4)">·</div>')+
       '</div>';
@@ -1819,6 +1957,126 @@ function cohorts(D){
     '<p class="muted" style="font-size:11.5px;margin-top:8px">The iPhone process started '+esc(fmtD(parseTs(CFG.process_start||SOP_START)))+' — give it two to three weeks before reading much into the comparison.</p>';
 }
 
+/* ═══════════ HEALTH CHECK — owner only ═══════════
+   Asks Reddit whether every account the board calls active is really alive. Catches the account a
+   VA keeps "working" after it was suspended. Runs every day at 8:00 AM PHT (Apps Script trigger)
+   and on demand here. Nothing is changed automatically — the owner marks bans from this list. */
+var HC=null, HCRUN=null, HCF='problems', _hcLoading=false;
+var HC_LBL={ ok:['Alive on Reddit','#10b981'], suspended:['Suspended','#ef4444'], notfound:['Not found','#f97316'], error:["Couldn't check",'#94a3b8'] };
+async function loadHealth(force){
+  if(!isAdmin() || _hcLoading) return; if(HC && !force) return;
+  _hcLoading=true;
+  try{ var d=await jget(API+'?'+qs({ action:'rc_health_get', by:USER.id })+'&_='+Date.now(), 0); HC=(d&&d.ok)?d:{ error:(d&&d.error)||'unknown', rows:[], last:{} }; }
+  catch(e){ HC={ error:'connection', rows:[], last:{} }; }
+  _hcLoading=false; paintTabs(); if(VIEW==='health'||VIEW==='today') renderView();
+}
+function hcProblems(){
+  if(!HC || !HC.rows) return [];
+  return HC.rows.filter(function(x){ if(x.result!=='suspended' && x.result!=='notfound') return false; var r=rowById(x.account_id); return !r || !isDead(r); });
+}
+function hcBanner(){
+  if(!isAdmin() || !HC || !HC.last || !HC.last.run) return '';
+  var p=hcProblems(); if(!p.length) return '';
+  return '<div class="banner bad">'+IC.ban+'<div style="flex:1"><b>Health check '+esc(fmtDT(parseTs(HC.last.at)))+':</b> '+p.length+' account'+(p.length===1?' the board calls active is':'s the board calls active are')+' suspended or missing on Reddit.</div><button class="btn sm dark" onclick="go(\'health\')">Review</button></div>';
+}
+function vHealth(){
+  if(!isAdmin()) return '<div class="card empty">Owner only.</div>';
+  if(HC===null){ loadHealth(); return '<div class="card empty">Loading the last health check…</div>'; }
+  var L=HC.last||{}, c=L.counts||{};
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Account <span class="gtxt">health check</span></h2><p>Asks Reddit whether every account marked active is really alive — catches accounts that were banned but never tagged. Runs every day at 8:00 AM PHT; you can also run it now.</p></div>'+
+    '<button class="btn pri" '+(HCRUN||!HC.keys?'disabled title="Needs approved Reddit API keys"':'onclick="hcRun()"')+'>'+IC.search+(HCRUN?' Checking…':' Run now')+'</button></div>';
+  if(HC.error) h+='<div class="banner bad">'+IC.x+'<div>Could not load: '+esc(HC.error)+' — is the backend on rc-2026-10-04h?</div></div>';
+  if(!HC.keys) h+='<div class="banner info">'+IC.doc+'<div style="flex:1"><b>The automatic check needs approved Reddit API access.</b> Reddit\'s Responsible Builder Policy requires you to request access and be approved before any API use, so the tool does not contact Reddit until approved keys are in place. Once approved, add <code>REDDIT_CLIENT_ID</code> and <code>REDDIT_CLIENT_SECRET</code> in the Reddit Central Apps Script → Project Settings → Script properties (you type them yourself). Until then, use the <b>manual sweep</b> below.</div></div>';
+  if(!HC.scheduled) h+='<div class="banner warn">'+IC.hour+'<div style="flex:1"><b>The daily 8:00 AM run is not installed.</b> In the Reddit Central Apps Script editor, pick <code>RUN_InstallHealthCheck</code> and press Run once (allow the permissions).</div></div>';
+  if(HCRUN){
+    var pc=HCRUN.total?Math.round(HCRUN.done/HCRUN.total*100):0;
+    h+='<div class="card pad" style="margin-bottom:12px"><div class="row"><b>Checking '+HCRUN.done+' / '+(HCRUN.total||'…')+'</b><span class="muted" style="font-size:12px">keeps going while this tab is open</span></div><div class="prog" style="margin-top:8px;height:10px"><i style="width:'+pc+'%"></i></div></div>';
+  }
+  if(!HC.keys) return h+manualSweep();
+  if(!L.run){ return h+'<div class="card empty">No check has run yet. Press <b>Run now</b>.</div>'; }
+  h+='<div class="kpis">'+kpi('Checked',L.total||0,esc(fmtDT(parseTs(L.at)))+(L.by==='8am-auto'?' · daily run':''),'#a855f7')+
+    kpi('Alive on Reddit',c.ok||0,'profile found, not suspended','#10b981')+kpi('Suspended',c.suspended||0,'Reddit says suspended','#ef4444')+
+    kpi('Not found',c.notfound||0,'deleted, renamed or hidden','#f97316')+kpi("Couldn't check",c.error||0,'rate-limited or blocked — run again','#94a3b8')+'</div>';
+  var rows=(HC.rows||[]).slice();
+  var prob=hcProblems();
+  var list=HCF==='problems'?prob:(HCF==='error'?rows.filter(function(x){ return x.result==='error'; }):rows);
+  h+='<div class="sec-h"><b>'+(HCF==='problems'?'Marked active in the tool, not alive on Reddit':(HCF==='error'?"Couldn't check":'Every account checked'))+'</b><span>'+list.length+'</span><hr>'+
+    '<div class="chips">'+[['problems','Problems '+prob.length],['error',"Couldn't check "+(c.error||0)],['all','All '+rows.length]].map(function(x){ return '<button class="chip '+(HCF===x[0]?'sel':'')+'" onclick="HCF=\''+x[0]+'\';renderView()">'+x[1]+'</button>'; }).join('')+'</div></div>';
+  if(HCF==='problems' && prob.length) h+='<div class="row" style="margin-bottom:10px"><div class="sp"></div><button class="btn sm dark" onclick="hcBanAll()">'+IC.ban+' Mark all '+prob.length+' as banned</button></div>';
+  if(!list.length) return h+'<div class="card empty">'+(HCF==='problems'?'Nothing to fix — every account marked active was found alive on Reddit (or already tagged).':'Nothing here.')+'</div>';
+  var day=String(L.at||'').slice(0,10);
+  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Account</th><th>Reddit says</th><th>Stage in tool</th><th>Method</th><th>Base</th><th>VA</th><th>Last session ticked</th><th>Karma on Reddit</th><th></th></tr></thead><tbody>'+
+    list.map(function(x){
+      var r=rowById(x.account_id), L2=HC_LBL[x.result]||[x.result,'#94a3b8'], lw=r?lastWorked(r):'';
+      var still=(x.result!=='ok' && x.result!=='error' && lw && lw>=day);
+      return '<tr><td class="c1"><a href="https://www.reddit.com/user/'+encodeURIComponent(x.handle)+'" target="_blank" rel="noopener" style="color:inherit">'+esc(x.handle)+' ↗</a></td>'+
+        '<td><span class="pill" style="background:'+L2[1]+'18;color:'+L2[1]+'">'+esc(L2[0])+'</span></td>'+
+        '<td>'+(r?'<span class="pill" style="background:'+stageMeta(r.status).c+'16;color:'+stageMeta(r.status).c+'">'+esc(stageMeta(r.status).n)+'</span>':'<span class="muted">not on board</span>')+'</td>'+
+        '<td>'+methodPill(r?methodOf(r):x.method,true)+'</td><td>'+esc(baseOf(x.project).n)+'</td><td>'+esc(vaName(r?owner(r):x.va))+'</td>'+
+        '<td>'+(lw?esc(fmtD(parseTs(lw))):'—')+(still?' <span class="flag r" title="Session ticked on or after the day Reddit showed it dead">still ticking</span>':'')+'</td>'+
+        '<td class="num">'+(x.karma!==''&&x.karma!=null?esc(x.karma):'—')+'</td>'+
+        '<td style="white-space:nowrap">'+(r && !isDead(r) && (x.result==='suspended'||x.result==='notfound')?'<button class="btn sm dark" onclick="hcBan(\''+jsq(x.account_id)+'\',\''+x.result+'\')">Mark banned</button> ':'')+(r?'<button class="btn sm sec" onclick="openRec(\''+jsq(x.account_id)+'\')">Record</button>':'')+'</td></tr>';
+    }).join('')+'</tbody></table></div>'+
+    '<p class="muted" style="font-size:11.5px;margin-top:8px">"Not found" can also mean the username in the tool has a typo — open the link before marking it banned. "Still ticking" = a session was logged for the account on or after the check day.</p>';
+  return h;
+}
+/* Manual sweep — no API: the owner opens each profile himself and records what he sees. */
+var MS={ n:60 };
+function manualSweep(){
+  var rows=(ALL[PROJECT]||ROWS).filter(function(r){ return !isDead(r); });
+  var td=today(), wk=addDays(td,-6);
+  rows.sort(function(a,b){ var x=String(M(a).hcok||''), y=String(M(b).hcok||''); return (x<y?-1:x>y?1:0) || String(a.handle).localeCompare(String(b.handle)); });
+  var stale=rows.filter(function(r){ return !M(r).hcok || String(M(r).hcok)<wk; }).length;
+  var h='<div class="sec-h"><b>Manual sweep · '+esc(baseOf(PROJECT).n)+'</b><span>'+stale+' of '+rows.length+' not checked in the last 7 days · least recently checked first</span><hr></div>'+
+    '<p class="muted" style="font-size:12px;margin:-4px 0 10px">Open the profile ↗, look at it, then press <b>Alive ✓</b> or <b>Banned on Reddit</b>. Each mark is saved on the account with your name and the date.</p>';
+  if(!rows.length) return h+'<div class="card empty">No active accounts on this base.</div>';
+  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Account</th><th>Stage</th><th>Method</th><th>VA</th><th>Last session</th><th>Last checked</th><th></th></tr></thead><tbody>'+
+    rows.slice(0,MS.n).map(function(r){
+      var m=M(r), lw=lastWorked(r), ck=String(m.hcok||''), sm=stageMeta(r.status);
+      return '<tr><td class="c1"><a href="https://www.reddit.com/user/'+encodeURIComponent(String(r.handle).replace(/^\/?u\//i,''))+'" target="_blank" rel="noopener" style="color:inherit">'+esc(r.handle)+' ↗</a></td>'+
+        '<td><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+'">'+esc(sm.n)+'</span></td><td>'+methodPill(methodOf(r),true)+'</td><td>'+esc(vaName(owner(r)))+'</td>'+
+        '<td>'+(lw?esc(fmtD(parseTs(lw))):'—')+'</td><td>'+(ck?esc(fmtD(parseTs(ck)))+(ck===td?' <span class="flag g">today</span>':''):'<span class="flag a">never</span>')+'</td>'+
+        '<td style="white-space:nowrap"><button class="btn sm sec" onclick="msAlive(\''+jsq(r.id)+'\')">Alive ✓</button> <button class="btn sm dark" onclick="banAcct(\''+jsq(r.id)+'\')">Banned on Reddit</button></td></tr>';
+    }).join('')+'</tbody></table></div>'+
+    (rows.length>MS.n?'<div class="row" style="justify-content:center;margin-top:10px"><button class="btn sm sec" onclick="MS.n+=60;renderView()">Show 60 more</button></div>':'');
+  return h;
+}
+async function msAlive(id){
+  var r=rowById(id); if(!r) return;
+  if(await saveMeta(r,{ hcok:today(), hcby:USER.id })){ toast(r.handle+' — alive ✓'); renderView(); } else toast('Could not save — try again.');
+}
+async function hcRun(){
+  if(HCRUN) return;
+  HCRUN={ done:0, total:0 }; renderView();
+  var run='', off=0, guard=0, d=null;
+  try{
+    while(guard++<200){
+      d=await api({ action:'rc_health_run', by:USER.id, run:run, offset:off, limit:40 });
+      if(!d || !d.ok){ toast(d&&d.error==='NO_API_ACCESS'?'The automatic check needs approved Reddit API keys — use the manual sweep for now.':'Check stopped: '+((d&&d.error)||'unknown')); break; }
+      run=d.run; HCRUN={ done:d.done, total:d.total }; if(VIEW==='health') renderView();
+      if(d.next===null || d.next===undefined) break;
+      off=d.next;
+    }
+  }catch(e){ toast('Connection lost — the check stopped. Run it again.'); }
+  HCRUN=null; await loadHealth(true);
+  if(d && d.ok && d.next==null){ var c=(d.summary&&d.summary.counts)||{}; toast('Done · '+(c.suspended||0)+' suspended · '+(c.notfound||0)+' not found · '+(c.error||0)+" couldn't check"); }
+}
+function hcReason(res){ return res==='suspended'?'Permanently suspended: found suspended by the health check':'Other: profile not found on Reddit (health check)'; }
+async function hcBan(id, res){
+  var r=rowById(id); if(!r) return;
+  if(!(await confirmBox('Mark '+r.handle+' as banned?', 'Reddit '+(res==='suspended'?'reports it suspended':'has no such profile')+'. Owner: '+esc(vaName(owner(r)))+'.', 'Mark banned', true))) return;
+  await moveTo(r, 'banned', { end_reason:hcReason(res) }, 'Marked banned (health check)');
+}
+async function hcBanAll(){
+  var p=hcProblems(); if(!p.length) return;
+  if(!(await confirmBox('Mark '+p.length+' accounts as banned?', 'Every account the check found suspended or missing on Reddit. Open a few links first if you want to be sure — "not found" can be a typo in the username.', 'Mark all banned', true))) return;
+  var ok=0, fail=0; toast('Marking '+p.length+'…');
+  for(var i=0;i<p.length;i+=5){
+    await Promise.all(p.slice(i,i+5).map(async function(x){ try{ var d=await upd(x.account_id,{ status:'banned', end_reason:hcReason(x.result) }); if(d&&d.ok){ ok++; patchLocal(x.account_id,{ status:'banned', ended_at:phtStamp(), end_reason:hcReason(x.result) }); } else fail++; }catch(e){ fail++; } }));
+  }
+  EVENTS_AT=0; toast(ok+' marked banned'+(fail?' · '+fail+' failed':'')); renderView(); load();
+}
+
 /* ═══════════ COVERAGE — owner only ═══════════
    Reads who is off from the admin console's own data (approved leave + rest days from each VA's
    work schedule) and asks the owner what happens to their accounts today: hand them to one VA,
@@ -2020,7 +2278,10 @@ function vSettings(){
       (c.count?'<button class="btn '+(which==='all'?'dark':'sec')+'" onclick="cleanGo(\''+which+'\')">'+IC.trash+' Remove '+c.count+'</button>':'')+'</div>';
   };
   h+='<div class="card pad"><div class="ch-h"><b>Clean-up · banned accounts</b><span>removed from the board, the totals and Insights · kept in a "ProjectAccounts_Archive" tab in the sheet, not destroyed · every base incl. MeG</span></div>'+
+    '<div class="row" style="padding:4px 0 12px"><label class="chk" style="margin:0;flex:1"><input type="checkbox" '+((SET.auto_purge_days==null?30:+SET.auto_purge_days)>0?'checked':'')+' onchange="SET.auto_purge_days=this.checked?(+($(\'purge-d\').value)||30):0;renderView()"> '+
+      '<span>Automatically remove banned accounts <input class="inp" id="purge-d" type="number" min="1" max="365" value="'+esc((SET.auto_purge_days==null||+SET.auto_purge_days<=0)?30:SET.auto_purge_days)+'" style="width:64px;padding:3px 6px;margin:0 4px" onclick="event.stopPropagation()" onchange="if((+SET.auto_purge_days)>0) SET.auto_purge_days=Math.max(1,+this.value||30)"> days after the ban — checked once a day. Press Save settings to apply.</span></label></div>'+
     (CLEAN===null?'<div class="muted">Counting…</div>':
+      cleanRow(CLEAN.d30,'d30','Banned more than 30 days ago','Bans from the last 30 days stay — that is the recent record Insights uses for ban waves.')+
       cleanRow(CLEAN.all,'all','Every banned account so far','Start the ban record fresh from today — only bans from now on are recorded and analysed.')+
       cleanRow(CLEAN.old,'old','Only the old process','Banned before '+esc(fmtD(parseTs(SET.process_start||SOP_START)))+'. Keeps bans since the iPhone process started.'))+
     '<div class="muted" style="font-size:11.5px;margin-top:8px">Going forward: a banned account stays on the Today board for 7 days, then only shows in Accounts (Banned filter) and Insights. Banned accounts are never counted in any total.</div></div></div>';
@@ -2033,17 +2294,19 @@ function restTog(k,i){
   renderView();
 }
 var CLEAN=null, _cleanBusy=false;
-function cleanCut(which){ return which==='all' ? addDays(phtDate(),1) : (CFG.process_start||SOP_START); }   // 'all' = everything banned up to and including today
+function cleanCut(which){ return which==='all' ? addDays(phtDate(),1) : (which==='d30' ? addDays(phtDate(),-29) : (CFG.process_start||SOP_START)); }   // 'all' = everything banned up to and including today
 async function cleanCount(){
   if(_cleanBusy) return; _cleanBusy=true;
   var one=async function(which){ try{ var d=await api({ action:'rc_archive_banned', by:USER.id, before:cleanCut(which) }); return (d&&d.ok)?d:{error:(d&&d.error)||'unknown'}; }catch(e){ return {error:'connection'}; } };
-  var a=await one('all'), o=await one('old');
-  CLEAN={ all:a, old:o };
+  var d30=await one('d30'), a=await one('all'), o=await one('old');
+  CLEAN={ d30:d30, all:a, old:o };
   _cleanBusy=false; if(VIEW==='settings') renderView();
 }
 async function cleanGo(which){
   var c=CLEAN&&CLEAN[which]; if(!c || !c.count) return;
-  var msg=which==='all'
+  var msg=which==='d30'
+    ? 'The '+c.count+' accounts banned more than 30 days ago leave the board, the totals and Insights. Bans from the last 30 days stay. A copy is kept in the ProjectAccounts_Archive tab.'
+    : which==='all'
     ? 'All '+c.count+' banned accounts leave the board, the totals and Insights. From now on only new bans are recorded. They are kept in the ProjectAccounts_Archive tab of the sheet, in case one ever needs looking up.'
     : 'The '+c.count+' accounts banned before '+esc(fmtD(parseTs(CFG.process_start||SOP_START)))+' leave the board, the totals and Insights. They are kept in the ProjectAccounts_Archive tab.';
   if(!(await confirmBox('Remove '+c.count+' banned accounts?', msg, 'Remove them', true))) return;
