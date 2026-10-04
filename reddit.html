@@ -161,6 +161,30 @@ main{max-width:1320px;margin:0 auto;padding:20px 18px 80px}
 .ses.up:hover{border-color:var(--p);color:var(--pd)}
 .ses.dm{border-color:rgba(14,165,233,.35);color:#0369a1;background:rgba(14,165,233,.06)}
 .ses.ok2{border-color:rgba(16,185,129,.4);color:#047857;background:rgba(16,185,129,.07)}
+/* task timers (Oct 5): ▶ start → ■ finish — the tool learns how long each task takes */
+.ses.go .pl{width:0;height:0;border-left:7px solid currentColor;border-top:4.5px solid transparent;border-bottom:4.5px solid transparent;margin:0 2px 0 3px}
+.ses.run{border-color:#0ea5e9;background:linear-gradient(180deg,#f0f9ff,#e0f2fe);color:#075985}
+.ses.run .sq{width:9px;height:9px;border-radius:2px;background:#0284c7;animation:tmPulse 1.2s ease-in-out infinite}
+.ses.run small,.tmv{font:800 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:#0369a1;letter-spacing:.02em}
+.ses.x{padding:5px 7px;color:var(--ink3);border-style:dashed}
+.ses.x:hover{color:#b91c1c;border-color:#fca5a5}
+@keyframes tmPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.8)}}
+.btn.run{background:linear-gradient(180deg,#f0f9ff,#e0f2fe);border:1px solid #7dd3fc;color:#075985}
+.btn.run .sq{width:10px;height:10px;border-radius:2px;background:#0284c7;animation:tmPulse 1.2s ease-in-out infinite}
+/* Productivity & QA */
+.pq-cell{min-width:150px}
+.pq-med{font:800 15px/1.1 Inter,system-ui,sans-serif;color:var(--ink)}
+.pq-sub{font-size:10.5px;color:var(--ink3);margin-top:2px;white-space:nowrap}
+.pq-t{display:flex;align-items:center;gap:5px;margin-top:6px}
+.pq-t input{width:62px;padding:4px 6px;border:1px solid var(--line2);border-radius:7px;font:700 11.5px ui-monospace,Menlo,monospace;text-align:center;background:var(--s1)}
+.pq-t input.set{border-color:#10b981;background:#ecfdf5;color:#065f46}
+.pq-sug{font-size:10.5px;font-weight:800;color:#7c3aed;cursor:pointer;border:none;background:none;padding:0}
+.pq-lrn{display:inline-block;font-size:10px;font-weight:800;color:#64748b;background:#f1f5f9;border-radius:6px;padding:2px 6px}
+.qa-sc{width:58px;padding:5px 6px;border:1px solid var(--line2);border-radius:8px;font:800 13px Inter,system-ui,sans-serif;text-align:center}
+.qa-sc.saved{border-color:#10b981;background:#ecfdf5;color:#065f46}
+.qa-nt{width:130px;padding:5px 8px;border:1px solid var(--line2);border-radius:8px;font-size:12px}
+.qf{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:800;border-radius:7px;padding:3px 7px;margin:1px 3px 1px 0;white-space:nowrap}
+.qf.r{background:#fff1f2;color:#9f1239}.qf.a{background:#fff7ed;color:#9a3412}.qf.g{background:#ecfdf5;color:#047857}
 .note{font-size:11.5px;font-weight:600;margin-top:8px;padding:7px 10px;border-radius:9px}
 .note.w{background:#fff8eb;color:#92400e}
 .note.i{background:#f0f9ff;color:#075985}
@@ -940,8 +964,13 @@ function vToday(){
   var nm=String(USER.name||'').split(',').pop().trim().split(/\s+/)[0]||USER.id;
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>'+greet+', <span class="gtxt">'+esc(nm)+'</span></h2>'+
     '<p>'+esc(baseOf(PROJECT).n)+' base · '+new Date().toLocaleDateString('en-US',{timeZone:'Asia/Manila',weekday:'long',month:'long',day:'numeric'})+
-    ' · tick each session as you finish it — no screenshots needed.</p></div>'+
+    ' · '+(tmOn()?'press <b>Start</b> when a task begins and <b>Finish</b> when it ends':'tick each session as you finish it')+' — no screenshots needed.</p></div>'+
+    (tmOn()?(crGet()?'<button class="btn run" onclick="newAccount()" title="Account exists on the phone? Log it — the timer stops when it is counted"><span class="sq"></span> Creating… <span class="tmv" data-tm="'+crGet().t+'">'+tmFmt(Date.now()-crGet().t)+'</span></button><button class="btn sec sm" onclick="crCancel()" title="Cancel the creation timer">'+IC.x+'</button>'
+      :'<button class="btn sec" onclick="crStart()" title="Press when you START creating an account on the iPhone">▶ Start creating</button>'):'')+
     '<button class="btn pri" onclick="newAccount()">'+IC.plus+' Log new account</button></div>';
+  if(tmOn() && !(function(){ try{ return localStorage.getItem('rc_tm_seen_'+myId()); }catch(e){ return 1; } })())
+    h+='<div class="banner info">'+IC.hour+'<div style="flex:1"><b>New — task timers.</b> Press <b>Start</b> when you begin a session, DMs or a new account, and <b>Finish</b> when it\'s done. For the first days the tool is only <b>learning how long each task normally takes</b> on Vysor, Jailbroken and Blaze+. It is not a race — finishing in seconds gets flagged for review, never rewarded.</div><button class="btn sm sec" onclick="try{localStorage.setItem(\'rc_tm_seen_'+jsq(myId())+'\',\'1\')}catch(e){};renderView()">Got it</button></div>';
+  if(tmOn() && tmCount()) tmEnsure();
 
   // coverage prompts
   if(admin && OFF && OFF.uncovered>0){
@@ -972,6 +1001,9 @@ function vToday(){
   var scopeRows = admin && TD.va==='all' ? ROWS : (admin ? board : mineWork);
   var p=progOf(scopeRows, admin&&TD.va==='all'?null:(admin&&TD.va!=='mine'?TD.va:me));
   if(!admin || TD.va==='mine') maybeSnap(progOf(mineWork, me));
+  if(!admin){ try{ var _pm=progOf(mineWork, me), _cm=ccMine(); daySnap({ due:_pm.tot, done:_pm.done,
+      created:mineWork.filter(function(r){ var m=M(r); return m.cdone && markOkAny(m.cstamp,me,owner(r)); }).length,
+      hc_assigned:_cm.length, hc_done:_cm.filter(function(r){ return !!ccState(r); }).length }); }catch(_ds){} }
   var createdToday=scopeRows.filter(function(r){ var m=M(r); return m.cdone && (markOkAny(m.cstamp,worksFor(r),owner(r))); }).length;
   var active=scopeRows.filter(function(r){ return !isDead(r); }).length;
   var att=scopeRows.filter(needsAttention).length;
@@ -1081,7 +1113,7 @@ function rowHtml(r){
     else prog='<span class="muted" title="'+esc(p.plan)+'" style="font-size:11.5px;font-weight:600">'+din+'d in stage'+(km!=null?' · '+km+' karma':'')+' · <u style="text-decoration-style:dotted;cursor:help">plan</u></span>';
     if(!held){
       act=(p.task?sesBtn(r,1)+sesBtn(r,2):'')+
-        (p.dms?'<button class="ses dm" onclick="dmsDone(\''+id+'\')">'+IC.mail+' DMs'+(markOkAny(m.dm,worksFor(r),owner(r))?' ✓':'')+'</button>':'')+
+        (p.dms?dmBtn(r):'')+
         (p.karma&&!can?'<button class="ses" onclick="setKarma(\''+id+'\')">'+IC.star+' Karma</button>':'')+
         (next&&can?'<button class="ses up" onclick="promote(\''+id+'\',\''+next.k+'\')" title="Promote to '+esc(next.n)+'">'+IC.up+' '+esc(next.n)+'</button>':'');
     }
@@ -1162,7 +1194,12 @@ function sesBtn(r, n){
   var done=markOkAny(m[k],wk,ow);
   if(done){ var tt=m[t]?fmtT(parseTs(m[t])):''; return '<button class="ses done" disabled><span class="bx">'+IC.check+'</span>Session '+n+(tt?' <small>'+esc(tt)+'</small>':'')+'</button>'; }
   var locked=(n===2 && !markOkAny(m.s1,wk,ow));
-  return '<button class="ses" '+(locked?'disabled title="Finish Session 1 first"':'onclick="doSession(\''+jsq(r.id)+'\','+n+',this)"')+'><span class="bx"></span>Session '+n+'</button>';
+  if(locked) return '<button class="ses" disabled title="Finish Session 1 first"><span class="bx"></span>Session '+n+'</button>';
+  if(!tmOn()) return '<button class="ses" onclick="doSession(\''+jsq(r.id)+'\','+n+',this)"><span class="bx"></span>Session '+n+'</button>';
+  var t=tmGet(r.id,'s'+n);
+  if(t) return '<button class="ses run" onclick="doSession(\''+jsq(r.id)+'\','+n+',this)" title="Press when the session is finished"><span class="sq"></span>Finish S'+n+' <small data-tm="'+t.t+'">'+tmFmt(Date.now()-t.t)+'</small></button>'+
+    '<button class="ses x" onclick="tmCancel(\''+jsq(r.id)+'\',\'s'+n+'\')" title="Cancel this timer (started by mistake)">'+IC.x+'</button>';
+  return '<button class="ses go" onclick="sesStart(\''+jsq(r.id)+'\','+n+')" title="Press when you START this session — press again when it\'s done"><span class="pl"></span>Start S'+n+'</button>';
 }
 function cardHtml(r){
   var st=r.status, sm=stageMeta(st), p=phase(st), held=isHeld(r), m=M(r);
@@ -1200,7 +1237,7 @@ function cardHtml(r){
     body='<div class="gate">'+gate+'</div>'+
       '<details class="plan"><summary>'+IC.doc+' Today\'s plan</summary><div>'+esc(p.plan)+'</div></details>'+
       (held?'':'<div class="acts">'+(p.task?sesBtn(r,1)+sesBtn(r,2):'')+
-        (p.dms?'<button class="ses dm" onclick="dmsDone(\''+jsq(r.id)+'\')">'+IC.mail+' DMs done'+(markOkAny(m.dm,worksFor(r),owner(r))?' ✓':'')+'</button>':'')+
+        (p.dms?dmBtn(r):'')+
         (p.karma&&!can?'<button class="ses" onclick="setKarma(\''+jsq(r.id)+'\')">'+IC.star+' Karma</button>':'')+
         (next&&can?'<button class="ses up" onclick="promote(\''+jsq(r.id)+'\',\''+next.k+'\')">'+IC.up+' '+esc(upLbl)+'</button>':'')+
       '</div>');
@@ -1209,6 +1246,60 @@ function cardHtml(r){
   return '<div class="card acct'+(isDead(r)?' dim':'')+'" style="--sc:'+sm.c+'">'+head+chipsHtml(r, isAdmin())+body+'</div>';
 }
 function setupBtn(r,k,l){ var on=!!((M(r).setup||{})[k]); return '<button class="ses'+(on?' done':'')+'" onclick="toggleSetup(\''+jsq(r.id)+'\',\''+k+'\')"><span class="bx">'+(on?IC.check:'')+'</span>'+esc(l)+'</button>'; }
+
+/* ═══════════ TASK TIMERS — learning phase (owner, Oct 5) ═══════════
+   Before any productivity target exists the tool MEASURES how long each task really takes, per stage
+   and per method (creation on Vysor ≠ Jailbroken ≠ Blaze+ — different devices). A VA presses ▶ when a
+   session starts and ■ when it ends; account creation is timed from "Start creating" to the moment it
+   is counted. Durations go to the RcTasks sheet; the owner reads the medians in Productivity & QA and
+   sets the targets from them. It is not a race: nothing here ranks speed, and sessions finished
+   seconds after starting are flagged for QA, not rewarded. Timers live in this browser (localStorage),
+   survive a reload, and expire after 3 hours. The owner/admin ticks without timers. */
+var TM_MAX=3*3600*1000, _tmIv=null;
+function tmKey(){ return 'rc_tm_'+myId(); }
+function tmAll(){
+  var o={}; try{ o=JSON.parse(localStorage.getItem(tmKey())||'{}')||{}; }catch(e){ o={}; }
+  var now=Date.now(), ch=false; for(var k in o){ if(!o[k] || !o[k].t || now-o[k].t>TM_MAX){ delete o[k]; ch=true; } }
+  if(ch) tmPut(o); return o;
+}
+function tmPut(o){ try{ localStorage.setItem(tmKey(), JSON.stringify(o)); }catch(e){} }
+function tmGet(id,k){ return tmAll()[id+'|'+k]||null; }
+function tmCount(){ return Object.keys(tmAll()).length; }
+function tmStart(id,k){ var o=tmAll(); o[id+'|'+k]={ t:Date.now(), p:Object.keys(o).length, d:today() }; tmPut(o); tmEnsure(); }
+function tmStop(id,k){ var o=tmAll(), x=o[id+'|'+k]; if(!x) return null; delete o[id+'|'+k]; tmPut(o);
+  return { secs:Math.round((Date.now()-x.t)/1000), start:x.t, parallel:Math.max(x.p||0, Object.keys(o).length) }; }
+function tmFmt(ms){ var s=Math.max(0,Math.floor(ms/1000)), h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60; return (h?h+':'+(m<10?'0':''):'')+m+':'+(x<10?'0':'')+x; }
+function tmEnsure(){ if(_tmIv) return; _tmIv=setInterval(function(){
+  var els=document.querySelectorAll('[data-tm]'); if(!els.length) return;
+  var now=Date.now(); els.forEach(function(e){ e.textContent=tmFmt(now-parseInt(e.getAttribute('data-tm'),10)); }); }, 1000); }
+function tmOn(){ return !isAdmin(); }        // VAs time their work; the owner's ticks are corrections, not work
+/* fire-and-forget: one finished task → RcTasks (backend rc-2026-10-05c+) */
+function tmLog(r, kind, t, extra){
+  if(!tmOn() || !(BE_BUILD && BE_BUILD>='rc-2026-10-05c')) return;
+  var o=Object.assign({ action:'rc_task_log', by:USER.id, va:myId(), date:vaKeyOf(USER.id).slice(0,10), project:r?r.project||PROJECT:PROJECT,
+    account_id:r?r.id:'', handle:r?r.handle:'', method:r?methodOf(r):'', device:r?(r.device||''):'', stage:r?r.status:'', kind:kind,
+    start:t&&t.start?phtStamp(new Date(t.start)):'', end:phtStamp(), secs:t?t.secs:'', parallel:t?t.parallel:0, source:t?'timer':'untimed' }, extra||{});
+  try{ fetch(API+'?'+qs(o)+'&_='+Date.now()).catch(function(){}); }catch(e){}
+}
+async function sesStart(id, n){
+  var r=rowById(id); if(!r) return;
+  if(!(await karmaGate(r))) return;          // today's karma first — then the clock starts
+  tmStart(id,'s'+n); renderView();
+}
+function tmCancel(id, k){ var o=tmAll(); delete o[id+'|'+k]; tmPut(o); renderView(); toast('Timer cancelled — nothing was recorded.'); }
+/* creation: ▶ Start creating (hero) → Log new account → counted */
+function crGet(){ return tmGet('__create','c'); }
+function crStart(){ tmStart('__create','c'); renderView(); toast('Timer started — create the account on the iPhone, then press Log new account.'); }
+function crCancel(){ var o=tmAll(); delete o['__create|c']; tmPut(o); renderView(); }
+function crTake(){ var o=tmAll(), x=o['__create|c']; if(!x) return null; delete o['__create|c']; tmPut(o); return x.t; }
+/* VA's own day line in RcDaily (backend rc-2026-10-05b+) — fire-and-forget, only when a number changes */
+var _dsK='';
+function daySnap(f){
+  if(isAdmin() || !(BE_BUILD && BE_BUILD>='rc-2026-10-05b')) return;
+  var o=Object.assign({ action:'rc_day_snap', by:USER.id, va:myId(), date:vaKeyOf(USER.id).slice(0,10) }, f||{});
+  var k=JSON.stringify(o); if(!f.hc_first_at){ if(k===_dsK) return; try{ if(sessionStorage.getItem('rc_ds')===k) return; sessionStorage.setItem('rc_ds',k); }catch(e){} _dsK=k; }
+  try{ fetch(API+'?'+qs(o)+'&_='+Date.now()).catch(function(){}); }catch(e){}
+}
 
 /* ── actions ── */
 /* Meta writes send only the keys that change (meta_patch, backend rc-2026-10-05a+): the server merges
@@ -1229,8 +1320,10 @@ async function toggleSetup(id,k){
 async function finishCreation(id, btn){
   var r=rowById(id); if(!r || M(r).cdone) return;
   if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  var go=parseInt(M(r).cgo,10);
   var ok=await saveMeta(r,{ cdone:1, cstamp:vaKeyOf(USER.id), cdoneAt:phtStamp() });
   if(!ok){ toast('Could not save — try again.'); renderView(); return; }
+  if(go && Date.now()-go<TM_MAX) tmLog(r,'creation',{ secs:Math.round((Date.now()-go)/1000), start:go, parallel:0 },{ stage:'new' });
   await bump('Reddit Account Creation',1);
   toast('+1 Reddit Account Creation — counted'); renderView();
 }
@@ -1246,19 +1339,30 @@ async function karmaGate(r){
 async function doSession(id, n, btn){
   var r=rowById(id); if(!r) return;
   if(!(await karmaGate(r))) return;
+  var t=tmOn()?tmStop(id,'s'+n):null;
   var p=phase(r.status), task=(r.status==='recovery')?'Reddit Warmup':(p&&p.task);
   if(btn){ btn.disabled=true; btn.innerHTML='<span class="bx"></span>Saving…'; }
   var patch=(n===2)?{ s2:vaKeyOf(USER.id), s2t:phtStamp(), last:vaKeyOf(USER.id) }:{ s1:vaKeyOf(USER.id), s1t:phtStamp() };
   var ok=await saveMeta(r, patch);
-  if(!ok){ toast('Could not save the session — try again.'); renderView(); return; }
+  if(!ok){ if(t){ var o=tmAll(); o[id+'|s'+n]={ t:t.start, p:t.parallel, d:today() }; tmPut(o); } toast('Could not save the session — try again.'); renderView(); return; }
+  tmLog(r, 'session', t);
   if(task) await bump(task,1);
   toast('Session '+n+'/2 done'+(n===2?' — day complete for '+r.handle+'!':(task==='Reddit Posting'?' — rotate subs, captions & photos!':'')));
   renderView();
 }
 async function dmsDone(id){
   var r=rowById(id); if(!r) return;
-  /* DM replies are part of the posting shift, not a separate deliverable — logged, never counted. */
-  if(await saveMeta(r,{ dm:vaKeyOf(USER.id) })){ toast('DMs logged for today ✓'); renderView(); }
+  /* DM replies are part of the posting shift, not a separate deliverable — logged, never counted.
+     Timed like a session: first press starts the clock, second press logs them. */
+  if(tmOn() && !tmGet(id,'dm') && !markOkAny(M(r).dm,worksFor(r),owner(r))){ tmStart(id,'dm'); renderView(); return; }
+  var t=tmOn()?tmStop(id,'dm'):null;
+  if(await saveMeta(r,{ dm:vaKeyOf(USER.id) })){ if(t) tmLog(r,'dms',t); toast('DMs logged for today ✓'); renderView(); }
+}
+function dmBtn(r){
+  var id=jsq(r.id), done=markOkAny(M(r).dm,worksFor(r),owner(r)), t=tmOn()&&!done?tmGet(r.id,'dm'):null;
+  if(done) return '<button class="ses done" disabled><span class="bx">'+IC.check+'</span>DMs</button>';
+  if(t) return '<button class="ses run" onclick="dmsDone(\''+id+'\')"><span class="sq"></span>Finish DMs <small data-tm="'+t.t+'">'+tmFmt(Date.now()-t.t)+'</small></button><button class="ses x" onclick="tmCancel(\''+id+'\',\'dm\')" title="Cancel this timer">'+IC.x+'</button>';
+  return '<button class="ses dm" onclick="dmsDone(\''+id+'\')" title="'+(tmOn()?'Press when you START replying to DMs — press again when done':'Log DMs')+'">'+IC.mail+' '+(tmOn()?'Start DMs':'DMs')+'</button>';
 }
 async function setKarma(id){
   var r=rowById(id); if(!r) return;
@@ -1392,10 +1496,12 @@ async function naSave(){
   var meta={ cdate:cd, pstart:(st==='new'||st==='creation')?cd:today(), added:vaKeyOf(USER.id) };
   if(ctime) meta.ctime=ctime;
   if(!NA.seed){ meta.setup=setup; if(full){ meta.cdone=1; meta.cstamp=vaKeyOf(USER.id); meta.cdoneAt=phtStamp(); } }
+  var cgo=(!NA.seed && tmOn())?(crGet()||{}).t:null; if(cgo) meta.cgo=cgo;   // creation timer → finished when it is counted
   var b=$('na-go'); b.disabled=true; b.textContent='Saving…';
   try{
     var d=await api({ action:'pa_add', project:PROJECT, handle:u, status:st, method:NA.method, model:model, device:dev, niche:niche, email:email, meta:JSON.stringify(meta), employee_id:USER.id, by:USER.id });
     if(d && d.ok){
+      if(cgo){ crTake(); if(full) tmLog({ id:d.id||'', handle:u, project:PROJECT, method:NA.method, device:dev, status:'new' },'creation',{ secs:Math.round((Date.now()-cgo)/1000), start:cgo, parallel:0 }); }
       if(full) await bump('Reddit Account Creation',1);
       closeModal();
       toast(full?'Saved · +1 Reddit Account Creation counted':(NA.seed?'Saved → '+stageMeta(st).n:'Saved to Newly created — tick Email + password saved to count it'));
@@ -2108,14 +2214,15 @@ async function qrAnswer(k){
   var r=rowById(QR.list[QR.i]); if(!r) return;
   var cur=r;
   QR.i++; if(k!=='s') QR.done++;
+  if(!isAdmin()) hcProgress(QR.i>=QR.list.length);
   renderView(); if(QR.i<QR.list.length) qrOpen();             // next profile opens immediately (same tab)
   try{
     if(k==='a') await saveMeta(cur,{ hcok:today(), hcby:USER.id, hcrep:null });
     else if((k==='b'||k==='n') && !isAdmin()){        // a VA reports — the owner confirms (no VA can ban a teammate's account)
       await saveMeta(cur,{ hcrep:{ by:USER.id, res:k, at:phtStamp(), day:today() } }); toast('Reported — the admin will confirm');
     }
-    else if(k==='b') await moveTo(cur,'banned',{ end_reason:'Permanently suspended: found banned in manual review', meta_patch:JSON.stringify({ hcrep:null }) }, cur.handle+' marked banned');
-    else if(k==='n') await moveTo(cur,'banned',{ end_reason:'Other: profile not found on Reddit (manual review)', meta_patch:JSON.stringify({ hcrep:null }) }, cur.handle+' marked banned (not found)');
+    else if(k==='b'){ if(await moveTo(cur,'banned',{ end_reason:'Permanently suspended: found banned in manual review', meta_patch:JSON.stringify({ hcrep:null }) }, cur.handle+' marked banned')) qaHit(cur,'review'); }
+    else if(k==='n'){ if(await moveTo(cur,'banned',{ end_reason:'Other: profile not found on Reddit (manual review)', meta_patch:JSON.stringify({ hcrep:null }) }, cur.handle+' marked banned (not found)')) qaHit(cur,'review'); }
   }catch(e){ toast('Could not save '+cur.handle+' — mark it again from the list.'); }
 }
 document.addEventListener('keydown', function(e){
@@ -2150,14 +2257,14 @@ function hcReason(res){ return res==='suspended'?'Permanently suspended: found s
 async function hcBan(id, res){
   var r=rowById(id); if(!r) return;
   if(!(await confirmBox('Mark '+r.handle+' as banned?', 'Reddit '+(res==='suspended'?'reports it suspended':'has no such profile')+'. Owner: '+esc(vaName(owner(r)))+'.', 'Mark banned', true))) return;
-  await moveTo(r, 'banned', { end_reason:hcReason(res) }, 'Marked banned (health check)');
+  if(await moveTo(r, 'banned', { end_reason:hcReason(res) }, 'Marked banned (health check)')) qaHit(r,'api');
 }
 async function hcBanAll(){
   var p=hcProblems(); if(!p.length) return;
   if(!(await confirmBox('Mark '+p.length+' accounts as banned?', 'Every account the check found suspended or missing on Reddit. Open a few links first if you want to be sure — "not found" can be a typo in the username.', 'Mark all banned', true))) return;
   var ok=0, fail=0; toast('Marking '+p.length+'…');
   for(var i=0;i<p.length;i+=5){
-    await Promise.all(p.slice(i,i+5).map(async function(x){ try{ var d=await upd(x.account_id,{ status:'banned', end_reason:hcReason(x.result) }); if(d&&d.ok){ ok++; patchLocal(x.account_id,{ status:'banned', ended_at:phtStamp(), end_reason:hcReason(x.result) }); } else fail++; }catch(e){ fail++; } }));
+    await Promise.all(p.slice(i,i+5).map(async function(x){ try{ var d=await upd(x.account_id,{ status:'banned', end_reason:hcReason(x.result) }); if(d&&d.ok){ ok++; qaHit(rowById(x.account_id),'api'); patchLocal(x.account_id,{ status:'banned', ended_at:phtStamp(), end_reason:hcReason(x.result) }); } else fail++; }catch(e){ fail++; } }));
   }
   EVENTS_AT=0; toast(ok+' marked banned'+(fail?' · '+fail+' failed':'')); renderView(); load();
 }
@@ -2229,8 +2336,23 @@ function vHealthVA(){
     }).join('')+'</tbody></table></div>';
   return h;
 }
+/* VA side of the QA ledger: when the day's check started, how many are done, and — once the whole
+   list is through — the time per account (the "Health check · per account" learning cell). */
+function hcProgress(finished){
+  try{
+    var d=vaKeyOf(USER.id).slice(0,10), kF='rc_hcfirst_'+myId(), mine=ccMine();
+    var dn=Math.min(mine.length, mine.filter(function(r){ return !!ccState(r); }).length+1);
+    var seen=''; try{ seen=localStorage.getItem(kF)||''; }catch(e){}
+    if(seen!==d){ try{ localStorage.setItem(kF,d); }catch(e){} daySnap({ hc_assigned:mine.length, hc_done:dn, hc_first_at:phtStamp() }); }
+    if(finished){
+      daySnap({ hc_assigned:mine.length, hc_done:dn });
+      if(QR.t0 && QR.done) tmLog(null,'healthcheck',{ secs:Math.round((Date.now()-QR.t0)/1000/QR.done), start:QR.t0, parallel:0 },{ source:'n='+QR.done });
+    }
+  }catch(e){}
+}
 async function ccMark(id,k){
   var r=rowById(id); if(!r) return;
+  if(!isAdmin()) hcProgress(false);
   if(k==='a'){ if(await saveMeta(r,{ hcok:today(), hcby:USER.id })){ toast(r.handle+' — alive ✓'); renderView(); } return; }
   if(await saveMeta(r,{ hcrep:{ by:USER.id, res:k, at:phtStamp(), day:today() } })){ toast('Reported — the admin will confirm'); renderView(); }
 }
@@ -2259,7 +2381,7 @@ function ccAdmin(){
 }
 async function ccConfirm(id){
   var r=rowById(id); if(!r) return; var x=M(r).hcrep||{};
-  await moveTo(r,'banned',{ end_reason:(x.res==='n'?'Other: profile not found on Reddit':'Permanently suspended')+' — reported by '+vaName(x.by)+' in the daily check', meta_patch:JSON.stringify({ hcrep:null }) }, r.handle+' marked banned');
+  if(await moveTo(r,'banned',{ end_reason:(x.res==='n'?'Other: profile not found on Reddit':'Permanently suspended')+' — reported by '+vaName(x.by)+' in the daily check', meta_patch:JSON.stringify({ hcrep:null }) }, r.handle+' marked banned')) qaHit(r,'cross-check');
 }
 async function ccClear(id){ var r=rowById(id); if(!r) return; if(await saveMeta(r,{ hcrep:null, hcok:today(), hcby:USER.id })){ toast(r.handle+' — alive, report cleared'); renderView(); } }
 function vHealth(){
@@ -2274,19 +2396,232 @@ function vHealth(){
   return h;
 }
 
-/* ══════════ PRODUCTIVITY & QA — placeholder until the owner sets the rules ══════════ */
+/* ══════════ PRODUCTIVITY & QA (owner only · Oct 5 2026) ══════════
+   Productivity + QA = 50% of each VA's overall scorecard. Two parts:
+   • TASK TIMES — learning phase. No speed score yet. The board times every session, DM round, account
+     creation and health-check look (VA presses Start / Finish). This tab shows the typical time per
+     task × stage × method; the owner sets a target per cell once it has enough samples. Suggested
+     target = the 75th percentile (a time 3 of 4 real runs already meet), so nobody has to rush to hit it.
+   • QA — the owner's daily score out of 10 per VA. Rules suggest it (hidden bans, health check missed or
+     late, stages skipped, sessions finished in seconds); the owner's number is final.
+   The ledger shape (RcTasks, RcDaily) is tool-agnostic so ALTR Media can reuse it. */
+var PQ={ tab:'times', range:'7', day:'', st:null, dd:null, loading:false, key:'', tg:{} };
+var PQ_MIN=10;    // samples before a cell suggests a target
+var QA_RULES=[
+  { k:'hidden_ban', n:'Hidden ban — a health check found one of their accounts banned that they never tagged', d:2, u:'each' },
+  { k:'hc_missing', n:'Daily health check not finished', d:1, u:'' },
+  { k:'hc_late',    n:'Health check started after 8:15 (AM or PM shift)', d:0.5, u:'' },
+  { k:'skip',       n:'Stage skipped, or promoted before the stage\'s days were up', d:1, u:'each' },
+  { k:'quick',      n:'Session or DMs finished within 20 seconds of starting', d:0.5, u:'each · max 2' },
+  { k:'fast',       n:'Under 35% of the team\'s usual time for that task (once it has '+PQ_MIN+'+ samples)', d:0.5, u:'each · max 2' }
+];
+function pqRule(k){ for(var i=0;i<QA_RULES.length;i++) if(QA_RULES[i].k===k) return QA_RULES[i]; return { d:0 }; }
+function dAdd(d,n){ var x=new Date(d+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+n); return x.toISOString().slice(0,10); }
+function bizDayOf(ts){ var t=(ts instanceof Date)?ts:parseTs(ts); return t?phtDate(new Date(t.getTime()-8*3600000)):''; }
+function pqFrom(){ var ps=CFG.process_start||'2026-10-01'; if(PQ.range==='all') return ps; var f=dAdd(today(), -(parseInt(PQ.range,10)-1)); return f<ps?ps:f; }
+function fmtSecs(s){ if(s==null||isNaN(s)) return '—'; s=Math.round(s); return s<60?(s+'s'):tmFmt(s*1000); }
+function parseSecs(v){ v=String(v||'').trim(); if(!v) return null; var m=v.match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/);
+  if(m) return m[3]!=null?(+m[1]*3600+ +m[2]*60+ +m[3]):(+m[1]*60+ +m[2]);
+  var s=v.match(/^(\d+(?:\.\d+)?)\s*s$/i); if(s) return Math.round(+s[1]);
+  var n=parseFloat(v); return isNaN(n)?NaN:Math.round(n*60); }          // a bare number = minutes
+async function pqLoad(force){
+  if(PQ.loading || !isAdmin()) return;
+  var day=PQ.day||today(), from=pqFrom(), key=day+'|'+from;
+  if(!force && PQ.key===key && PQ.st) return;
+  PQ.loading=true;
+  try{
+    var mFrom=day.slice(0,8)+'01', ps=CFG.process_start||''; if(ps && ps>mFrom && ps<=day) mFrom=ps;
+    var res=await Promise.all([
+      jget(API+'?'+qs({ action:'rc_task_stats', by:USER.id, from:from, to:today(), day:day })+'&_='+Date.now(), 0),
+      jget(API+'?'+qs({ action:'rc_day_get', by:USER.id, from:mFrom, to:day })+'&_='+Date.now(), 0),
+      loadEvents()
+    ]);
+    PQ.st=(res[0]&&res[0].ok)?res[0]:{ error:(res[0]&&res[0].error)||'unknown', groups:[], vas:[], rows:[] };
+    PQ.dd=(res[1]&&res[1].ok)?(res[1].rows||[]):[];
+    PQ.key=key;
+  }catch(e){ PQ.st={ error:'connection', groups:[], vas:[], rows:[] }; PQ.dd=[]; }
+  PQ.loading=false; if(VIEW==='prod') renderView();
+}
+function pqG(kind, stage, meth){
+  var gs=(PQ.st&&PQ.st.groups)||[], st=(kind==='creation'||kind==='healthcheck')?'':stage;
+  for(var i=0;i<gs.length;i++){ var g=gs[i]; if(g.kind===kind && g.stage===st && g.method===meth) return g; } return null;
+}
+function pqSuggest(g){ var v=g.p75||g.median; if(!v) return null; var step=v<120?5:30; return Math.ceil(v/step)*step; }
+function pqTasks(){
+  var t=[{ kind:'creation', stage:'', n:'Account creation', s:'Start creating → counted (+1)' }];
+  PH.forEach(function(p){ if(p.task) t.push({ kind:'session', stage:p.k, n:'Session · '+p.n, s:p.plan }); });
+  t.push({ kind:'session', stage:'recovery', n:'Session · Spam recovery', s:'10 min browsing · upvotes · replies' });
+  PH.forEach(function(p){ if(p.dms) t.push({ kind:'dms', stage:p.k, n:'DMs · '+p.n, s:'one DM round' }); });
+  t.push({ kind:'healthcheck', stage:'', n:'Health check · per account', s:'one profile look in the daily check', one:true });
+  return t;
+}
+function pqKey(t, meth){ return t.kind+'|'+((t.kind==='creation'||t.kind==='healthcheck')?'':t.stage)+'|'+meth; }
+function pqTargetOf(key){ if(Object.prototype.hasOwnProperty.call(PQ.tg,key)) return PQ.tg[key]; var t=(CFG.targets||{})[key]; return t==null?null:t; }
+function pqCell(task, meth){
+  var g=pqG(task.kind, task.stage, meth), key=pqKey(task, meth), tg=pqTargetOf(key);
+  var sug=(g && g.n>=PQ_MIN)?pqSuggest(g):null;
+  var h=g?'<div class="pq-med">'+fmtSecs(g.median)+'</div><div class="pq-sub" title="middle half of all runs · number of timed runs'+(g.parallel?' · share run while another timer was going':'')+'">'+fmtSecs(g.p25)+'–'+fmtSecs(g.p75)+' · n='+g.n+(g.parallel?' · '+g.parallel+'% parallel':'')+'</div>'
+         :'<div class="pq-sub" style="margin-top:4px">no runs yet</div>';
+  h+='<div class="pq-t"><input class="'+(tg!=null?'set':'')+'" value="'+(tg!=null?fmtSecs(tg):'')+'" placeholder="target" data-k="'+esc(key)+'" onchange="pqTarget(this)" title="Target time — m:ss, or minutes (e.g. 6.5). Clear it to remove.">'+
+    (sug!=null && tg==null?'<button class="pq-sug" onclick="pqUse(\''+jsq(key)+'\','+sug+')" title="75th percentile — 3 of 4 runs already meet it">use '+fmtSecs(sug)+'</button>'
+      :((!g||g.n<PQ_MIN)?'<span class="pq-lrn">learning '+(g?g.n:0)+'/'+PQ_MIN+'</span>':''))+'</div>';
+  return '<td class="pq-cell">'+h+'</td>';
+}
+function pqTarget(inp){ var k=inp.getAttribute('data-k'), v=parseSecs(inp.value); if(typeof v==='number' && isNaN(v)){ toast('Type the time as m:ss (6:30) or minutes (6.5).'); return; } PQ.tg[k]=v; renderView(); }
+function pqUse(k,v){ PQ.tg[k]=v; renderView(); }
+async function pqSaveTargets(){
+  var n=Object.keys(PQ.tg).length; if(!n) return;
+  var cfg=JSON.parse(JSON.stringify(CFG)); cfg.targets=cfg.targets||{};
+  Object.keys(PQ.tg).forEach(function(k){ if(PQ.tg[k]==null) delete cfg.targets[k]; else cfg.targets[k]=PQ.tg[k]; });
+  try{
+    var r=await fetch(API, { method:'POST', body:JSON.stringify({ action:'rc_cfg_set', by:USER.id, cfg:cfg }) }); var d=await r.json();
+    if(!(d&&d.ok)) d=await api({ action:'rc_cfg_set', by:USER.id, cfg:JSON.stringify(cfg) });
+    if(d&&d.ok&&d.cfg){ CFG=d.cfg; if(!CFG.targets) CFG.targets=cfg.targets; PQ.tg={}; toast(n+' target'+(n===1?'':'s')+' saved.'); renderView(); }
+    else toast('Could not save: '+((d&&d.error)||'unknown'));
+  }catch(e){ toast('Connection error.'); }
+}
 function vProd(){
   if(!isAdmin()) return '<div class="card empty">Owner only.</div>';
-  var by={}; ROWS.forEach(function(r){ var k=worksFor(r)||'—'; (by[k]=by[k]||[]).push(r); });
-  var list=Object.keys(by).filter(function(k){ return !isGone(k); }).map(function(k){ var q=progOf(by[k],k); q.k=k;
-      q.cre=by[k].filter(function(r){ var m=M(r); return m.cdone && markOkAny(m.cstamp,k,owner(r)); }).length; return q; })
-    .sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
-  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Productivity <span class="gtxt">&amp; QA</span></h2><p>Productivity computed inside Reddit Central from what each VA does on the board. The scoring rules are being set up with you.</p></div></div>';
-  h+='<div class="banner info">'+IC.doc+'<div><b>Waiting for your rules.</b> Below is what the board already measures today. Tell me how productivity and QA should be scored (targets, what counts, weights) and this tab becomes the official number.</div></div>';
-  h+='<div class="sec-h"><b>Today from the board · '+esc(baseOf(PROJECT).n)+'</b><span>sessions this shift · creations counted</span><hr></div>'+
-    '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th><th>Sessions done</th><th>Sessions due</th><th>%</th><th>Creations</th></tr></thead><tbody>'+
-    list.map(function(o){ return '<tr><td class="c1">'+esc(vaName(o.k))+'</td><td class="num">'+o.done+'</td><td class="num">'+o.tot+'</td><td class="num" style="font-weight:800;color:'+(o.pct>=100?'#047857':(o.pct>=70?'#b45309':'#b91c1c'))+'">'+o.pct+'%</td><td class="num">'+(o.cre||'·')+'</td></tr>'; }).join('')+'</tbody></table></div>';
+  if(!PQ.day) PQ.day=today();
+  if(!PQ.st && !PQ.loading) pqLoad();
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Productivity <span class="gtxt">&amp; QA</span></h2><p>Half of each VA\'s overall scorecard. QA is scored daily from today; productivity is still <b>learning how long each task takes</b> before any target is set.</p></div>'+
+    '<button class="btn sec" onclick="pqLoad(true)">'+IC.hist+' Refresh</button></div>';
+  h+='<div class="seg" style="width:auto;display:inline-flex;margin-bottom:14px;white-space:nowrap"><button class="'+(PQ.tab==='times'?'on':'')+'" onclick="PQ.tab=\'times\';renderView()">Task times · learning</button><button class="'+(PQ.tab==='qa'?'on':'')+'" onclick="PQ.tab=\'qa\';renderView()">QA · daily score</button></div>';
+  if(PQ.st && PQ.st.error) h+='<div class="banner warn">'+IC.doc+'<div>'+(/unknown|action/i.test(PQ.st.error)?'Deploy the Reddit backend <b>rc-2026-10-05c</b> (New version) — this tab reads the new task-time and QA sheets.':'Could not load: '+esc(PQ.st.error))+'</div></div>';
+  if(!PQ.st) return h+'<div class="card empty">Loading…</div>';
+  return h+(PQ.tab==='qa'?pqQA():pqTimes());
+}
+function pqTimes(){
+  var st=PQ.st, ms=methodsList().slice(), tasks=pqTasks();
+  if((st.groups||[]).some(function(g){ return g.method==='(none)' && g.kind!=='healthcheck'; })) ms.push('(none)');
+  var cells=0, set=0; tasks.forEach(function(t){ (t.one?['(none)']:ms).forEach(function(m){ cells++; if(pqTargetOf(pqKey(t,m))!=null) set++; }); });
+  var nt=Object.keys(PQ.tg).length;
+  var h='<div class="banner info">'+IC.hour+'<div style="flex:1"><b>Learning phase — nothing here is scored yet.</b> VAs press Start and Finish on every session, DM round and new account, so the tool sees real times per stage and per method (Vysor, Jailbroken and Blaze+ run on different devices). '+
+    'When a cell has '+PQ_MIN+'+ runs it suggests a target at the 75th percentile — a time most runs already meet, so nobody rushes to hit it. Runs far <i>faster</i> than usual go to QA as possible skipped steps, never as a win.</div></div>';
+  h+='<div class="kpis">'+kpi('Timed runs', st.total||0, 'since '+fmtD(parseTs(pqFrom())), '#0ea5e9')+
+    kpi('Finished in seconds', st.quick||0, 'not counted · see QA', (st.quick?'#ef4444':'#10b981'))+
+    kpi('Targets set', set+' / '+cells, set?'productivity can start':'set them when the cells are ready', '#a855f7')+'</div>';
+  h+='<div class="tbar"><span class="lbl">Period</span><div class="chips">'+[['7','7 days'],['14','14 days'],['all','Since process start']].map(function(x){ return '<button class="chip '+(PQ.range===x[0]?'sel':'')+'" onclick="PQ.range=\''+x[0]+'\';pqLoad(true)">'+x[1]+'</button>'; }).join('')+'</div><div class="sp"></div>'+
+    (nt?'<button class="btn sm sec" onclick="PQ.tg={};renderView()">Discard</button> <button class="btn sm pri" onclick="pqSaveTargets()">Save '+nt+' target'+(nt===1?'':'s')+'</button>':'')+'</div>';
+  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Task</th>'+ms.map(function(m){ return '<th>'+(m==='(none)'?'Not tagged':methodPill(m,true))+'</th>'; }).join('')+'</tr></thead><tbody>'+
+    tasks.map(function(t){
+      return '<tr><td class="c1" title="'+esc(t.s||'')+'"><b>'+esc(t.n)+'</b><div class="pq-sub" style="max-width:260px;overflow:hidden;text-overflow:ellipsis">'+esc(t.s||'')+'</div></td>'+
+        (t.one?pqCell(t,'(none)')+(ms.length>1?'<td colspan="'+(ms.length-1)+'" class="pq-sub" style="vertical-align:middle">same for every method</td>':''):ms.map(function(m){ return pqCell(t,m); }).join(''))+'</tr>';
+    }).join('')+'</tbody></table></div>';
+  // per VA — observation only
+  var team={}; (st.groups||[]).forEach(function(g){ team[g.kind+'|'+g.stage+'|'+g.method]=g; });
+  var V={}; (st.vas||[]).forEach(function(x){
+    var g=team[x.kind+'|'+x.stage+'|'+x.method]; if(!g || g.n<5 || !g.median) return;
+    var o=V[x.va]=V[x.va]||{ n:0, kinds:{} }; o.n+=x.n; var kk=o.kinds[x.kind]=o.kinds[x.kind]||{ w:0, s:0 };
+    kk.w+=x.n; kk.s+=x.n*(x.median/g.median);
+  });
+  var vk=Object.keys(V).filter(function(k){ return !isGone(k) && OWNERS.indexOf(k)<0; }).sort(function(a,b){ return vaName(a).localeCompare(vaName(b)); });
+  var kinds=[['creation','Creation'],['session','Sessions'],['dms','DMs'],['healthcheck','Health check']];
+  h+='<details class="card pad" style="margin-top:16px"><summary style="cursor:pointer;font-weight:800">Per VA vs the team’s usual time <span class="muted" style="font-weight:600;font-size:12px">· owner only · not scored</span></summary>'+
+    '<p class="muted" style="font-size:12px;margin:8px 0 10px">1.0× = the team\'s usual time for the same task, stage and method. Well under 1× (red) is worth a look — fast can mean skipped steps. Over 1.5× (amber) may need coaching or a slower device.</p>'+
+    (vk.length?'<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th><th>Runs</th>'+kinds.map(function(k){ return '<th>'+k[1]+'</th>'; }).join('')+'</tr></thead><tbody>'+
+      vk.map(function(k){ var o=V[k]; return '<tr><td class="c1">'+esc(vaName(k))+'</td><td class="num">'+o.n+'</td>'+kinds.map(function(kd){ var x=o.kinds[kd[0]]; if(!x) return '<td class="num muted">·</td>'; var r=x.s/x.w;
+        return '<td class="num" style="font-weight:800;color:'+(r<0.5?'#b91c1c':(r>1.5?'#b45309':'#047857'))+'">'+r.toFixed(2)+'×</td>'; }).join('')+'</tr>'; }).join('')+'</tbody></table></div>'
+      :'<div class="muted" style="font-size:12.5px">Not enough timed runs yet — each cell needs 5+ team runs first.</div>')+'</details>';
   return h;
+}
+/* ── QA: daily score out of 10 ── */
+function pqVAs(day){
+  var ids={};
+  allRows().forEach(function(r){ if(isDead(r)) return; var o=owner(r); if(o) ids[o]=1; });
+  (PQ.dd||[]).forEach(function(x){ if(x.date===day && x.va) ids[String(x.va).toLowerCase()]=1; });
+  return Object.keys(ids).filter(function(k){ return !isGone(k) && OWNERS.indexOf(k)<0; }).sort(function(a,b){ return vaName(a).localeCompare(vaName(b)); });
+}
+function pqRow(va, day){ var d=PQ.dd||[]; for(var i=0;i<d.length;i++) if(d[i].date===day && String(d[i].va).toLowerCase()===va) return d[i]; return null; }
+function pqLive(va, day){
+  var o={ off:false, live:day===today() };
+  if(o.live){
+    var off=OFF&&(OFF.off||[]).filter(function(x){ return String(x.employee_id).toLowerCase()===va; })[0]; o.off=off?off.type:false;
+    var mine=allRows().filter(function(r){ return worksFor(r)===va; }), p=progOf(mine, va);
+    o.done=p.done; o.due=p.tot; o.cre=mine.filter(function(r){ var m=M(r); return m.cdone && markOkAny(m.cstamp,va,owner(r)); }).length;
+    var pl=ccPlan(), list=(pl.plan[va]||[]).map(rowById).filter(Boolean);
+    o.hcA=list.length; o.hcD=list.filter(function(r){ return !!ccState(r); }).length;
+  } else {
+    var dr=pqRow(va, day); if(dr){ o.done=+dr.done||0; o.due=+dr.due||0; o.cre=+dr.created||0; o.hcA=+dr.hc_assigned||0; o.hcD=+dr.hc_done||0; o.nodata=false; } else o.nodata=true;
+  }
+  return o;
+}
+function pqEntered(e){
+  var best=null, t=parseTs(e.at);
+  (EVENTS||[]).forEach(function(x){ if(x.account_id!==e.account_id || x.to!==e.from) return; var u=parseTs(x.at); if(u && u<t && (!best || u>best)) best=u; });
+  if(!best && e.from==='creation'){ var r=rowById(e.account_id); if(r && createdAt(r)) best=createdAt(r); }
+  return best;
+}
+function pqFlags(va, day, dr, L){
+  var F=[], mf=[];
+  try{ mf=JSON.parse((dr&&dr.manual_flags)||'[]')||[]; }catch(e){ mf=[]; }
+  mf.forEach(function(f){ if(f.type==='hidden_ban') F.push({ k:'hidden_ban', t:'Hidden ban · '+(f.account||''), d:pqRule('hidden_ban').d, c:'r' }); else F.push({ k:'manual', t:f.label||'Flag', d:+f.deduct||0, c:'a' }); });
+  var night=SHIFTOF[va]==='night', started=!L.live || phtStamp()>day+(night?' 20:30:00':' 08:30:00');
+  if(!L.off && started && L.hcA>0 && L.hcD<L.hcA) F.push({ k:'hc_missing', t:'Health check '+L.hcD+'/'+L.hcA, d:pqRule('hc_missing').d, c:'r' });
+  if(!L.off && dr && dr.hc_first_at && String(dr.hc_first_at).slice(0,10)>=day && String(dr.hc_first_at)>day+(night?' 20:15:00':' 08:15:00'))
+    F.push({ k:'hc_late', t:'Health check started '+fmtT(parseTs(dr.hc_first_at)), d:pqRule('hc_late').d, c:'a' });
+  var rows=((PQ.st&&PQ.st.rows)||[]).filter(function(x){ return String(x.va).toLowerCase()===va && (x.kind==='session'||x.kind==='dms'); });
+  var q=rows.filter(function(x){ return x.secs!=null && x.secs<20; }).length;
+  if(q) F.push({ k:'quick', t:q+' finished within 20 s', d:Math.min(2,q*pqRule('quick').d), c:'r' });
+  var fast=rows.filter(function(x){ if(x.secs==null || x.secs<20) return false; var g=pqG(x.kind,x.stage,x.method); return g && g.n>=PQ_MIN && x.secs<g.median*0.35; }).length;
+  if(fast) F.push({ k:'fast', t:fast+' far faster than usual', d:Math.min(2,fast*pqRule('fast').d), c:'a' });
+  (EVENTS||[]).forEach(function(e){
+    if(e.kind!=='stage' || String(e.by||'').toLowerCase()!==va || bizDayOf(e.at)!==day) return;
+    var a=phaseIx(e.from), b=phaseIx(e.to); if(a<0 || b<0 || b<=a) return;
+    if(b-a>1){ F.push({ k:'skip', t:(e.handle||'?')+': '+stageMeta(e.from).n+' → '+stageMeta(e.to).n, d:pqRule('skip').d, c:'r' }); return; }
+    var p=PH[a]; if(!p.dur) return; var ent=pqEntered(e); if(!ent) return;
+    var days=Math.floor((parseTs(e.at).getTime()-new Date(bizDayOf(ent)+'T00:00:00+08:00').getTime())/86400000);
+    if(days<p.dur) F.push({ k:'skip', t:(e.handle||'?')+': left '+p.n+' on day '+(days+1)+' of '+p.dur, d:pqRule('skip').d, c:'r' });
+  });
+  return F;
+}
+function pqQA(){
+  var day=PQ.day||today(), vas=pqVAs(day);
+  var h='<div class="tbar"><button class="btn sm sec" onclick="PQ.day=dAdd(PQ.day,-1);pqLoad(true);renderView()">‹</button>'+
+    '<input class="inp" type="date" value="'+esc(day)+'" max="'+today()+'" onchange="PQ.day=this.value||today();pqLoad(true);renderView()" style="width:auto">'+
+    '<button class="btn sm sec" '+(day>=today()?'disabled':'')+' onclick="PQ.day=dAdd(PQ.day,1);pqLoad(true);renderView()">›</button>'+
+    (day!==today()?' <button class="btn sm sec" onclick="PQ.day=today();pqLoad(true);renderView()">Today</button>':'')+
+    '<div class="sp"></div><span class="muted" style="font-size:12px">Business day · '+esc(fmtD(parseTs(day)))+'</span></div>';
+  h+='<details class="card pad" style="margin-bottom:12px"><summary style="cursor:pointer;font-weight:800">How the QA score works</summary><div style="font-size:13px;line-height:1.6;margin-top:8px">'+
+    'You score each VA <b>out of 10</b> for the day — your number is final. The <b>suggested</b> score starts at 10 and takes off what the rules found:'+
+    '<table class="db" style="margin-top:8px"><tbody>'+QA_RULES.map(function(r){ return '<tr><td class="c1">'+esc(r.n)+'</td><td class="num" style="font-weight:800;color:#b91c1c">−'+r.d+'</td><td class="muted" style="font-size:11.5px">'+esc(r.u)+'</td></tr>'; }).join('')+'</tbody></table>'+
+    '<div class="muted" style="font-size:12px;margin-top:6px">Sessions done and accounts created are shown for context — they are productivity, not QA, and are not scored until you set the task targets.</div></div></details>';
+  if(!vas.length) return h+'<div class="card empty">No VAs with accounts yet.</div>';
+  var avg={}; (PQ.dd||[]).forEach(function(x){ if(x.qa_score===''||x.qa_score==null) return; var s=parseFloat(x.qa_score); if(isNaN(s)) return; var k=String(x.va).toLowerCase(); (avg[k]=avg[k]||[]).push(s); });
+  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th><th>Sessions</th><th>Created</th><th>Health check</th><th>Rule hits</th><th>Suggested</th><th>Your score</th><th>Note</th><th>Month avg</th><th></th></tr></thead><tbody>'+
+    vas.map(function(va){
+      var dr=pqRow(va,day), L=pqLive(va,day), F=pqFlags(va,day,dr,L), ded=F.reduce(function(s,f){ return s+f.d; },0), sug=Math.max(0, Math.round((10-ded)*2)/2);
+      var sc=dr && dr.qa_score!=='' && dr.qa_score!=null ? String(dr.qa_score) : '', a=avg[va];
+      var hc=L.off?'<span class="flag" style="background:#f1f2f7;color:var(--ink3)">'+esc(L.off)+'</span>':(L.nodata?'<span class="muted">no data</span>':(L.hcA?(L.hcD+'/'+L.hcA+(dr&&dr.hc_first_at?' <span class="muted" style="font-size:11px">· '+esc(fmtT(parseTs(dr.hc_first_at)))+'</span>':'')):'<span class="muted">—</span>'));
+      return '<tr data-va="'+esc(va)+'"><td class="c1">'+esc(vaName(va))+(SHIFTOF[va]==='night'?' 🌙':'')+'</td>'+
+        '<td class="num">'+(L.nodata?'—':(L.done+'/'+L.due))+'</td><td class="num">'+(L.nodata?'—':(L.cre||'·'))+'</td><td>'+hc+'</td>'+
+        '<td style="white-space:normal;max-width:300px;min-width:180px">'+(F.length?F.map(function(f){ return '<span class="qf '+f.c+'" title="−'+f.d+'">'+esc(f.t)+' <b>−'+f.d+'</b></span>'; }).join(''):'<span class="qf g">'+IC.check+' clean</span>')+'</td>'+
+        '<td class="num" style="font-weight:800;color:'+(sug>=9?'#047857':(sug>=7?'#b45309':'#b91c1c'))+'">'+sug+'</td>'+
+        '<td><input class="qa-sc'+(sc!==''?' saved':'')+'" id="qa-s-'+esc(va)+'" type="number" min="0" max="10" step="0.5" value="'+esc(sc)+'" placeholder="'+sug+'"></td>'+
+        '<td style="max-width:none"><input class="qa-nt" id="qa-n-'+esc(va)+'" value="'+esc(dr&&dr.qa_note||'')+'" placeholder="optional"></td>'+
+        '<td class="num">'+(a&&a.length?(a.reduce(function(s,x){ return s+x; },0)/a.length).toFixed(1)+'<span class="muted" style="font-size:10.5px"> · '+a.length+'d</span>':'<span class="muted">—</span>')+'</td>'+
+        '<td style="white-space:nowrap"><button class="btn sm '+(sc!==''?'sec':'pri')+'" onclick="pqSave(\''+jsq(va)+'\','+sug+')">'+(sc!==''?'Update':'Save')+'</button></td></tr>';
+    }).join('')+'</tbody></table></div>'+
+    '<p class="muted" style="font-size:11.5px;margin-top:6px">Leave the score empty and press Save to accept the suggestion. Scores are stored per business day in the RcDaily sheet with who scored and when.</p>';
+  return h;
+}
+async function pqSave(va, sug){
+  var day=PQ.day||today(), si=$('qa-s-'+va), ni=$('qa-n-'+va);
+  var v=si&&si.value!==''?parseFloat(si.value):sug; if(isNaN(v)||v<0||v>10){ toast('Score must be 0–10.'); return; }
+  var note=ni?ni.value:'', dr=pqRow(va,day), F=pqFlags(va,day,dr,pqLive(va,day)), ded=F.reduce(function(s,f){ return s+f.d; },0);
+  try{
+    var d=await api({ action:'rc_qa_set', by:USER.id, va:va, date:day, score:v, note:note });
+    if(!(d&&d.ok)){ toast('Could not save: '+((d&&d.error)||'unknown')); return; }
+    api({ action:'rc_day_snap', by:USER.id, va:va, date:day, auto_flags:JSON.stringify(F.filter(function(f){ return f.k!=='hidden_ban' && f.k!=='manual'; })), auto_deduct:ded }).catch(function(){});
+    if(!dr){ dr={ date:day, va:va }; (PQ.dd=PQ.dd||[]).push(dr); }
+    dr.qa_score=v; dr.qa_note=note; dr.qa_by=USER.id; dr.qa_at=phtStamp();
+    toast(firstName(va)+' · '+v+'/10 saved'); renderView();
+  }catch(e){ toast('Connection error.'); }
+}
+/* A ban the owner never tagged, found by the health check = a QA hit for the account's owner. */
+function qaHit(r, how){
+  if(!isAdmin() || !r) return; var va=owner(r); if(!va || OWNERS.indexOf(va)>=0) return;
+  try{ api({ action:'rc_qa_flag', by:USER.id, va:va, date:today(), flag:JSON.stringify({ type:'hidden_ban', label:'Hidden ban: '+r.handle, deduct:pqRule('hidden_ban').d, account:r.handle, how:how||'' }) }).then(function(){ PQ.key=''; PQ.st=null; }).catch(function(){}); }catch(e){}
 }
 
 /* ═══════════ COVERAGE — owner only ═══════════
