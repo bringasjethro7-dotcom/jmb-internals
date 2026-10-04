@@ -688,7 +688,10 @@ async function fixBases(){
   for(var i=0;i<w.length;i+=5){ await Promise.all(w.slice(i,i+5).map(async function(r){ try{ var d=await upd(r.id,{ project:wrongBase(r) }); if(d&&d.ok) ok++; else fail++; }catch(e){ fail++; } })); }
   toast(ok+' moved'+(fail?' · '+fail+' failed (deploy rc-2026-10-04g?)':'')); ALL_AT=0; EVENTS_AT=0; await loadAll(true); load();
 }
-function phoneList(activeOnly){ return (CFG.phones||[]).filter(function(p){ return p && p.label && (!activeOnly || p.active!==false); }); }
+/* Company iPhones belong to a base (owner, Oct 5: the iPhones are Altz only). A phone saved before this
+   had no base and counts as Altz ("Reddit"). Pass a base to get only that base's phones. */
+function phoneBase(p){ return (p && p.base) || 'Reddit'; }
+function phoneList(activeOnly, base){ return (CFG.phones||[]).filter(function(p){ return p && p.label && (!activeOnly || p.active!==false) && (!base || phoneBase(p)===base); }); }
 
 /* ── network ── */
 async function jget(url, ttl){
@@ -1701,7 +1704,7 @@ document.addEventListener('keydown', function(e){
 var NA={ seed:false };
 function newAccount(){
   NA={ seed:false };
-  var admin=isAdmin(), models=admin?modelsFor(PROJECT):modelsAllowed(PROJECT), phones=phoneList(true);   // VAs: only the owner's model list
+  var admin=isAdmin(), models=modelsAllowed(PROJECT), phones=phoneList(true, PROJECT);   // everyone: only this base's models from Settings (owner, Oct 5)   // VAs: only the owner's model list
   var nowLocal=phtStamp().replace(' ','T').slice(0,16);
   openModal('<div class="md-h"><h3>Log new account</h3><p>Do this the moment the account exists on the phone. Creation date and time are stamped automatically.</p></div>'+
     '<div class="md-b">'+
@@ -1709,13 +1712,12 @@ function newAccount(){
       '<div class="fld"><label>Reddit username</label><input class="inp" id="na-u" placeholder="u/username" autocomplete="off"></div>'+
       '<div class="fld"><label>Method — how this account is run</label><div class="seg" id="na-meth">'+methodsList().map(function(m){ return '<button type="button" data-m="'+esc(m)+'" onclick="naMeth(this)" style="color:'+methodColor(m)+'">'+esc(m)+'</button>'; }).join('')+'</div></div>'+
       '<div class="f2"><div class="fld"><label>Model</label>'+
-        '<select class="sel" id="na-m" onchange="naModel()"><option value="">'+(models.length?'— pick the model —':'— none set yet —')+'</option>'+models.map(function(x){ return '<option>'+esc(x)+'</option>'; }).join('')+(admin?'<option value="__new">＋ Other… (owner only)</option>':'')+'</select>'+
-        (admin?'':'<div class="hint">Models are set by the owner. Missing one? Ask the admin to add it in Settings.</div>')+
+        '<select class="sel" id="na-m" onchange="naModel()"><option value="">'+(models.length?'— pick the model —':'— none set yet —')+'</option>'+models.map(function(x){ return '<option>'+esc(x)+'</option>'; }).join('')+'</select>'+
+        '<div class="hint">'+(admin?'Add or rename models in Settings → Models per base.':'Models are set by the owner. Missing one? Ask the admin to add it in Settings.')+'</div>'+
         '<input class="inp" id="na-m2" placeholder="Model name" style="display:none;margin-top:6px" oninput="naModel()"></div>'+
-      '<div class="fld"><label>Created on (iPhone)</label>'+
-        (phones.length?'<select class="sel" id="na-d"><option value="">— pick the phone —</option>'+phones.map(function(x){ return '<option>'+esc(x.label)+'</option>'; }).join('')+'</select>'
-          :'<input class="inp" id="na-d" placeholder="e.g. iPhone 13 · #2"><div class="hint">The owner can set the phone list in Settings.</div>')+
-      '</div></div>'+
+      (phones.length?'<div class="fld"><label>Created on (iPhone)</label><select class="sel" id="na-d"><option value="">— pick the phone —</option>'+phones.map(function(x){ return '<option>'+esc(x.label)+'</option>'; }).join('')+'</select></div>'
+        :'<div class="fld"><label>Created on</label><input type="hidden" id="na-d" value=""><div class="hint" style="margin-top:9px">'+esc(baseOf(PROJECT).n)+' accounts aren\'t made on a company iPhone — nothing to pick.</div></div>')+
+      '</div>'+
       '<div class="fld"><label>Persona niche</label><input class="inp" id="na-n" list="na-nl" placeholder="traveller, food, fitness…"><datalist id="na-nl">'+(CFG.niches||[]).map(function(x){ return '<option value="'+esc(x)+'">'; }).join('')+'</datalist></div>'+
       '<div id="na-seed" style="display:none"><div class="f2"><div class="fld"><label>Created on</label><input class="inp" type="date" id="na-cd" value="'+today()+'"></div>'+
         '<div class="fld"><label>Current stage</label><select class="sel" id="na-st">'+ORDER.filter(function(k){ return k!=='new'&&k!=='creationstandby'&&k!=='banned'; }).map(function(k){ return '<option value="'+k+'">'+esc(stageMeta(k).n)+'</option>'; }).join('')+'</select></div></div></div>'+
@@ -1735,7 +1737,7 @@ async function naSave(){
   if(!/^[A-Za-z0-9_-]{3,20}$/.test(u)){ toast('That doesn\'t look like a Reddit username (3–20 letters, numbers, _ or -).'); return; }
   if(!NA.method){ toast('Pick the method — Vysor, Jailbroken or Blaze+.'); return; }
   if(!model){ toast('Pick the model this account is for.'); return; }
-  if(!dev && !NA.seed){ toast('Pick the iPhone it was created on.'); return; }
+  if(!dev && !NA.seed && phoneList(true, PROJECT).length){ toast('Pick the iPhone it was created on.'); return; }
   var st='new', cd=today(), ctime=phtStamp().slice(11,16), setup={};
   if(NA.seed){ st=$('na-st').value||'creation'; cd=$('na-cd').value||today(); ctime=''; }
   else setup={ cred:$('na-c1').checked };
@@ -1925,16 +1927,15 @@ function drawRec(r, evs){
 }
 function editRec(id){
   var r=rowById(id); if(!r) return;
-  var admin=isAdmin(), phones=phoneList(false), models=modelsFor(r.project);
+  var admin=isAdmin(), phones=phoneList(false, r.project), models=modelsFor(r.project);
   openModal('<div class="md-h"><h3>Edit '+esc(r.handle)+'</h3><p>Every change is written to the account\'s history.</p></div><div class="md-b">'+
     (admin?'<div class="fld"><label>Username</label><input class="inp" id="ed-h" value="'+esc(r.handle)+'"></div>':'')+
     '<div class="fld"><label>Method</label><select class="sel" id="ed-me"><option value="">— not tagged —</option>'+methodsList().concat(methodOf(r)&&methodsList().indexOf(methodOf(r))<0?[methodOf(r)]:[]).map(function(m){ return '<option'+(methodOf(r)===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select></div>'+
-    '<div class="f2"><div class="fld"><label>Model</label>'+(admin
-      ?'<input class="inp" id="ed-m" list="ed-ml" value="'+esc(r.model||'')+'"><datalist id="ed-ml">'+models.map(function(x){ return '<option value="'+esc(x)+'">'; }).join('')+'</datalist>'
-      :(function(){ var al=modelsAllowed(r.project), cur=String(r.model||''); var known=al.some(function(x){ return x.toLowerCase()===cur.toLowerCase(); });
+    '<div class="f2"><div class="fld"><label>Model</label>'+(
+      (function(){ var al=modelsAllowed(r.project), cur=String(r.model||''); var known=al.some(function(x){ return x.toLowerCase()===cur.toLowerCase(); });
           return '<select class="sel" id="ed-m">'+(cur&&!known?'<option value="'+esc(cur)+'" selected>'+esc(cur)+' (not on the list)</option>':(cur?'':'<option value="" selected>— pick the model —</option>'))+
-            al.map(function(x){ return '<option'+(x.toLowerCase()===cur.toLowerCase()?' selected':'')+'>'+esc(x)+'</option>'; }).join('')+'</select><div class="hint">Only the owner can add models.</div>'; })())+'</div>'+
-    '<div class="fld"><label>Created on (iPhone)</label><input class="inp" id="ed-d" list="ed-dl" value="'+esc(r.device||'')+'"><datalist id="ed-dl">'+phones.map(function(x){ return '<option value="'+esc(x.label)+'">'; }).join('')+'</datalist></div></div>'+
+            al.map(function(x){ return '<option'+(x.toLowerCase()===cur.toLowerCase()?' selected':'')+'>'+esc(x)+'</option>'; }).join('')+'</select><div class="hint">'+(admin?'The list is Settings → Models per base.':'Only the owner can add models.')+'</div>'; })())+'</div>'+
+    (phones.length||r.device?'<div class="fld"><label>Created on (iPhone)</label><input class="inp" id="ed-d" list="ed-dl" value="'+esc(r.device||'')+'"><datalist id="ed-dl">'+phones.map(function(x){ return '<option value="'+esc(x.label)+'">'; }).join('')+'</datalist></div>':'')+'</div>'+
     '<div class="fld"><label>Niche</label><input class="inp" id="ed-n" value="'+esc(r.niche||'')+'"></div>'+
     (admin?'<div class="fld"><label>VA (permanent owner)</label><select class="sel" id="ed-va">'+allVaIds().map(function(k){ return '<option value="'+esc(k)+'"'+(k===owner(r)?' selected':'')+'>'+esc(vaName(k))+'</option>'; }).join('')+'</select></div>':'')+
     '<div class="fld"><label>Notes</label><textarea class="inp" id="ed-no" rows="2" style="width:100%;resize:vertical">'+esc(r.notes||'')+'</textarea></div>'+
@@ -2937,8 +2938,8 @@ function pqFlags(va, day, dr, L){
   if(q) F.push({ k:'quick', t:q+' finished within 20 s', d:Math.min(2,q*pqRule('quick').d), c:'r' });
   var fast=rows.filter(function(x){ if(x.secs==null || x.secs<20) return false; var tt=pqTeamTime(x.kind+'|'+x.stage+'|'+(x.method||'(none)')); return tt && x.secs<tt*0.35; }).length;
   if(fast) F.push({ k:'fast', t:fast+' far under the team time', d:Math.min(2,fast*pqRule('fast').d), c:'a' });
-  var ps=CFG.process_start||'2026-10-01', untag=allRows().filter(function(r){ return owner(r)===va && !isDead(r) && (!methodOf(r) || !r.model || (cdateOf(r)>=ps && !r.device)); });
-  if(untag.length) F.push({ k:'tagging', t:untag.length+' account'+(untag.length===1?'':'s')+' missing tags', d:Math.min(2,untag.length*pqRule('tagging').d), c:'a', tip:untag.slice(0,12).map(function(r){ return r.handle+': '+[!methodOf(r)?'method':'',!r.model?'model':'',(cdateOf(r)>=ps&&!r.device)?'phone':''].filter(String).join(', '); }).join('\n') });
+  var ps=CFG.process_start||'2026-10-01', untag=allRows().filter(function(r){ return owner(r)===va && !isDead(r) && (!methodOf(r) || !r.model || (cdateOf(r)>=ps && !r.device && phoneList(false, r.project).length)); });
+  if(untag.length) F.push({ k:'tagging', t:untag.length+' account'+(untag.length===1?'':'s')+' missing tags', d:Math.min(2,untag.length*pqRule('tagging').d), c:'a', tip:untag.slice(0,12).map(function(r){ return r.handle+': '+[!methodOf(r)?'method':'',!r.model?'model':'',(cdateOf(r)>=ps&&!r.device&&phoneList(false,r.project).length)?'phone':''].filter(String).join(', '); }).join('\n') });
   (EVENTS||[]).forEach(function(e){
     if(e.kind!=='stage' || String(e.by||'').toLowerCase()!==va || bizDayOf(e.at)!==day) return;
     var a=phaseIx(e.from), b=phaseIx(e.to); if(a<0 || b<0 || b<=a) return;
@@ -3165,21 +3166,22 @@ function vSettingsLists(){
   if(!SET) SET=JSON.parse(JSON.stringify(CFG));
   if(!SET.models) SET.models={};
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Settings</h2><p>The pick-lists VAs choose from when they log an account.</p></div><button class="btn sec" onclick="SET=null;renderView()">Discard changes</button><button class="btn pri" id="set-go" onclick="setSave()">Save settings</button></div>';
-  h+='<div class="ig"><div class="card pad s6"><div class="ch-h"><b>Company iPhones</b><span>every account traces back to one phone</span></div>'+
+  h+='<div class="ig"><div class="card pad s6"><div class="ch-h"><b>Company iPhones</b><span>every account traces back to one phone · each phone belongs to one base — Altz only for now</span></div>'+
     (SET.phones.length?SET.phones.map(function(p,i){
       return '<div class="row" style="margin-bottom:8px;flex-wrap:nowrap"><input class="inp" style="flex:1" value="'+esc(p.label)+'" placeholder="iPhone 13 · #2" oninput="SET.phones['+i+'].label=this.value">'+
         '<select class="sel" onchange="SET.phones['+i+'].model=this.value">'+['iPhone 12','iPhone 13','Other'].map(function(m){ return '<option'+(p.model===m?' selected':'')+'>'+m+'</option>'; }).join('')+'</select>'+
+        '<select class="sel" title="Which base uses this phone" onchange="SET.phones['+i+'].base=this.value">'+BASES.map(function(b){ return '<option value="'+esc(b.id)+'"'+(phoneBase(p)===b.id?' selected':'')+'>'+esc(b.n)+'</option>'; }).join('')+'</select>'+
         '<label class="chip" style="cursor:pointer"><input type="checkbox" '+(p.active!==false?'checked':'')+' onchange="SET.phones['+i+'].active=this.checked" style="accent-color:var(--o)"> in use</label>'+
         '<button class="ghost" title="Remove" onclick="SET.phones.splice('+i+',1);renderView()">'+IC.x+'</button></div>'; }).join('')
       :'<div class="muted" style="margin-bottom:10px">No phones yet. Add each company iPhone once — VAs pick from this list.</div>')+
-    '<div class="row"><button class="btn sm sec" onclick="SET.phones.push({label:\'iPhone 12 · #'+(SET.phones.length+1)+'\',model:\'iPhone 12\',active:true});renderView()">'+IC.plus+' iPhone 12</button>'+
-    '<button class="btn sm sec" onclick="SET.phones.push({label:\'iPhone 13 · #'+(SET.phones.length+1)+'\',model:\'iPhone 13\',active:true});renderView()">'+IC.plus+' iPhone 13</button></div></div>';
+    '<div class="row"><button class="btn sm sec" onclick="SET.phones.push({label:\'iPhone 12 · #'+(SET.phones.length+1)+'\',model:\'iPhone 12\',base:\'Reddit\',active:true});renderView()">'+IC.plus+' iPhone 12</button>'+
+    '<button class="btn sm sec" onclick="SET.phones.push({label:\'iPhone 13 · #'+(SET.phones.length+1)+'\',model:\'iPhone 13\',base:\'Reddit\',active:true});renderView()">'+IC.plus+' iPhone 13</button></div></div>';
   h+='<div class="card pad s6"><div class="ch-h"><b>Models per base</b><span>who each account is for</span></div>'+BASES.map(function(b){
     var list=SET.models[b.id]||[];
     return '<div style="margin-bottom:12px"><div class="lbl" style="color:'+b.c+';margin-bottom:6px">'+esc(b.n)+'</div><div class="chips">'+
       list.map(function(m,i){ return '<span class="chip">'+esc(m)+' <a href="#" onclick="SET.models[\''+jsq(b.id)+'\'].splice('+i+',1);renderView();return false" style="color:var(--ink3);text-decoration:none">×</a></span>'; }).join('')+
       '<input class="inp" style="width:140px;padding:4px 9px;font-size:12px" placeholder="+ add model" onkeydown="if(event.key===\'Enter\'&&this.value.trim()){(SET.models[\''+jsq(b.id)+'\']=SET.models[\''+jsq(b.id)+'\']||[]).push(this.value.trim());renderView();}"></div></div>';
-  }).join('')+'<div class="hint muted" style="font-size:11px">Models already used on accounts are offered automatically too.</div></div>';
+  }).join('')+'<div class="hint muted" style="font-size:11px">Only these show when an account is logged or edited — per base. A base with no models yet falls back to the models its accounts already use.</div></div>';
   if(!SET.methods || !SET.methods.length) SET.methods=['Vysor','Jailbroken','Blaze+'];
   h+='<div class="card pad s6"><div class="ch-h"><b>Methods</b><span>how an account is run — every account is tagged with one</span></div><div class="chips">'+
     SET.methods.map(function(m,i){ return '<span class="chip" style="background:'+methodColor(m)+'16;color:'+methodColor(m)+'">'+esc(m)+(SET.methods.length>1?' <a href="#" onclick="SET.methods.splice('+i+',1);renderView();return false" style="color:inherit;text-decoration:none;opacity:.6">×</a>':'')+'</span>'; }).join('')+
@@ -3258,7 +3260,7 @@ async function cleanGo(which){
 }
 async function setSave(){
   var b=$('set-go'); b.disabled=true; b.textContent='Saving…';
-  SET.phones=SET.phones.filter(function(p){ return p.label && p.label.trim(); }).map(function(p){ return { label:p.label.trim(), model:p.model||'Other', active:p.active!==false }; });
+  SET.phones=SET.phones.filter(function(p){ return p.label && p.label.trim(); }).map(function(p){ return { label:p.label.trim(), model:p.model||'Other', base:phoneBase(p), active:p.active!==false }; });
   try{
     var r=await fetch(API, { method:'POST', body:JSON.stringify({ action:'rc_cfg_set', by:USER.id, cfg:SET }) });
     var d=await r.json();
