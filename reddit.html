@@ -497,9 +497,11 @@ var EXTRA=[
  {k:'creationstandby', n:'Creation standby', c:'#f59e0b'},
  {k:'recovery',        n:'Spam recovery',    c:'#0ea5e9'},
  {k:'tempban',         n:'Temp banned',      c:'#d97706'},
+ {k:'onhold',          n:'On hold',          c:'#0891b2'},   // owner/client decision — kept, not worked, not counted (Oct 5)
+ {k:'archived',        n:'Archived',         c:'#475569'},   // retired — off the board, kept in the data (Oct 5)
  {k:'banned',          n:'Banned',           c:'#64748b'}
 ];
-var ORDER=['new','creation','creationstandby','warming','comment','nsfw','day1','early','earlydm','medium','strong','superstrong','recovery','tempban','banned'];
+var ORDER=['new','creation','creationstandby','warming','comment','nsfw','day1','early','earlydm','medium','strong','superstrong','recovery','tempban','onhold','archived','banned'];
 var GROUPS=[
  {k:'new',  n:'New',       c:'#ff6b1a', st:['new']},
  {k:'cre',  n:'Creation',  c:'#f59e0b', st:['creation','creationstandby']},
@@ -508,6 +510,8 @@ var GROUPS=[
  {k:'str',  n:'Strong',    c:'#8b5cf6', st:['strong','superstrong']},
  {k:'rec',  n:'Recovery',  c:'#0ea5e9', st:['recovery']},
  {k:'tb',   n:'Temp ban',  c:'#d97706', st:['tempban']},
+ {k:'hold', n:'On hold',   c:'#0891b2', st:['onhold']},
+ {k:'arc',  n:'Archived',  c:'#475569', st:['archived']},
  {k:'ban',  n:'Banned',    c:'#64748b', st:['banned']}
 ];
 var END_REASONS=['Permanently suspended','Shadowbanned','Locked — could not recover','Other'];
@@ -517,7 +521,7 @@ var ST_ALIAS={ newlycreated:'new', newcreated:'new', creationstage:'creation', s
   commentfarm:'comment', commentfarming:'comment', comments:'comment', nsfwcomment:'nsfw', nsfwcomments:'nsfw', day1posting:'day1', dayone:'day1', dayoneposting:'day1',
   earlyposting:'early', earlydms:'earlydm', earlyplusdms:'earlydm', earlywithdms:'earlydm', mediumdm:'medium', mediumdms:'medium', mediumplusdms:'medium',
   spamrecovery:'recovery', spamfilter:'recovery', spamfilterrecovery:'recovery', spam:'recovery', tempbanned:'tempban', temporaryban:'tempban', temporarybanned:'tempban',
-  temporarilybanned:'tempban', ban:'banned', permanentlybanned:'banned', permaban:'banned', suspended:'banned', dead:'banned' };
+  temporarilybanned:'tempban', hold:'onhold', onhold:'onhold', paused:'onhold', archive:'archived', archived:'archived', retired:'archived', ban:'banned', permanentlybanned:'banned', permaban:'banned', suspended:'banned', dead:'banned' };
 function statusKey(v){ var raw=String(v==null?'':v).trim(), k=raw.toLowerCase().replace(/[^a-z0-9]/g,''); if(!k) return ''; if(ORDER.indexOf(k)>=0) return k; return ST_ALIAS[k]||raw.toLowerCase(); }
 function normRows(rows){ (rows||[]).forEach(function(r){ r.status=statusKey(r.status); }); return rows; }
 function phase(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return PH[i]; return null; }
@@ -530,7 +534,9 @@ function stageMeta(k){
 function stageOrd(k){ var i=ORDER.indexOf(k); return i<0?50:i; }
 function groupOf(k){ for(var i=0;i<GROUPS.length;i++) if(GROUPS[i].st.indexOf(k)>=0) return GROUPS[i]; return {k:'other',n:'Other',c:'#94a3b8',st:[]}; }
 function isDead(r){ return r.status==='banned'; }
-function isWorkable(r){ var s=r.status; return s!=='banned'&&s!=='tempban'&&s!=='new'&&s!=='creation'&&s!=='creationstandby'; }
+function isWorkable(r){ var s=r.status; return s!=='banned'&&s!=='tempban'&&s!=='new'&&s!=='creation'&&s!=='creationstandby'&&s!=='onhold'&&s!=='archived'; }
+function isArchived(r){ return r.status==='archived'; }
+function isParked(r){ return r.status==='onhold'||r.status==='archived'; }
 
 /* ── tiny helpers ── */
 function $(id){ return document.getElementById(id); }
@@ -573,8 +579,16 @@ function vaKeyOf(empId){
 }
 function markOk(v, empId){
   if(!v) return false;
-  if(v===vaKeyOf(empId)) return true;
-  return SHIFTOF[String(empId||'').toLowerCase()]!=='night' && v===today();
+  var k=vaKeyOf(empId); if(v===k) return true;
+  if(SHIFTOF[String(empId||'').toLowerCase()]!=='night') return v===today();
+  /* Night VA: their window is keyed by the night it started (D·PM). A stamp written while their shift
+     setting hadn't loaded yet reads D·AM or D — same night, so it counts (Oct 5, Rhussel's 0%). */
+  var d=k.slice(0,10); return v===d+'·AM' || v===d;
+}
+/* The worker's current shift window: morning = business day D 08:00 → D+1 08:00; night = D 20:00 → D+1 20:00. */
+function shiftWindow(empId){
+  var night=SHIFTOF[String(empId||'').toLowerCase()]==='night', d=vaKeyOf(empId).slice(0,10);
+  var s=new Date(d+'T'+(night?'20':'08')+':00:00+08:00'); return { start:s, end:new Date(s.getTime()+24*3600000) };
 }
 function markOkAny(v, a, b){ return markOk(v,a) || (b && markOk(v,b)); }
 function parseTs(s){
@@ -994,7 +1008,7 @@ function progOf(rows, worker){
        VA's new accounts graduated to Creation standby after midnight while the shift was still running,
        and dropped out of their progress — Rhussel showed 0% after a night of creating.) Accounts logged
        as "already existing" carry no setup and are not creations. */
-    if((r.status==='new' || m.setup || m.cdone) && (markOkAny(m.added,wk,ow) || markOkAny(m.cstamp,wk,ow))){ tot+=1; if(m.cdone) done+=1; }
+    var cr=creationOf(r, wk, ow); if(cr){ tot+=1; if(cr.done) done+=1; }
     if(isWorkable(r)){ tot+=2; if(markOkAny(m.s1,wk,ow)) done++; if(markOkAny(m.s2,wk,ow)) done++; return; }
     if(r.status==='new') return;
     if(r.status==='banned'||r.status==='tempban'){
@@ -1022,7 +1036,7 @@ function vToday(){
   var me=myId(), admin=isAdmin();
   /* Banned accounts leave the board a week after the ban — the record stays in Accounts and Insights,
      but they never pad a count or clutter the day's work. Since Oct 5: not shown on Today at all. */
-  var onBoard=function(r){ return !isDead(r); };   // banned accounts never sit on the work board (owner, Oct 5) — Accounts → Banned / Insights keep the record
+  var onBoard=function(r){ return !isDead(r) && !isArchived(r); };   // banned accounts never sit on the work board (owner, Oct 5) — Accounts → Banned / Insights keep the record
   var board = (admin ? (TD.va==='all'?ROWS:ROWS.filter(function(r){ return worksFor(r)===(TD.va==='mine'?me:TD.va); })) : ROWS).filter(onBoard);
   var mineWork=ROWS.filter(function(r){ return worksFor(r)===me; });
   var hr=parseInt(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',hour12:false}).format(new Date()),10);
@@ -1101,7 +1115,8 @@ function vToday(){
           '<div style="min-width:0;flex:1"><div class="nm">'+esc(vaName(o.k))+'</div>'+
           '<div class="sb">'+o.n+' active'+(off?' · <span style="color:#b45309;font-weight:800">'+esc(off.type)+'</span>':'')+'</div>'+
           '<div class="prog" style="margin-top:6px"><i style="width:'+Math.min(100,o.pct)+'%;background:'+c+'"></i></div></div>'+
-          '<div class="pc" style="color:'+c+'">'+o.done+'/'+o.tot+'<div style="font:700 11px Inter,system-ui,sans-serif">'+o.pct+'%</div></div></div>';
+          '<div class="pc" style="color:'+c+'">'+o.done+'/'+o.tot+'<div style="font:700 11px Inter,system-ui,sans-serif">'+o.pct+'%</div>'+
+          '<button class="pq-sug" style="font-size:10px;margin-top:3px" title="How is this counted?" onclick="event.stopPropagation();progWhy(\''+jsq(o.k)+'\')">how?</button></div></div>';
       };
       h+='<div class="sec-h"><b>Team progress</b><span>owner view · grouped by shift</span><hr></div>';
       grp.forEach(function(g){
@@ -1127,7 +1142,7 @@ function vToday(){
     (mcount['']?'<button class="chip '+(TD.m===''?'sel':'')+'" onclick="TD.m=\'\';renderView()" style="'+(TD.m===''?'':'color:#b45309')+'">Not tagged '+mcount['']+'</button>':'')+
     '</div><div class="sp"></div>'+
     searchBox('td-q', TD.q, 'Search username, model, phone, VA…', 'TD.q', TD.q.trim()?board.filter(tdMatch(TD.q)).length:null)+
-    '<div class="seg" style="width:auto"><button class="'+(TD.by==='stage'?'on':'')+'" onclick="TD.by=\'stage\';renderView()">Group by stage</button><button class="'+(TD.by==='method'?'on':'')+'" onclick="TD.by=\'method\';renderView()">Group by method</button></div></div>';
+    '<div class="seg" style="width:auto"><button class="'+(TD.by==='stage'?'on':'')+'" onclick="TD.by=\'stage\';renderView()">Group by stage</button><button class="'+(TD.by==='method'?'on':'')+'" onclick="TD.by=\'method\';renderView()">Group by method</button><button class="'+(TD.by==='model'?'on':'')+'" onclick="TD.by=\'model\';renderView()">Group by model</button></div></div>';
 
   var stF=function(r){ return TD.stg==='all' || (TD.stg==='att'?needsAttention(r):r.status===TD.stg); };
   var mF=function(r){ return TD.m==='all' || methodOf(r)===TD.m; };
@@ -1135,11 +1150,13 @@ function vToday(){
   if(TD.q.trim()) rows=rows.filter(tdMatch(TD.q));
   if(!board.length && !(admin && TD.va!=='all')){ return h+'<div class="card empty">No accounts yet. Create one on your assigned iPhone, then tap <b>Log new account</b> right away — the SOP says the account is logged the moment it exists.</div>'; }
   var mOrd=function(r){ var m=methodOf(r); var i=mkeys.indexOf(m); return m?(i<0?50:i):99; };
-  rows.sort(function(a,b){ return (TD.by==='method'?(mOrd(a)-mOrd(b)):0) || stageOrd(a.status)-stageOrd(b.status) || (isHeld(a)-isHeld(b)) || daysIn(b)-daysIn(a) || String(a.handle).localeCompare(String(b.handle)); });
+  var mdl=modelsAllowed(PROJECT), mdOrd=function(r){ var m=String(r.model||''), i=mdl.indexOf(m); return m?(i<0?50:i):99; };
+  rows.sort(function(a,b){ return (TD.by==='method'?(mOrd(a)-mOrd(b)):0) || (TD.by==='model'?(mdOrd(a)-mdOrd(b) || String(a.model||'').localeCompare(String(b.model||''))):0) || stageOrd(a.status)-stageOrd(b.status) || (isHeld(a)-isHeld(b)) || daysIn(b)-daysIn(a) || String(a.handle).localeCompare(String(b.handle)); });
   var out=[], last=null;
   rows.forEach(function(r){
     var key, label, col, n;
     if(TD.by==='method'){ key=methodOf(r); label=key||'Not tagged yet — set the method'; col=methodColor(key); n=rows.filter(function(x){ return methodOf(x)===key; }).length; }
+    else if(TD.by==='model'){ key=String(r.model||''); label=key||'No model yet'; col=key?AVC[Math.abs(hcH(key))%AVC.length]:'#94a3b8'; n=rows.filter(function(x){ return String(x.model||'')===key; }).length; }
     else { var sm=stageMeta(r.status); key=sm.n; label=sm.n; col=sm.c; n=rows.filter(function(x){ return stageMeta(x.status).n===key; }).length; }
     if(key!==last){ out.push('<div class="lg" style="--gc:'+col+'"><i></i><b>'+esc(label)+'</b><span>'+n+'</span></div>'); last=key; }
     out.push(rowHtml(r));
@@ -1234,7 +1251,11 @@ function rowHtml(r){
   var tag=cv==='__hold__'?' · <span style="color:#075985">on hold today</span>':(cv?' · <span style="color:#9a3412">'+esc(cv===me?('covering for '+firstName(ow)):(ow===me?('with '+firstName(cv)+' today'):(firstName(ow)+' → '+firstName(cv))))+'</span>':'');
   var sub=[r.model, r.device, r.niche].filter(Boolean).map(esc).join(' · ');
   var prog='', act='';
-  if(st==='new'){
+  if(isParked(r)){
+    var pk=m.park||{};
+    prog='<span class="note i" title="'+esc((pk.reason||'')+(pk.by?' — '+vaName(pk.by):''))+'">'+(st==='archived'?IC.doc+' Archived':IC.pause+' On hold')+(pk.reason?' · '+esc(String(pk.reason).slice(0,40)):'')+'</span>';
+    if(admin) act='<button class="ses ok2" onclick="resumeAcct(\''+id+'\')">'+IC.up+' Resume → '+esc(stageMeta(m.prev&&!/^(onhold|archived)$/.test(m.prev)?m.prev:'creation').n)+'</button>';
+  } else if(st==='new'){
     var ok3=!!(m.setup||{}).cred;
     if(m.cdone) prog='<span class="note g">'+IC.check+' Counted · to Creation tomorrow</span>';
     else { prog='<span class="note w">Save the login in the credential store, then count it</span>';
@@ -1294,7 +1315,7 @@ function allVaIds(){
 /* ── one account card ── */
 function stageSelect(r, cls){
   var cur=r.status, sm=stageMeta(cur);
-  var opts=ORDER.filter(function(k){ return k!=='creationstandby' || cur==='creationstandby'; }).map(function(k){ return '<option value="'+k+'"'+(k===cur?' selected':'')+'>'+esc(stageMeta(k).n)+'</option>'; }).join('');
+  var opts=ORDER.filter(function(k){ return (k!=='creationstandby' || cur==='creationstandby') && (isAdmin() || (k!=='onhold' && k!=='archived') || k===cur); }).map(function(k){ return '<option value="'+k+'"'+(k===cur?' selected':'')+'>'+esc(stageMeta(k).n)+'</option>'; }).join('');
   if(ORDER.indexOf(cur)<0) opts='<option value="'+esc(cur)+'" selected>'+esc(cur)+'</option>'+opts;
   return '<select class="stg '+(cls||'')+'" onchange="changeStage(\''+jsq(r.id)+'\',this)" data-prev="'+esc(cur)+'" title="Move this account to another stage" '+
     'style="color:'+sm.c+';border-color:'+sm.c+'40;background-color:'+sm.c+'12">'+opts+'</select>';
@@ -1314,6 +1335,11 @@ function chipsHtml(r, withVa){
 }
 function menuItems(r){
   var it=[['Open record',"openRec('"+jsq(r.id)+"')",IC.doc]];
+  if(isAdmin() && !isDead(r)){
+    if(isParked(r)) it.push(['Resume → '+stageMeta(M(r).prev&&!/^(onhold|archived)$/.test(M(r).prev)?M(r).prev:'creation').n,"resumeAcct('"+jsq(r.id)+"')",IC.up]);
+    if(r.status!=='onhold') it.push(['Put on hold…',"parkAcct('"+jsq(r.id)+"','onhold')",IC.pause]);
+    if(r.status!=='archived') it.push(['Archive…',"parkAcct('"+jsq(r.id)+"','archived')",IC.doc]);
+  }
   if(!isDead(r)){
     it.push(['Update karma',"setKarma('"+jsq(r.id)+"')",IC.star]);
     it.push(['Edit details',"editRec('"+jsq(r.id)+"')",IC.edit]);
@@ -1454,6 +1480,101 @@ function daySnap(f){
   try{ fetch(API+'?'+qs(o)+'&_='+Date.now()).catch(function(){}); }catch(e){}
 }
 
+/* ═══════════ COUNTED CREATIONS — one rule for the card, the breakdown and the day close ═══════════
+   An account counts as a creation of THIS shift when it is a real creation (status New, or it has the
+   setup / was counted) and either
+     • its log stamp (added / cstamp) belongs to the worker's current shift, or
+     • it carries no stamp at all (typed into the sheet, or logged before stamps) and was created inside
+       the worker's shift window by that worker.
+   Done = the setup was finished (or it has already moved past New). */
+function creationOf(r, wk, ow){
+  var m=M(r);
+  if(!(r.status==='new' || m.setup || m.cdone || r.status==='creation' || r.status==='creationstandby')) return null;
+  var stamped=markOkAny(m.added,wk,ow) || markOkAny(m.cstamp,wk,ow);
+  if(stamped && (r.status==='new' || m.setup || m.cdone)) return { done:!!m.cdone, how:'stamp' };
+  if(!m.added && !m.cstamp && createdExact(r) && String(r.created_by||'').toLowerCase()===wk){
+    var c=createdAt(r), w=shiftWindow(wk);
+    if(c && c>=w.start && c<w.end) return { done:(!!m.cdone || r.status!=='new'), how:'time' };
+  }
+  return null;
+}
+/* "How is this counted?" — the owner's breakdown behind a team card: sessions per account, creations
+   counted this shift, and anything logged in the last 36 hours that did NOT count, with the reason. */
+function progWhy(va){
+  var rows=allRows().filter(function(r){ return worksFor(r)===va; }), p=progOf(rows.filter(function(r){ return r.project===PROJECT; }), va), w=shiftWindow(va);
+  var work=rows.filter(function(r){ return r.project===PROJECT && !isHeld(r) && isWorkable(r); });
+  var cre=[], miss=[], since=Date.now()-36*3600000;
+  allRows().forEach(function(r){
+    var by=String(r.created_by||'').toLowerCase(); if(by!==va && worksFor(r)!==va) return;
+    var c=createdAt(r), cr=creationOf(r, va, owner(r));
+    if(cr){ if(r.project===PROJECT) cre.push({ r:r, c:cr }); return; }
+    if(!c || c.getTime()<since || isDead(r)) return;
+    var m=M(r), why;
+    if(r.project!==PROJECT) why='on '+baseOf(r.project).n+' — switch base to see it there';
+    else if(m.added||m.cstamp) why=(!m.setup && !m.cdone && r.status!=='new')?'logged as an "already existing" account — not a creation':'stamped for another shift ('+esc(m.cstamp||m.added)+'; this shift is '+esc(vaKeyOf(va))+')';
+    else if(!/^(new|creation|creationstandby)$/.test(r.status)) why='already past Creation ('+esc(stageMeta(r.status).n)+') — an existing account, not a creation';
+    else if(!createdExact(r)) why='created date has no time — can\'t place it in a shift';
+    else if(c<w.start || c>=w.end) why='created '+esc(fmtDT(c))+' — outside this shift ('+esc(fmtDT(w.start))+' → '+esc(fmtDT(w.end))+')';
+    else if(by!==va) why='logged by '+esc(vaName(by))+', not by '+esc(vaName(va));
+    else why='not counted';
+    miss.push({ r:r, why:why });
+  });
+  var s1=work.filter(function(r){ return markOkAny(M(r).s1,va,owner(r)); }).length, s2=work.filter(function(r){ return markOkAny(M(r).s2,va,owner(r)); }).length;
+  var parked=rows.filter(function(r){ return r.project===PROJECT && isParked(r); }).length, standby=rows.filter(function(r){ return r.project===PROJECT && (r.status==='creation'||r.status==='creationstandby'); }).length;
+  openModal('<div class="md-h"><h3>'+esc(vaName(va))+' · '+p.done+'/'+p.tot+'</h3><p>How this shift is counted — '+esc(SHIFTOF[va]==='night'?'night':'morning')+' shift, '+esc(fmtDT(w.start))+' → '+esc(fmtDT(w.end))+' ('+esc(vaKeyOf(va))+'). '+esc(baseOf(PROJECT).n)+' base.</p></div>'+
+    '<div class="md-b" style="max-height:62vh;overflow:auto;font-size:13px;line-height:1.6">'+
+      '<div class="card pad" style="margin-bottom:10px"><b>Sessions</b> — '+work.length+' working account'+(work.length===1?'':'s')+' × 2 = <b>'+(work.length*2)+' due</b> · Session 1 done on '+s1+', Session 2 on '+s2+'.'+
+        '<div class="muted" style="font-size:12px">Not due: '+standby+' in Creation / standby (no sessions)'+(parked?' · '+parked+' on hold / archived':'')+'.</div></div>'+
+      '<div class="card pad" style="margin-bottom:10px"><b>Creations counted this shift — '+cre.length+'</b> ('+cre.filter(function(x){ return x.c.done; }).length+' finished)'+
+        (cre.length?'<div style="margin-top:6px">'+cre.map(function(x){ return '<span class="chip" style="margin:2px">'+esc(x.r.handle)+(x.c.done?' ✓':' · setup open')+(x.c.how==='time'?' · by time':'')+'</span>'; }).join('')+'</div>':'')+'</div>'+
+      (miss.length?'<div class="card pad" style="border-color:#fed7aa"><b style="color:#9a3412">Logged in the last 36 h but NOT counted — '+miss.length+'</b>'+
+        '<table class="db" style="margin-top:6px"><tbody>'+miss.map(function(x){ return '<tr><td class="c1">'+esc(x.r.handle)+'</td><td><span class="pill" style="background:'+stageMeta(x.r.status).c+'16;color:'+stageMeta(x.r.status).c+'">'+esc(stageMeta(x.r.status).n)+'</span></td><td style="white-space:normal">'+x.why+'</td></tr>'; }).join('')+'</tbody></table></div>'
+        :'<div class="muted" style="font-size:12px">Nothing logged in the last 36 hours was left out.</div>')+
+    '</div><div class="md-f"><button class="btn sec" onclick="closeModal()">Close</button></div>');
+}
+
+/* ═══════════ ON HOLD / ARCHIVED (owner, Oct 5) ═══════════
+   On hold = kept exactly where it is but not worked: no sessions due, not in anyone's progress, still in
+   the health check (it still exists on Reddit). Archived = retired: off the Today board, out of the
+   health check, kept in Accounts and the history. Only JMBEAST / ADMIN can put an account in or take it
+   out (the backend enforces it). Both remember the stage they came from; Resume puts it back. */
+async function parkAcct(id, kind){
+  var r=rowById(id); if(!r || !isAdmin()) return;
+  var lbl=kind==='archived'?'Archive':'Put on hold';
+  var reason=await askText(lbl+' '+r.handle+'?', kind==='archived'
+      ?'Retires the account: it leaves the Today board and the health check, stays in Accounts and its history. Resume brings it back to <b>'+esc(stageMeta(r.status).n)+'</b>.'
+      :'Keeps it at <b>'+esc(stageMeta(r.status).n)+'</b> but nobody works it — no sessions due, not in anyone\'s progress — until you resume it.', 'Why? (e.g. client asked to hold Jailbroken creation accounts)');
+  if(reason==null) return;
+  var meta=Object.assign({}, M(r), { prev:r.status, park:{ by:myId(), at:phtStamp(), reason:reason } });
+  await moveTo(r, kind, { meta:JSON.stringify(meta), note:reason }, (kind==='archived'?'Archived':'On hold')+' — '+r.handle);
+}
+async function resumeAcct(id){
+  var r=rowById(id); if(!r || !isAdmin()) return;
+  var back=M(r).prev && M(r).prev!=='onhold' && M(r).prev!=='archived' ? M(r).prev : 'creation';
+  var meta=Object.assign({}, M(r)); delete meta.park; if(phase(back)) meta.pstart=today();
+  await moveTo(r, back, { meta:JSON.stringify(meta) }, 'Back to '+stageMeta(back).n);
+}
+/* Bulk: every live account in the current Accounts filter (e.g. Jailbroken + Creation) at once. */
+async function bulkPark(kind){
+  if(!isAdmin()) return;
+  var L=dbRows().filter(function(r){ return !isDead(r) && r.status!==kind && !(kind==='onhold' && r.status==='archived'); });
+  if(!L.length){ toast('Nothing in this filter to '+(kind==='archived'?'archive':'put on hold')+'.'); return; }
+  var reason=await askText((kind==='archived'?'Archive ':'Put on hold ')+L.length+' account'+(L.length===1?'':'s')+'?', 'Every live account in the current filter'+(DB.meth!=='all'?' — <b>'+esc(DB.meth||'not tagged')+'</b>':'')+(DB.grp?' · <b>'+esc((GROUPS.filter(function(g){ return g.k===DB.grp; })[0]||{}).n||DB.grp)+'</b>':'')+'. Each one remembers its stage; Resume brings it back. Ctrl+Z undoes the whole batch.', 'Why? (e.g. client asked to hold Jailbroken creation accounts)');
+  if(reason==null) return;
+  toast('Updating '+L.length+'…'); var ok=0, fail=0, items=[];
+  for(var i=0;i<L.length;i+=5){
+    await Promise.all(L.slice(i,i+5).map(async function(r){
+      var pm=Object.assign({}, M(r)), meta=Object.assign({}, pm, { prev:r.status, park:{ by:myId(), at:phtStamp(), reason:reason } });
+      try{ var d=await upd(r.id,{ status:kind, meta:JSON.stringify(meta), note:reason });
+        if(d&&d.ok){ ok++; items.push({ id:r.id, status:r.status, stage_at:r.stage_at, meta:{ prev:pm.prev, park:pm.park }, keys:['prev','park'] }); patchLocal(r.id,{ status:kind, meta:meta, stage_at:phtStamp() }); }
+        else fail++; }catch(e){ fail++; }
+    }));
+  }
+  if(items.length) undoPush({ kind:'stage', label:items.length+' account'+(items.length===1?'':'s')+' back from '+(kind==='archived'?'archive':'hold'), items:items });
+  EVENTS_AT=0; if(fail) toast(ok+' done · '+fail+' failed — retry'); else toastUndo(ok+' '+(kind==='archived'?'archived':'on hold'));
+  renderView();
+}
+
 /* ── actions ── */
 /* Meta writes send only the keys that change (meta_patch, backend rc-2026-10-05a+): the server merges
    them into the CURRENT row, so an owner ticking a session and a teammate recording today's health
@@ -1557,6 +1678,8 @@ async function changeStage(id, sel){
   var r=rowById(id); if(!r) return; var next=sel.value, prev=sel.getAttribute('data-prev');
   if(next===prev) return;
   if(next==='banned'){ sel.value=prev; banAcct(id); return; }
+  if(next==='onhold'||next==='archived'){ sel.value=prev; if(!isAdmin()){ toast('Only the owner can put accounts on hold or archive them.'); return; } return parkAcct(id, next); }
+  if((prev==='onhold'||prev==='archived') && !isAdmin()){ sel.value=prev; toast('Only the owner can take an account off hold.'); return; }
   if(next==='tempban'||next==='recovery'){ sel.value=prev; return next==='tempban'?toTempBan(id):toRecovery(id); }
   var extra={};
   if(phase(next)){ extra.meta=JSON.stringify(Object.assign({}, M(r), { pstart:today() })); }
@@ -1787,8 +1910,10 @@ function dbRows(){
   var src=(isAdmin() && DB.all)?allRows():(isAdmin()?(ALL[PROJECT]||ROWS):ROWS);
   var q=DB.q.trim().toLowerCase();
   return src.filter(function(r){
-    if(DB.life==='alive' && isDead(r)) return false;
+    if(DB.life==='alive' && (isDead(r) || isArchived(r))) return false;
     if(DB.life==='dead' && !isDead(r)) return false;
+    if(DB.life==='hold' && r.status!=='onhold') return false;
+    if(DB.life==='arch' && !isArchived(r)) return false;
     if(DB.grp && groupOf(r.status).k!==DB.grp) return false;
     if(DB.meth!=='all' && methodOf(r)!==DB.meth) return false;
     if(DB.model && String(r.model||'')!==DB.model) return false;
@@ -1811,7 +1936,7 @@ function vAccounts(){
     '<button class="btn pri" onclick="newAccount()">'+IC.plus+' Log new account</button></div>';
   var models=distinct(src,function(r){ return r.model; }), phones=distinct(src,function(r){ return r.device; });
   h+='<div class="tbar">'+
-    '<div class="seg" style="width:auto">'+[['alive','Alive'],['dead','Banned'],['all','All']].map(function(x){ return '<button class="'+(DB.life===x[0]?'on':'')+'" onclick="DB.life=\''+x[0]+'\';renderView()">'+x[1]+'</button>'; }).join('')+'</div>'+
+    '<div class="seg" style="width:auto">'+[['alive','Alive'],['hold','On hold'],['arch','Archived'],['dead','Banned'],['all','All']].map(function(x){ return '<button class="'+(DB.life===x[0]?'on':'')+'" onclick="DB.life=\''+x[0]+'\';renderView()">'+x[1]+'</button>'; }).join('')+'</div>'+
     '<select class="sel" onchange="DB.grp=this.value;renderView()"><option value="">All stages</option>'+GROUPS.map(function(g){ return '<option value="'+g.k+'"'+(DB.grp===g.k?' selected':'')+'>'+g.n+'</option>'; }).join('')+'</select>'+
     '<select class="sel" onchange="DB.meth=this.value;renderView()"><option value="all">All methods</option>'+methodsList().map(function(m){ return '<option'+(DB.meth===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'<option value=""'+(DB.meth===''?' selected':'')+'>Not tagged</option></select>'+
     '<select class="sel" onchange="DB.model=this.value;renderView()"><option value="">All models</option>'+models.map(function(m){ return '<option'+(DB.model===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select>'+
@@ -1822,6 +1947,12 @@ function vAccounts(){
     '<div class="sp"></div>'+searchBox('db-q', DB.q, 'Search username, model, phone, VA…', 'DB.q', DB.q.trim()?rows.length:null)+
     '<span class="muted" style="font-weight:700;font-size:12px">'+rows.length+' record'+(rows.length===1?'':'s')+'</span></div>';
   if(admin && DB.life==='dead' && rows.length) h+='<div class="banner info">'+IC.trash+'<div style="flex:1">Don\'t want these old bans in the tool? Remove them all (or only the old-process ones) in one go — new bans keep being recorded.</div><button class="btn sm dark" onclick="CLEAN=null;go(\'settings\')">Open Clean-up</button></div>';
+  if(admin && rows.length){
+    var liveN=rows.filter(function(r){ return !isDead(r); }).length;
+    if(liveN) h+='<div class="row" style="gap:8px;margin:-4px 0 12px;align-items:center;flex-wrap:wrap"><span class="muted" style="font-size:12px;font-weight:700">With the '+liveN+' live account'+(liveN===1?'':'s')+' shown:</span>'+
+      '<button class="btn sm sec" onclick="bulkPark(\'onhold\')">'+IC.pause+' Put on hold</button><button class="btn sm sec" onclick="bulkPark(\'archived\')">'+IC.doc+' Archive</button>'+
+      '<span class="muted" style="font-size:11.5px">e.g. filter Jailbroken + Creation first · Ctrl+Z undoes it</span></div>';
+  }
   var untagged=rows.filter(function(r){ return !methodOf(r); }).length;
   if(admin && untagged) h+='<div class="banner warn">'+IC.tag+'<div style="flex:1"><b>'+untagged+'</b> of these records have no method yet. Tag them so Insights can compare Vysor, Jailbroken and Blaze+.</div>'+
     '<select class="sel" id="bulk-m">'+methodsList().map(function(m){ return '<option>'+esc(m)+'</option>'; }).join('')+'</select><button class="btn sm dark" onclick="bulkMethod()">Tag the '+untagged+' shown</button></div>';
@@ -2577,7 +2708,7 @@ async function hcBanAll(){
 var CC_SEC=4, CC_MAX=10;   // ~4 seconds per account; hard limit 10 minutes
 function hcH(s){ var h=2166136261>>>0; s=String(s); for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } return h; }
 var _CC=null, _CCK='';
-function ccLive(){ var out=[]; BASES.forEach(function(b){ (ALL[b.id]||[]).forEach(function(r){ if(!isDead(r)) out.push(r); }); }); return out; }
+function ccLive(){ var out=[]; BASES.forEach(function(b){ (ALL[b.id]||[]).forEach(function(r){ if(!isDead(r) && !isArchived(r)) out.push(r); }); }); return out; }   // archived accounts are retired — not checked
 function ccPlan(){
   var live=ccLive(), day=today(), key=day+'|'+live.length+'|'+DIR_READY;
   if(_CC && _CCK===key) return _CC;
