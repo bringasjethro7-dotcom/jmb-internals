@@ -411,7 +411,7 @@ var PROJECT=(function(){
 })();
 var USER=null, ROWS=[], ALL={}, ALL_AT=0, NAMES={}, SHIFTOF={}, PHOTOOF={}, COVER={}, OFF=null, EVENTS=null, EVENTS_AT=0;
 var CFG={ phones:[], models:{}, niches:[], process_start:'2026-10-01', rest_days:{}, methods:['Vysor','Jailbroken','Blaze+'] };
-var VIEW='today', BASECOUNT={};
+var VIEW='today', BASECOUNT={}, BE_BUILD='';
 var SOP_START='2026-10-01';
 
 /* ── stages: the SOP ladder + lifecycle states ── */
@@ -707,7 +707,7 @@ async function load(){
     var d=await jget(API+'?'+qs({action:'pa_list', project:PROJECT})+'&_='+Date.now(), 10000);
     if(!d||!d.ok) throw new Error((d&&d.error)||'load');
     var rows=normRows((d.rows||[]).map(function(r){ r.project=r.project||PROJECT; return r; }));
-    if(isAdmin()){ ALL[PROJECT]=rows; }
+    ALL[PROJECT]=rows;
     ROWS=scope(rows);
     try{ sessionStorage.setItem('rc_rows_'+PROJECT, JSON.stringify({t:Date.now(), rows:rows})); }catch(e){}
     BASECOUNT[PROJECT]=(isAdmin()?rows:ROWS).filter(function(r){ return r.status!=='banned'; }).length;   // banned accounts never count in a total
@@ -732,7 +732,8 @@ async function loadAll(force){
     try{
       var d=await jget(API+'?'+qs({action:'pa_list', project:b.id})+'&_='+Date.now(), 10000);
       var rows=normRows(((d&&d.rows)||[]).map(function(r){ r.project=r.project||b.id; return r; }));
-      if(isAdmin()) ALL[b.id]=rows;
+      ALL[b.id]=rows;   // everyone keeps all rows in memory — the daily cross-check needs other VAs' handles; views still scope by role
+      if(b.id===PROJECT) ROWS=scope(rows);   // one set of objects per base, so an edit is never made on a stale copy
       BASECOUNT[b.id]=rows.filter(function(r){ return r.status!=='banned' && (isAdmin() || owner(r)===me); }).length;
     }catch(e){}
   }));
@@ -747,7 +748,7 @@ async function loadEvents(force){
 }
 async function loadOff(){
   if(!isAdmin()) return;
-  try{ var d=await jget(API+'?'+qs({action:'rc_off_today', by:USER.id, with_accounts:1})+'&_='+Date.now(), 30000); if(d && d.ok){ OFF=d; paintTabs(); if(VIEW==='today'||VIEW==='coverage') renderView(); } }catch(e){}
+  try{ var d=await jget(API+'?'+qs({action:'rc_off_today', by:USER.id, with_accounts:1})+'&_='+Date.now(), 30000); if(d && d.ok){ OFF=d; paintTabs(); if(VIEW==='today'||VIEW==='settings') renderView(); } }catch(e){}
 }
 /* A fresh account graduates to Creation standby the day after it was finished. One that was never
    finished stays in New — that is an open item, not stock. */
@@ -776,18 +777,22 @@ function paintTop(){
 }
 function tabsFor(){
   var t=[['today','Today'],['accounts','Accounts']];
-  if(isAdmin()) t=t.concat([['pipeline','Pipeline'],['insights','Insights'],['health','Health check'],['coverage','Coverage'],['settings','Settings']]);
+  if(isAdmin()) t=t.concat([['pipeline','Pipeline'],['insights','Insights'],['health','Health check'],['prod','Productivity & QA'],['settings','Settings']]);   // Coverage lives inside Settings (owner, Oct 5)
+  else t=t.concat([['health','Health check']]);   // every VA does the daily cross-check
   return t;
 }
+var SETSUB='lists';   // Settings sub-page: 'coverage' | 'lists'
 function paintTabs(){
   var h=$('tabs'); if(!h) return;
   var unc=(OFF&&OFF.uncovered)||0;
   h.innerHTML=tabsFor().map(function(t){
-    var hp=(t[0]==='health' && typeof hcProblems==='function')?hcProblems().length:0;
-    return '<button class="'+(VIEW===t[0]?'on':'')+'" onclick="go(\''+t[0]+'\')">'+t[1]+(t[0]==='coverage'&&unc?' <span class="badge">'+unc+'</span>':'')+(hp?' <span class="badge">'+hp+'</span>':'')+'</button>';
+    var hp=0; try{ if(t[0]==='health') hp=isAdmin()?(hcProblems().length+ccReports().length):ccMineLeft().length; }catch(_b){}
+    return '<button class="'+(VIEW===t[0]?'on':'')+'" onclick="go(\''+t[0]+'\')">'+t[1]+(t[0]==='settings'&&unc?' <span class="badge">'+unc+'</span>':'')+(hp?' <span class="badge">'+hp+'</span>':'')+'</button>';
   }).join('');
 }
 function go(v){
+  if(v==='coverage'){ SETSUB='coverage'; v='settings'; }
+  else if(v==='settings' && VIEW!=='settings') SETSUB=(OFF&&OFF.uncovered)?'coverage':'lists';
   if(!tabsFor().some(function(t){ return t[0]===v; })) v='today';
   VIEW=v; try{ sessionStorage.setItem('rc_view', v); }catch(e){}
   paintTabs(); renderView(); window.scrollTo({top:0,behavior:'smooth'});
@@ -831,6 +836,7 @@ function renderView(){
     else if(VIEW==='insights') html=vInsights();
     else if(VIEW==='coverage') html=vCoverage();
     else if(VIEW==='health') html=vHealth();
+    else if(VIEW==='prod') html=vProd();
     else if(VIEW==='settings') html=vSettings();
   }catch(e){ html='<div class="card empty">Something went wrong drawing this view: '+esc(e&&e.message)+'</div>'; console.error(e); }
   var keep=document.activeElement && document.activeElement.id;
@@ -850,7 +856,9 @@ function start(){
   try{ fetch(API+'?'+qs({action:'tool_used', employee_id:USER.id, tool:'reddit'})+'&_='+Date.now()).catch(function(){}); }catch(_t){}
   var want=null;
   try{ want=window.__RC_VIEW || (new URLSearchParams(location.search)).get("tab") || sessionStorage.getItem("rc_view"); }catch(e){}
+  if(want==='coverage'){ SETSUB='coverage'; want='settings'; }
   VIEW=(want && tabsFor().some(function(t){ return t[0]===want; }))?want:'today';
+  try{ api({ action:'rc_build' }).then(function(d){ BE_BUILD=(d&&d.build)||''; }).catch(function(){}); }catch(_bb){}
   if(isAdmin()){ DB.va='all'; TD.va='all'; }
   paintTop(); paintCached();
   if(!ROWS.length) $('view').innerHTML='<div class="grid"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>';
@@ -923,8 +931,8 @@ function needsAttention(r){
 function vToday(){
   var me=myId(), admin=isAdmin();
   /* Banned accounts leave the board a week after the ban — the record stays in Accounts and Insights,
-     but they never pad a count or clutter the day's work. */
-  var onBoard=function(r){ if(!isDead(r)) return true; var e=endedAt(r); return !!(e && dayDiff(e)<7); };
+     but they never pad a count or clutter the day's work. Since Oct 5: not shown on Today at all. */
+  var onBoard=function(r){ return !isDead(r); };   // banned accounts never sit on the work board (owner, Oct 5) — Accounts → Banned / Insights keep the record
   var board = (admin ? (TD.va==='all'?ROWS:ROWS.filter(function(r){ return worksFor(r)===(TD.va==='mine'?me:TD.va); })) : ROWS).filter(onBoard);
   var mineWork=ROWS.filter(function(r){ return worksFor(r)===me; });
   var hr=parseInt(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',hour12:false}).format(new Date()),10);
@@ -950,6 +958,7 @@ function vToday(){
   }
   if(admin) h+=wrongBaseBanner(ALL[PROJECT]||ROWS);
   if(admin) h+=hcBanner();
+  try{ var _ml=ccMineLeft(); if(_ml.length) h+='<div class="banner warn">'+IC.search+'<div style="flex:1"><b>Daily health check:</b> '+_ml.length+' teammate account'+(_ml.length===1?'':'s')+' to check (about '+Math.max(1,Math.ceil(_ml.length*4/60))+' min). Do it now, before your first session.</div><button class="btn sm dark" onclick="go(\'health\')">Start check</button></div>'; }catch(_hc){}
   var covering=mineWork.filter(function(r){ return owner(r)!==me; });
   if(covering.length){
     var whose={}; covering.forEach(function(r){ var o=owner(r); whose[o]=(whose[o]||0)+1; });
@@ -1077,6 +1086,7 @@ function rowHtml(r){
         (next&&can?'<button class="ses up" onclick="promote(\''+id+'\',\''+next.k+'\')" title="Promote to '+esc(next.n)+'">'+IC.up+' '+esc(next.n)+'</button>':'');
     }
   }
+  if(m.hcrep && !isDead(r)) prog='<span class="note b" title="A teammate found this profile '+(m.hcrep.res==='n'?'missing':'banned')+' on Reddit during the daily check">'+IC.ban+' Reported '+(m.hcrep.res==='n'?'not found':'banned')+' — admin will confirm</span>';
   if(held){ prog='<span class="note i">'+IC.pause+' On hold today</span>'; act=''; }
   return '<div class="lr'+(isDead(r)?' dim':'')+'" data-rid="'+esc(r.id)+'" style="--sc:'+sm.c+'">'+
     '<div class="cell c-acc"><div class="an" onclick="openRec(\''+id+'\')" title="Open record">'+esc(r.handle)+'</div><div class="sub"><span class="msub" style="color:'+methodColor(methodOf(r))+';font-weight:800">'+esc(methodOf(r)||'no method')+' · </span>'+(sub||'<span style="opacity:.6">—</span>')+tag+'</div></div>'+
@@ -1201,10 +1211,14 @@ function cardHtml(r){
 function setupBtn(r,k,l){ var on=!!((M(r).setup||{})[k]); return '<button class="ses'+(on?' done':'')+'" onclick="toggleSetup(\''+jsq(r.id)+'\',\''+k+'\')"><span class="bx">'+(on?IC.check:'')+'</span>'+esc(l)+'</button>'; }
 
 /* ── actions ── */
+/* Meta writes send only the keys that change (meta_patch, backend rc-2026-10-05a+): the server merges
+   them into the CURRENT row, so an owner ticking a session and a teammate recording today's health
+   check never overwrite each other. Older backends get the full object as before. */
 async function saveMeta(r, patch, extra){
-  var m=Object.assign({}, M(r), patch);
-  var d=await upd(r.id, Object.assign({ meta:JSON.stringify(m) }, extra||{}));
-  if(d && d.ok){ r.meta=m; if(extra){ for(var k in extra) if(k!=='meta'&&k!=='end_reason'&&k!=='note') r[k]=extra[k]; } return true; }
+  var m=Object.assign({}, M(r)); for(var k0 in patch){ if(patch[k0]===null) delete m[k0]; else m[k0]=patch[k0]; }
+  var body=(BE_BUILD && BE_BUILD>='rc-2026-10-05a') ? { meta_patch:JSON.stringify(patch) } : { meta:JSON.stringify(m) };
+  var d=await upd(r.id, Object.assign(body, extra||{}));
+  if(d && d.ok){ r.meta=m; patchLocal(r.id,{ meta:m }); if(extra){ for(var k in extra) if(k!=='meta'&&k!=='meta_patch'&&k!=='end_reason'&&k!=='note') r[k]=extra[k]; } return true; }
   return false;
 }
 async function toggleSetup(id,k){
@@ -1975,12 +1989,17 @@ function hcProblems(){
   return HC.rows.filter(function(x){ if(x.result!=='suspended' && x.result!=='notfound') return false; var r=rowById(x.account_id); return !r || !isDead(r); });
 }
 function hcBanner(){
-  if(!isAdmin() || !HC || !HC.last || !HC.last.run) return '';
+  if(!isAdmin()) return '';
+  var rp=ccReports().length;
+  var extra=rp?'<div class="banner bad">'+IC.ban+'<div style="flex:1"><b>'+rp+' account'+(rp===1?'':'s')+' reported dead</b> in the daily cross-check — confirm or clear.</div><button class="btn sm dark" onclick="go(\'health\')">Review</button></div>':'';
+  if(!HC || !HC.last || !HC.last.run) return extra;
+  return extra+hcBannerAuto();
+}
+function hcBannerAuto(){
   var p=hcProblems(); if(!p.length) return '';
   return '<div class="banner bad">'+IC.ban+'<div style="flex:1"><b>Health check '+esc(fmtDT(parseTs(HC.last.at)))+':</b> '+p.length+' account'+(p.length===1?' the board calls active is':'s the board calls active are')+' suspended or missing on Reddit.</div><button class="btn sm dark" onclick="go(\'health\')">Review</button></div>';
 }
-function vHealth(){
-  if(!isAdmin()) return '<div class="card empty">Owner only.</div>';
+function vHealthAuto(){
   if(HC===null){ loadHealth(); return '<div class="card empty">Loading the last health check…</div>'; }
   var L=HC.last||{}, c=L.counts||{};
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Account <span class="gtxt">health check</span></h2><p>Asks Reddit whether every account marked active is really alive — catches accounts that were banned but never tagged. Runs every day at 8:00 AM PHT; you can also run it now.</p></div>'+
@@ -1992,7 +2011,7 @@ function vHealth(){
     var pc=HCRUN.total?Math.round(HCRUN.done/HCRUN.total*100):0;
     h+='<div class="card pad" style="margin-bottom:12px"><div class="row"><b>Checking '+HCRUN.done+' / '+(HCRUN.total||'…')+'</b><span class="muted" style="font-size:12px">keeps going while this tab is open</span></div><div class="prog" style="margin-top:8px;height:10px"><i style="width:'+pc+'%"></i></div></div>';
   }
-  if(!HC.keys) return h+manualSweep();
+  if(!HC.keys) return h;
   if(!L.run){ return h+'<div class="card empty">No check has run yet. Press <b>Run now</b>.</div>'; }
   h+='<div class="kpis">'+kpi('Checked',L.total||0,esc(fmtDT(parseTs(L.at)))+(L.by==='8am-auto'?' · daily run':''),'#a855f7')+
     kpi('Alive on Reddit',c.ok||0,'profile found, not suspended','#10b981')+kpi('Suspended',c.suspended||0,'Reddit says suspended','#ef4444')+
@@ -2030,6 +2049,7 @@ function manualSweep(){
   var h='<div class="sec-h"><b>Manual sweep · '+esc(baseOf(PROJECT).n)+'</b><span>'+stale+' of '+rows.length+' not checked in the last 7 days · least recently checked first</span><hr></div>'+
     '<p class="muted" style="font-size:12px;margin:-4px 0 10px">Open the profile ↗, look at it, then press <b>Alive ✓</b> or <b>Banned on Reddit</b>. Each mark is saved on the account with your name and the date.</p>';
   if(!rows.length) return h+'<div class="card empty">No active accounts on this base.</div>';
+  h+=qrPanel(rows);
   h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Account</th><th>Stage</th><th>Method</th><th>VA</th><th>Last session</th><th>Last checked</th><th></th></tr></thead><tbody>'+
     rows.slice(0,MS.n).map(function(r){
       var m=M(r), lw=lastWorked(r), ck=String(m.hcok||''), sm=stageMeta(r.status);
@@ -2041,6 +2061,71 @@ function manualSweep(){
     (rows.length>MS.n?'<div class="row" style="justify-content:center;margin-top:10px"><button class="btn sm sec" onclick="MS.n+=60;renderView()">Show 60 more</button></div>':'');
   return h;
 }
+/* ── QUICK REVIEW — a human check made fast ──
+   One account at a time. The profile opens in ONE reusable browser tab ("rc-profile"); put it next to
+   this window. Keys: A = alive, B = banned (suspended), N = not found, S = skip, O = reopen.
+   Each answer saves and opens the next profile in the same tab, so a sweep is: look → key → look → key.
+   It is still you looking at each page — the tool never loads Reddit by itself. */
+var QR={ on:false, list:[], i:0, done:0, prio:true };
+function qrQueue(){
+  var td=today(), P1=phaseIx('day1');
+  var rows=(ALL[PROJECT]||ROWS).filter(function(r){ return !isDead(r) && String(M(r).hcok||'')!==td; });
+  rows.sort(function(a,b){
+    var pa=QR.prio?(phaseIx(a.status)>=P1?0:(isWorkable(a)?1:2)):0, pb=QR.prio?(phaseIx(b.status)>=P1?0:(isWorkable(b)?1:2)):0;
+    var x=String(M(a).hcok||''), y=String(M(b).hcok||'');
+    return pa-pb || (x<y?-1:x>y?1:0) || String(a.handle).localeCompare(String(b.handle)); });
+  return rows.map(function(r){ return r.id; });
+}
+function qrPanel(rows){
+  if(!QR.on){
+    var left=qrQueue().length;
+    return '<div class="card pad row" style="margin-bottom:12px;gap:12px"><div style="flex:1"><b>Quick review</b> — '+left+' account'+(left===1?'':'s')+' not checked today. Opens each profile in one reusable tab; answer with a key: <b>A</b> alive · <b>B</b> banned · <b>N</b> not found · <b>S</b> skip.'+
+      '<div class="muted" style="font-size:11.5px;margin-top:3px">Tip: put the profile tab in a window next to this one. Posting-stage accounts come first.</div></div>'+
+      (left?'<button class="btn pri" onclick="qrStart()">'+IC.search+' Start quick review</button>':'<span class="flag g">All checked today ✓</span>')+'</div>';
+  }
+  var id=QR.list[QR.i], r=id?rowById(id):null;
+  if(!r) return '<div class="card pad row" style="margin-bottom:12px"><div style="flex:1"><b>Done ✓</b> — '+QR.done+' checked'+(QR.t0?' in '+Math.max(1,Math.round((Date.now()-QR.t0)/60000))+' min':'')+'. Thank you!</div><button class="btn sec" onclick="QR.on=false;renderView()">Close</button></div>';
+  var sm=stageMeta(r.status), lw=lastWorked(r);
+  return '<div class="card pad" style="margin-bottom:12px;border:2px solid #c4b5fd;position:sticky;top:110px;z-index:20">'+
+    '<div class="row" style="gap:10px"><span class="muted" style="font-weight:800;font-size:12px">'+(QR.i+1)+' / '+QR.list.length+'</span>'+
+      '<div class="prog" style="flex:1;max-width:260px"><i style="width:'+Math.round(QR.i/Math.max(1,QR.list.length)*100)+'%"></i></div><div class="sp"></div>'+
+      (QR.t0?'<span class="muted" style="font-size:12px;font-weight:700">'+Math.floor((Date.now()-QR.t0)/60000)+':'+('0'+Math.floor((Date.now()-QR.t0)/1000)%60).slice(-2)+' elapsed</span>':'')+
+      '<button class="btn sm sec" onclick="QR.on=false;renderView()">Stop</button></div>'+
+    '<div class="row" style="margin-top:10px;gap:14px;align-items:center">'+
+      '<div style="flex:1;min-width:220px"><div class="h-d" style="font-size:20px;font-weight:800">'+esc(r.handle)+'</div>'+
+        '<div class="row" style="gap:6px;margin-top:5px"><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+'">'+esc(sm.n)+'</span>'+methodPill(methodOf(r),true)+(isAdmin()?'<span class="chip">'+esc(vaName(owner(r)))+'</span>':'')+(lw&&isAdmin()?'<span class="chip">last session '+esc(fmtD(parseTs(lw)))+'</span>':'')+'</div></div>'+
+      '<button class="btn sec" onclick="qrOpen()">↗ Open profile <span class="muted">(O)</span></button>'+
+      '<button class="btn" style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0" onclick="qrAnswer(\'a\')">Alive ✓ <span style="opacity:.6">(A)</span></button>'+
+      '<button class="btn dark" onclick="qrAnswer(\'b\')">Banned <span style="opacity:.6">(B)</span></button>'+
+      '<button class="btn" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa" onclick="qrAnswer(\'n\')">Not found <span style="opacity:.6">(N)</span></button>'+
+      '<button class="btn sec" onclick="qrAnswer(\'s\')">Skip <span class="muted">(S)</span></button></div></div>';
+}
+function qrUrl(r){ return 'https://www.reddit.com/user/'+encodeURIComponent(String(r.handle).replace(/^\/?u\//i,'').trim())+'/'; }
+var _qrWin=null;
+function qrOpen(){ var r=rowById(QR.list[QR.i]); if(!r) return; try{ _qrWin=window.open(qrUrl(r),'rc-profile'); }catch(e){} }
+function qrStart(list){ QR={ on:true, list:(list&&list.length)?list:qrQueue(), i:0, done:0, prio:true, t0:Date.now() }; renderView(); qrOpen(); }
+async function qrAnswer(k){
+  var r=rowById(QR.list[QR.i]); if(!r) return;
+  var cur=r;
+  QR.i++; if(k!=='s') QR.done++;
+  renderView(); if(QR.i<QR.list.length) qrOpen();             // next profile opens immediately (same tab)
+  try{
+    if(k==='a') await saveMeta(cur,{ hcok:today(), hcby:USER.id, hcrep:null });
+    else if((k==='b'||k==='n') && !isAdmin()){        // a VA reports — the owner confirms (no VA can ban a teammate's account)
+      await saveMeta(cur,{ hcrep:{ by:USER.id, res:k, at:phtStamp(), day:today() } }); toast('Reported — the admin will confirm');
+    }
+    else if(k==='b') await moveTo(cur,'banned',{ end_reason:'Permanently suspended: found banned in manual review', meta_patch:JSON.stringify({ hcrep:null }) }, cur.handle+' marked banned');
+    else if(k==='n') await moveTo(cur,'banned',{ end_reason:'Other: profile not found on Reddit (manual review)', meta_patch:JSON.stringify({ hcrep:null }) }, cur.handle+' marked banned (not found)');
+  }catch(e){ toast('Could not save '+cur.handle+' — mark it again from the list.'); }
+}
+document.addEventListener('keydown', function(e){
+  if(!QR.on || VIEW!=='health') return;
+  var t=e.target&&e.target.tagName; if(t==='INPUT'||t==='TEXTAREA'||t==='SELECT') return;
+  if($('modal').classList.contains('on')) return;
+  var k=String(e.key||'').toLowerCase();
+  if(k==='a'||k==='b'||k==='n'||k==='s'){ e.preventDefault(); qrAnswer(k); }
+  else if(k==='o'){ e.preventDefault(); qrOpen(); }
+});
 async function msAlive(id){
   var r=rowById(id); if(!r) return;
   if(await saveMeta(r,{ hcok:today(), hcby:USER.id })){ toast(r.handle+' — alive ✓'); renderView(); } else toast('Could not save — try again.');
@@ -2075,6 +2160,133 @@ async function hcBanAll(){
     await Promise.all(p.slice(i,i+5).map(async function(x){ try{ var d=await upd(x.account_id,{ status:'banned', end_reason:hcReason(x.result) }); if(d&&d.ok){ ok++; patchLocal(x.account_id,{ status:'banned', ended_at:phtStamp(), end_reason:hcReason(x.result) }); } else fail++; }catch(e){ fail++; } }));
   }
   EVENTS_AT=0; toast(ok+' marked banned'+(fail?' · '+fail+' failed':'')); renderView(); load();
+}
+
+/* ══════════ DAILY CROSS-CHECK (Oct 5 2026, owner) ══════════
+   Every VA checks TEAMMATES' accounts at the start of the shift — never their own — so a ban nobody
+   tagged gets caught by someone else. The list is shuffled every day (same result on every screen,
+   seeded by the date). VA answers: A alive · B/N report (the owner confirms before anything is banned —
+   so no VA can ban a teammate's live account) · S skip. Owner names are hidden from the checker. */
+var CC_SEC=4, CC_MAX=10;   // ~4 seconds per account; hard limit 10 minutes
+function hcH(s){ var h=2166136261>>>0; s=String(s); for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } return h; }
+var _CC=null, _CCK='';
+function ccLive(){ var out=[]; BASES.forEach(function(b){ (ALL[b.id]||[]).forEach(function(r){ if(!isDead(r)) out.push(r); }); }); return out; }
+function ccPlan(){
+  var live=ccLive(), day=today(), key=day+'|'+live.length+'|'+DIR_READY;
+  if(_CC && _CCK===key) return _CC;
+  var own={}; live.forEach(function(r){ var o=owner(r); if(o && !isGone(o) && OWNERS.indexOf(o)<0) own[o]=1; });
+  var checkers=Object.keys(own).sort(function(a,b){ return hcH(day+'#'+a)-hcH(day+'#'+b) || (a<b?-1:1); });
+  var acc=live.slice().sort(function(a,b){ return hcH(day+'|'+a.id)-hcH(day+'|'+b.id) || (a.id<b.id?-1:1); });
+  var plan={}, of={}; checkers.forEach(function(c){ plan[c]=[]; });
+  var n=checkers.length, un=[];
+  acc.forEach(function(r,i){
+    if(n<2){ un.push(r.id); return; }
+    var o=owner(r), pick=null;
+    for(var j=0;j<n;j++){ var c=checkers[(i+j)%n]; if(c!==o){ pick=c; break; } }
+    if(pick){ plan[pick].push(r.id); of[r.id]=pick; } else un.push(r.id);
+  });
+  _CC={ day:day, plan:plan, of:of, checkers:checkers, unassigned:un }; _CCK=key; return _CC;
+}
+function ccState(r){ var m=M(r), d=today(); if(m.hcrep && m.hcrep.day===d) return 'rep'; if(String(m.hcok||'')===d) return 'ok'; return ''; }
+function ccMine(){ if(isAdmin()) return []; var p=ccPlan(); return (p.plan[myId()]||[]).map(rowById).filter(Boolean); }
+function ccMineLeft(){ return ccMine().filter(function(r){ return !ccState(r); }); }
+function ccReports(){ return ccLive().filter(function(r){ return M(r).hcrep; }).sort(function(a,b){ return String(M(b).hcrep.at||'')<String(M(a).hcrep.at||'')?-1:1; }); }
+function ccPrioSort(list){
+  var P1=phaseIx('day1');
+  return list.slice().sort(function(a,b){ var pa=phaseIx(a.status)>=P1?0:(isWorkable(a)?1:2), pb=phaseIx(b.status)>=P1?0:(isWorkable(b)?1:2); return pa-pb || String(a.handle).localeCompare(String(b.handle)); });
+}
+function ccGuide(open){
+  return '<details class="card pad"'+(open?' open':'')+' style="margin-bottom:14px"><summary style="cursor:pointer;font-weight:800;font-size:14px">How the daily health check works</summary>'+
+    '<div class="f2" style="margin-top:12px;gap:16px">'+
+      '<div><div class="lbl" style="margin-bottom:5px">When</div><div style="font-size:13px;line-height:1.55">Every working day, <b>first thing in your shift — before your first session</b>.<br>☀ Morning shift: <b>8:00 – 8:10 AM</b> · 🌙 Night shift: <b>8:00 – 8:10 PM</b></div></div>'+
+      '<div><div class="lbl" style="margin-bottom:5px">How long</div><div style="font-size:13px;line-height:1.55">About <b>'+CC_SEC+' seconds per account</b> — most lists take 2–3 minutes.<br><b>Maximum '+CC_MAX+' minutes.</b> If it takes longer, tell the admin.</div></div>'+
+    '</div>'+
+    '<div class="lbl" style="margin:14px 0 6px">How</div><ol style="font-size:13px;line-height:1.7;padding-left:20px">'+
+      '<li>Put this window on one side of the screen and press <b>Start check</b>. The first Reddit profile opens in a tab on the other side.</li>'+
+      '<li>Look at the profile — don\'t log in, don\'t click anything on Reddit — then press one key in this window:'+
+        '<div class="row" style="gap:8px;margin:6px 0 2px;flex-wrap:wrap">'+
+          '<span class="chip" style="background:#ecfdf5;color:#047857"><b>A</b>&nbsp;Alive — the profile shows normally</span>'+
+          '<span class="chip" style="background:#fff1f2;color:#9f1239"><b>B</b>&nbsp;Banned — "This account has been suspended"</span>'+
+          '<span class="chip" style="background:#fff7ed;color:#c2410c"><b>N</b>&nbsp;Not found — "nobody on Reddit goes by that name" / page not found</span>'+
+          '<span class="chip"><b>S</b>&nbsp;Skip — the page didn\'t load</span></div></li>'+
+      '<li>The next profile opens by itself in the same tab. Keep going until it says <b>Done ✓</b>.</li></ol>'+
+    '<div class="muted" style="font-size:12px;margin-top:8px">You never get your own accounts, and the list is shuffled every day. Your answers are saved with your name. B and N are reports — the admin confirms them before an account is marked banned.</div></details>';
+}
+function vHealthVA(){
+  var mine=ccPrioSort(ccMine()), left=mine.filter(function(r){ return !ccState(r); }), done=mine.length-left.length, est=Math.max(1,Math.ceil(left.length*CC_SEC/60));
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Daily <span class="gtxt">health check</span></h2><p>Check that your teammates\' accounts are really alive on Reddit — before your first session.</p></div>'+
+    (left.length?'<button class="btn pri" onclick="qrStart(ccPrioSort(ccMineLeft()).map(function(r){return r.id;}))">'+IC.search+' Start check</button>':'')+'</div>';
+  h+=ccGuide(!done);
+  if(!mine.length) return h+'<div class="card empty">'+(allRows().length?'Nothing assigned to you today.':'Loading today\'s list…')+'</div>';
+  h+='<div class="kpis">'+kpi('Your list today',mine.length,'teammates\' accounts','#a855f7')+kpi('Checked',done,left.length?left.length+' to go':'all done ✓',done===mine.length?'#10b981':'#f59e0b')+kpi('Time needed','~'+est+' min','max '+CC_MAX+' minutes','#0ea5e9')+'</div>';
+  if(QR.on) h+=qrPanel(mine);
+  else if(!left.length) h+='<div class="banner info" style="background:#ecfdf5;border-color:#a7f3d0;color:#065f46">'+IC.check+'<div><b>All done for today ✓</b> Thank you — you can start your sessions.</div></div>';
+  h+='<div class="tbl-w" style="max-height:none;margin-top:10px"><table class="db"><thead><tr><th class="c1">Account</th><th>Stage</th><th>Method</th><th>Today</th><th></th></tr></thead><tbody>'+
+    mine.map(function(r){ var st=ccState(r), sm=stageMeta(r.status), m=M(r);
+      var res=st==='ok'?'<span class="flag g">Alive ✓</span>':(st==='rep'?'<span class="flag r">Reported '+(m.hcrep.res==='n'?'not found':'banned')+'</span>':'<span class="flag a">to check</span>');
+      return '<tr><td class="c1"><a href="'+qrUrl(r)+'" target="rc-profile" rel="noopener" style="color:inherit">'+esc(r.handle)+' ↗</a></td><td><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+'">'+esc(sm.n)+'</span></td><td>'+methodPill(methodOf(r),true)+'</td><td>'+res+'</td>'+
+        '<td style="white-space:nowrap">'+(st?'':'<button class="btn sm sec" onclick="ccMark(\''+jsq(r.id)+'\',\'a\')">Alive ✓</button> <button class="btn sm dark" onclick="ccMark(\''+jsq(r.id)+'\',\'b\')">Banned</button> <button class="btn sm sec" onclick="ccMark(\''+jsq(r.id)+'\',\'n\')">Not found</button>')+'</td></tr>';
+    }).join('')+'</tbody></table></div>';
+  return h;
+}
+async function ccMark(id,k){
+  var r=rowById(id); if(!r) return;
+  if(k==='a'){ if(await saveMeta(r,{ hcok:today(), hcby:USER.id })){ toast(r.handle+' — alive ✓'); renderView(); } return; }
+  if(await saveMeta(r,{ hcrep:{ by:USER.id, res:k, at:phtStamp(), day:today() } })){ toast('Reported — the admin will confirm'); renderView(); }
+}
+function ccAdmin(){
+  var P=ccPlan(), d=today();
+  var rowsH=P.checkers.map(function(c){
+    var list=(P.plan[c]||[]).map(rowById).filter(Boolean), ok=list.filter(function(r){ return ccState(r)==='ok'; }).length, rep=list.filter(function(r){ return ccState(r)==='rep'; }).length, n=list.length, dn=ok+rep;
+    var off=OFF&&(OFF.off||[]).filter(function(x){ return String(x.employee_id).toLowerCase()===c; })[0];
+    var stx=dn===n?'<span class="flag g">Done ✓</span>':(dn?'<span class="flag a">In progress</span>':(off?'<span class="flag" style="background:#f1f2f7;color:var(--ink3)">'+esc(off.type)+'</span>':'<span class="flag r">Not started</span>'));
+    return '<tr><td class="c1">'+esc(vaName(c))+(SHIFTOF[c]==='night'?' 🌙':'')+'</td><td class="num">'+n+'</td><td class="num">'+ok+'</td><td class="num" style="'+(rep?'color:#b91c1c;font-weight:800':'')+'">'+(rep||'·')+'</td><td>'+stx+'</td></tr>';
+  }).join('');
+  var reps=ccReports();
+  var h='<div class="sec-h"><b>Today\'s cross-check</b><span>'+esc(fmtD(parseTs(d)))+' · '+P.checkers.length+' checkers · shuffled daily · nobody checks their own</span><hr></div>';
+  if(reps.length){
+    h+='<div class="card pad" style="margin-bottom:12px;border-color:#fecdd3"><div class="ch-h"><b style="color:#9f1239">Reported dead — confirm</b><span>open the profile, then confirm or clear</span></div>'+
+      '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Account</th><th>Reported</th><th>By</th><th>Owner</th><th>Stage</th><th>Last session</th><th></th></tr></thead><tbody>'+
+      reps.map(function(r){ var x=M(r).hcrep, lw=lastWorked(r);
+        return '<tr><td class="c1"><a href="'+qrUrl(r)+'" target="rc-profile" rel="noopener" style="color:inherit">'+esc(r.handle)+' ↗</a></td><td><span class="flag r">'+(x.res==='n'?'Not found':'Banned')+'</span> <span class="muted" style="font-size:11px">'+esc(fmtDT(parseTs(x.at)))+'</span></td><td>'+esc(vaName(x.by))+'</td><td>'+esc(vaName(owner(r)))+'</td>'+
+          '<td><span class="pill" style="background:'+stageMeta(r.status).c+'16;color:'+stageMeta(r.status).c+'">'+esc(stageMeta(r.status).n)+'</span></td><td>'+(lw?esc(fmtD(parseTs(lw))):'—')+(lw&&lw>=String(x.day||'')?' <span class="flag r">still ticking</span>':'')+'</td>'+
+          '<td style="white-space:nowrap"><button class="btn sm dark" onclick="ccConfirm(\''+jsq(r.id)+'\')">Confirm banned</button> <button class="btn sm sec" onclick="ccClear(\''+jsq(r.id)+'\')">It\'s alive</button></td></tr>'; }).join('')+
+      '</tbody></table></div></div>';
+  }
+  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Checker</th><th>Accounts</th><th>Alive ✓</th><th>Reported</th><th>Status</th></tr></thead><tbody>'+(rowsH||'<tr><td colspan="5" class="muted">Needs at least two VAs with live accounts.</td></tr>')+'</tbody></table></div>'+
+    (P.unassigned.length?'<p class="muted" style="font-size:11.5px;margin-top:6px">'+P.unassigned.length+' account(s) couldn\'t be assigned — check them in Quick review below.</p>':'');
+  return h;
+}
+async function ccConfirm(id){
+  var r=rowById(id); if(!r) return; var x=M(r).hcrep||{};
+  await moveTo(r,'banned',{ end_reason:(x.res==='n'?'Other: profile not found on Reddit':'Permanently suspended')+' — reported by '+vaName(x.by)+' in the daily check', meta_patch:JSON.stringify({ hcrep:null }) }, r.handle+' marked banned');
+}
+async function ccClear(id){ var r=rowById(id); if(!r) return; if(await saveMeta(r,{ hcrep:null, hcok:today(), hcby:USER.id })){ toast(r.handle+' — alive, report cleared'); renderView(); } }
+function vHealth(){
+  if(!isAdmin()) return vHealthVA();
+  if(HC===null) loadHealth();
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Daily <span class="gtxt">health check</span></h2><p>VAs check each other\'s accounts at the start of every shift; you confirm what they report.</p></div></div>';
+  h+=ccGuide(false);
+  h+=ccAdmin();
+  if(HC && HC.keys){ h+='<div class="sec-h" style="margin-top:26px"><b>Automatic check (Reddit API)</b><hr></div>'+vHealthAuto().replace(/^<div class="hero">[\s\S]*?<\/div><\/div>/,''); }
+  else { h+='<div style="margin-top:22px"></div>'+manualSweep();
+    h+='<details class="plan" style="margin-top:14px"><summary>Automatic check (Reddit API)</summary><div>Built and switched off. It turns on by itself once Reddit approves API access and the two keys are added in Script Properties.</div></details>'; }
+  return h;
+}
+
+/* ══════════ PRODUCTIVITY & QA — placeholder until the owner sets the rules ══════════ */
+function vProd(){
+  if(!isAdmin()) return '<div class="card empty">Owner only.</div>';
+  var by={}; ROWS.forEach(function(r){ var k=worksFor(r)||'—'; (by[k]=by[k]||[]).push(r); });
+  var list=Object.keys(by).filter(function(k){ return !isGone(k); }).map(function(k){ var q=progOf(by[k],k); q.k=k;
+      q.cre=by[k].filter(function(r){ var m=M(r); return m.cdone && markOkAny(m.cstamp,k,owner(r)); }).length; return q; })
+    .sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Productivity <span class="gtxt">&amp; QA</span></h2><p>Productivity computed inside Reddit Central from what each VA does on the board. The scoring rules are being set up with you.</p></div></div>';
+  h+='<div class="banner info">'+IC.doc+'<div><b>Waiting for your rules.</b> Below is what the board already measures today. Tell me how productivity and QA should be scored (targets, what counts, weights) and this tab becomes the official number.</div></div>';
+  h+='<div class="sec-h"><b>Today from the board · '+esc(baseOf(PROJECT).n)+'</b><span>sessions this shift · creations counted</span><hr></div>'+
+    '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th><th>Sessions done</th><th>Sessions due</th><th>%</th><th>Creations</th></tr></thead><tbody>'+
+    list.map(function(o){ return '<tr><td class="c1">'+esc(vaName(o.k))+'</td><td class="num">'+o.done+'</td><td class="num">'+o.tot+'</td><td class="num" style="font-weight:800;color:'+(o.pct>=100?'#047857':(o.pct>=70?'#b45309':'#b91c1c'))+'">'+o.pct+'%</td><td class="num">'+(o.cre||'·')+'</td></tr>'; }).join('')+'</tbody></table></div>';
+  return h;
 }
 
 /* ═══════════ COVERAGE — owner only ═══════════
@@ -2228,6 +2440,12 @@ async function xferGo(){
 var SET=null;
 function vSettings(){
   if(!isAdmin()) return '<div class="card empty">Owner only.</div>';
+  var unc=(OFF&&OFF.uncovered)||0;
+  var sub='<div class="seg" style="width:auto;display:inline-flex;margin-bottom:14px"><button class="'+(SETSUB==='coverage'?'on':'')+'" onclick="SETSUB=\'coverage\';renderView()">Coverage'+(unc?' <span class="badge" style="background:var(--bad);color:#fff;border-radius:100px;padding:0 6px;font-size:10px">'+unc+'</span>':'')+'</button><button class="'+(SETSUB==='lists'?'on':'')+'" onclick="SETSUB=\'lists\';renderView()">Lists, rules &amp; clean-up</button></div>';
+  if(SETSUB==='coverage') return sub+vCoverage();
+  return sub+vSettingsLists();
+}
+function vSettingsLists(){
   if(!SET) SET=JSON.parse(JSON.stringify(CFG));
   if(!SET.models) SET.models={};
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Settings</h2><p>The pick-lists VAs choose from when they log an account.</p></div><button class="btn sec" onclick="SET=null;renderView()">Discard changes</button><button class="btn pri" id="set-go" onclick="setSave()">Save settings</button></div>';
