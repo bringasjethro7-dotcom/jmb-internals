@@ -413,6 +413,26 @@ svg text{font-family:'Inter',sans-serif}
   .f2{grid-template-columns:1fr}
   .facts{grid-template-columns:1fr}
 }
+/* ── SOP quiz gate ── */
+.qz{max-width:760px;margin:0 auto}
+.qz-q{margin-bottom:12px}
+.qz-n{font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:4px}
+.qz-t{font-family:'Sora',sans-serif;font-size:15px;line-height:1.35;margin-bottom:10px}
+.qz-o{display:grid;gap:7px}
+.qz-opt{display:flex;align-items:flex-start;gap:10px;border:1.5px solid var(--line2);border-radius:12px;padding:10px 12px;cursor:pointer;font-size:13.5px;line-height:1.4;transition:border-color .15s,background .15s}
+.qz-opt:hover{border-color:var(--ink4)}
+.qz-opt.on{border-color:var(--o);background:rgba(255,107,26,.07)}
+.qz-opt input{margin-top:3px;accent-color:var(--o);flex:none}
+.qz-res{border-radius:var(--r);padding:18px 20px;margin-bottom:14px;border:1.5px solid}
+.qz-res.ok{background:#ecfdf5;border-color:#6ee7b7;color:#065f46}
+.qz-res.no{background:#fff7ed;border-color:#fdba74;color:#7c2d12}
+.qz-res h3{font-family:'Sora',sans-serif;font-size:20px;margin-bottom:4px}
+.qz-miss{background:var(--s1);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px;color:var(--ink);font-size:13px;line-height:1.45}
+.qz-miss b{display:block;font-size:13px;margin-bottom:3px}
+.qz-miss .ok{color:#047857;font-weight:800}
+.qz-sticky{position:sticky;bottom:12px;display:flex;gap:10px;align-items:center;box-shadow:0 14px 30px -14px rgba(15,23,42,.5)}
+.qz-st{display:inline-flex;align-items:center;gap:5px;border-radius:100px;padding:3px 9px;font-size:11px;font-weight:800}
+.qz-st.p{background:#ecfdf5;color:#047857} .qz-st.t{background:#fff7ed;color:#c2410c} .qz-st.n{background:var(--s3);color:var(--ink3)}
 </style>
 </head>
 <body>
@@ -886,6 +906,7 @@ var TAB_IC={
 };
 function paintTabs(){
   var h=$('tabs'); if(!h) return;
+  if(qzOn()){ h.innerHTML=''; return; }
   var unc=(OFF&&OFF.uncovered)||0;
   h.innerHTML=tabsFor().map(function(t){
     var hp=0; try{ if(t[0]==='health') hp=isAdmin()?(hcProblems().length+ccReports().length):ccMineLeft().length; }catch(_b){}
@@ -893,6 +914,7 @@ function paintTabs(){
   }).join('');
 }
 function go(v){
+  if(qzOn()) return;
   if(v==='coverage'){ SETSUB='coverage'; v='settings'; }
   else if(v==='settings' && VIEW!=='settings') SETSUB=(OFF&&OFF.uncovered)?'coverage':'lists';
   if(!tabsFor().some(function(t){ return t[0]===v; })) v='today';
@@ -931,7 +953,9 @@ function flipRows(v, before){
 function renderView(){
   var v=$('view'); if(!v || !USER) return;
   var html='';
-  try{
+  if(qzOn() && QZ.pending) html=qzWaiting();
+  else if(qzOn()) html=vQuiz();
+  else try{
     if(VIEW==='today') html=vToday();
     else if(VIEW==='accounts') html=vAccounts();
     else if(VIEW==='pipeline') html=vPipeline();
@@ -962,6 +986,7 @@ function start(){
   VIEW=(want && tabsFor().some(function(t){ return t[0]===want; }))?want:'today';
   try{ api({ action:'rc_build' }).then(function(d){ BE_BUILD=(d&&d.build)||''; }).catch(function(){}); }catch(_bb){}
   if(isAdmin()){ DB.va='all'; TD.va='all'; }
+  if(!isAdmin()){ QZ.pending=!qzOptimistic(); quizCheck(); }   // SOP quiz gate — the tool opens when the current quiz is passed
   paintTop(); paintCached();
   if(!ROWS.length) $('view').innerHTML='<div class="grid"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>';
   loadNames(); loadCfg().then(renderView); load(); loadAll(); smartPoll();
@@ -3298,7 +3323,7 @@ function vSettingsLists(){
   if(!SET) SET=JSON.parse(JSON.stringify(CFG));
   if(!SET.models) SET.models={};
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Settings</h2><p>The pick-lists VAs choose from when they log an account.</p></div><button class="btn sec" onclick="SET=null;renderView()">Discard changes</button><button class="btn pri" id="set-go" onclick="setSave()">Save settings</button></div>';
-  h+='<div class="ig"><div class="card pad s6"><div class="ch-h"><b>Company iPhones</b><span>every account traces back to one phone · each phone belongs to one base — Altz only for now</span></div>'+
+  h+='<div class="ig">'+(isAdmin()?qzAdminCard():'')+'<div class="card pad s6"><div class="ch-h"><b>Company iPhones</b><span>every account traces back to one phone · each phone belongs to one base — Altz only for now</span></div>'+
     (SET.phones.length?SET.phones.map(function(p,i){
       return '<div class="row" style="margin-bottom:8px;flex-wrap:nowrap"><input class="inp" style="flex:1" value="'+esc(p.label)+'" placeholder="iPhone 13 · #2" oninput="SET.phones['+i+'].label=this.value">'+
         '<select class="sel" onchange="SET.phones['+i+'].model=this.value">'+['iPhone 12','iPhone 13','Other'].map(function(m){ return '<option'+(p.model===m?' selected':'')+'>'+m+'</option>'; }).join('')+'</select>'+
@@ -3408,6 +3433,112 @@ async function setSave(){
   if(u && u.id){ USER=u; start(); }
   else { try{ $('si-id').focus(); }catch(e){} $('si-pin').addEventListener('keydown', function(e){ if(e.key==='Enter') signIn(); }); $('si-id').addEventListener('keydown', function(e){ if(e.key==='Enter') $('si-pin').focus(); }); }
 })();
+
+/* ═══════════ SOP QUIZ GATE (Jeth, Oct 5 2026) ═══════════
+   Every SOP update ships a quiz (backend RC_QUIZZES). A VA must pass the CURRENT one before the tool
+   opens for them, so the update is understood, not just announced. Admins are exempt. Until the backend
+   answers, a VA who has not passed on this device sees a "checking" screen instead of the board; a
+   backend older than rc-2026-10-05h has no quiz, so the gate stands down rather than locking anyone out. */
+var QZ={ pending:false, gate:false, d:null, order:null, ans:[], res:null, busy:false, adm:null, admLoading:false };
+function qzUid(){ return String(USER&&USER.id||'').toLowerCase(); }
+function qzOptimistic(){ try{ var v=localStorage.getItem('rc_quiz_last')||''; return !!v && localStorage.getItem('rc_quiz_ok_'+v+'_'+qzUid())==='1'; }catch(e){ return false; } }
+function qzRemember(ver){ try{ localStorage.setItem('rc_quiz_last', ver); localStorage.setItem('rc_quiz_ok_'+ver+'_'+qzUid(),'1'); }catch(e){} }
+function qzOn(){ return !isAdmin() && (QZ.gate || QZ.pending); }
+async function quizCheck(){
+  if(!USER || isAdmin()){ QZ.pending=false; QZ.gate=false; return; }
+  try{
+    var d=await api({ action:'rc_quiz_get', employee_id:USER.id });
+    if(d && d.ok && d.version){
+      QZ.d=d; QZ.gate=!!(d.required && !d.passed);
+      if(d.passed) qzRemember(d.version);
+    } else QZ.gate=false;              // no quiz on this backend → nothing to gate on
+  }catch(e){ QZ.gate=false; }
+  QZ.pending=false; if(QZ.gate) qzShuffle();
+  paintTabs(); renderView();
+}
+function qzShuffle(){
+  if(!QZ.d) return;
+  QZ.order=QZ.d.questions.map(function(x){ var idx=x.o.map(function(_,i){ return i; }); for(var i=idx.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=idx[i]; idx[i]=idx[j]; idx[j]=t; } return idx; });
+  QZ.ans=[]; QZ.res=null;
+}
+function qzWaiting(){ return '<div class="card pad" style="max-width:520px;margin:48px auto;text-align:center"><div class="skel" style="height:12px;width:55%;margin:4px auto 12px;border-radius:6px"></div><div class="muted" style="font-size:13px">Checking your SOP quiz status…</div></div>'; }
+function qzPick(i, oi){
+  QZ.ans[i]=oi;
+  document.querySelectorAll('label[data-q="'+i+'"]').forEach(function(l){ l.classList.toggle('on', Number(l.getAttribute('data-o'))===oi); });
+  var left=QZ.d.questions.length-QZ.ans.filter(function(a){ return a!=null; }).length;
+  var el=$('qz-left'); if(el) el.textContent=left?(left+' unanswered'):'All answered — submit when ready';
+  var b=$('qz-go'); if(b) b.disabled=!!left;
+}
+function vQuiz(){
+  var d=QZ.d; if(!d) return qzWaiting();
+  var r=QZ.res, wrongBy={}; if(r) (r.wrong||[]).forEach(function(w){ wrongBy[w.i]=w; });
+  var h='<div class="qz"><div class="hero"><div style="flex:1;min-width:240px"><h2>Before you start: <span class="gtxt">'+esc(d.title)+'</span></h2>'+
+    '<p>'+d.total+' questions on the new phase plans · pass mark <b>'+d.pass_mark+'</b>. Reddit Central opens when you pass. Retake it as many times as you need'+(d.attempts?' · so far '+d.attempts+' attempt'+(d.attempts===1?'':'s')+', best '+d.best+'/'+d.total:'')+'.</p></div>'+
+    (d.huddle?'<a class="btn sec" href="'+esc(d.huddle)+'" target="_blank" rel="noopener">'+IC.doc+' Watch the 4-min huddle</a>':'')+'</div>';
+  if(r){
+    var miss=(r.wrong||[]).map(function(w){ var q=d.questions[w.i]; return '<div class="qz-miss"><b>'+esc(q.q)+'</b><span class="ok">✓ '+esc(q.o[w.correct])+'</span> — '+esc(w.why)+'</div>'; }).join('');
+    if(r.passed){
+      h+='<div class="qz-res ok"><h3>Passed · '+r.score+'/'+r.total+' ✓</h3><div>You know the update. '+(miss?'One more look at what you missed, then you\'re in:':'Every answer right — you\'re in.')+'</div>'+miss+
+        '<div style="margin-top:14px"><button class="btn pri" onclick="qzEnter()">'+IC.check+' Open Reddit Central</button></div></div>';
+    } else {
+      h+='<div class="qz-res no"><h3>Not yet · '+r.score+'/'+r.total+'</h3><div>Pass mark is '+r.pass_mark+'. Here is what to re-read — the right answer is marked, with the reason:</div>'+miss+
+        '<div class="row" style="margin-top:14px;gap:8px">'+(d.huddle?'<a class="btn sec" href="'+esc(d.huddle)+'" target="_blank" rel="noopener">'+IC.doc+' Watch the huddle again</a>':'')+'<button class="btn pri" onclick="qzShuffle();renderView();window.scrollTo({top:0})">Try again</button></div></div>';
+    }
+    return h+'</div>';
+  }
+  if(!QZ.order) qzShuffle();
+  h+=d.questions.map(function(x,i){
+    var ord=QZ.order[i]||x.o.map(function(_,k){ return k; });
+    return '<div class="card pad qz-q"><div class="qz-n">Question '+(i+1)+' of '+d.total+'</div><div class="qz-t">'+esc(x.q)+'</div><div class="qz-o">'+
+      ord.map(function(oi){ var id='qz'+i+'_'+oi, on=(QZ.ans[i]===oi); return '<label class="qz-opt'+(on?' on':'')+'" for="'+id+'" data-q="'+i+'" data-o="'+oi+'"><input type="radio" id="'+id+'" name="qz'+i+'"'+(on?' checked':'')+' onchange="qzPick('+i+','+oi+')"><span>'+esc(x.o[oi])+'</span></label>'; }).join('')+'</div></div>';
+  }).join('');
+  var left=d.questions.length-QZ.ans.filter(function(a){ return a!=null; }).length;
+  h+='<div class="card pad qz-sticky"><div class="muted" id="qz-left" style="flex:1;font-size:13px">'+(left?(left+' unanswered'):'All answered — submit when ready')+'</div><button class="btn pri" id="qz-go" onclick="qzSubmit()"'+(left?' disabled':'')+'>Submit answers</button></div>';
+  return h+'</div>';
+}
+async function qzSubmit(){
+  if(QZ.busy || !QZ.d) return;
+  var left=QZ.d.questions.length-QZ.ans.filter(function(a){ return a!=null; }).length; if(left){ toast(left+' question'+(left===1?'':'s')+' still unanswered.'); return; }
+  QZ.busy=true; var b=$('qz-go'); if(b){ b.disabled=true; b.textContent='Checking…'; }
+  try{
+    var d=await api({ action:'rc_quiz_submit', employee_id:USER.id, name:vaName(USER.id), answers:JSON.stringify(QZ.ans) });
+    if(!d || !d.ok){ toast('Could not submit — '+esc((d&&d.error)||'network')+'. Try again.'); if(b){ b.disabled=false; b.textContent='Submit answers'; } QZ.busy=false; return; }
+    QZ.res=d; QZ.d.attempts=(QZ.d.attempts||0)+1; QZ.d.best=Math.max(QZ.d.best||0, d.score);
+    if(d.passed){ QZ.d.passed=true; qzRemember(d.version||QZ.d.version); }
+  }catch(e){ toast('Could not submit — check your connection and try again.'); if(b){ b.disabled=false; b.textContent='Submit answers'; } }
+  QZ.busy=false; renderView(); window.scrollTo({top:0,behavior:'smooth'});
+}
+function qzEnter(){ QZ.gate=false; QZ.res=null; paintTabs(); renderView(); toast('Welcome in — the new plans are on every card.'); }
+/* admin: who has passed the current quiz */
+async function qzAdminLoad(force){
+  if(QZ.admLoading || (QZ.adm && !force)) return;
+  QZ.admLoading=true;
+  try{ var d=await api({ action:'rc_quiz_results', by:USER.id }); QZ.adm=(d&&d.ok)?d:{ error:(d&&d.error)||'network', rows:[] }; }catch(e){ QZ.adm={ error:'network', rows:[] }; }
+  QZ.admLoading=false; if(VIEW==='settings') renderView();
+}
+function qzAdminCard(){
+  if(!QZ.adm){ qzAdminLoad(); return '<div class="card pad s6"><div class="ch-h"><b>SOP quiz</b><span>loading…</span></div><div class="skel" style="height:40px"></div></div>'; }
+  var A=QZ.adm;
+  if(A.error) return '<div class="card pad s6"><div class="ch-h"><b>SOP quiz</b></div><div class="muted">'+(A.error==='MISSING_PARAMS'||A.error==='network'?'The Reddit backend needs rc-2026-10-05h for the quiz gate.':esc(A.error))+'</div></div>';
+  var by={}; (A.rows||[]).forEach(function(r){ by[String(r.employee_id).toLowerCase()]=r; });
+  var ids={}; Object.keys(ALL).forEach(function(k){ (ALL[k]||[]).forEach(function(r){ var o=worksFor(r); if(o && !isGone(o) && OWNERS.indexOf(o)<0) ids[o]=1; }); });
+  ROWS.forEach(function(r){ var o=worksFor(r); if(o && !isGone(o) && OWNERS.indexOf(o)<0) ids[o]=1; });
+  Object.keys(by).forEach(function(k){ if(!isGone(k)) ids[k]=1; });
+  var list=Object.keys(ids).sort(function(a,b){ var ra=by[a], rb=by[b]; return ((rb&&rb.passed)?1:0)-((ra&&ra.passed)?1:0) || vaName(a).localeCompare(vaName(b)); });
+  var passed=list.filter(function(k){ return by[k]&&by[k].passed; }).length;
+  var rows=list.map(function(k){ var r=by[k];
+    var st=!r?'<span class="qz-st n">not yet</span>':(r.passed?'<span class="qz-st p">✓ passed</span>':'<span class="qz-st t">tried · best '+r.best+'/'+A.total+'</span>');
+    return '<tr><td style="font-weight:700">'+esc(vaName(k))+'</td><td>'+st+'</td><td class="muted">'+(r?(r.attempts+' attempt'+(r.attempts===1?'':'s')):'—')+'</td><td class="muted">'+(r&&r.passed?esc(fmtDT(parseTs(r.passed_at))):(r?esc(fmtDT(parseTs(r.last_at))):'—'))+'</td></tr>'; }).join('');
+  return '<div class="card pad s6"><div class="ch-h"><b>SOP quiz · '+esc(A.title)+'</b><span>'+passed+' of '+list.length+' passed · pass mark '+A.pass_mark+'/'+A.total+' · VAs can\'t open the tool until they pass</span></div>'+
+    '<div class="tbl-w" style="max-height:320px"><table class="db"><thead><tr><th>VA</th><th>Status</th><th>Attempts</th><th>When</th></tr></thead><tbody>'+(rows||'<tr><td colspan="4" class="muted">No Reddit VAs found yet.</td></tr>')+'</tbody></table></div>'+
+    '<div class="row" style="margin-top:10px;gap:8px"><button class="btn sm sec" onclick="qzAdminLoad(true)">Refresh</button><button class="btn sm sec" onclick="qzKeyModal()">Questions &amp; answer key</button><span class="muted" style="font-size:11.5px">Next SOP update: add a quiz version in the backend and everyone is asked again.</span></div></div>';
+}
+function qzKeyModal(){
+  var A=QZ.adm; if(!A || !A.key) return;
+  openModal('<div class="md-h"><h3>'+esc(A.title)+' — answer key</h3><p>'+A.key.length+' questions · pass mark '+A.pass_mark+'. VAs see the options in a shuffled order; the key never leaves the backend.</p></div>'+
+    '<div style="max-height:60vh;overflow:auto;padding:0 2px">'+A.key.map(function(x,i){ return '<div class="qz-miss"><b>'+(i+1)+'. '+esc(x.q)+'</b>'+x.o.map(function(o,k){ return '<div style="padding:2px 0 2px 10px;'+(k===x.a?'color:#047857;font-weight:800':'color:var(--ink2)')+'">'+(k===x.a?'✓ ':'· ')+esc(o)+'</div>'; }).join('')+'<div class="muted" style="margin-top:4px;font-size:12px">'+esc(x.why)+'</div></div>'; }).join('')+'</div>'+
+    '<div class="md-f"><button class="btn pri" onclick="closeModal(false)">Close</button></div>');
+}
 </script>
 </body>
 </html>
