@@ -394,10 +394,48 @@ main{color:var(--pg-ink)}
 .side{background:rgba(16,14,29,.97)}
 #signin{background:rgba(21,19,42,.97)}
 .hof-c .t b,.hof-c .trophy{text-shadow:0 1px 2px rgba(0,0,0,.5)}
+/* ── sign-in intro (Oct 6, 2026): ~5.5 s, a synthesised beat + the disc, the bars and the wordmark — skippable ── */
+#intro{position:fixed;inset:0;z-index:200;display:none;background:#0b0a14;color:#f3f1ff;overflow:hidden;align-items:center;justify-content:center}
+#intro.on{display:flex} #intro.out{opacity:0;transition:opacity .5s}
+#intro .glow{position:absolute;border-radius:50%;filter:blur(70px);opacity:.6}
+#intro .g1{width:520px;height:520px;left:-120px;top:-160px;background:#ff3d9a;animation:iglow 5.5s ease-in-out infinite alternate}
+#intro .g2{width:460px;height:460px;right:-120px;bottom:-160px;background:#8b5cf6;animation:iglow 4.5s ease-in-out infinite alternate-reverse}
+@keyframes iglow{from{transform:scale(.9);opacity:.45}to{transform:scale(1.15);opacity:.75}}
+#intro .stage{position:relative;text-align:center}
+#intro .idisc{width:150px;height:150px;border-radius:50%;margin:0 auto 22px;position:relative;background:repeating-radial-gradient(circle at 50% 50%,#1b1836 0 2px,#262253 2px 4px);box-shadow:0 0 0 2px rgba(255,255,255,.2),0 30px 70px -30px #000;animation:spin 2.4s linear infinite,iin .6s cubic-bezier(.2,.9,.3,1.2) both}
+#intro .idisc::before{content:'';position:absolute;inset:44px;border-radius:50%;background:linear-gradient(135deg,#ff3d9a,#8b5cf6)}
+#intro .idisc::after{content:'';position:absolute;inset:68px;border-radius:50%;background:#0b0a14}
+#intro .idisc i{position:absolute;inset:-14px;border-radius:50%;border:2px solid rgba(198,255,77,.6);opacity:0;animation:iring 1s ease-out infinite}
+@keyframes iring{0%{transform:scale(.9);opacity:.7}100%{transform:scale(1.35);opacity:0}}
+@keyframes iin{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+#intro .ieq{display:flex;gap:6px;align-items:flex-end;justify-content:center;height:40px;margin-bottom:18px}
+#intro .ieq i{width:7px;border-radius:4px;background:linear-gradient(180deg,#c6ff4d,#22d3ee);height:8px;box-shadow:0 0 12px rgba(198,255,77,.5);transition:height .09s}
+#intro .iword{font:700 44px/1 'Space Grotesk',sans-serif;letter-spacing:.14em;min-height:48px}
+#intro .iword b{display:inline-block;opacity:0;transform:translateY(14px);transition:opacity .25s,transform .25s}
+#intro .iword b.on{opacity:1;transform:none}
+#intro .isub{margin-top:10px;font:800 11px Inter,sans-serif;letter-spacing:.32em;text-transform:uppercase;color:#9a94c2}
+#intro .ihi{margin-top:26px;font:600 16px Inter,sans-serif;color:#c6ff4d;opacity:0;transform:translateY(8px);transition:opacity .4s,transform .4s}
+#intro .ihi.on{opacity:1;transform:none}
+#intro .iline{width:220px;height:3px;border-radius:3px;background:rgba(255,255,255,.1);margin:22px auto 0;overflow:hidden}
+#intro .iline i{display:block;height:100%;width:0;background:linear-gradient(90deg,#c6ff4d,#22d3ee)}
+#intro .iskip{position:absolute;right:18px;bottom:18px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#c9c4e6;border-radius:100px;padding:7px 14px;font:700 12px Inter,sans-serif;cursor:pointer}
+@media(prefers-reduced-motion:reduce){ #intro .idisc,#intro .glow,#intro .idisc i{animation:none} }
 </style>
 </head>
 <body>
 
+<div id="intro" aria-hidden="true">
+  <div class="glow g1"></div><div class="glow g2"></div>
+  <div class="stage">
+    <div class="idisc"><i></i></div>
+    <div class="ieq"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="iword" id="intro-word"></div>
+    <div class="isub">reels · music promo</div>
+    <div class="ihi" id="intro-hi"></div>
+    <div class="iline"><i id="intro-line"></i></div>
+  </div>
+  <button class="iskip" onclick="introSkip()">skip</button>
+</div>
 <div id="signin">
   <div class="eq"><i></i><i></i><i></i><i></i><i></i></div>
   <h1 class="h-d">ALTR <em>Studio</em></h1>
@@ -541,7 +579,49 @@ function myName(){ return (USER&&USER.name)||(USER&&USER.id)||''; }
 function isOwner(){ return ROLE==='owner'; }
 function isLead(){ return ROLE==='owner'||ROLE==='lead'; }
 function roleOf(id){ id=String(id||'').toLowerCase(); if(OWNERS.indexOf(id)>=0) return 'owner'; if((CFG.leads||[]).indexOf(id)>=0) return 'lead'; return 'va'; }
+/* ══ SIGN-IN INTRO — ~5.5 s. The beat is synthesised in Web Audio (no file, nothing to license): kick on every
+   beat, snare on 2 & 4, closed hats on 8ths, a bass line, a riser into the hit at beat 10, and a chord stab under the
+   name. Plays only on a real sign-in click (browsers allow sound after a gesture); a session restore skips it. ══ */
+var INTRO={ ctx:null, t:null, done:false, timers:[] };
+function introArm(){ try{ if(!INTRO.ctx) INTRO.ctx=new (window.AudioContext||window.webkitAudioContext)(); if(INTRO.ctx.state==='suspended') INTRO.ctx.resume(); }catch(e){} }
+function introSkip(){ if(INTRO.done) return; INTRO.done=true; INTRO.timers.forEach(clearTimeout); try{ if(INTRO.master) INTRO.master.gain.setTargetAtTime(0, INTRO.ctx.currentTime, .08); }catch(e){} var el=$('intro'); el.classList.add('out'); setTimeout(function(){ el.classList.remove('on','out'); }, 520); }
+function introBeat(){
+  var ctx=INTRO.ctx; if(!ctx) return; try{ if(ctx.state==='suspended') ctx.resume(); }catch(e){}
+  var t0=ctx.currentTime+.05, B=.5;   // 120 BPM
+  var comp=ctx.createDynamicsCompressor(); comp.threshold.value=-14; comp.ratio.value=4; var master=ctx.createGain(); master.gain.value=.55; master.connect(comp); comp.connect(ctx.destination); INTRO.master=master;
+  var noiseBuf=(function(){ var b=ctx.createBuffer(1, ctx.sampleRate*1.2, ctx.sampleRate), d=b.getChannelData(0); for(var i=0;i<d.length;i++) d[i]=Math.random()*2-1; return b; })();
+  function kick(t,v){ var o=ctx.createOscillator(), g=ctx.createGain(); o.type='sine'; o.frequency.setValueAtTime(165,t); o.frequency.exponentialRampToValueAtTime(45,t+.28); g.gain.setValueAtTime(v||1,t); g.gain.exponentialRampToValueAtTime(.001,t+.38); o.connect(g); g.connect(master); o.start(t); o.stop(t+.4); }
+  function noise(t,len,hp,lp,v,q){ var src=ctx.createBufferSource(); src.buffer=noiseBuf; var f=ctx.createBiquadFilter(); f.type=hp?'highpass':'bandpass'; f.frequency.value=hp||lp; if(q) f.Q.value=q; var g=ctx.createGain(); g.gain.setValueAtTime(v,t); g.gain.exponentialRampToValueAtTime(.001,t+len); src.connect(f); f.connect(g); g.connect(master); src.start(t); src.stop(t+len+.05); }
+  function snare(t,v){ noise(t,.22,0,1800,v||.6,.8); var o=ctx.createOscillator(), g=ctx.createGain(); o.frequency.setValueAtTime(210,t); o.frequency.exponentialRampToValueAtTime(120,t+.12); g.gain.setValueAtTime(.45*(v||1),t); g.gain.exponentialRampToValueAtTime(.001,t+.16); o.connect(g); g.connect(master); o.start(t); o.stop(t+.2); }
+  function hat(t,open){ noise(t, open?.3:.06, 8500, 0, open?.22:.16); }
+  function bass(t,f,len){ var o=ctx.createOscillator(), fl=ctx.createBiquadFilter(), g=ctx.createGain(); o.type='sawtooth'; o.frequency.value=f; fl.type='lowpass'; fl.frequency.setValueAtTime(900,t); fl.frequency.exponentialRampToValueAtTime(220,t+len); fl.Q.value=6; g.gain.setValueAtTime(.32,t); g.gain.exponentialRampToValueAtTime(.001,t+len); o.connect(fl); fl.connect(g); g.connect(master); o.start(t); o.stop(t+len+.05); }
+  function stab(t){ [0,7,12,16].forEach(function(st,i){ var o=ctx.createOscillator(), g=ctx.createGain(); o.type='sawtooth'; o.frequency.value=110*Math.pow(2,st/12); o.detune.value=(i%2?8:-8); var fl=ctx.createBiquadFilter(); fl.type='lowpass'; fl.frequency.setValueAtTime(3200,t); fl.frequency.exponentialRampToValueAtTime(500,t+1.6); g.gain.setValueAtTime(.12,t); g.gain.exponentialRampToValueAtTime(.001,t+1.8); o.connect(fl); fl.connect(g); g.connect(master); o.start(t); o.stop(t+1.9); }); }
+  function riser(t,len){ var src=ctx.createBufferSource(); src.buffer=noiseBuf; src.loop=true; var f=ctx.createBiquadFilter(); f.type='bandpass'; f.Q.value=1.2; f.frequency.setValueAtTime(400,t); f.frequency.exponentialRampToValueAtTime(7000,t+len); var g=ctx.createGain(); g.gain.setValueAtTime(.02,t); g.gain.linearRampToValueAtTime(.3,t+len); g.gain.setValueAtTime(0,t+len+.01); src.connect(f); f.connect(g); g.connect(master); src.start(t); src.stop(t+len+.05); }
+  var bassLine=[55,55,82.4,55, 55,55,65.4,73.4, 55,55,82.4,55, 55,65.4,73.4,82.4];
+  for(var b=0;b<10;b++){ var t=t0+b*B; kick(t, b===0?1:.9); if(b%2===1) snare(t); hat(t); hat(t+B/2, b===7); if(b<8){ bass(t, bassLine[(b*2)%16], B*.45); bass(t+B/2, bassLine[(b*2+1)%16], B*.45); } }
+  riser(t0+7*B, 3*B);
+  var hit=t0+10*B; kick(hit,1.2); snare(hit,1.1); noise(hit,.9,0,3000,.5,.5); stab(hit); hat(hit+B/2,true); kick(hit+B,.7);
+}
+function introPlay(){
+  var el=$('intro'); if(!el || INTRO.done) return;
+  INTRO.done=false; el.classList.add('on');
+  var word=$('intro-word'); word.innerHTML='ALTR STUDIO'.split('').map(function(c){ return c===' '?'<span style="display:inline-block;width:.4em"></span>':'<b>'+c+'</b>'; }).join('');
+  var letters=Array.prototype.slice.call(word.querySelectorAll('b'));
+  $('intro-hi').textContent='Welcome back, '+esc(firstName(myName()));
+  $('intro-hi').classList.remove('on'); $('intro-line').style.transition='none'; $('intro-line').style.width='0';
+  try{ introBeat(); }catch(e){}
+  var T=function(ms,fn){ INTRO.timers.push(setTimeout(fn,ms)); };
+  T(50, function(){ $('intro-line').style.transition='width 5.4s linear'; $('intro-line').style.width='100%'; });
+  letters.forEach(function(b,i){ T(900+i*230, function(){ b.classList.add('on'); }); });   // letters land on the 8ths
+  var bars=Array.prototype.slice.call(el.querySelectorAll('.ieq i')), beatN=0;
+  var tick=function(){ if(INTRO.done) return; beatN++; bars.forEach(function(bar,i){ var h=8+Math.random()*((beatN%2?1:.6)*30)+(i===3?6:0); bar.style.height=h+'px'; }); INTRO.timers.push(setTimeout(tick, 250)); };
+  T(80, tick);
+  T(5000, function(){ $('intro-hi').classList.add('on'); el.querySelector('.idisc').style.animationDuration='.9s'; });
+  T(6300, introSkip);
+}
+document.addEventListener('keydown', function(e){ if(e.key==='Escape' && $('intro') && $('intro').classList.contains('on')) introSkip(); });
 async function signIn(){
+  introArm();   // the click is the gesture that lets the intro make sound
   var id=$('si-id').value.trim(), pin=$('si-pin').value.trim(), err=$('si-err'), btn=$('si-btn');
   err.style.display='none';
   if(!id||!pin){ err.textContent='Enter your employee ID and PIN.'; err.style.display='block'; return; }
@@ -558,6 +638,7 @@ async function signIn(){
       USER={ id:d.employee_id, name:d.full_name||d.employee_id, photo:d.photo||'' };
     }
     try{ sessionStorage.setItem('altr2_user', JSON.stringify(USER)); }catch(e){}
+    try{ introPlay(); }catch(_i){}   // intro over the console while it loads
     start();
   }catch(e){ err.textContent='Could not reach the login service — check your connection and try again.'; err.style.display='block'; }
   finally{ btn.disabled=false; btn.textContent='Sign in'; }
@@ -566,7 +647,7 @@ function signOut(){ try{ sessionStorage.removeItem('altr2_user'); }catch(e){} lo
 document.addEventListener('keydown', function(e){ if(e.key==='Enter' && $('signin').style.display!=='none' && (e.target.id==='si-id'||e.target.id==='si-pin')) signIn(); });
 
 /* ── state ── */
-var STATE=null, VIEW='today', DATE=phtToday(), ALL_ROLE_READY=false, OPEN={ src:{}, post:{} }, DIRTY={};
+var STATE=null, VIEW='promos', DATE=phtToday(), ALL_ROLE_READY=false, OPEN={ src:{}, post:{} }, DIRTY={};
 function markDirty(k){ DIRTY[k]=Date.now(); }
 async function loadCfg(){
   try{ var d=await apiGet({ action:'altr_cfg', by_id:myId() }, 0); if(d&&d.ok){ CFG=d; BE_VER=d.version||''; ROLE=d.role||roleOf(myId()); return; } }catch(e){}
@@ -696,6 +777,7 @@ function renderView(){
   if(!STATE){ v.innerHTML='<div class="kpis"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>'; return; }
   var html='';
   try{
+    if(!tabsFor().some(function(t){ return t[0]===VIEW; })) VIEW='promos';   // never a blank page: anything unknown opens Promotions
     if(VIEW==='promos') html=vPromos(); else if(VIEW==='delivery') html=vDelivery(); else if(VIEW==='sourcing') html=vSourcing();
     else if(VIEW==='fleet') html=vAccounts(); else if(VIEW==='history') html=vHistory(); else if(VIEW==='settings') html=vSettings(); else if(VIEW==='score') html=vScore(); else if(VIEW==='reel') html=vReel();
   }catch(e){ html='<div class="card empty">Something went wrong drawing this view: '+esc(e&&e.message)+'</div>'; console.error(e); }
