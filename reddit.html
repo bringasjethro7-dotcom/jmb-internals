@@ -798,7 +798,7 @@ async function loadNames(){
   }catch(e){ setTimeout(loadNames, 15000); }
 }
 async function loadCfg(){
-  try{ var d=await jget(API+'?action=rc_cfg_get&_='+Date.now(), 30000); if(d && d.cfg){ CFG=d.cfg; if(!CFG.models) CFG.models={}; if(!CFG.phones) CFG.phones=[]; if(!CFG.niches) CFG.niches=[]; if(!CFG.methods||!CFG.methods.length) CFG.methods=['Vysor','Jailbroken','Blaze+']; } }catch(e){}
+  try{ var d=await jget(API+'?action=rc_cfg_get&_='+Date.now(), 30000); if(d && d.cfg){ CFG=d.cfg; if(!CFG.models) CFG.models={}; if(!CFG.phones) CFG.phones=[]; if(!CFG.niches) CFG.niches=[]; if(!CFG.methods||!CFG.methods.length) CFG.methods=['Vysor','Jailbroken','Blaze+']; CFG_READY=true; if(SET && JSON.stringify(SET)===SET_SNAP) SET=null; if(VIEW==='settings') renderView(); } }catch(e){}
 }
 
 /* ── data ── */
@@ -991,6 +991,9 @@ function start(){
   if(!ROWS.length) $('view').innerHTML='<div class="grid"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>';
   loadNames(); loadCfg().then(renderView); load(); loadAll(); smartPoll();
   if(isAdmin()){ loadOff(); loadHealth(); }
+  if(isAdmin()){ try{ var _dk='rc_dc_'+today(); if(!localStorage.getItem(_dk)){ localStorage.setItem(_dk,'1');
+    // Day close runs from the owner's page in the background (05i) — never inside a VA's request.
+    api({ action:'rc_day_close', by:USER.id, catchup:'1' }).then(function(d){ if(d&&d.ok&&d.closed&&d.closed.length){ toast('Closed '+d.closed.length+' day'+(d.closed.length===1?'':'s')+' → scorecard updated.'); if(VIEW==='prod'){ PQ.st=null; PQ.sc=null; renderView(); } } }).catch(function(){ try{ localStorage.removeItem(_dk); }catch(_r){} }); } }catch(_dc){} }
   if(VIEW==='insights') loadAll().then(loadEvents).then(renderView);
 }
 
@@ -3311,7 +3314,7 @@ async function xferGo(){
 }
 
 /* ═══════════ SETTINGS — owner only ═══════════ */
-var SET=null;
+var SET=null, SET_SNAP='', CFG_READY=false;   // SET_SNAP = the draft as created, so an untouched draft can be replaced when the real config lands
 function vSettings(){
   if(!isAdmin()) return '<div class="card empty">Owner only.</div>';
   var unc=(OFF&&OFF.uncovered)||0;
@@ -3320,7 +3323,7 @@ function vSettings(){
   return sub+vSettingsLists();
 }
 function vSettingsLists(){
-  if(!SET) SET=JSON.parse(JSON.stringify(CFG));
+  if(!SET){ SET=JSON.parse(JSON.stringify(CFG)); SET_SNAP=JSON.stringify(SET); }
   if(!SET.models) SET.models={};
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Settings</h2><p>The pick-lists VAs choose from when they log an account.</p></div><button class="btn sec" onclick="SET=null;renderView()">Discard changes</button><button class="btn pri" id="set-go" onclick="setSave()">Save settings</button></div>';
   h+='<div class="ig">'+(isAdmin()?qzAdminCard():'')+'<div class="card pad s6"><div class="ch-h"><b>Company iPhones</b><span>every account traces back to one phone · each phone belongs to one base — Altz only for now</span></div>'+
@@ -3416,6 +3419,7 @@ async function cleanGo(which){
   }catch(e){ toast('Connection error — nothing was changed if this shows twice.'); }
 }
 async function setSave(){
+  if(!CFG_READY){ toast('The current settings have not loaded yet — wait a moment, then save.'); return; }
   var b=$('set-go'); b.disabled=true; b.textContent='Saving…';
   SET.phones=SET.phones.filter(function(p){ return p.label && p.label.trim(); }).map(function(p){ return { label:p.label.trim(), model:p.model||'Other', base:phoneBase(p), active:p.active!==false }; });
   try{
@@ -3519,7 +3523,13 @@ async function qzAdminLoad(force){
 function qzAdminCard(){
   if(!QZ.adm){ qzAdminLoad(); return '<div class="card pad s6"><div class="ch-h"><b>SOP quiz</b><span>loading…</span></div><div class="skel" style="height:40px"></div></div>'; }
   var A=QZ.adm;
-  if(A.error) return '<div class="card pad s6"><div class="ch-h"><b>SOP quiz</b></div><div class="muted">'+(A.error==='MISSING_PARAMS'||A.error==='network'?'The Reddit backend needs rc-2026-10-05h for the quiz gate.':esc(A.error))+'</div></div>';
+  if(A.error){
+    var old=!!(BE_BUILD && BE_BUILD<'rc-2026-10-05h'), msg;
+    if(old) msg='The live Reddit backend is <b>'+esc(BE_BUILD)+'</b> — the quiz gate needs <b>rc-2026-10-05h</b>. Paste reddit-apps-script.gs, then Deploy → Manage deployments → Edit → <b>New version</b>. Until then VAs are not gated.';
+    else if(!BE_BUILD) msg='Waiting for the backend to answer… <button class="btn sm sec" onclick="qzAdminLoad(true)">Retry</button>';
+    else msg='Could not load the quiz results ('+esc(A.error)+'). <button class="btn sm sec" onclick="qzAdminLoad(true)">Retry</button>';
+    return '<div class="card pad s6"><div class="ch-h"><b>SOP quiz</b><span>gate for VAs · you are exempt</span></div><div class="muted" style="line-height:1.5">'+msg+'</div></div>';
+  }
   var by={}; (A.rows||[]).forEach(function(r){ by[String(r.employee_id).toLowerCase()]=r; });
   var ids={}; Object.keys(ALL).forEach(function(k){ (ALL[k]||[]).forEach(function(r){ var o=worksFor(r); if(o && !isGone(o) && OWNERS.indexOf(o)<0) ids[o]=1; }); });
   ROWS.forEach(function(r){ var o=worksFor(r); if(o && !isGone(o) && OWNERS.indexOf(o)<0) ids[o]=1; });
