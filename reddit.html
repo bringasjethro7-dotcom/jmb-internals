@@ -482,15 +482,15 @@ var SOP_START='2026-10-01';
 /* ── stages: the SOP ladder + lifecycle states ── */
 var PH=[
  {k:'creation',   n:'Creation',      c:'#f59e0b', dur:4, plan:'Creation standby — no daily sessions. Ages 4 days, then waits as replacement stock for a banned account.', task:null},
- {k:'warming',    n:'Warming',       c:'#fb923c', dur:1, plan:'5 min browsing · search 5 subreddits · upvote 2 · join 2 — 1 day.', task:'Reddit Warmup'},
- {k:'comment',    n:'Comment Farm',  c:'#f97316', maxDur:7, karma:50, plan:'5 min browsing · search 5 · upvote 3 · join 2 · 2 SFW comments (approved subs). Goal: 50 karma → NSFW. 7 days without 50 karma = stays here.', task:'Reddit Warmup'},
- {k:'nsfw',       n:'NSFW Comments', c:'#ef4444', client:true, plan:'5 min browsing · search 5 · upvote 3 · 2 comments/replies (approved subs). The CLIENT updates this status.', task:'Reddit Warmup'},
+ {k:'warming',    n:'Warming',       c:'#fb923c', dur:1, plan:'8–12 min browsing · search 2–4 topics and read them · no upvotes · no joining — 1 day.', task:'Reddit Warmup'},
+ {k:'comment',    n:'Comment Farm',  c:'#f97316', maxDur:7, karma:50, plan:'5 min browsing · search 3–5 · no upvotes · join only where you comment · 1–2 SFW comments from the list in the sheet. Goal: 50 karma → NSFW. 7 days without 50 karma = stays here.', task:'Reddit Warmup'},
+ {k:'nsfw',       n:'NSFW Comments', c:'#ef4444', client:true, plan:'5 min browsing · search 5 · upvote 1–3 · 1–2 NSFW comments/replies. The subreddit list is no longer in the SOP — some accounts get a list from the client; follow it when yours has one. The CLIENT updates this status.', task:'Reddit Warmup'},
  {k:'day1',       n:'Day 1 Posting', c:'#f43f5e', dur:1, plan:'3 min browsing · set name/bio/avatar · upvote 2 · 2–3 comments · 1 post/session · rotate subs, captions & photos — 1 day.', task:'Reddit Posting'},
- {k:'early',      n:'Early Posting', c:'#ec4899', plan:'3 min browsing · upvote 2 · 2–3 comments · 2 posts/session.', task:'Reddit Posting'},
- {k:'earlydm',    n:'Early + DMs',   c:'#d946ef', plan:'3 min browsing · 2–3 comments · 2 posts/session · up to 4 DMs per session (only if users are available).', task:'Reddit Posting'},
+ {k:'early',      n:'Early Posting', c:'#ec4899', plan:'2–5 min browsing · upvote 1–3 · 1–3 comments · 2 posts/session.', task:'Reddit Posting'},
+ {k:'earlydm',    n:'Early + DMs',   c:'#d946ef', plan:'2–5 min browsing · upvote 1–3 · 1–3 comments · 2 posts/session · DMs: 2–5 in the AM session, 4–6 in the PM (only if users are available).', task:'Reddit Posting'},
  {k:'medium',     n:'Medium + DMs',  c:'#a855f7', plan:'3 min browsing · 2–3 comments · 3 posts/session · up to 4 DMs per session (only if users are available).', task:'Reddit Posting'},
- {k:'strong',     n:'Strong',        c:'#8b5cf6', plan:'3 min browsing · 2–3 comments · 5 posts/session · 8 DMs per shift.', task:'Reddit Posting', dms:8},
- {k:'superstrong',n:'Super Strong',  c:'#6d28d9', plan:'3 min browsing · 2–3 comments · 7 posts/session · 8 DMs/shift · upvote 2.', task:'Reddit Posting', dms:8}
+ {k:'strong',     n:'Strong',        c:'#8b5cf6', plan:'3 min browsing · 2–3 comments · 5 posts/session · 6–8 DMs per shift.', task:'Reddit Posting', dms:8},
+ {k:'superstrong',n:'Super Strong',  c:'#6d28d9', plan:'3 min browsing · 2–3 comments · 7 posts/session · 8 DMs per shift · upvote 2.', task:'Reddit Posting', dms:8}
 ];
 var EXTRA=[
  {k:'new',             n:'Newly created',    c:'#ff6b1a'},
@@ -1068,6 +1068,7 @@ function vToday(){
   if(admin) h+=wrongBaseBanner(ALL[PROJECT]||ROWS);
   if(admin) h+=hcBanner();
   if(admin){ var _dq=delReqs(); if(_dq.length) h+='<div class="banner bad">'+IC.trash+'<div style="flex:1"><b>'+_dq.length+' deletion request'+(_dq.length===1?'':'s')+'</b> waiting for you — VAs can\'t delete a recorded account without your approval.</div><button class="btn sm dark" onclick="delReview()">Review</button></div>'; }
+  try{ if(!localStorage.getItem('sop_seen_2026-10-05')) h+='<div class="banner" style="background:#ecfeff;border-color:#a5f3fc">'+IC.doc+'<div style="flex:1"><b>SOP update · 5 Oct:</b> the phase plans changed — warming, comment farming, NSFW comments, early posting, DMs, Strong / Super Strong and spam-filter recovery. Each account card shows its new plan.</div><a class="btn sm dark" href="huddle-reddit-sop.html" target="_blank" rel="noopener">What changed</a><button class="btn sm" onclick="localStorage.setItem(\'sop_seen_2026-10-05\',\'1\');renderView()">Got it</button></div>'; }catch(_sb){}
   try{ var _ml=ccMineLeft(); if(_ml.length) h+='<div class="banner warn">'+IC.search+'<div style="flex:1"><b>Daily health check:</b> '+_ml.length+' teammate account'+(_ml.length===1?'':'s')+' to check (about '+Math.max(1,Math.ceil(_ml.length*4/60))+' min). Do it now, before your first session.</div><button class="btn sm dark" onclick="go(\'health\')">Start check</button></div>'; }catch(_hc){}
   var covering=mineWork.filter(function(r){ return owner(r)!==me; });
   if(covering.length){
@@ -1271,7 +1272,7 @@ function rowHtml(r){
     var e=endedAt(r);
     prog='<span class="note b" title="'+esc(r.end_reason||'')+'">'+IC.ban+' Banned'+(e?' '+esc(fmtD(e)):'')+(r.end_reason?' · '+esc(String(r.end_reason).split(':')[0]):'')+'</span>';
   } else if(st==='recovery'){
-    prog='<span class="note i" title="10 min active browsing · upvote 2–4 posts · reply to 2–3 comments. No posting until clear.">Recovery — browse, upvote, reply only</span>';
+    prog='<span class="note i" title="10 min browsing · reply to 2–3 comments · no upvotes. Nothing left to reply to? Comment in the location subreddits. No posting until clear.">Recovery — browse and reply only (no upvotes)</span>';
     act=held?'':sesBtn(r,1)+sesBtn(r,2)+'<button class="ses ok2" onclick="liftBack(\''+id+'\')">'+IC.check+' Cleared</button>';
   } else if(p){
     var ix=phaseIx(st), next=PH[ix+1], km=karmaOf(r), can=true;
@@ -1404,7 +1405,7 @@ function cardHtml(r){
     var e=endedAt(r);
     body='<div class="note b">'+IC.ban+' Banned'+(e?' '+esc(fmtD(e)):'')+(r.end_reason?' · '+esc(r.end_reason):'')+(ageDays(r)!=null?' · lived '+ageDays(r)+' days':'')+'</div>';
   } else if(st==='recovery'){
-    body='<details class="plan"><summary>'+IC.doc+' Recovery plan</summary><div>10 min active browsing · upvote 2–4 posts · reply to 2–3 comments. No posting until clear.</div></details>'+
+    body='<details class="plan"><summary>'+IC.doc+' Recovery plan</summary><div>10 min browsing · reply to 2–3 comments · <b>no upvotes</b>. If nothing is left to reply to, comment in the location subreddits. No posting until clear.</div></details>'+
       (held?'':'<div class="acts">'+sesBtn(r,1)+sesBtn(r,2)+'<button class="ses ok2" onclick="liftBack(\''+jsq(r.id)+'\')">'+IC.check+' Cleared → '+esc(stageMeta(m.prev||'warming').n)+'</button></div>');
   } else if(p){
     var ix=phaseIx(st), next=PH[ix+1], din2=daysIn(r), km=karmaOf(r), can=true, gate='';
@@ -1687,13 +1688,13 @@ async function changeStage(id, sel){
 }
 async function promote(id, nextk){
   var r=rowById(id); if(!r) return;
-  if(!(await confirmBox('Promote to '+stageMeta(nextk).n+'?', 'Only when the profile check is clean — no removed posts, no spam-filter flags, no mod warnings.', 'Promote'))) return;
+  if(!(await confirmBox('Promote to '+stageMeta(nextk).n+'?', 'Only when the profile check is clean — no mod messages or warnings, no "Unable to post", no removed posts, no spam-filter flags, and the avatar is still there (a missing avatar is a shadowban sign).', 'Promote'))) return;
   await moveTo(r, nextk, { meta:JSON.stringify(Object.assign({}, M(r), { pstart:today() })) }, 'Promoted → '+stageMeta(nextk).n);
 }
 async function toRecovery(id){
   var r=rowById(id); if(!r) return;
   if(!(await confirmBox('Move to Spam recovery?', 'Posting pauses and the recovery checklist starts. When it clears it goes back to <b>'+esc(stageMeta(r.status).n)+'</b>.', 'Move to recovery'))) return;
-  await moveTo(r, 'recovery', { meta:JSON.stringify(Object.assign({}, M(r), { prev:r.status })) }, 'In recovery — 10 min browsing, upvotes, replies only.');
+  await moveTo(r, 'recovery', { meta:JSON.stringify(Object.assign({}, M(r), { prev:r.status })) }, 'In recovery — 10 min browsing and replies only, no upvotes.');
 }
 async function toTempBan(id){
   var r=rowById(id); if(!r) return;
@@ -2894,7 +2895,7 @@ function pqG(kind, stage, meth){
 function pqTasks(){
   var t=[{ kind:'creation', stage:'', n:'Account creation', s:'Start creating → counted (+1)' }];
   PH.forEach(function(p){ if(p.task) t.push({ kind:'session', stage:p.k, n:'Session · '+p.n, s:p.plan }); });
-  t.push({ kind:'session', stage:'recovery', n:'Session · Spam recovery', s:'10 min browsing · upvotes · replies' });
+  t.push({ kind:'session', stage:'recovery', n:'Session · Spam recovery', s:'10 min browsing · replies · no upvotes' });
   PH.forEach(function(p){ if(p.dms) t.push({ kind:'dms', stage:p.k, n:'DMs · '+p.n, s:'one DM round' }); });
   t.push({ kind:'healthcheck', stage:'', n:'Health check · per account', s:'one profile look in the daily check', one:true });
   return t;
