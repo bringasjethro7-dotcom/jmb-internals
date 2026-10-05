@@ -784,9 +784,39 @@ function repostStats(r){ var id=String(r.id), hist=(STATE.repost_history||[]).fi
 async function addRepost(){ var l=await askText('Reel link', 'The reel that was reposted.', ''); if(l===null||!l.trim()) return; var r=await askText('Reach right now', 'Numbers like 12.5K are fine.', '0'); if(r===null) return; var n=parseLoose(r); if(isNaN(n)) n=0; try{ var d=await apiPost({ action:'repost_save', link:l.trim(), reach:n, count:1, date:DATE, status:'progress' }); if(d&&d.error) toast(d.error); else { toast('Repost logged'); loadState(true); } }catch(e){ toast('Save failed'); } }
 async function editRepost(id){ var r=(STATE.reposts||[]).filter(function(x){ return String(x.id)===String(id); })[0]; if(!r) return; var v=await askText('Reach for this repost', 'Current reach on the reposted reel.', String(r.reach||'')); if(v===null) return; var n=parseLoose(v); if(isNaN(n)){ toast('Enter a number'); return; } r.reach=n; STATE.repost_history=(STATE.repost_history||[]).concat([{ repost_id:r.id, date:DATE+' '+phtClock(), count:n }]); renderView(); apiPost({ action:'repost_save', id:r.id, reach:n }).then(function(d){ if(d&&d.error) toast(d.error); else toast('Saved'); }).catch(function(){ toast('Save failed'); }); }
 async function schedDone(id){ var it=(STATE.repost_schedule||[]).filter(function(x){ return String(x.id)===String(id); })[0]; if(!it) return; var v=await askText('Reposted — reach right now', it.note||it.link, '0'); if(v===null) return; var n=parseLoose(v); if(isNaN(n)) n=0; it.status='done'; renderView(); try{ var d=await apiPost({ action:'repost_sched_done', id:id, reach:n }); if(d&&d.error) toast(d.error); else { toast('Logged'); loadState(true); } }catch(e){ toast('Save failed'); } }
+/* The client's schedule as sent on Oct 5, 2026 — one click adds whatever is not in the sheet yet (lines already there are skipped by the backend). */
+var CLIENT_SCHED_2026_10=[
+  'October 3, Anllela: https://www.instagram.com/reel/CsG5X4XgaaX/?stkn=NDBwZjR2aXBjc2sz',
+  'October 4, Barbara: https://www.instagram.com/p/DUAwYOgDMGt/?stkn=Ym41dnpzN2JnN3ls',
+  'October 5, Mila: https://www.instagram.com/reel/Dde8G83hBV7/?stkn=MWw4bm9mcDd3MDl0Mg==',
+  'October 6, Liza: https://www.instagram.com/reel/DdFAm6ny4wx/?stkn=MXJ5cGVzMjh0Z3BrNw==',
+  'October 7, Essence: https://www.instagram.com/reel/Dbq2Yioirdn/?stkn=YjIxcm1yNDc1OXB5',
+  'October 8, Guadalupe: https://www.instagram.com/reel/DbUOfWwoAFT/?stkn=b2U0dWQzOGd3bXNn',
+  'October 9, Haleigh Cox: https://www.instagram.com/reel/DYApcTVhAyc/?stkn=MTlua25qaTNzMWI1bg==',
+  'October 10, Amber Hayes: https://www.instagram.com/reel/DdzgmosMLIu/?stkn=ZnQ3MzFmYjJiYXp5',
+  'October 11, Lauren Blake: https://www.instagram.com/reel/DbBXcrDirkp/?stkn=a3FoZ3Y0MGF3bjYw',
+  'October 12, LA: https://www.instagram.com/reel/DagWLv-R5_T/?stkn=MXNiM28yc3IwYnR4YQ==',
+  'October 13, Lilia: https://www.instagram.com/reel/DVyi1dgEsEI/?stkn=Zzg1YzhpMnZ3aWdp',
+  'October 14, Celine: https://www.instagram.com/reel/Dd1MW7NyTp_/?stkn=MTJ4YjVicXQ5OHkzYQ==',
+  'October 15, Mya Bernal: https://www.instagram.com/reel/Dd1VWdkR2Qk/?stkn=MXQycHZueDNka3dhcg==',
+  'October 16, Naza: https://www.instagram.com/reel/DcrVpZasDQf/?stkn=bnJ6b3E3MHJsNHM1',
+  'October 17, Sarah Henderson: https://www.instagram.com/reel/Dd60h2FAGKE/?stkn=aWg1bHBycnMwbHll',
+  'October 18, Sarah Lloyd: https://www.instagram.com/reel/Dc_4_gOS8vA/?stkn=YzU4amw1cHR4dmlu',
+  'October 19, Shayna Holt: https://www.instagram.com/reel/DKzs6-mJLuK/?stkn=MXAxbmhsb21qdG5mZw==',
+  'October 20, Vale: https://www.instagram.com/reel/DOUSSw9EZX_/?stkn=MTNkMXQwbWJmOWlxbg==',
+  'October 21, Amber Rodriguez: https://www.instagram.com/reel/DchT5Yih4Xr/?stkn=MWFwdjY4cnMyd3Rncg==',
+  'October 22, Jane Mautin: https://www.instagram.com/reel/Db8keHmIF_a/?stkn=ejZ6dGY0OTN5cXFk',
+  'October 23, Isabella: https://www.instagram.com/reel/DaL5gAFh75f/?stkn=MWhrM2piYno4NzRncA==',
+  'October 24, Jane Ford: https://www.instagram.com/reel/Ddmqa4PJdbO/?stkn=MWRsdGN5NGxyNnBteA==',
+  'October 25, Dani Banks: https://www.instagram.com/reel/DdaUjF1IhBo/?stkn=MWsxYXo5ZHF5NHcwcA==',
+  'October 26, Alarah: https://www.instagram.com/reel/DchKefLydgf/?stkn=MXJlZmZ5emsxdjkzcg==',
+  'October 27, Naomi: https://www.instagram.com/reel/Db-ri2CqrM1/?stkn=MTBpZ29jZHJxanB6dw=='
+];
+function schedMissing(){ var have={}; (STATE.repost_schedule||[]).forEach(function(x){ have[String(x.date)+'|'+String(x.link||'').trim()]=1; }); return parseSchedLines(CLIENT_SCHED_2026_10.join('\n')).filter(function(it){ return !have[it.date+'|'+it.link]; }); }
+async function schedLoadClient(){ var items=schedMissing(); if(!items.length){ toast('The October schedule is already in'); return; } try{ var d=await apiPost({ action:'repost_sched_set', items:items }); if(d&&d.ok){ toast('Added '+d.added+' day'+(d.added===1?'':'s')+' of the client\'s October schedule'); closeModal(false); loadState(true); } else toast((d&&d.error)||'Failed — is the backend on aura3 or newer?'); }catch(e){ toast('Save failed'); } }
 function schedModal(){
   var all=(STATE.repost_schedule||[]).slice().sort(function(a,b){ return a.date<b.date?1:-1; }).slice(0,40);
-  openModal('<div class="md-h"><h3>Repost schedule</h3><p>Paste the client\'s schedule, one per line: <b>date, link, note</b> (date as 2026-10-07 or 10/07; separators: comma, tab or spaces). Lines already in the schedule are skipped.</p></div><div class="md-b"><textarea id="sch-t" class="ta" style="min-height:120px" placeholder="2026-10-07  https://www.instagram.com/reel/…  Espresso teaser\n2026-10-08  https://www.instagram.com/reel/…"></textarea><div class="row" style="margin-top:8px"><button class="btn pri" onclick="schedSave()">Add to schedule</button></div>'+
+  openModal('<div class="md-h"><h3>Repost schedule</h3><p>Paste the client\'s schedule as it comes — one day per line, e.g. <b>October 7, Essence: https://…</b> (2026-10-07 and 10/07 work too). Lines already in the schedule are skipped.</p></div><div class="md-b">'+(schedMissing().length?'<div class="banner info" style="margin:0 0 12px"><div style="flex:1"><b>The client\'s October schedule (Oct 3–27) is built in.</b> '+schedMissing().length+' day'+(schedMissing().length===1?'':'s')+' not in the sheet yet.</div><button class="btn sm pri" onclick="schedLoadClient()">Add them</button></div>':'')+'<textarea id="sch-t" class="ta" style="min-height:120px" placeholder="October 7, Essence: https://www.instagram.com/reel/…\n2026-10-08  https://www.instagram.com/reel/…  note"></textarea><div class="row" style="margin-top:8px"><button class="btn pri" onclick="schedSave()">Add to schedule</button></div>'+
     (all.length?'<div class="lbl" style="margin:14px 0 6px">In the schedule</div>'+all.map(function(x){ return '<div class="rep"><span class="chip'+(String(x.status)==='done'?'" style="background:rgba(198,255,77,.14);color:var(--lime)':'')+'">'+esc(fmtD(x.date))+(String(x.status)==='done'?' ✓':'')+'</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.note||'')+' <span class="muted">'+esc(x.link)+'</span></span>'+(String(x.status)!=='done'?'<button class="ghost" onclick="schedDel(\''+jsq(x.id)+'\')">remove</button>':'')+'</div>'; }).join(''):'')+
     '</div><div class="md-f"><button class="btn sec" onclick="closeModal(false)">Close</button></div>');
 }
@@ -1413,7 +1443,7 @@ function vReel(){
   var extras=(STATE.reposts||[]).filter(function(r){ return String(r.status||'').toLowerCase()!=='done' && !schedLinks[String(r.link||'').trim()]; });
   var h=topBar('Daily <em>reel</em>', 'the client\'s scheduled reel, reposted on the big accounts · one reel a day, extras when asked', lead?'<button class="btn sm sec" onclick="schedModal()">Schedule…</button><button class="btn sm mag" onclick="addRepost()">'+IC.plus+' Extra reel</button>':'');
   if(!all.length) h+='<div class="banner warn">'+IC.phone+'<div><b>No repost accounts set yet.</b> '+(lead?'Settings → Reposts: pick the big accounts the client reposts on, and each day\'s reel gets one tick per account.':'Ask your lead to set the repost accounts in Settings.')+'</div></div>';
-  if(!todayL.length) h+='<div class="card pad" style="margin-bottom:12px"><div class="ch-h"><b>No reel scheduled for '+esc(fmtD(DATE))+'</b></div><div class="muted">'+(lead?'Paste the client\'s schedule with Schedule… — the day\'s reel then shows here with a tick per account.':'Nothing to repost today.')+'</div></div>';
+  if(!todayL.length) h+='<div class="card pad" style="margin-bottom:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:220px"><div class="ch-h" style="margin:0"><b>No reel scheduled for '+esc(fmtD(DATE))+'</b></div><div class="muted">'+(lead?(schedMissing().length?'The client\'s October schedule is built into the page — add it with one click, or paste a newer one with Schedule…':'Paste the client\'s schedule with Schedule… — the day\'s reel then shows here with a tick per account.'):'Nothing to repost today.')+'</div></div>'+(lead&&schedMissing().length?'<button class="btn pri" onclick="schedLoadClient()">Add the October schedule</button>':'')+'</div>';
   todayL.forEach(function(it){ h+=reelCard(it, all, mine, true); });
   if(overdue.length){ h+='<div class="sec-h"><b>Not finished</b><span>earlier days still missing accounts</span><hr></div>'; overdue.forEach(function(it){ h+=reelCard(it, all, mine, false); }); }
   h+='<div class="ig" style="margin-top:12px"><div class="card pad s6"><div class="ch-h"><b>Next</b><span>coming up</span></div>'+(next.length?next.map(function(x){ return '<div class="rep"><span class="chip">'+esc(fmtD(x.date))+'</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.note||x.link)+'</span></div>'; }).join(''):'<div class="muted">Nothing scheduled after today'+(lead?' — paste the next days with Schedule…':'')+'.</div>')+'</div>';
