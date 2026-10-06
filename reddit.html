@@ -1070,9 +1070,9 @@ function vToday(){
   var me=myId(), admin=isAdmin();
   /* Banned accounts leave the board a week after the ban — the record stays in Accounts and Insights,
      but they never pad a count or clutter the day's work. Since Oct 5: not shown on Today at all. */
-  var onBoard=function(r){ return !isDead(r) && !isArchived(r); };   // banned accounts never sit on the work board (owner, Oct 5) — Accounts → Banned / Insights keep the record
+  var onBoard=function(r){ return !isDead(r) && !isParked(r); };   // banned, on hold and archived accounts never sit on the work board (Oct 5 / Oct 6) — Accounts keeps the record
   var board = (admin ? (TD.va==='all'?ROWS:ROWS.filter(function(r){ return worksFor(r)===(TD.va==='mine'?me:TD.va); })) : ROWS).filter(onBoard);
-  var mineWork=ROWS.filter(function(r){ return worksFor(r)===me; });
+  var mineWork=ROWS.filter(function(r){ return worksFor(r)===me && !isParked(r); });
   var hr=parseInt(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Manila',hour:'2-digit',hour12:false}).format(new Date()),10);
   var greet=hr<12?'Good morning':(hr<18?'Good afternoon':'Good evening');
   var nm=String(USER.name||'').split(',').pop().trim().split(/\s+/)[0]||USER.id;
@@ -1099,6 +1099,8 @@ function vToday(){
     if(gk.length) h+='<div class="banner bad">'+IC.swap+'<div style="flex:1"><b>'+gk.map(function(k){ return esc(vaName(k)); }).join(', ')+'</b> '+(gk.length===1?'is':'are')+' deactivated in the admin console but still '+(gk.length===1?'owns':'own')+' <b>'+gk.reduce(function(s,k){ return s+gh[k].length; },0)+' live account'+(gk.reduce(function(s,k){ return s+gh[k].length; },0)===1?'':'s')+'</b> on '+esc(baseOf(PROJECT).n)+'. Move them to an active VA.</div>'+
       gk.map(function(k){ return '<button class="btn sm dark" onclick="xferOpen(\''+jsq(k)+'\')">Move '+esc(firstName(k))+'\'s '+gh[k].length+'</button>'; }).join('')+'</div>';
   }
+  if(admin){ var _pk=(ALL[PROJECT]||ROWS).filter(isParked), _ph=_pk.filter(function(r){ return r.status==='onhold'; }).length, _pa=_pk.length-_ph;
+    if(_pk.length) h+='<div class="banner info">'+IC.pause+'<div style="flex:1"><b>'+_ph+' on hold'+(_pa?' · '+_pa+' archived':'')+'</b> for clients on '+esc(baseOf(PROJECT).n)+' — out of every board and every number until you release them.</div><button class="btn sm dark" onclick="DB.life=\'hold\';if(!DB.groupBy)DB.groupBy=\'client\';go(\'accounts\')">See them</button></div>'; }
   if(admin) h+=wrongBaseBanner(ALL[PROJECT]||ROWS);
   if(admin) h+=hcBanner();
   if(admin){ var _dq=delReqs(); if(_dq.length) h+='<div class="banner bad">'+IC.trash+'<div style="flex:1"><b>'+_dq.length+' deletion request'+(_dq.length===1?'':'s')+'</b> waiting for you — VAs can\'t delete a recorded account without your approval.</div><button class="btn sm dark" onclick="delReview()">Review</button></div>'; }
@@ -1114,7 +1116,7 @@ function vToday(){
   if(heldMine && !admin) h+='<div class="banner info">'+IC.pause+'<div><b>'+heldMine+'</b> of your accounts are on hold today (client-approved) — leave them untouched.</div></div>';
 
   // KPIs
-  var scopeRows = admin && TD.va==='all' ? ROWS : (admin ? board : mineWork);
+  var scopeRows = (admin && TD.va==='all' ? ROWS.filter(function(r){ return !isParked(r); }) : (admin ? board : mineWork));
   var p=progOf(scopeRows, admin&&TD.va==='all'?null:(admin&&TD.va!=='mine'?TD.va:me));
   if(!admin || TD.va==='mine') maybeSnap(progOf(mineWork, me));
   if(!admin){ try{ var _pm=progOf(mineWork, me), _cm=ccMine(); daySnap({ due:_pm.tot, done:_pm.done,
@@ -1127,14 +1129,14 @@ function vToday(){
   h+='<div class="kpis">'+
     '<div class="card kpi"><div class="ringw"><div class="ring" style="--v:'+p.pct+'" data-t="'+p.pct+'%"></div><div><div class="k-l">'+(admin&&TD.va==='all'?'Team sessions':'Sessions today')+'</div><div class="k-v">'+p.done+'<span style="font-size:15px;color:var(--ink3)"> / '+p.tot+'</span></div><div class="k-s">2 per account · resets at your shift start</div></div></div></div>'+
     kpi('Created this shift', createdToday, 'setup finished & counted', '#ff6b1a')+
-    kpi('Active accounts', active, 'banned ones are not counted', '#a855f7')+
+    kpi('Active accounts', active, 'banned · on hold · archived not counted', '#a855f7')+
     kpi('Needs attention', att, 'recovery · temp ban · unfinished · stuck karma', att?'#ef4444':'#10b981')+
     (admin?kpi('Banned · 7 days', bannedWk, 'see Insights for the pattern', '#64748b'):'')+
   '</div>';
 
   // team progress — owner only
   if(admin){
-    var by={}; ROWS.forEach(function(r){ var k=worksFor(r)||'—'; (by[k]=by[k]||[]).push(r); });
+    var by={}; ROWS.filter(function(r){ return !isParked(r); }).forEach(function(r){ var k=worksFor(r)||'—'; (by[k]=by[k]||[]).push(r); });
     var list=Object.keys(by).filter(function(k){ return !isGone(k); }).map(function(k){ var q=progOf(by[k],k); q.k=k; q.n=by[k].filter(function(r){ return !isDead(r); }).length; return q; })
       .filter(function(o){ return o.tot>0 || o.n>0; })
       .sort(function(a,b){ return b.pct-a.pct || b.tot-a.tot; });
@@ -1288,7 +1290,7 @@ function rowHtml(r){
   var prog='', act='';
   if(isParked(r)){
     var pk=m.park||{};
-    prog='<span class="note i" title="'+esc((pk.reason||'')+(pk.by?' — '+vaName(pk.by):''))+'">'+(st==='archived'?IC.doc+' Archived':IC.pause+' On hold')+(pk.reason?' · '+esc(String(pk.reason).slice(0,40)):'')+'</span>';
+    prog='<span class="note i" title="'+esc((pk.client?'For '+pk.client+' · ':'')+(pk.reason||'')+(pk.by?' — '+vaName(pk.by):'')+(pk.at?' · '+pk.at:''))+'">'+(st==='archived'?IC.doc+' Archived':IC.pause+' On hold')+(pk.client?' · '+esc(pk.client):'')+(pk.reason?' · '+esc(String(pk.reason).slice(0,40)):'')+'</span>';
     if(admin) act='<button class="ses ok2" onclick="resumeAcct(\''+id+'\')">'+IC.up+' Resume → '+esc(stageMeta(m.prev&&!/^(onhold|archived)$/.test(m.prev)?m.prev:'creation').n)+'</button>';
   } else if(st==='new'){
     var ok3=!!(m.setup||{}).cred;
@@ -1568,47 +1570,124 @@ function progWhy(va){
     '</div><div class="md-f"><button class="btn sec" onclick="closeModal()">Close</button></div>');
 }
 
-/* ═══════════ ON HOLD / ARCHIVED (owner, Oct 5) ═══════════
-   On hold = kept exactly where it is but not worked: no sessions due, not in anyone's progress, still in
-   the health check (it still exists on Reddit). Archived = retired: off the Today board, out of the
-   health check, kept in Accounts and the history. Only JMBEAST / ADMIN can put an account in or take it
-   out (the backend enforces it). Both remember the stage they came from; Resume puts it back. */
-async function parkAcct(id, kind){
-  var r=rowById(id); if(!r || !isAdmin()) return;
-  var lbl=kind==='archived'?'Archive':'Put on hold';
-  var reason=await askText(lbl+' '+r.handle+'?', kind==='archived'
-      ?'Retires the account: it leaves the Today board and the health check, stays in Accounts and its history. Resume brings it back to <b>'+esc(stageMeta(r.status).n)+'</b>.'
-      :'Keeps it at <b>'+esc(stageMeta(r.status).n)+'</b> but nobody works it — no sessions due, not in anyone\'s progress — until you resume it.', 'Why? (e.g. client asked to hold Jailbroken creation accounts)');
-  if(reason==null) return;
-  var meta=Object.assign({}, M(r), { prev:r.status, park:{ by:myId(), at:phtStamp(), reason:reason } });
-  await moveTo(r, kind, { meta:JSON.stringify(meta), note:reason }, (kind==='archived'?'Archived':'On hold')+' — '+r.handle);
+/* ═══════════ CLIENT HOLD · ARCHIVE · RELEASE (owner, Oct 6) ═══════════
+   Clients ask for "massive" holds — every account on the jailbroken phones, or a list of usernames.
+   One modal does it: take the accounts in the current Accounts filter, or paste the client's list
+   (profile links, u/ names, commas, one per line — all fine), see exactly who matched, name the client
+   and the reason, and park them in one go (chunks of 80 → pa_bulk, one call each).
+   Parked = On hold or Archived = OUT OF EVERY NUMBER: no sessions due, no creation credit, not on
+   anyone's Today board, not in the cross-check or the API health run, not in Insights, Pipeline,
+   survival / ban rate / progress / karma, not in coverage. They stay in Accounts (On hold / Archived)
+   with their history; Release puts each one back at the stage it had when the client says go.
+   Only JMBEAST / ADMIN can park or release (the backend enforces it). Ctrl+Z undoes a whole batch. */
+function parkOf(r){ var m=M(r); return (m&&m.park)||{}; }
+function cleanHandle(h){ return String(h||'').trim().replace(/^(https?:\/\/)?((www|old|new|m)\.)?reddit\.com\/(u|user)\//i,'').replace(/^\/?(u|user)\//i,'').replace(/^@/,'').replace(/[\/?#].*$/,'').replace(/[^A-Za-z0-9_-]/g,'').toLowerCase(); }
+function parseHandles(text){ var seen={}, out=[]; String(text||'').split(/[\s,;|]+/).forEach(function(t){ var h=cleanHandle(t); if(h && h.length>=3 && !seen[h]){ seen[h]=1; out.push(h); } }); return out; }
+function matchHandles(list, rows){ var by={}; (rows||[]).forEach(function(r){ var k=cleanHandle(r.handle); if(k && (!by[k] || isDead(by[k]))) by[k]=r; }); var hit=[], miss=[]; list.forEach(function(h){ if(by[h]) hit.push(by[h]); else miss.push(h); }); return { hit:hit, miss:miss }; }
+function clientNames(){ var s={}; holdPool().forEach(function(r){ var c=parkOf(r).client; if(c) s[c]=1; }); try{ JSON.parse(localStorage.getItem('rc_clients')||'[]').forEach(function(c){ s[c]=1; }); }catch(e){} return Object.keys(s).sort(); }
+function rememberClient(c){ if(!c) return; try{ var L=JSON.parse(localStorage.getItem('rc_clients')||'[]'); if(L.indexOf(c)<0) L.push(c); localStorage.setItem('rc_clients', JSON.stringify(L.slice(-30))); }catch(e){} }
+async function apiPost(body){ var r=await fetch(API, { method:'POST', headers:{ 'Content-Type':'text/plain;charset=UTF-8' }, body:JSON.stringify(body) }); return await r.json(); }
+var HOLD={ op:'onhold', mode:'filter', text:'', ids:null, release:false, client:'', reason:'' };
+function holdPool(){ var a=allRows(); return a.length?a:(ALL[PROJECT]||ROWS); }   // match across every base
+function holdCandidates(){
+  var rel=HOLD.release, op=HOLD.op;
+  var keep=function(r){ return rel ? isParked(r) : (!isDead(r) && r.status!==op && !(op==='onhold' && isArchived(r))); };
+  var rows, miss=[];
+  if(HOLD.mode==='ids') rows=(HOLD.ids||[]).map(rowById).filter(Boolean);
+  else if(HOLD.mode==='paste'){ var m=matchHandles(parseHandles(HOLD.text), holdPool()); rows=m.hit; miss=m.miss; }
+  else rows=dbRows();
+  return { rows:rows.filter(keep), skipped:rows.filter(function(r){ return !keep(r); }), miss:miss };
 }
-async function resumeAcct(id){
-  var r=rowById(id); if(!r || !isAdmin()) return;
-  var back=M(r).prev && M(r).prev!=='onhold' && M(r).prev!=='archived' ? M(r).prev : 'creation';
-  var meta=Object.assign({}, M(r)); delete meta.park; if(phase(back)) meta.pstart=today();
-  await moveTo(r, back, { meta:JSON.stringify(meta) }, 'Back to '+stageMeta(back).n);
+function holdOpen(op, ids, release){
+  if(!isAdmin()){ toast('Only the owner can put accounts on hold, archive or release them.'); return; }
+  var rel=!!release;
+  HOLD.op=(op==='archived'?'archived':'onhold'); HOLD.ids=ids||null; HOLD.release=rel;
+  HOLD.mode=ids?'ids':((HOLD.mode==='paste' || VIEW!=='accounts')?'paste':'filter');
+  if(!allRows().length) loadAll().then(holdPaint);
+  var title=rel?'Release accounts':(HOLD.op==='archived'?'Archive for a client':'Hold for a client');
+  var sub=rel?'Back to the stage each one had before it was parked — use it when the client says the accounts are in play again.'
+            :'Parked accounts are <b>out of every number</b> — no sessions due, no credit, not on anyone\'s board, not in any report — until you release them. Each one remembers its stage.';
+  openModal('<div class="md-h"><h3>'+(rel?IC.up:(HOLD.op==='archived'?IC.doc:IC.pause))+' '+esc(title)+'</h3><p>'+sub+'</p></div>'+
+    '<div class="md-b">'+
+      (HOLD.mode==='ids'?'':'<div class="seg" style="width:auto;margin-bottom:10px"><button id="hm-filter" class="'+(HOLD.mode==='filter'?'on':'')+'" onclick="HOLD.mode=\'filter\';holdPaint()">'+(VIEW==='accounts'?'The accounts in this filter':'Current Accounts filter')+'</button><button id="hm-paste" class="'+(HOLD.mode==='paste'?'on':'')+'" onclick="HOLD.mode=\'paste\';holdPaint();try{$(\'hold-t\').focus()}catch(e){}">Paste the client\'s list</button></div>')+
+      '<div id="hold-paste" style="'+(HOLD.mode==='paste'?'':'display:none')+'"><textarea class="inp" id="hold-t" rows="5" placeholder="u/username — one per line, commas, or profile links. Paste the client\'s message as it is." style="width:100%;resize:vertical" oninput="HOLD.text=this.value;holdPaintSoon()">'+esc(HOLD.text)+'</textarea><div class="muted" style="font-size:11.5px;margin-top:4px">Matched by username across every base, case-insensitive. Names that are not in the tool are listed so you can check them.</div></div>'+
+      '<div id="hold-prev" style="margin:10px 0"></div>'+
+      (rel?'':'<div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-start"><label style="flex:1;min-width:160px"><div class="lbl">Client</div><input class="inp" id="hold-c" list="hold-cl" placeholder="Who asked for it" value="'+esc(HOLD.client||'')+'" style="width:100%"><datalist id="hold-cl">'+clientNames().map(function(c){ return '<option value="'+esc(c)+'">'; }).join('')+'</datalist></label>'+
+        '<label style="flex:2;min-width:220px"><div class="lbl">Reason</div><input class="inp" id="hold-r" maxlength="300" placeholder="e.g. client asked to hold the jailbroken accounts until further notice" value="'+esc(HOLD.reason||'')+'" style="width:100%"></label></div>'+
+        '<div class="seg" style="width:auto;margin-top:10px"><button id="ho-hold" class="'+(HOLD.op==='onhold'?'on':'')+'" onclick="HOLD.op=\'onhold\';holdPaint()">'+IC.pause+' On hold — will be reused</button><button id="ho-arch" class="'+(HOLD.op==='archived'?'on':'')+'" onclick="HOLD.op=\'archived\';holdPaint()">'+IC.doc+' Archive — retired</button></div>')+
+    '</div>'+
+    '<div class="md-f"><button class="btn sec" onclick="closeModal(null)">Cancel</button><button class="btn pri" id="hold-go" onclick="holdGo()">…</button></div>');
+  holdPaint();
+  if(HOLD.mode==='paste'){ try{ $('hold-t').focus(); }catch(e){} }
 }
-/* Bulk: every live account in the current Accounts filter (e.g. Jailbroken + Creation) at once. */
-async function bulkPark(kind){
-  if(!isAdmin()) return;
-  var L=dbRows().filter(function(r){ return !isDead(r) && r.status!==kind && !(kind==='onhold' && r.status==='archived'); });
-  if(!L.length){ toast('Nothing in this filter to '+(kind==='archived'?'archive':'put on hold')+'.'); return; }
-  var reason=await askText((kind==='archived'?'Archive ':'Put on hold ')+L.length+' account'+(L.length===1?'':'s')+'?', 'Every live account in the current filter'+(DB.meth!=='all'?' — <b>'+esc(DB.meth||'not tagged')+'</b>':'')+(DB.grp?' · <b>'+esc((GROUPS.filter(function(g){ return g.k===DB.grp; })[0]||{}).n||DB.grp)+'</b>':'')+'. Each one remembers its stage; Resume brings it back. Ctrl+Z undoes the whole batch.', 'Why? (e.g. client asked to hold Jailbroken creation accounts)');
-  if(reason==null) return;
-  toast('Updating '+L.length+'…'); var ok=0, fail=0, items=[];
-  for(var i=0;i<L.length;i+=5){
-    await Promise.all(L.slice(i,i+5).map(async function(r){
-      var pm=Object.assign({}, M(r)), meta=Object.assign({}, pm, { prev:r.status, park:{ by:myId(), at:phtStamp(), reason:reason } });
-      try{ var d=await upd(r.id,{ status:kind, meta:JSON.stringify(meta), note:reason });
-        if(d&&d.ok){ ok++; items.push({ id:r.id, status:r.status, stage_at:r.stage_at, meta:{ prev:pm.prev, park:pm.park }, keys:['prev','park'] }); patchLocal(r.id,{ status:kind, meta:meta, stage_at:phtStamp() }); }
-        else fail++; }catch(e){ fail++; }
-    }));
+var _hpT=null; function holdPaintSoon(){ clearTimeout(_hpT); _hpT=setTimeout(holdPaint, 250); }
+function holdPaint(){
+  var box=$('hold-prev'); if(!box) return;
+  var pv=$('hold-paste'); if(pv) pv.style.display=HOLD.mode==='paste'?'':'none';
+  [['hm-filter',HOLD.mode==='filter'],['hm-paste',HOLD.mode==='paste'],['ho-hold',HOLD.op==='onhold'],['ho-arch',HOLD.op==='archived']].forEach(function(x){ var b=$(x[0]); if(b) b.classList.toggle('on', x[1]); });
+  var c=holdCandidates(), rel=HOLD.release, n=c.rows.length, verb=rel?'released':(HOLD.op==='archived'?'archived':'put on hold');
+  var chips=function(rows){ return rows.slice(0,40).map(function(r){ var s=stageMeta(r.status), pk=parkOf(r); return '<span class="pill" style="background:'+s.c+'18;color:'+s.c+'" title="'+esc(s.n+' · '+vaName(owner(r))+(pk.client?' · held for '+pk.client:''))+'">'+esc(r.handle)+'</span>'; }).join(' ')+(rows.length>40?' <span class="muted">+'+(rows.length-40)+' more</span>':''); };
+  var h='';
+  if(HOLD.mode==='paste' && !parseHandles(HOLD.text).length) h='<div class="muted" style="font-size:12.5px">Paste the usernames above — the matches show here.</div>';
+  else {
+    h+='<div style="font-weight:800;font-size:13px;margin-bottom:4px">'+n+' account'+(n===1?'':'s')+' will be '+verb+'</div>'+(n?'<div style="line-height:1.9">'+chips(c.rows)+'</div>':'<div class="muted" style="font-size:12.5px">Nothing to do here'+(HOLD.mode==='filter'?' — change the filter on the Accounts page, or paste a list':'')+'.</div>');
+    if(c.skipped.length) h+='<div class="muted" style="font-size:12px;margin-top:6px">'+c.skipped.length+' skipped — '+(rel?'not parked':'banned or already there')+': '+esc(c.skipped.slice(0,8).map(function(r){ return r.handle; }).join(', '))+(c.skipped.length>8?' …':'')+'</div>';
+    if(c.miss.length) h+='<div class="note w" style="margin-top:6px;display:block"><b>'+c.miss.length+' not in the tool:</b> '+esc(c.miss.slice(0,15).join(', '))+(c.miss.length>15?' …':'')+'</div>';
   }
-  if(items.length) undoPush({ kind:'stage', label:items.length+' account'+(items.length===1?'':'s')+' back from '+(kind==='archived'?'archive':'hold'), items:items });
-  EVENTS_AT=0; if(fail) toast(ok+' done · '+fail+' failed — retry'); else toastUndo(ok+' '+(kind==='archived'?'archived':'on hold'));
-  renderView();
+  box.innerHTML=h;
+  var go=$('hold-go'); if(go){ go.innerHTML=(rel?IC.up+' Release ':(HOLD.op==='archived'?IC.doc+' Archive ':IC.pause+' Put on hold · '))+n; go.disabled=!n; go.style.opacity=n?'':'.5'; }
 }
+async function holdGo(){
+  var c=holdCandidates(); if(!c.rows.length) return;
+  var rel=HOLD.release, client=rel?'':(($('hold-c')||{}).value||'').trim(), reason=rel?'':(($('hold-r')||{}).value||'').trim();
+  if(!rel && !reason){ toast('Write the reason first — it shows on every account.'); try{ $('hold-r').focus(); }catch(e){} return; }
+  HOLD.client=client; HOLD.reason=reason; rememberClient(client);
+  closeModal(null);
+  await paBulkRun(rel?'release':HOLD.op, c.rows, client, reason, false);
+}
+/* One batch: chunks of 80 ids → pa_bulk. Local rows are patched as each chunk lands, so the page never waits
+   for a reload. restore=true is the undo path (release keeps the old phase start). */
+async function paBulkRun(op, rows, client, reason, restore){
+  if(!rows.length) return { done:[], fail:0 };
+  var ids=rows.map(function(r){ return r.id; }), done=[], fail=0, notfound=[], at=phtStamp(), before={};
+  rows.forEach(function(r){ before[r.id]={ status:r.status, stage_at:r.stage_at, meta:Object.assign({}, M(r)) }; });
+  toast((op==='release'?'Releasing ':'Updating ')+ids.length+'…');
+  var i=0, tries=0;
+  while(i<ids.length){
+    var chunk=ids.slice(i,i+80), d=null;
+    try{ d=await apiPost({ action:'pa_bulk', by:USER.id, op:op, ids:chunk.join(','), client:client||'', reason:reason||'', restore:restore?'1':'' }); }catch(e){ d=null; }
+    if(d && d.error==='BUSY' && tries<3){ tries++; await new Promise(function(r){ setTimeout(r,2500); }); continue; }
+    tries=0;
+    if(d && d.ok){
+      var sk={}; (d.skipped||[]).forEach(function(x){ sk[x.id]=1; }); var nf={}; (d.notfound||[]).forEach(function(x){ nf[x]=1; notfound.push(x); });
+      chunk.forEach(function(id){
+        if(sk[id] || nf[id]) return; done.push(id); var r=rowById(id); if(!r) return;
+        var m=Object.assign({}, M(r)), next;
+        if(op==='release'){ next=(m.prev && !/^(onhold|archived|banned)$/.test(m.prev))?m.prev:'creation'; delete m.park; if(!restore && phase(next)) m.pstart=today(); }
+        else { if(!isParked(r)) m.prev=r.status; m.park={ by:myId(), at:at, reason:reason||'', client:client||'' }; next=op; }
+        patchLocal(id, { status:next, meta:m, stage_at:at });
+      });
+      if(ids.length>80) toast(Math.min(i+80,ids.length)+' / '+ids.length+'…');
+    } else {
+      fail+=chunk.length;
+      if(d && d.error==='UNKNOWN_ACTION'){ toast('The Reddit backend needs build rc-2026-10-06a — paste reddit-apps-script.gs and deploy a new version.'); break; }
+      if(d && d.error==='OWNER_ONLY'){ toast('Only the owner can do this.'); break; }
+    }
+    i+=80;
+  }
+  if(done.length && !restore) undoPush({ kind:'bulk', label:done.length+' account'+(done.length===1?'':'s')+' '+(op==='release'?'parked again':'released'), op:op, ids:done.slice(), before:before });
+  EVENTS_AT=0; renderView();
+  if($('drawer').classList.contains('on')){ var did=$('drawer').getAttribute('data-id'); if(did && rowById(did)) openRec(did); }
+  var msg=done.length+' '+(op==='release'?'released':(op==='archived'?'archived':'on hold'))+(fail?' · '+fail+' failed — try again':'')+(notfound.length?' · '+notfound.length+' not found':'');
+  if(done.length && !restore && !_undoing) toastUndo(msg); else toast(msg);
+  setTimeout(function(){ loadAll(true).then(renderView); }, 1500);
+  return { done:done, fail:fail };
+}
+/* the single-account paths (card menu, stage dropdown, drawer) go through the same modal / batch */
+function parkAcct(id, kind){ holdOpen(kind, [id]); }
+async function resumeAcct(id){ var r=rowById(id); if(!r || !isAdmin()) return; await paBulkRun('release', [r], '', '', false); }
+function bulkPark(kind){ holdOpen(kind); }
+function bulkRelease(){ holdOpen('onhold', null, true); }
 
 /* ── actions ── */
 /* Meta writes send only the keys that change (meta_patch, backend rc-2026-10-05a+): the server merges
@@ -1825,6 +1904,16 @@ function toastUndo(msg){
 async function undoLast(){
   if(_undoing) return;
   var e=UNDO.pop(); if(!e){ toast('Nothing to undo.'); return; }
+  if(e.kind==='bulk'){   // a client hold / archive / release batch: one call back the other way
+    _undoing=true;
+    try{
+      if(e.op==='release'){
+        var groups={}; e.ids.forEach(function(id){ var b=e.before[id]; if(b && isParked(b)) (groups[b.status]=groups[b.status]||[]).push(id); });
+        for(var st in groups){ var first=(e.before[groups[st][0]].meta||{}).park||{}; await paBulkRun(st, groups[st].map(rowById).filter(Boolean), first.client||'', first.reason||'', true); }
+      } else await paBulkRun('release', e.ids.map(rowById).filter(Boolean), '', '', true);
+    } finally { _undoing=false; }
+    toast('Undone — '+e.label); return;
+  }
   _undoing=true; var ok=0, fail=0;
   try{
     for(var i=0;i<e.items.length;i++){
@@ -1939,13 +2028,14 @@ var COLS=[
   {k:'karma',   n:'Karma',       num:true, v:function(r){ var k=karmaOf(r); return k==null?-1:k; }, h:function(r){ var k=karmaOf(r); return k==null?'—':k; }},
   {k:'last',    n:'Last worked', v:function(r){ return lastWorked(r); }, h:function(r){ var l=lastWorked(r); return l?esc(fmtD(parseTs(l))):'—'; }},
   {k:'ended',   n:'Banned on',   v:function(r){ var e=endedAt(r); return e?e.getTime():0; }, h:function(r){ var e=endedAt(r); return e?esc(fmtD(e))+(endedExact(r)?'':' <span class="muted" title="Recorded before the history log — approximate">≈</span>'):''; }},
-  {k:'reason',  n:'Ban reason',  v:function(r){ return String(r.end_reason||''); }, h:function(r){ return esc(r.end_reason||''); }}
+  {k:'reason',  n:'Ban reason',  v:function(r){ return String(r.end_reason||''); }, h:function(r){ return esc(r.end_reason||''); }},
+  {k:'held',    n:'Held for',    hold:true, v:function(r){ return String(parkOf(r).client||'').toLowerCase(); }, h:function(r){ var pk=parkOf(r); if(!isParked(r)) return ''; return '<b>'+esc(pk.client||'—')+'</b>'+(pk.reason?' <span class="muted">· '+esc(String(pk.reason).slice(0,60))+'</span>':'')+(pk.at?' <span class="muted">· since '+esc(fmtD(parseTs(pk.at)))+'</span>':''); }}
 ];
 function dbRows(){
   var src=(isAdmin() && DB.all)?allRows():(isAdmin()?(ALL[PROJECT]||ROWS):ROWS);
   var q=DB.q.trim().toLowerCase();
   return src.filter(function(r){
-    if(DB.life==='alive' && (isDead(r) || isArchived(r))) return false;
+    if(DB.life==='alive' && (isDead(r) || isParked(r))) return false;   // Alive = in play (parked accounts have their own filters)
     if(DB.life==='dead' && !isDead(r)) return false;
     if(DB.life==='hold' && r.status!=='onhold') return false;
     if(DB.life==='arch' && !isArchived(r)) return false;
@@ -1965,28 +2055,30 @@ function vAccounts(){
   var rows=dbRows();
   var col=COLS.filter(function(c){ return c.k===DB.sort; })[0]||COLS[8];
   rows.sort(function(a,b){ var x=col.v(a), y=col.v(b); return (x<y?-1:x>y?1:0)*DB.dir || String(a.handle).localeCompare(String(b.handle)); });
-  var cols=COLS.filter(function(c){ return (!c.admin || admin) && (!c.all || (admin && DB.all)); });
+  var cols=COLS.filter(function(c){ return (!c.admin || admin) && (!c.all || (admin && DB.all)) && (!c.hold || DB.life==='hold' || DB.life==='arch'); });
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Accounts</h2><p>'+(admin?'Every account, every stage, from creation to ban — click a row for its full history.':'Your accounts — click a row for its full history.')+'</p></div>'+
     (admin?'<button class="btn sec" onclick="exportCsv()">'+IC.dl+' Export CSV</button>':'')+
     '<button class="btn pri" onclick="newAccount()">'+IC.plus+' Log new account</button></div>';
   var models=distinct(src,function(r){ return r.model; }), phones=distinct(src,function(r){ return r.device; });
   h+='<div class="tbar">'+
-    '<div class="seg" style="width:auto">'+[['alive','Alive'],['hold','On hold'],['arch','Archived'],['dead','Banned'],['all','All']].map(function(x){ return '<button class="'+(DB.life===x[0]?'on':'')+'" onclick="DB.life=\''+x[0]+'\';renderView()">'+x[1]+'</button>'; }).join('')+'</div>'+
+    '<div class="seg" style="width:auto">'+[['alive','Alive'],['hold','On hold'],['arch','Archived'],['dead','Banned'],['all','All']].map(function(x){ return '<button class="'+(DB.life===x[0]?'on':'')+'" onclick="DB.life=\''+x[0]+'\';'+((x[0]==='hold'||x[0]==='arch')?'if(!DB.groupBy)DB.groupBy=\'client\';':'if(DB.groupBy===\'client\')DB.groupBy=\'\';')+'renderView()">'+x[1]+(x[0]==='hold'||x[0]==='arch'?' <small>'+src.filter(x[0]==='hold'?function(r){ return r.status==='onhold'; }:isArchived).length+'</small>':'')+'</button>'; }).join('')+'</div>'+
     '<select class="sel" onchange="DB.grp=this.value;renderView()"><option value="">All stages</option>'+GROUPS.map(function(g){ return '<option value="'+g.k+'"'+(DB.grp===g.k?' selected':'')+'>'+g.n+'</option>'; }).join('')+'</select>'+
     '<select class="sel" onchange="DB.meth=this.value;renderView()"><option value="all">All methods</option>'+methodsList().map(function(m){ return '<option'+(DB.meth===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'<option value=""'+(DB.meth===''?' selected':'')+'>Not tagged</option></select>'+
     '<select class="sel" onchange="DB.model=this.value;renderView()"><option value="">All models</option>'+models.map(function(m){ return '<option'+(DB.model===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select>'+
     '<select class="sel" onchange="DB.phone=this.value;renderView()"><option value="">All phones</option>'+phones.map(function(m){ return '<option'+(DB.phone===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select>'+
     (admin?'<select class="sel" onchange="DB.va=this.value;renderView()"><option value="all">All VAs</option>'+vaOptions(DB.va,false)+'</select>':'')+
-    '<select class="sel" onchange="DB.groupBy=this.value;renderView()" title="Group rows"><option value="">No grouping</option>'+[['method','Group: Method'],['stage','Group: Stage'],['model','Group: Model'],['device','Group: Phone'],['va','Group: VA'],['niche','Group: Niche']].concat(admin&&DB.all?[['base','Group: Base']]:[]).filter(function(x){ return admin||x[0]!=='va'; }).map(function(x){ return '<option value="'+x[0]+'"'+(DB.groupBy===x[0]?' selected':'')+'>'+x[1]+'</option>'; }).join('')+'</select>'+
+    '<select class="sel" onchange="DB.groupBy=this.value;renderView()" title="Group rows"><option value="">No grouping</option>'+[['method','Group: Method'],['stage','Group: Stage'],['model','Group: Model'],['device','Group: Phone'],['va','Group: VA'],['niche','Group: Niche'],['client','Group: Client (hold)']].concat(admin&&DB.all?[['base','Group: Base']]:[]).filter(function(x){ return admin||x[0]!=='va'; }).map(function(x){ return '<option value="'+x[0]+'"'+(DB.groupBy===x[0]?' selected':'')+'>'+x[1]+'</option>'; }).join('')+'</select>'+
     (admin?'<label class="chip" style="cursor:pointer;background:var(--s1);border:1px solid var(--line)"><input type="checkbox" '+(DB.all?'checked':'')+' onchange="DB.all=this.checked;if(DB.all)loadAll().then(renderView);renderView()" style="accent-color:var(--o)"> All bases</label>':'')+
     '<div class="sp"></div>'+searchBox('db-q', DB.q, 'Search username, model, phone, VA…', 'DB.q', DB.q.trim()?rows.length:null)+
     '<span class="muted" style="font-weight:700;font-size:12px">'+rows.length+' record'+(rows.length===1?'':'s')+'</span></div>';
   if(admin && DB.life==='dead' && rows.length) h+='<div class="banner info">'+IC.trash+'<div style="flex:1">Don\'t want these old bans in the tool? Remove them all (or only the old-process ones) in one go — new bans keep being recorded.</div><button class="btn sm dark" onclick="CLEAN=null;go(\'settings\')">Open Clean-up</button></div>';
-  if(admin && rows.length){
-    var liveN=rows.filter(function(r){ return !isDead(r); }).length;
-    if(liveN) h+='<div class="row" style="gap:8px;margin:-4px 0 12px;align-items:center;flex-wrap:wrap"><span class="muted" style="font-size:12px;font-weight:700">With the '+liveN+' live account'+(liveN===1?'':'s')+' shown:</span>'+
-      '<button class="btn sm sec" onclick="bulkPark(\'onhold\')">'+IC.pause+' Put on hold</button><button class="btn sm sec" onclick="bulkPark(\'archived\')">'+IC.doc+' Archive</button>'+
-      '<span class="muted" style="font-size:11.5px">e.g. filter Jailbroken + Creation first · Ctrl+Z undoes it</span></div>';
+  if(admin){
+    var liveN=rows.filter(function(r){ return !isDead(r) && !isParked(r); }).length, parkedN=rows.filter(isParked).length;
+    h+='<div class="row" style="gap:8px;margin:-4px 0 12px;align-items:center;flex-wrap:wrap">'+
+      (liveN?'<span class="muted" style="font-size:12px;font-weight:700">With the '+liveN+' live account'+(liveN===1?'':'s')+' shown:</span><button class="btn sm sec" onclick="HOLD.mode=\'filter\';holdOpen(\'onhold\')">'+IC.pause+' Hold for a client…</button><button class="btn sm sec" onclick="HOLD.mode=\'filter\';holdOpen(\'archived\')">'+IC.doc+' Archive…</button>':'')+
+      (parkedN?'<span class="muted" style="font-size:12px;font-weight:700;margin-left:'+(liveN?'10px':'0')+'">'+parkedN+' parked shown:</span><button class="btn sm sec" style="color:#047857" onclick="HOLD.mode=\'filter\';bulkRelease()">'+IC.up+' Release…</button>':'')+
+      '<button class="btn sm dark" onclick="HOLD.mode=\'paste\';holdOpen(\'onhold\')">📋 Paste a list from the client</button>'+
+      '<span class="muted" style="font-size:11.5px">e.g. filter the Jailbroken phone first · parked accounts are out of every number · Ctrl+Z undoes a batch</span></div>';
   }
   var untagged=rows.filter(function(r){ return !methodOf(r); }).length;
   if(admin && untagged) h+='<div class="banner warn">'+IC.tag+'<div style="flex:1"><b>'+untagged+'</b> of these records have no method yet. Tag them so Insights can compare Vysor, Jailbroken and Blaze+.</div>'+
@@ -1997,7 +2089,8 @@ function vAccounts(){
   var body='';
   if(DB.groupBy){
     var gf={ method:function(r){ return methodOf(r)||'Not tagged'; }, stage:function(r){ return stageMeta(r.status).n; }, model:function(r){ return r.model||'(no model)'; }, device:function(r){ return r.device||'(phone not recorded)'; },
-             va:function(r){ return vaName(owner(r)); }, niche:function(r){ return r.niche||'(no niche)'; }, base:function(r){ return baseOf(r.project).n; } }[DB.groupBy];
+             va:function(r){ return vaName(owner(r)); }, niche:function(r){ return r.niche||'(no niche)'; }, base:function(r){ return baseOf(r.project).n; },
+             client:function(r){ return isParked(r)?(parkOf(r).client||'(no client named)'):'Not parked'; } }[DB.groupBy];
     var g={}, order=[]; rows.forEach(function(r){ var k=gf(r); if(!g[k]){ g[k]=[]; order.push(k); } g[k].push(r); });
     if(DB.groupBy==='stage') order.sort(function(a,b){ return stageOrd(g[a][0].status)-stageOrd(g[b][0].status); });
     else if(DB.groupBy==='method'){ var ml=methodsList(); order.sort(function(a,b){ var ia=ml.indexOf(a), ib=ml.indexOf(b); return (ia<0?(a==='Not tagged'?99:50):ia)-(ib<0?(b==='Not tagged'?99:50):ib); }); }
@@ -2079,6 +2172,7 @@ function drawRec(r, evs){
         f('Created', c?esc(createdExact(r)?fmtDT(c):fmtD(c))+(createdExact(r)?'':' <span class="muted">(date only)</span>'):'—')+f('Age', ageDays(r)!=null?ageDays(r)+' days':'—')+
         f('In stage since', s?esc(fmtD(s))+' · '+dayDiff(s)+'d':'—')+f('Karma', karmaOf(r)!=null?karmaOf(r):'—')+
         (isDead(r)?f('Banned on', e?esc(fmtD(e)):'—')+f('Reason', esc(r.end_reason||'—')):'')+
+        (isParked(r)?f(r.status==='archived'?'Archived for':'On hold for', esc(parkOf(r).client||'—')+(parkOf(r).at?' <span class="muted">· since '+esc(fmtD(parseTs(parkOf(r).at)))+(parkOf(r).by?' · by '+esc(vaName(parkOf(r).by)):'')+'</span>':''))+f('Why', esc(parkOf(r).reason||'—')):'')+
       '</div>'+
       (r.notes?'<div class="note g" style="margin-bottom:12px">'+esc(r.notes)+'</div>':'')+
       '<div class="row" style="margin-bottom:16px">'+(canEdit?'<button class="btn sm sec" onclick="editRec(\''+jsq(r.id)+'\')">'+IC.edit+' Edit details</button>':'')+
@@ -2167,7 +2261,7 @@ function vPipeline(){
   var src=PL.all?allRows():(ALL[PROJECT]||ROWS);
   if(!src.length) return '<div class="card empty">Loading accounts…</div>';
   /* The pipeline compares METHODS — accounts without a method are not part of it (owner, Oct 5). */
-  var all=src.filter(function(r){ return !!methodOf(r); });
+  var all=src.filter(function(r){ return !!methodOf(r) && !isParked(r); });   // parked accounts are out of every report (Oct 6)
   var ml=methodsList(), lanes=ml.slice();
   all.forEach(function(r){ var m=methodOf(r); if(m && lanes.indexOf(m)<0) lanes.push(m); });
   var byM={}; lanes.forEach(function(m){ byM[m]=all.filter(function(r){ return methodOf(r)===m; }); });
@@ -2280,7 +2374,7 @@ function exposure(rows, startD){
 /* Insights only reads accounts that carry a method (owner, Oct 5): an account with no method tag says
    nothing about which approach works, so it is left out of every number on this page. */
 function insData(){
-  var rows=(INS.base==='all'?allRows():(ALL[INS.base]||[])).filter(function(r){ return !!methodOf(r); });
+  var rows=(INS.base==='all'?allRows():(ALL[INS.base]||[])).filter(function(r){ return !!methodOf(r) && !isParked(r); });   // parked accounts are out of every report (Oct 6)
   var banEv={}; (EVENTS||[]).forEach(function(e){ if(e.kind==='ban') banEv[e.account_id]=e; });
   var end=today(), start=INS.range?addDays(end,-(INS.range-1)):null;
   if(!start){ var mn=end; rows.forEach(function(r){ var c=createdAt(r); if(c){ var d=phtDate(c); if(d<mn) mn=d; } }); start=mn; }
@@ -2743,7 +2837,7 @@ async function hcBanAll(){
 var CC_SEC=4, CC_MAX=10;   // ~4 seconds per account; hard limit 10 minutes
 function hcH(s){ var h=2166136261>>>0; s=String(s); for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } return h; }
 var _CC=null, _CCK='';
-function ccLive(){ var out=[]; BASES.forEach(function(b){ (ALL[b.id]||[]).forEach(function(r){ if(!isDead(r) && !isArchived(r)) out.push(r); }); }); return out; }   // archived accounts are retired — not checked
+function ccLive(){ var out=[]; BASES.forEach(function(b){ (ALL[b.id]||[]).forEach(function(r){ if(!isDead(r) && !isParked(r)) out.push(r); }); }); return out; }   // parked accounts (on hold / archived) are nobody's work — not checked (Oct 6)
 function ccPlan(){
   var live=ccLive(), day=today(), key=day+'|'+live.length+'|'+DIR_READY;
   if(_CC && _CCK===key) return _CC;
@@ -3177,7 +3271,7 @@ function qaHit(r, how){
    work schedule) and asks the owner what happens to their accounts today: hand them to one VA,
    split them across several, or — when the client agrees — hold them untouched for the day.
    Covers and holds last for this business day only; ownership never changes. */
-function coverable(r){ var s=r.status; return s!=='banned'&&s!=='tempban'&&s!=='creation'&&s!=='creationstandby'; }
+function coverable(r){ var s=r.status; return s!=='banned'&&s!=='tempban'&&s!=='creation'&&s!=='creationstandby'&&!isParked(r); }
 function offIds(){ var s={}; ((OFF&&OFF.off)||[]).forEach(function(o){ s[String(o.employee_id).toLowerCase()]=o; }); return s; }
 function vCoverage(){
   if(!isAdmin()) return '<div class="card empty">Owner only.</div>';

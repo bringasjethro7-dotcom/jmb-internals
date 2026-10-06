@@ -31,6 +31,29 @@
   #narr{position:absolute;left:6vw;right:6vw;bottom:3.2vh;color:#7dd3fc;font-size:1.7vh;line-height:1.45;border-left:2px solid #0ea5a4;padding-left:1vw;max-width:94ch}
   #narr b{color:#bae6fd}
   #filmprog{position:absolute;left:0;right:0;bottom:0;height:.5vh;background:rgba(255,255,255,.10)}
+  /* ── player (Oct 6): pause/resume, prev/next, end card ── */
+  #ctl{position:absolute;right:1.6vw;top:1.6vh;display:flex;align-items:center;z-index:45;
+    background:rgba(8,10,20,.72);border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:.6vh 1vh;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    box-shadow:0 14px 40px -18px rgba(0,0,0,.9);opacity:.92;transition:opacity .25s}
+  #ctl:hover{opacity:1}
+  #ctl button{appearance:none;border:0;background:transparent;color:#fff;font:inherit;font-weight:800;font-size:1.9vh;line-height:1;cursor:pointer;
+    width:4.2vh;height:4.2vh;border-radius:999px;display:inline-flex;align-items:center;justify-content:center}
+  #ctl button:hover{background:rgba(255,255,255,.12)}
+  #ctl button.pp{width:5.2vh;height:5.2vh;font-size:2.3vh;background:rgba(255,255,255,.14)}
+  #ctl .cnt{color:#cbd5e1;font-size:1.5vh;font-weight:700;letter-spacing:.04em;margin:0 1.2vh;min-width:6ch;text-align:center;font-variant-numeric:tabular-nums}
+  #ctl .hint{color:#94a3b8;font-size:1.3vh;font-weight:600;margin:0 1.2vh 0 .4vh;white-space:nowrap}
+  body.paused #filmprog i{opacity:.55}
+  #pausebadge{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:44;display:none;pointer-events:none;
+    background:rgba(8,10,20,.78);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:1.4vh;padding:1.6vh 2.6vh;font-family:'Sora',sans-serif;font-size:2.4vh;font-weight:800;letter-spacing:.02em}
+  body.paused #pausebadge{display:block}
+  #endcard{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:none;flex-direction:column;align-items:center;justify-content:center;z-index:46;
+    background:rgba(6,8,16,.86);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);text-align:center;padding:6vh 8vw}
+  #endcard.on{display:flex}
+  #endcard .big{font-family:'Sora',sans-serif;font-size:4.6vh;color:#fff;line-height:1.1;letter-spacing:-.02em;margin-bottom:1.6vh}
+  #endcard .sub2{color:#a8bdd4;font-size:1.9vh;line-height:1.5;max-width:70ch;margin-bottom:3vh}
+  #endcard button{appearance:none;border:0;cursor:pointer;font:inherit;font-weight:800;font-size:2vh;border-radius:999px;padding:1.4vh 3vh;margin:0 .8vh;color:#0b1220;background:#fff}
+  #endcard button.ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35)}
+  @media (max-width:640px){ #ctl .hint{display:none} }
   #filmprog i{display:block;height:100%;width:0;background:linear-gradient(90deg,#5eead4,#0ea5a4)}
   .chain{display:flex;margin-top:1vh}
   .chain>.step+.step{margin-left:1vw}
@@ -176,6 +199,20 @@
 
 </div>
 <div id="filmprog"><i></i></div>
+<div id="pausebadge">⏸ Paused — tap to continue</div>
+<div id="ctl" role="group" aria-label="Player">
+  <button type="button" id="ctl-prev" title="Previous scene (←)" aria-label="Previous scene">⏮</button>
+  <button type="button" id="ctl-pp" class="pp" title="Pause / resume (space)" aria-label="Pause">⏸</button>
+  <button type="button" id="ctl-next" title="Next scene (→)" aria-label="Next scene">⏭</button>
+  <span class="cnt" id="ctl-cnt">1 / 1</span>
+  <span class="hint">tap the film to pause</span>
+</div>
+<div id="endcard" aria-live="polite">
+  <div class="big">That's the whole film ✓</div>
+  <div class="sub2" id="endcard-sub">Now take the short quiz in Reddit Central — pass it and the tool opens. Replay any time.</div>
+  <div><button type="button" id="ctl-replay">↻ Replay</button><button type="button" class="ghost" id="ctl-back">◀ Last scene</button></div>
+</div>
+
 <script>
 /* TV mode: bigger type, overscan-safe padding, no absolute callouts, no animation.
    Auto-detected for smart-TV browsers; force with ?tv=1, disable with ?tv=0. */
@@ -196,18 +233,19 @@ function secs(){ return parseFloat(scenes[i].getAttribute('data-secs'))||12; }
 function show(n){
   i=Math.max(0,Math.min(scenes.length-1,n));
   scenes.forEach(function(s,k){ s.classList.toggle('on', k===i); });
-  t0=Date.now();
+  t0=Date.now(); elapsed=0;
   var pb=document.querySelector('#filmprog i'); if(pb) pb.style.width='0%';
+  try{ paintCtl(); }catch(e){}
   chime();
   speak(i);
 }
 function tick(){
   if(playing){
-    var p=Math.min(1,(Date.now()-t0)/(secs()*1000));
+    var p=Math.min(1,sceneNow()/(secs()*1000));
     var pb=document.querySelector('#filmprog i'); if(pb) pb.style.width=(p*100).toFixed(1)+'%';
     if(p>=1){
       if(VOICE && synth && synth.speaking) return;   // let the narration finish first
-      if(i<scenes.length-1) show(i+1); else { show(0); }   // loops — it's a film, not a deck
+      if(i<scenes.length-1) show(i+1); else finishFilm();   // no loop: ends on the card (Oct 6)
     }
   }
   requestAnimationFrame(tick);
@@ -239,6 +277,7 @@ function narrationOf(n){
 }
 function speak(n){
   if(!VOICE||!synth) return;
+  if(ENDED) return;
   try{
     synth.cancel();
     var txt=narrationOf(n); if(!txt) return;
@@ -252,7 +291,7 @@ function speak(n){
       // The narration paces the session: advance a moment after the sentence lands.
       if(!VOICE||!playing) return;
       if(n!==i) return;
-      setTimeout(function(){ if(VOICE&&playing&&n===i){ if(i<scenes.length-1) show(i+1); else show(0); } }, 1200);
+      setTimeout(function(){ if(VOICE&&playing&&n===i&&!ENDED){ if(i<scenes.length-1) show(i+1); else finishFilm(); } }, 1200);
     };
     synth.speak(u);
     setTimeout(function(){
@@ -341,6 +380,78 @@ function kickoff(){
   speak(i);
 }
 ['click','keydown'].forEach(function(ev){ document.addEventListener(ev, kickoff, {once:false}); });
+
+/* ── PLAYER (Oct 6): pause / resume, prev / next, no auto-loop ──
+   Pause freezes the scene clock AND the narration; resume continues where it stopped (if the
+   speech engine can't resume — some phones — the current scene is read again from the top).
+   The film no longer loops: the last scene ends on a card with Replay, and tells the Feed
+   (postMessage) that it was watched to the end. */
+var elapsed=0, ENDED=false;
+function sceneNow(){ return playing ? (Date.now()-t0) : elapsed; }
+function paintCtl(){
+  var c=document.getElementById('ctl-cnt'); if(c) c.textContent=(i+1)+' / '+scenes.length;
+  var b=document.getElementById('ctl-pp'); if(b){ b.textContent=playing?'⏸':'▶'; b.setAttribute('aria-label', playing?'Pause':'Resume'); b.title=(playing?'Pause':'Resume')+' (space)'; }
+  document.body.classList.toggle('paused', !playing && !ENDED);
+}
+function pauseFilm(){
+  if(!playing||ENDED) return;
+  elapsed=Date.now()-t0; playing=false;
+  try{ if(synth && synth.speaking) synth.pause(); }catch(e){}
+  try{ duck(false); }catch(e){}
+  paintCtl(); post('paused');
+}
+function resumeFilm(){
+  if(playing||ENDED) return;
+  playing=true; t0=Date.now()-elapsed;
+  var wasSpeaking=false; try{ wasSpeaking=!!(synth && synth.paused); }catch(e){}
+  try{ if(synth && synth.paused) synth.resume(); }catch(e){}
+  paintCtl(); post('playing');
+  // Engines that can't resume (Android, some TVs) stay silent: read the scene again from the top.
+  if(VOICE && synth){ setTimeout(function(){ try{ if(playing && !ENDED && !synth.speaking && !synth.pending){ t0=Date.now(); speak(i); } }catch(e){} }, 700); }
+}
+function toggleFilm(){ if(ENDED){ replayFilm(); return; } if(playing) pauseFilm(); else resumeFilm(); }
+function finishFilm(){
+  if(ENDED) return;
+  ENDED=true; playing=false; elapsed=secs()*1000;
+  try{ if(synth) synth.cancel(); }catch(e){}
+  var pb=document.querySelector('#filmprog i'); if(pb) pb.style.width='100%';
+  var ec=document.getElementById('endcard'); if(ec) ec.classList.add('on');
+  paintCtl(); post('ended');
+}
+function replayFilm(){
+  var ec=document.getElementById('endcard'); if(ec) ec.classList.remove('on');
+  ENDED=false; playing=true; elapsed=0; if(!_spoke){ try{ kickoff(); }catch(e){} } show(0); paintCtl(); post('playing');
+}
+function stepFilm(d){
+  var ec=document.getElementById('endcard'); if(ec) ec.classList.remove('on');
+  ENDED=false; playing=true; elapsed=0; show(i+d); paintCtl();
+}
+function post(state){ try{ if(window.parent && window.parent!==window) window.parent.postMessage({ jmbFilm:state, scene:i+1, scenes:scenes.length, src:location.pathname }, '*'); }catch(e){} }
+(function wirePlayer(){
+  var q=function(id){ return document.getElementById(id); };
+  var stop=function(ev){ ev.stopPropagation(); };
+  if(q('ctl')) q('ctl').addEventListener('click', stop);
+  if(q('endcard')) q('endcard').addEventListener('click', stop);
+  if(q('ctl-pp')) q('ctl-pp').onclick=function(){ if(!_spoke) kickoff(); toggleFilm(); };
+  if(q('ctl-prev')) q('ctl-prev').onclick=function(){ if(!_spoke) kickoff(); stepFilm(-1); };
+  if(q('ctl-next')) q('ctl-next').onclick=function(){ if(!_spoke) kickoff(); if(i>=scenes.length-1) finishFilm(); else stepFilm(1); };
+  if(q('ctl-replay')) q('ctl-replay').onclick=function(){ replayFilm(); };
+  if(q('ctl-back')) q('ctl-back').onclick=function(){ stepFilm(0); };
+  /* The first tap anywhere starts the narration (browsers need a gesture); every tap after that pauses / resumes. */
+  document.addEventListener('click', function(ev){
+    if(ev.target && ev.target.closest && ev.target.closest('#ctl, #endcard')) return;
+    if(!_spoke){ return; }                    // capture phase: runs BEFORE kickoff, so the first tap only starts the narration
+    toggleFilm();
+  }, true);
+  document.addEventListener('keydown', function(ev){
+    if(ev.key===' '||ev.code==='Space'){ ev.preventDefault(); if(_spoke) toggleFilm(); }
+    else if(ev.key==='ArrowRight'||ev.key==='PageDown'){ if(i>=scenes.length-1) finishFilm(); else stepFilm(1); }
+    else if(ev.key==='ArrowLeft'||ev.key==='PageUp'){ stepFilm(-1); }
+    else if(ev.key==='Home'){ replayFilm(); }
+  }, true);
+  paintCtl();
+})();
+
 /* Render FIRST. Narration, ambience and the safety net are nice-to-have; the slides
    are not. Nothing after this may be able to stop them appearing. */
 try{ show(0); }catch(e){ try{ scenes[0].classList.add('on'); }catch(_){} }
