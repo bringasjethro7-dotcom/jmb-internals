@@ -819,6 +819,7 @@ var _retryT=null, _loading=false;
 async function load(){
   if(_loading) return; _loading=true;
   try{
+    try{ linkLoad(false).then(function(){ if(VIEW==='today') renderView(); }); if(isAdmin()) linkDayRows(false); }catch(_lk){}
     await loadCover();
     var d=await jget(API+'?'+qs({action:'pa_list', project:PROJECT})+'&_='+Date.now(), 10000);
     if(!d||!d.ok) throw new Error((d&&d.error)||'load');
@@ -1112,6 +1113,7 @@ function vToday(){
     h+='<div class="banner info">'+IC.swap+'<div>You\'re covering <b>'+covering.length+' account'+(covering.length===1?'':'s')+'</b> today for '+
       Object.keys(whose).map(function(o){ return esc(firstName(o))+' ('+whose[o]+')'; }).join(', ')+'. They\'re marked on the cards below.</div></div>';
   }
+  h+=linkBanner();
   var heldMine=ROWS.filter(function(r){ return owner(r)===me && isHeld(r); }).length;
   if(heldMine && !admin) h+='<div class="banner info">'+IC.pause+'<div><b>'+heldMine+'</b> of your accounts are on hold today (client-approved) — leave them untouched.</div></div>';
 
@@ -1119,9 +1121,12 @@ function vToday(){
   var scopeRows = (admin && TD.va==='all' ? ROWS.filter(function(r){ return !isParked(r); }) : (admin ? board : mineWork));
   var p=progOf(scopeRows, admin&&TD.va==='all'?null:(admin&&TD.va!=='mine'?TD.va:me));
   if(!admin || TD.va==='mine') maybeSnap(progOf(mineWork, me));
-  if(!admin){ try{ var _pm=progOf(mineWork, me), _cm=ccMine(); daySnap({ due:_pm.tot, done:_pm.done,
+  if(!admin){ try{ var _pm=progOf(mineWork, me), _cm=ccMine(), _ls=linkState(LINK.me), _snap={ due:_pm.tot, done:_pm.done,
       created:mineWork.filter(function(r){ var m=M(r); return m.cdone && markOkAny(m.cstamp,me,owner(r)); }).length,
-      hc_assigned:_cm.length, hc_done:_cm.filter(function(r){ return !!ccState(r); }).length }); }catch(_ds){} }
+      hc_assigned:_cm.length, hc_done:_cm.filter(function(r){ return !!ccState(r); }).length };
+      // portal time vs tool time, in 5-minute steps so the snapshot is not resent on every repaint (Oct 6)
+      if(_ls.k!=='unknown' && LINK.me && LINK.me.tracked_secs!==undefined){ _snap.tracked_secs=Math.floor(((+LINK.me.tracked_proj_secs)||(+LINK.me.tracked_secs)||0)/300)*300; _snap.timed_secs=Math.floor(timedToday()/300)*300; }
+      daySnap(_snap); }catch(_ds){} }
   var createdToday=scopeRows.filter(function(r){ var m=M(r); return m.cdone && (markOkAny(m.cstamp,worksFor(r),owner(r))); }).length;
   var active=scopeRows.filter(function(r){ return !isDead(r); }).length;
   var att=scopeRows.filter(needsAttention).length;
@@ -1150,7 +1155,7 @@ function vToday(){
         var off=OFF&&(OFF.off||[]).filter(function(x){ return String(x.employee_id).toLowerCase()===o.k; })[0];
         return '<div class="card va" onclick="TD.va=\''+jsq(o.k)+'\';renderView()" style="cursor:pointer" title="'+esc(vaName(o.k))+' — show only their accounts">'+avHtml(o.k,36)+
           '<div style="min-width:0;flex:1"><div class="nm">'+esc(vaName(o.k))+'</div>'+
-          '<div class="sb">'+o.n+' active'+(off?' · <span style="color:#b45309;font-weight:800">'+esc(off.type)+'</span>':'')+'</div>'+
+          '<div class="sb">'+o.n+' active'+(off?' · <span style="color:#b45309;font-weight:800">'+esc(off.type)+'</span>':'')+'</div>'+linkCardLine(o.k)+
           '<div class="prog" style="margin-top:6px"><i style="width:'+Math.min(100,o.pct)+'%;background:'+c+'"></i></div></div>'+
           '<div class="pc" style="color:'+c+'">'+o.done+'/'+o.tot+'<div style="font:700 11px Inter,system-ui,sans-serif">'+o.pct+'%</div>'+
           '<button class="pq-sug" style="font-size:10px;margin-top:3px" title="How is this counted?" onclick="event.stopPropagation();progWhy(\''+jsq(o.k)+'\')">how?</button></div></div>';
@@ -1481,6 +1486,101 @@ function tmAll(){
 function tmPut(o){ try{ localStorage.setItem(tmKey(), JSON.stringify(o)); }catch(e){} }
 function tmGet(id,k){ return tmAll()[id+'|'+k]||null; }
 function tmCount(){ return Object.keys(tmAll()).length; }
+/* ═══════════ PORTAL TIMER LINK (owner, Oct 6) ═══════════
+   The portal's time tracker is the hard clock; every tool timer must live inside it. The portal writes
+   its live timer into the presence row it already keeps in Supabase (task · since · tracked seconds today),
+   and this page reads that row:
+     • a session / creation / DM timer will not START unless the portal timer is running on a Reddit project;
+     • the board shows "tracked today vs timed in the tool" — the gap is the tell-tale for tapping Start/Finish
+       without doing the work (timed time is wall-clock: parallel timers never double count);
+     • the day snapshot carries both numbers to the ledger, the day close recounts tool time from the server's
+       own task log, and Productivity & QA flags days where tool time is under half of tracked time.
+   Owner/admin accounts are exempt from the gate. If the portal has not been upgraded (no link columns yet)
+   or Supabase cannot be reached, the gate stands down rather than blocking work. */
+var SB_URL='https://rvyrnkjqxnijxydloujk.supabase.co', SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2eXJua2pxeG5panh5ZGxvdWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NzAwODQsImV4cCI6MjA5NzE0NjA4NH0.SwkSkmbeWrhm5PZZDSZ1Z4hbjpQ0L2CRtuKQmpHshBE';
+var LINK={ me:null, all:{}, at:0, allAt:0, dayRows:null, dayRowsAt:0 };
+async function sbGet(path){
+  var ctl=(typeof AbortController!=='undefined')?new AbortController():null, tm=ctl?setTimeout(function(){ try{ ctl.abort(); }catch(_){} },8000):null;
+  try{ var r=await fetch(SB_URL+'/rest/v1/'+path, { headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY }, signal:ctl?ctl.signal:undefined }); if(!r.ok) throw new Error('sb '+r.status); return await r.json(); }
+  finally{ if(tm) clearTimeout(tm); }
+}
+function linkIsReddit(task){ return /reddit/i.test(String(task||'')); }
+async function linkLoad(force){
+  var me=String(USER&&USER.id||'').toUpperCase(); if(!me) return;
+  try{
+    if(isAdmin()){
+      if(!force && Date.now()-LINK.allAt<45000) return;
+      var rows=await sbGet('presence?select=employee_id,status,last_seen,task,task_since,tracked_secs,tracked_proj_secs');
+      var m={}; (rows||[]).forEach(function(r){ m[String(r.employee_id||'').toLowerCase()]=r; }); LINK.all=m; LINK.allAt=Date.now();
+    } else {
+      if(!force && Date.now()-LINK.at<20000) return;
+      var one=await sbGet('presence?select=employee_id,status,last_seen,task,task_since,tracked_secs,tracked_proj_secs&employee_id=eq.'+encodeURIComponent(me));
+      LINK.me=(one&&one[0])||null; LINK.at=Date.now();
+    }
+  }catch(e){ /* keep what we had */ }
+}
+/* what the portal says about this VA right now */
+function linkState(p){
+  if(!p) return { k:'unknown', why:'no presence row' };
+  if(p.task===undefined || p.tracked_secs===undefined) return { k:'unknown', why:'portal link not set up yet' };
+  var age=Date.now()-(Date.parse(p.last_seen||'')||0);
+  if(age>4*60000) return { k:'off', why:'the portal has been closed or asleep for '+Math.round(age/60000)+' min' };
+  if(String(p.status||'')!=='working') return { k:'off', why:(p.status==='paused'?'your portal timer is paused':(p.status==='idle'?'the portal shows you idle':'your portal timer is not running')) };
+  if(!linkIsReddit(p.task)) return { k:'other', why:'your portal timer is on "'+String(p.task||'').split(' · ')[0]+'", not Reddit' };
+  return { k:'ok', since:p.task_since||'', tracked:+p.tracked_secs||0, trackedProj:+p.tracked_proj_secs||0, task:p.task };
+}
+/* seconds this page's own timers have covered today, as wall-clock (union of intervals) */
+function tlKey(){ return 'rc_tl_'+String(USER&&USER.id||'x').toUpperCase()+'_'+today(); }
+function tlAdd(start, end){ try{ var L=JSON.parse(localStorage.getItem(tlKey())||'[]'); L.push([Math.round(start), Math.round(end)]); if(L.length>600) L=L.slice(-600); localStorage.setItem(tlKey(), JSON.stringify(L)); }catch(e){} }
+function timedToday(){
+  var iv=[]; try{ iv=JSON.parse(localStorage.getItem(tlKey())||'[]'); }catch(e){ iv=[]; }
+  try{ var o=tmAll(), now=Date.now(); Object.keys(o).forEach(function(k){ var x=o[k]; if(x && x.t && x.d===today() && now-x.t<3*3600000) iv.push([x.t, now]); }); }catch(e){}
+  iv=iv.filter(function(x){ return x && x[1]>x[0] && x[1]-x[0]>=20000 && x[1]-x[0]<=3*3600000; }).sort(function(a,b){ return a[0]-b[0]; });
+  var tot=0, cur=null; iv.forEach(function(x){ if(!cur || x[0]>cur[1]){ if(cur) tot+=cur[1]-cur[0]; cur=[x[0],x[1]]; } else if(x[1]>cur[1]) cur[1]=x[1]; }); if(cur) tot+=cur[1]-cur[0];
+  return Math.round(tot/1000);
+}
+function hm(secs){ secs=Math.max(0,Math.round(secs||0)); var h=Math.floor(secs/3600), m=Math.round((secs%3600)/60); return h?(h+'h '+(m<10?'0':'')+m+'m'):(m+'m'); }
+function covPct(timed, tracked){ return tracked>0?Math.min(100, Math.round(timed/tracked*100)):null; }
+function covColor(pct){ return pct==null?'#94a3b8':(pct>=70?'#047857':(pct>=50?'#b45309':'#b91c1c')); }
+/* the gate: called before a tool timer starts */
+async function linkGate(what){
+  if(isAdmin()) return true;
+  await linkLoad(true);
+  var st=linkState(LINK.me);
+  if(st.k==='ok' || st.k==='unknown') return true;
+  openModal('<div class="md-h"><h3>'+IC.hour+' Start your time tracker first</h3><p>'+esc(st.why.charAt(0).toUpperCase()+st.why.slice(1))+'. '+(what||'A session')+' can only start while the portal timer is running on a Reddit project — that is the clock your work is measured against.</p></div>'+
+    '<div class="md-b"><ol style="font-size:13px;line-height:1.7;margin:0 0 0 18px"><li>Open the portal → <b>Attendance &amp; Time</b>.</li><li>Pick the Reddit project and press <b>Start</b>.</li><li>Come back here and press Start again.</li></ol></div>'+
+    '<div class="md-f"><a class="btn sec" href="https://portal.jmbvirtuals.com/" target="_blank" rel="noopener">Open the portal ↗</a><button class="btn pri" onclick="closeModal(false);linkLoad(true).then(renderView)">I started it — check again</button></div>');
+  return false;
+}
+function linkBanner(){
+  if(isAdmin()) return '';
+  var st=linkState(LINK.me);
+  if(st.k==='unknown') return '';
+  var timed=timedToday();
+  if(st.k==='ok'){
+    var tracked=st.trackedProj||st.tracked, pct=covPct(timed, tracked);
+    return '<div class="banner" style="background:#ecfdf5;border-color:#a7f3d0"><span style="font-size:18px">⏱</span><div style="flex:1"><b>Portal timer running</b> · '+esc(st.task)+(st.since?' · since '+esc(fmtT(new Date(st.since))):'')+
+      '<div class="muted" style="font-size:12px;margin-top:2px">Tracked today <b>'+hm(tracked)+'</b> · timed in this tool <b>'+hm(timed)+'</b>'+(pct!=null?' · <b style="color:'+covColor(pct)+'">'+pct+'%</b>':'')+' — keep the two close: press Start before a task and Finish after it.</div></div></div>';
+  }
+  return '<div class="banner warn">'+IC.hour+'<div style="flex:1"><b>Your portal timer is not running on Reddit</b> — '+esc(st.why)+'. Sessions, creations and DMs will not start until it is.</div><a class="btn sm dark" href="https://portal.jmbvirtuals.com/" target="_blank" rel="noopener">Open the portal</a><button class="btn sm sec" onclick="linkLoad(true).then(renderView)">Check again</button></div>';
+}
+/* owner: today's tool time per VA from the server's task log (wall-clock union), refreshed every 5 min */
+async function linkDayRows(force){
+  if(!isAdmin()) return; if(!force && Date.now()-LINK.dayRowsAt<5*60000) return;
+  try{ var d=await jget(API+'?'+qs({ action:'rc_task_stats', by:USER.id, from:today(), to:today(), day:today() })+'&_='+Date.now(), 0); LINK.dayRows=(d&&d.ok)?(d.rows||[]):[]; LINK.dayRowsAt=Date.now(); }catch(e){}
+}
+function rowsTimed(rows, va){
+  var iv=[]; (rows||[]).forEach(function(x){ if(String(x.va||'').toLowerCase()!==va || x.secs==null || x.secs<20 || x.secs>3*3600) return; var e=parseTs(x.at); if(!e) return; iv.push([e.getTime()-x.secs*1000, e.getTime()]); });
+  iv.sort(function(a,b){ return a[0]-b[0]; }); var tot=0, cur=null; iv.forEach(function(x){ if(!cur || x[0]>cur[1]){ if(cur) tot+=cur[1]-cur[0]; cur=[x[0],x[1]]; } else if(x[1]>cur[1]) cur[1]=x[1]; }); if(cur) tot+=cur[1]-cur[0];
+  return Math.round(tot/1000);
+}
+function linkCardLine(va){
+  var p=LINK.all[va]; if(!p || p.tracked_secs===undefined) return '';
+  var st=linkState(p), tracked=+p.tracked_proj_secs||+p.tracked_secs||0, timed=rowsTimed(LINK.dayRows, va), pct=covPct(timed, tracked);
+  if(!tracked && st.k!=='ok') return '';
+  return '<div class="sb" style="margin-top:2px" title="Tracked in the portal today vs covered by this tool’s timers">⏱ '+hm(timed)+' / '+hm(tracked)+(pct!=null?' · <b style="color:'+covColor(pct)+'">'+pct+'%</b>':'')+(st.k==='ok'?'':' <span style="color:#b45309">· timer off</span>')+'</div>';
+}
 function tmStart(id,k){ var o=tmAll(); o[id+'|'+k]={ t:Date.now(), p:Object.keys(o).length, d:today() }; tmPut(o); tmEnsure(); }
 function tmStop(id,k){ var o=tmAll(), x=o[id+'|'+k]; if(!x) return null; delete o[id+'|'+k]; tmPut(o);
   return { secs:Math.round((Date.now()-x.t)/1000), start:x.t, parallel:Math.max(x.p||0, Object.keys(o).length) }; }
@@ -1491,6 +1591,7 @@ function tmEnsure(){ if(_tmIv) return; _tmIv=setInterval(function(){
 function tmOn(){ return !isAdmin(); }        // VAs time their work; the owner's ticks are corrections, not work
 /* fire-and-forget: one finished task → RcTasks (backend rc-2026-10-05c+) */
 function tmLog(r, kind, t, extra){
+  try{ if(t && t.start && t.secs>=20) tlAdd(t.start, t.start+t.secs*1000); }catch(_tl){}
   if(!tmOn() || !(BE_BUILD && BE_BUILD>='rc-2026-10-05c')) return;
   var o=Object.assign({ action:'rc_task_log', by:USER.id, va:myId(), date:vaKeyOf(USER.id).slice(0,10), project:r?r.project||PROJECT:PROJECT,
     account_id:r?r.id:'', handle:r?r.handle:'', method:r?methodOf(r):'', device:r?(r.device||''):'', stage:r?r.status:'', kind:kind,
@@ -1499,13 +1600,14 @@ function tmLog(r, kind, t, extra){
 }
 async function sesStart(id, n){
   var r=rowById(id); if(!r) return;
+  if(!(await linkGate('A session'))) return;  // the portal timer must be running on Reddit (Oct 6)
   if(!(await karmaGate(r))) return;          // today's karma first — then the clock starts
   tmStart(id,'s'+n); renderView();
 }
 function tmCancel(id, k){ var o=tmAll(); delete o[id+'|'+k]; tmPut(o); renderView(); toast('Timer cancelled — nothing was recorded.'); }
 /* creation: ▶ Start creating (hero) → Log new account → counted */
 function crGet(){ return tmGet('__create','c'); }
-function crStart(){ tmStart('__create','c'); renderView(); toast('Timer started — create the account on the iPhone, then press Log new account.'); }
+async function crStart(){ if(!(await linkGate('A creation'))) return; tmStart('__create','c'); renderView(); toast('Timer started — create the account on the iPhone, then press Log new account.'); }
 function crCancel(){ var o=tmAll(); delete o['__create|c']; tmPut(o); renderView(); }
 function crTake(){ var o=tmAll(), x=o['__create|c']; if(!x) return null; delete o['__create|c']; tmPut(o); return x.t; }
 /* VA's own day line in RcDaily (backend rc-2026-10-05b+) — fire-and-forget, only when a number changes */
@@ -1743,7 +1845,7 @@ async function dmsDone(id){
   var r=rowById(id); if(!r) return;
   /* DM replies are part of the posting shift, not a separate deliverable — logged, never counted.
      Timed like a session: first press starts the clock, second press logs them. */
-  if(tmOn() && !tmGet(id,'dm') && !markOkAny(M(r).dm,worksFor(r),owner(r))){ tmStart(id,'dm'); renderView(); return; }
+  if(tmOn() && !tmGet(id,'dm') && !markOkAny(M(r).dm,worksFor(r),owner(r))){ if(!(await linkGate('A DM round'))) return; tmStart(id,'dm'); renderView(); return; }
   var t=tmOn()?tmStop(id,'dm'):null;
   if(await saveMeta(r,{ dm:vaKeyOf(USER.id) })){ if(t) tmLog(r,'dms',t); toast('DMs logged for today ✓'); renderView(); }
 }
@@ -2978,7 +3080,8 @@ var QA_RULES=[
   { k:'skip',       n:'Stage skipped, or promoted before the stage\'s days were up', d:1, u:'each' },
   { k:'tagging',    n:'Accounts not tagged right — method or model missing, or a new account without its phone', d:0.5, u:'each · max 2' },
   { k:'quick',      n:'Session or DMs finished within 20 seconds of starting', d:0.5, u:'each · max 2' },
-  { k:'fast',       n:'Under 35% of the team time for that task (once it is learned)', d:0.5, u:'each · max 2' }
+  { k:'fast',       n:'Under 35% of the team time for that task (once it is learned)', d:0.5, u:'each · max 2' },
+  { k:'cover',      n:'Tool time under half of the portal time (2+ hours tracked) — timers tapped, not worked', d:0, u:'flag only for now' }
 ];
 function pqRule(k){ for(var i=0;i<QA_RULES.length;i++) if(QA_RULES[i].k===k) return QA_RULES[i]; return { d:0 }; }
 function dAdd(d,n){ var x=new Date(d+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+n); return x.toISOString().slice(0,10); }
@@ -3002,6 +3105,7 @@ async function pqLoad(force){
       jget(API+'?'+qs({ action:'rc_targets', by:USER.id })+'&_='+Date.now(), 0).catch(function(){ return null; }),
       loadEvents()
     ]);
+    try{ await linkLoad(false); }catch(_lk){}
     PQ.st=(res[0]&&res[0].ok)?res[0]:{ error:(res[0]&&res[0].error)||'unknown', groups:[], vas:[], rows:[] };
     PQ.dd=(res[1]&&res[1].ok)?(res[1].rows||[]):[];
     PQ.tgt=(res[2]&&res[2].ok)?res[2]:null;
@@ -3099,7 +3203,7 @@ function pqScore(){
   var rows=S.rows||[];
   if(!rows.length) return h+'<div class="card empty">No VA activity recorded for this month yet.</div>';
   var col=function(v){ return v==null?'var(--ink4)':(v>=90?'#047857':(v>=75?'#b45309':'#b91c1c')); }, num=function(v){ return v==null?'—':(Math.round(v*10)/10); };
-  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th><th>Productivity</th><th>QA</th><th>Results</th><th>Reddit score</th><th>Points</th></tr></thead><tbody>'+
+  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th><th>Productivity</th><th>QA</th><th>Results</th><th title="Tool timers vs portal timer, month to date">Tool time</th><th>Reddit score</th><th>Points</th></tr></thead><tbody>'+
     rows.map(function(o){
       var P=o.productivity||{}, Q=o.quality||{}, R=o.results||{}, rp=R.parts||{};
       return '<tr><td class="c1"><b>'+esc(o.name||vaName(o.va))+'</b><div class="pq-sub">'+(o.days||0)+' working day'+(o.days===1?'':'s')+'</div></td>'+
@@ -3108,6 +3212,7 @@ function pqScore(){
         '<td><div class="pq-med" style="color:'+col(Q.score)+'">'+num(Q.score)+'</div><div class="pq-sub">'+(Q.days||0)+' day'+(Q.days===1?'':'s')+' scored</div></td>'+
         '<td style="white-space:normal;min-width:220px"><div class="pq-med" style="color:'+col(R.score)+'">'+num(R.score)+'</div><div style="margin-top:3px">'+pqPart('Survival',rp.survival)+pqPart('Ban rate',rp.ban)+pqPart('Progress',rp.progress)+pqPart('Karma',rp.karma)+
           (Object.keys(rp).length?'':'<span class="pq-sub">accounts still too young</span>')+'</div></td>'+
+        (function(){ var C=o.coverage||{}; return '<td><div class="pq-med" style="color:'+covColor(C.pct)+'">'+(C.pct==null?'—':C.pct+'%')+'</div><div class="pq-sub">'+(C.days?(C.timed_h+'h of '+C.tracked_h+'h · '+C.days+' day'+(C.days===1?'':'s')+(C.low_days?' · <span style="color:#b91c1c">'+C.low_days+' under 50%</span>':'')):'no portal time yet')+'</div></td>'; })()+
         '<td><div class="pq-med" style="font-size:18px;color:'+col(o.total)+'">'+num(o.total)+'</div><div class="pq-sub">out of 100</div></td>'+
         '<td><div class="pq-med">'+num(o.points)+'<span class="muted" style="font-size:11px"> / '+num(o.max||0)+'</span></div><div class="pq-sub">of the overall</div></td></tr>';
     }).join('')+'</tbody></table></div>';
@@ -3199,6 +3304,7 @@ function pqFlags(va, day, dr, L){
   if(q) F.push({ k:'quick', t:q+' finished within 20 s', d:Math.min(2,q*pqRule('quick').d), c:'r' });
   var fast=rows.filter(function(x){ if(x.secs==null || x.secs<20) return false; var tt=pqTeamTime(x.kind+'|'+x.stage+'|'+(x.method||'(none)')); return tt && x.secs<tt*0.35; }).length;
   if(fast) F.push({ k:'fast', t:fast+' far under the team time', d:Math.min(2,fast*pqRule('fast').d), c:'a' });
+  try{ var cv=pqCover(va, day, dr); if(cv && cv.tracked>=7200 && cv.pct!=null && cv.pct<50) F.push({ k:'cover', t:'Tool time '+hm(cv.timed)+' of '+hm(cv.tracked)+' tracked ('+cv.pct+'%)', d:pqRule('cover').d, c:'r', tip:'The portal tracked '+hm(cv.tracked)+' but this tool\'s timers only covered '+hm(cv.timed)+' of it.' }); }catch(_cv){}
   var ps=CFG.process_start||'2026-10-01', untag=allRows().filter(function(r){ return owner(r)===va && !isDead(r) && !isParked(r) && (!methodOf(r) || !r.model || (cdateOf(r)>=ps && !r.device && phoneList(false, r.project).length)); });
   if(untag.length) F.push({ k:'tagging', t:untag.length+' account'+(untag.length===1?'':'s')+' missing tags', d:Math.min(2,untag.length*pqRule('tagging').d), c:'a', tip:untag.slice(0,12).map(function(r){ return r.handle+': '+[!methodOf(r)?'method':'',!r.model?'model':'',(cdateOf(r)>=ps&&!r.device&&phoneList(false,r.project).length)?'phone':''].filter(String).join(', '); }).join('\n') });
   (EVENTS||[]).forEach(function(e){
@@ -3210,6 +3316,14 @@ function pqFlags(va, day, dr, L){
     if(days<p.dur) F.push({ k:'skip', t:(e.handle||'?')+': left '+p.n+' on day '+(days+1)+' of '+p.dur, d:pqRule('skip').d, c:'r' });
   });
   return F;
+}
+/* portal time vs tool time for a VA-day: live from presence + today's task log, past days from the ledger */
+function pqCover(va, day, dr){
+  var tracked=0, timed=0;
+  if(day===today() && LINK.all[va] && LINK.all[va].tracked_secs!==undefined){ var p=LINK.all[va]; tracked=+p.tracked_proj_secs||+p.tracked_secs||0; timed=Math.max(rowsTimed(PQ.st&&PQ.st.rows, va), dr?(+dr.timed_secs||0):0); if(dr) tracked=Math.max(tracked, +dr.tracked_secs||0); }
+  else if(dr){ tracked=+dr.tracked_secs||0; timed=Math.max(+dr.timed_secs||0, rowsTimed(PQ.st&&PQ.st.rows, va)); }
+  if(!tracked && !timed) return null;
+  return { tracked:tracked, timed:timed, pct:covPct(timed, tracked) };
 }
 function pqQA(){
   var day=PQ.day||today(), vas=pqVAs(day);
@@ -3224,13 +3338,14 @@ function pqQA(){
     '<div class="muted" style="font-size:12px;margin-top:6px">Sessions done and accounts created are shown for context — they are productivity, not QA, and are not scored until you set the task targets.</div></div></details>';
   if(!vas.length) return h+'<div class="card empty">No VAs with accounts yet.</div>';
   var avg={}; (PQ.dd||[]).forEach(function(x){ if(x.qa_score===''||x.qa_score==null) return; var s=parseFloat(x.qa_score); if(isNaN(s)) return; var k=String(x.va).toLowerCase(); (avg[k]=avg[k]||[]).push(s); });
-  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th><th>Sessions</th><th>Created</th><th>Health check</th><th>Rule hits</th><th>Suggested</th><th>Your score</th><th>Note</th><th>Month avg</th><th></th></tr></thead><tbody>'+
+  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th><th>Sessions</th><th>Created</th><th>Health check</th><th title="Tool timers vs portal timer">Tool time</th><th>Rule hits</th><th>Suggested</th><th>Your score</th><th>Note</th><th>Month avg</th><th></th></tr></thead><tbody>'+
     vas.map(function(va){
       var dr=pqRow(va,day), L=pqLive(va,day), F=pqFlags(va,day,dr,L), ded=F.reduce(function(s,f){ return s+f.d; },0), sug=Math.max(0, Math.round((10-ded)*2)/2);
       var sc=dr && dr.qa_score!=='' && dr.qa_score!=null ? String(dr.qa_score) : '', a=avg[va];
       var hc=L.off?'<span class="flag" style="background:#f1f2f7;color:var(--ink3)">'+esc(L.off)+'</span>':(L.nodata?'<span class="muted">no data</span>':(L.hcA?(L.hcD+'/'+L.hcA+(dr&&dr.hc_first_at?' <span class="muted" style="font-size:11px">· '+esc(fmtT(parseTs(dr.hc_first_at)))+'</span>':'')):'<span class="muted">—</span>'));
       return '<tr data-va="'+esc(va)+'"><td class="c1">'+esc(vaName(va))+(SHIFTOF[va]==='night'?' 🌙':'')+'</td>'+
         '<td class="num">'+(L.nodata?'—':(L.done+'/'+L.due))+'</td><td class="num">'+(L.nodata?'—':(L.cre||'·'))+'</td><td>'+hc+'</td>'+
+        (function(){ var cv=pqCover(va,day,dr); return '<td style="white-space:nowrap">'+(cv?(hm(cv.timed)+' <span class="muted">/ '+hm(cv.tracked)+'</span>'+(cv.pct!=null?' <b style="color:'+covColor(cv.pct)+'">'+cv.pct+'%</b>':'')):'<span class="muted">—</span>')+'</td>'; })()+
         '<td style="white-space:normal;max-width:300px;min-width:180px">'+(F.length?F.map(function(f){ return '<span class="qf '+f.c+'" title="'+esc(f.tip?f.tip:('−'+f.d))+'">'+esc(f.t)+' <b>−'+f.d+'</b></span>'; }).join(''):'<span class="qf g">'+IC.check+' clean</span>')+'</td>'+
         '<td class="num" style="font-weight:800;color:'+(sug>=9?'#047857':(sug>=7?'#b45309':'#b91c1c'))+'">'+sug+'</td>'+
         '<td><input class="qa-sc'+(sc!==''?' saved':'')+'" id="qa-s-'+esc(va)+'" type="number" min="0" max="10" step="0.5" value="'+esc(sc)+'" placeholder="'+sug+'"></td>'+
