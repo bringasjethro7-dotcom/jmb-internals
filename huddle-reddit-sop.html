@@ -296,7 +296,7 @@ function speak(n){
     var u=new SpeechSynthesisUtterance(txt);
     if(pickedVoice) u.voice=pickedVoice;
     u.onstart=function(){ duck(true); _voiceProven=true; var vb2=(document.getElementById('voice')||{}); if(vb2) vb2.textContent='🔊 Voice: on'; };
-    u.onerror=function(){ voiceFailed('the browser refused to speak'); };
+    u.onerror=function(ev){ if(_cancelling || (ev && /interrupted|cancel/i.test(String(ev.error||'')))) return; voiceFailed('the browser refused to speak'); };
     u.rate=0.96; u.pitch=1.0; u.volume=1;
     u.onend=function(){
       duck(false);
@@ -391,7 +391,7 @@ function kickoff(){
   var hint=document.getElementById('voicehint'); if(hint) hint.remove();
   speak(i);
 }
-['click','keydown'].forEach(function(ev){ document.addEventListener(ev, function(){ if(STARTED) kickoff(); }, {once:false}); });
+['click','keydown'].forEach(function(ev){ document.addEventListener(ev, function(){ if(STARTED && !_spoke) kickoff(); }, {once:false}); });   // once: a later tap must not wake the ambience / voice while paused
 
 /* ── PLAYER (Oct 6): pause / resume, prev / next, no auto-loop ──
    Pause freezes the scene clock AND the narration; resume continues where it stopped (if the
@@ -405,22 +405,21 @@ function paintCtl(){
   var b=document.getElementById('ctl-pp'); if(b){ b.textContent=playing?'⏸':'▶'; b.setAttribute('aria-label', playing?'Pause':'Resume'); b.title=(playing?'Pause':'Resume')+' (space)'; }
   document.body.classList.toggle('paused', STARTED && !playing && !ENDED);
 }
+var _cancelling=false;
 function pauseFilm(){
   if(!playing||ENDED) return;
-  elapsed=Date.now()-t0; playing=false;
-  try{ if(synth && synth.speaking) synth.pause(); }catch(e){}
+  playing=false; elapsed=0;                                         // the scene restarts with its narration on resume
+  try{ if(synth){ _cancelling=true; synth.cancel(); setTimeout(function(){ _cancelling=false; }, 400); } }catch(e){}   // pause() is unreliable with network voices — stop it
   try{ if(AUDIO && AUDIO.state==='running') AUDIO.suspend(); }catch(e){}   // no hum while paused
   paintCtl(); post('paused');
 }
 function resumeFilm(){
   if(playing||ENDED) return;
-  playing=true; t0=Date.now()-elapsed;
-  var wasSpeaking=false; try{ wasSpeaking=!!(synth && synth.paused); }catch(e){}
-  try{ if(synth && synth.paused) synth.resume(); }catch(e){}
+  playing=true; t0=Date.now(); elapsed=0;
   try{ if(AUDIO && AUDIO.state==='suspended') AUDIO.resume(); }catch(e){}
+  var pb=document.querySelector('#filmprog i'); if(pb) pb.style.width='0%';
+  speak(i);                                                          // same scene, read from the top
   paintCtl(); post('playing');
-  // Engines that can't resume (Android, some TVs) stay silent: read the scene again from the top.
-  if(VOICE && synth){ setTimeout(function(){ try{ if(playing && !ENDED && !synth.speaking && !synth.pending){ t0=Date.now(); speak(i); } }catch(e){} }, 700); }
 }
 function startFilm(){
   if(STARTED) return;
