@@ -881,6 +881,23 @@ function autoGraduate(){
     upd(r.id,{ status:'creation', by:'auto' }).catch(function(){});
   });
 }
+/* SELF-REFRESH (Oct 7): the page watches its own ETag on Netlify. When a new reddit.html is published, every open
+   tool reloads itself within ~2 minutes — no admin button, no "please press F5". Timers and the board live in
+   localStorage / sessionStorage, so nothing is lost; it waits if a modal or the record drawer is open. */
+var _pageTag=null;
+async function pageWatch(){
+  try{
+    var r=await fetch(location.pathname+'?w='+Date.now(), { method:'HEAD', cache:'no-store' });
+    var tag=r.headers.get('etag')||r.headers.get('last-modified')||''; if(!tag) return;
+    if(_pageTag===null){ _pageTag=tag; return; }
+    if(tag===_pageTag) return;
+    var busy=($('modal')&&$('modal').classList.contains('on')) || ($('drawer')&&$('drawer').classList.contains('on'));
+    if(busy) return;                                           // try again next round
+    _pageTag=tag; toast('Reddit Central was updated — refreshing…');
+    setTimeout(function(){ try{ var u=new URL(location.href); u.searchParams.set('v', String(Date.now())); location.replace(u.toString()); }catch(e){ location.reload(); } }, 3000);
+  }catch(e){}
+}
+setTimeout(pageWatch, 15000); setInterval(pageWatch, 120000);
 function smartPoll(){
   setInterval(function(){ if(!document.hidden) load(); }, 60000);
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) load(); });
