@@ -323,7 +323,9 @@ async function loadAll(isRefresh){
     DATA.snaps={};
     (d.snaps||[]).forEach(function(s){ (DATA.snaps[s[1]]=DATA.snaps[s[1]]||[]).push({d:s[0],f:s[2],k:s[3]}); });
     Object.keys(DATA.snaps).forEach(function(k){ DATA.snaps[k].sort(function(a,b){ return a.d<b.d?-1:1; }); });
-    var accounts=(d.accounts||[]);
+    /* Reddit accounts a client put ON HOLD / ARCHIVED (Oct 6, owner): not active, not inactive — parked.
+       They are left out of every number here and come back by themselves when Reddit Central releases them. */
+    var accounts=(d.accounts||[]).filter(function(a){ return !(String(a.plat||'')==='reddit' && /^(onhold|on_hold|hold|paused|archived|archive)$/i.test(String(a.status||'').trim())); });
     var alt=await pAltr;
     if(alt && alt.accounts){
       alt.accounts.forEach(function(a){
@@ -877,6 +879,7 @@ window.addEventListener('focus', function(){ if(AUTH && document.getElementById(
     for(var i=0;i<RPROJ.length;i++){ var cfg=RPROJ[i];
       prog(5+Math.round(i/RPROJ.length*90),'Loading '+cfg.n+' … ('+(i+1)+'/'+RPROJ.length+')');
       var rows=[]; try{ var j=await getJSON(RAPI+'?action=pa_list&project='+encodeURIComponent(cfg.p)+'&_='+Date.now(),5); rows=(j&&j.rows)||[]; }catch(_e){}
+      rows=rows.filter(function(r){ return !/^(onhold|on_hold|hold|paused|archived|archive)$/i.test(String(r.status||'').trim()); });   // parked by a client: out of every count (Oct 6)
       recs.push(analyze(cfg,rows));
       rows.forEach(function(r){var o=String(r.assigned_to||r.created_by||'').toLowerCase();if(!o)return;var v=vm[o]||(vm[o]={total:0,alive:0,dead:0,karma:0,kn:0});v.total++;var dead=RDEAD.indexOf(String(r.status||'').toLowerCase())>=0;if(dead)v.dead++;else{v.alive++;var k=(r.meta&&r.meta.karma!=null)?parseInt(r.meta.karma,10):null;if(k!=null&&!isNaN(k)){v.karma+=k;v.kn++;}}});
       var html=renderSummary(recs); recs.forEach(function(r){html+=renderProject(r,byP(r.proj));}); html+=renderVAs(vm);

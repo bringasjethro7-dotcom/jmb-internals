@@ -826,7 +826,7 @@ async function load(){
     ALL[PROJECT]=rows;
     ROWS=scope(rows);
     try{ sessionStorage.setItem('rc_rows_'+PROJECT, JSON.stringify({t:Date.now(), rows:rows})); }catch(e){}
-    BASECOUNT[PROJECT]=(isAdmin()?rows:ROWS).filter(function(r){ return r.status!=='banned'; }).length;   // banned accounts never count in a total
+    BASECOUNT[PROJECT]=(isAdmin()?rows:ROWS).filter(function(r){ return r.status!=='banned' && !isParked(r); }).length;   // banned + parked accounts never count in a total
     if(_retryT){ clearTimeout(_retryT); _retryT=null; }
     autoGraduate();
     paintTop(); renderView();
@@ -851,7 +851,7 @@ async function loadAll(force){
       var rows=normRows(((d&&d.rows)||[]).map(function(r){ r.project=r.project||b.id; return r; }));
       ALL[b.id]=rows;   // everyone keeps all rows in memory — the daily cross-check needs other VAs' handles; views still scope by role
       if(b.id===PROJECT) ROWS=scope(rows);   // one set of objects per base, so an edit is never made on a stale copy
-      BASECOUNT[b.id]=rows.filter(function(r){ return r.status!=='banned' && (isAdmin() || owner(r)===me); }).length;
+      BASECOUNT[b.id]=rows.filter(function(r){ return r.status!=='banned' && !isParked(r) && (isAdmin() || owner(r)===me); }).length;   // parked accounts are not in anyone's total (Oct 6)
     }catch(e){}
   }));
   ALL_AT=Date.now(); paintTop();
@@ -1229,13 +1229,13 @@ function vToday(){
      3. the sheet names her by name ("Francine") instead of her employee ID, so nothing matches. */
 function whereAre(who){
   var nm=vaName(who), first=String(nm).split(' ')[0].toLowerCase(), all=allRows(), h='';
-  var other=all.filter(function(r){ return r.project!==PROJECT && worksFor(r)===who && !isDead(r); }), byB={};
+  var other=all.filter(function(r){ return r.project!==PROJECT && worksFor(r)===who && !isDead(r) && !isParked(r); }), byB={};
   other.forEach(function(r){ byB[r.project]=(byB[r.project]||0)+1; });
   Object.keys(byB).forEach(function(pj){
     var mm={}; other.filter(function(r){ return r.project===pj; }).forEach(function(r){ var m=methodOf(r)||'no method'; mm[m]=(mm[m]||0)+1; });
     h+='<div class="banner info">'+IC.swap+'<div style="flex:1"><b>'+esc(nm)+'</b> also has <b>'+byB[pj]+' live account'+(byB[pj]===1?'':'s')+'</b> on <b>'+esc(baseOf(pj).n)+'</b> ('+Object.keys(mm).map(function(m){ return esc(m)+' '+mm[m]; }).join(' · ')+'). This list only shows '+esc(baseOf(PROJECT).n)+'.</div><button class="btn sm dark" onclick="setBase(\''+jsq(pj)+'\')">Show '+esc(baseOf(pj).n)+'</button></div>';
   });
-  var moved=all.filter(function(r){ return String(r.created_by||'').toLowerCase()===who && owner(r)!==who && !isDead(r); });
+  var moved=all.filter(function(r){ return String(r.created_by||'').toLowerCase()===who && owner(r)!==who && !isDead(r) && !isParked(r); });
   if(moved.length){
     var bo={}; moved.forEach(function(r){ var o=owner(r)||'(nobody)'; bo[o]=(bo[o]||0)+1; });
     h+='<div class="banner warn">'+IC.user+'<div style="flex:1"><b>'+esc(nm)+'</b> logged <b>'+moved.length+' more live account'+(moved.length===1?'':'s')+'</b> that now belong to other VAs — '+Object.keys(bo).map(function(o){ return esc(o==='(nobody)'?'nobody':vaName(o))+' ('+bo[o]+')'; }).join(', ')+'. They count for those VAs, not for her.</div><button class="btn sm dark" onclick="whereList(\''+jsq(who)+'\',\'moved\')">See them</button></div>';
@@ -2709,7 +2709,7 @@ function vHealthAuto(){
 /* Manual sweep — no API: the owner opens each profile himself and records what he sees. */
 var MS={ n:60 };
 function manualSweep(){
-  var rows=(ALL[PROJECT]||ROWS).filter(function(r){ return !isDead(r); });
+  var rows=(ALL[PROJECT]||ROWS).filter(function(r){ return !isDead(r) && !isParked(r); });
   var td=today(), wk=addDays(td,-6);
   rows.sort(function(a,b){ var x=String(M(a).hcok||''), y=String(M(b).hcok||''); return (x<y?-1:x>y?1:0) || String(a.handle).localeCompare(String(b.handle)); });
   var stale=rows.filter(function(r){ return !M(r).hcok || String(M(r).hcok)<wk; }).length;
@@ -2736,7 +2736,7 @@ function manualSweep(){
 var QR={ on:false, list:[], i:0, done:0, prio:true };
 function qrQueue(){
   var td=today(), P1=phaseIx('day1');
-  var rows=(ALL[PROJECT]||ROWS).filter(function(r){ return !isDead(r) && String(M(r).hcok||'')!==td; });
+  var rows=(ALL[PROJECT]||ROWS).filter(function(r){ return !isDead(r) && !isParked(r) && String(M(r).hcok||'')!==td; });
   rows.sort(function(a,b){
     var pa=QR.prio?(phaseIx(a.status)>=P1?0:(isWorkable(a)?1:2)):0, pb=QR.prio?(phaseIx(b.status)>=P1?0:(isWorkable(b)?1:2)):0;
     var x=String(M(a).hcok||''), y=String(M(b).hcok||'');
@@ -3199,7 +3199,7 @@ function pqFlags(va, day, dr, L){
   if(q) F.push({ k:'quick', t:q+' finished within 20 s', d:Math.min(2,q*pqRule('quick').d), c:'r' });
   var fast=rows.filter(function(x){ if(x.secs==null || x.secs<20) return false; var tt=pqTeamTime(x.kind+'|'+x.stage+'|'+(x.method||'(none)')); return tt && x.secs<tt*0.35; }).length;
   if(fast) F.push({ k:'fast', t:fast+' far under the team time', d:Math.min(2,fast*pqRule('fast').d), c:'a' });
-  var ps=CFG.process_start||'2026-10-01', untag=allRows().filter(function(r){ return owner(r)===va && !isDead(r) && (!methodOf(r) || !r.model || (cdateOf(r)>=ps && !r.device && phoneList(false, r.project).length)); });
+  var ps=CFG.process_start||'2026-10-01', untag=allRows().filter(function(r){ return owner(r)===va && !isDead(r) && !isParked(r) && (!methodOf(r) || !r.model || (cdateOf(r)>=ps && !r.device && phoneList(false, r.project).length)); });
   if(untag.length) F.push({ k:'tagging', t:untag.length+' account'+(untag.length===1?'':'s')+' missing tags', d:Math.min(2,untag.length*pqRule('tagging').d), c:'a', tip:untag.slice(0,12).map(function(r){ return r.handle+': '+[!methodOf(r)?'method':'',!r.model?'model':'',(cdateOf(r)>=ps&&!r.device&&phoneList(false,r.project).length)?'phone':''].filter(String).join(', '); }).join('\n') });
   (EVENTS||[]).forEach(function(e){
     if(e.kind!=='stage' || String(e.by||'').toLowerCase()!==va || bizDayOf(e.at)!==day) return;
