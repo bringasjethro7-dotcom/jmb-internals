@@ -510,6 +510,7 @@ var SI=function(p,w){ return '<svg width="'+(w||15)+'" height="'+(w||15)+'" view
 var IC={
  plus:SI('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'),
  check:SI('<polyline points="20 6 9 17 4 12"/>',12),
+ clock:SI('<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>',14),
  phone:SI('<rect x="5" y="2" width="14" height="20" rx="3"/><line x1="12" y1="18" x2="12" y2="18.01"/>',14),
  play:SI('<polygon points="5 3 19 12 5 21 5 3"/>',12),
  dots:SI('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',16),
@@ -675,6 +676,7 @@ function livePoll(){
   loadState(true);
 }
 setInterval(livePoll, 45000);
+setInterval(function(){ linkLoad(false).then(function(){ if(VIEW==='delivery'||VIEW==='sourcing') renderView(); }); }, 60000); setTimeout(function(){ linkLoad(true).then(renderView); }, 2500);
 document.addEventListener('visibilitychange', function(){ if(!document.hidden) livePoll(); });
 
 /* ── derived model ── */
@@ -997,6 +999,7 @@ function vDelivery(){
   var mine=all?phones:phones.filter(function(p){ return set[String(p.phone)]; });
   var prog=postProgress(set), nu=nextUp(prog), nk=nu?keyOf(nu.a):'';
   var h=topBar('Delivery', all?'the whole fleet — phones, posting, who is where':'your phones and your accounts', (lead?scopeSeg(PF)+'<button class="btn sm sec" onclick="autoAssignPosting()">Auto-assign phones</button>':''));
+  h+=linkBanner();
   if(!all && !mine.length) h+='<div class="banner warn">'+IC.phone+'<div><b>No phones assigned to you'+(lead?' on the posting roster':' yet')+'.</b> '+(lead?'Pick a person and phones in Settings → Team.':'Ask your lead to put you on the posting roster (Settings → Team).')+'</div></div>';
   try{ var rk='altr2_phchk_'+myId()+'_'+phtToday(); if(mine.length && !sessionStorage.getItem(rk)){ h+='<div class="banner info">'+IC.phone+'<div style="flex:1"><b>Check your phones first.</b> Tap each phone to set its real status — a disconnected or on-hold phone drops out of today\'s targets by itself.</div><button class="btn sm pri" onclick="sessionStorage.setItem(\''+rk+'\',1);this.closest(\'.banner\').remove()">Done</button></div>'; } }catch(e){}
   var down=mine.filter(function(p){ return isDown(p.phone); }), iss=mine.filter(function(p){ return phoneStatus(p.phone)==='issue'; }), disc=mine.filter(function(p){ return phoneStatus(p.phone)==='disconnected'; }), hold=mine.filter(function(p){ return phoneStatus(p.phone)==='hold'; });
@@ -1099,6 +1102,7 @@ function setNote(k,slot,v){
 async function clearTag(k){ var a=acctByKey(k); if(!a) return; if(!(await confirmBox('Clear the flag on @'+a.handle+'?', 'Only clear it once "'+esc(a.tag)+'" is fixed on the account.', 'Clear flag'))) return; a.tag=''; renderView(); apiPost({ action:'account_tag', phone:a.phone, user:a.user, acct:a.acct, handle:a.handle, tag:'' }).catch(function(){ toast('Save failed'); }); }
 async function togglePost(k){
   var a=acctByKey(k); if(!a) return;
+  if(!(await linkGate('A posting tick'))) return;   // portal timer must be running on ALTR (Oct 7)
   var pm=postingMap(), sm=sourceMap(), pr=pm[k], sr=sm[k], posted=!!(pr&&cellAt(pr.cells,0)==='2');
   if(!posted){
     var nt=noteFor(a), miss=[1,2,3,4].filter(function(s){ return !String(nt['n'+s]||'').trim(); });
@@ -1127,6 +1131,7 @@ async function togglePost(k){
 }
 async function togglePost(k){
   var a=acctByKey(k); if(!a) return;
+  if(!(await linkGate('A posting tick'))) return;   // portal timer must be running on ALTR (Oct 7)
   var pm=postingMap(), sm=sourceMap(), pr=pm[k], sr=sm[k], posted=!!(pr&&cellAt(pr.cells,0)==='2');
   if(!posted){
     var nt=noteFor(a), miss=[1,2,3,4].filter(function(s){ return !String(nt['n'+s]||'').trim(); });
@@ -1167,7 +1172,7 @@ async function autoAssignPosting(){
 function vSourcing(){
   // a VA sees only the phones on their SOURCING roster (Jeth, Oct 5)
   var lead=isLead(), all=lead&&SF.scope!=='mine', set=all?null:mySrcPhones(), map=sourceMap(), sp=srcProgress(set);
-  var h=topBar('Sourcing <em>pipeline</em>', 'Red = a cycle to source · orange = sourced and queued · green = posted. '+(lead?'Click a box to cycle it, + adds the next cycle, right-click renumbers.':'Click a red box when you have sourced that cycle.'), lead?scopeSeg(SF)+'<button class="btn sm sec" onclick="autoAssignSrc()">Auto-assign phones</button><button class="btn sm sec" onclick="recordDay()">Record day</button>':'');
+  var h=linkBanner()+topBar('Sourcing <em>pipeline</em>', 'Red = a cycle to source · orange = sourced and queued · green = posted. '+(lead?'Click a box to cycle it, + adds the next cycle, right-click renumbers.':'Click a red box when you have sourced that cycle.'), lead?scopeSeg(SF)+'<button class="btn sm sec" onclick="autoAssignSrc()">Auto-assign phones</button><button class="btn sm sec" onclick="recordDay()">Record day</button>':'');
   if(!all){ var myPh=(STATE.phones||[]).filter(function(p){ return set[String(p.phone)]; }).sort(function(a,b){ return fnum(a.phone)-fnum(b.phone); });
     if(!myPh.length) h+='<div class="banner warn">'+IC.phone+'<div><b>No phones assigned to you on the sourcing roster.</b> '+(lead?'Pick a person and phones in Settings → Team.':'Ask your lead to put you on the sourcing roster (Settings → Team).')+'</div></div>';
     else h+='<div class="comp" style="margin-bottom:14px"><div class="comp-h"><b>My phones</b><span class="chip">'+myPh.filter(function(p){ return !isDown(p.phone); }).length+'/'+myPh.length+' in play</span><span class="muted" style="font-size:11px;font-weight:700">tap a phone to set its status</span></div><div class="ph-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px">'+myPh.map(function(p){ return phoneRow(p, null); }).join('')+'</div></div>';
@@ -1209,8 +1214,9 @@ function srcRow(a, r){
   h+='</div></div>';
   return h;
 }
-function cycleSrc(k, idx, el){
+async function cycleSrc(k, idx, el){
   var a=acctByKey(k); if(!a) return;
+  if(!(await linkGate('A sourcing box'))) return;   // portal timer must be running on ALTR (Oct 7)
   var r=sourceMap()[k], cur=r?cellAt(r.cells,idx):'0', next;
   if(isLead()){ var nn=parseInt(cur,10)||0; next=String(nn>=2?0:nn+1); }
   else { if(cur==='0'){ toast('Only a lead can assign boxes'); return; } if(cur==='3'){ toast('Already posted'); return; } next=(cur==='1')?'2':'1'; }
@@ -1435,6 +1441,98 @@ document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeAll(
 function confirmBox(title, body, okLbl, danger){ return new Promise(function(res){ _mResolve=res; openModal('<div class="md-h"><h3>'+esc(title)+'</h3>'+(body?'<p>'+body+'</p>':'')+'</div><div class="md-f"><button class="btn sec" onclick="closeModal(false)">Cancel</button><button class="btn '+(danger?'dark':'pri')+'" onclick="closeModal(true)">'+esc(okLbl||'Confirm')+'</button></div>'); }); }
 function askText(title, body, ph){ return new Promise(function(res){ _mResolve=res; openModal('<div class="md-h"><h3>'+esc(title)+'</h3>'+(body?'<p>'+esc(body)+'</p>':'')+'</div><div class="md-b"><input class="inp" id="ask-v" style="width:100%" placeholder="'+esc(ph||'')+'" value="'+esc(ph&&/^\d+$/.test(ph)?ph:'')+'" onkeydown="if(event.key===\'Enter\') closeModal(this.value)"></div><div class="md-f"><button class="btn sec" onclick="closeModal(null)">Cancel</button><button class="btn pri" onclick="closeModal(document.getElementById(\'ask-v\').value)">OK</button></div>'); }); }
 
+
+/* ═══════════ PORTAL TIMER LINK (owner, Oct 7) — same rule as Reddit Central ═══════════
+   The portal's time tracker is the hard clock. The portal publishes its live timer in the presence row it
+   keeps in Supabase (task · since · tracked seconds today); the Studio reads that row:
+     • a posting tick, a sourcing box or a reel tick is refused unless the portal timer is running on an ALTR
+       project ("Start your time tracker first");
+     • the Studio keeps its own attended clock — a second counts when the tab is visible and the VA clicked,
+       typed or scrolled within the last 90 s — and shows "tracked in the portal vs active in the Studio";
+     • both numbers go to the ALTR ledger a few times an hour (altr_tool_time); leads see coverage per day
+       and per month, and days under 50% with 2h+ tracked are flagged (flag only for now).
+   Leads and owners are exempt from the gate. No link columns yet / Supabase unreachable → the gate stands down. */
+var SB_URL='https://rvyrnkjqxnijxydloujk.supabase.co', SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2eXJua2pxeG5panh5ZGxvdWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NzAwODQsImV4cCI6MjA5NzE0NjA4NH0.SwkSkmbeWrhm5PZZDSZ1Z4hbjpQ0L2CRtuKQmpHshBE';
+var LINK={ me:null, all:{}, at:0, allAt:0 };
+async function sbGet(path){
+  var ctl=(typeof AbortController!=='undefined')?new AbortController():null, tm=ctl?setTimeout(function(){ try{ ctl.abort(); }catch(_){} },8000):null;
+  try{ var r=await fetch(SB_URL+'/rest/v1/'+path, { headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY }, signal:ctl?ctl.signal:undefined }); if(!r.ok) throw new Error('sb '+r.status); return await r.json(); }
+  finally{ if(tm) clearTimeout(tm); }
+}
+function linkIsAltr(task){ return /altr/i.test(String(task||'')); }
+async function linkLoad(force){
+  var me=String(USER&&USER.id||'').toUpperCase(); if(!me || me==='ADMIN') return;
+  try{
+    if(isLead()){
+      if(!force && Date.now()-LINK.allAt<45000) return;
+      var rows=await sbGet('presence?select=employee_id,status,last_seen,task,task_since,tracked_secs,tracked_proj_secs');
+      var m={}; (rows||[]).forEach(function(r){ m[String(r.employee_id||'').toLowerCase()]=r; }); LINK.all=m; LINK.allAt=Date.now(); LINK.me=m[me.toLowerCase()]||null; LINK.at=Date.now();
+    } else {
+      if(!force && Date.now()-LINK.at<20000) return;
+      var one=await sbGet('presence?select=employee_id,status,last_seen,task,task_since,tracked_secs,tracked_proj_secs&employee_id=eq.'+encodeURIComponent(me));
+      LINK.me=(one&&one[0])||null; LINK.at=Date.now();
+    }
+  }catch(e){}
+}
+function linkState(p){
+  if(!p) return { k:'unknown', why:'no presence row' };
+  if(p.task===undefined || p.tracked_secs===undefined) return { k:'unknown', why:'portal link not set up yet' };
+  var age=Date.now()-(Date.parse(p.last_seen||'')||0);
+  if(age>4*60000) return { k:'off', why:'the portal has been closed or asleep for '+Math.round(age/60000)+' min' };
+  if(String(p.status||'')!=='working') return { k:'off', why:(p.status==='paused'?'your portal timer is paused':(p.status==='idle'?'the portal shows you idle':'your portal timer is not running')) };
+  if(!linkIsAltr(p.task)) return { k:'other', why:'your portal timer is on "'+String(p.task||'').split(' · ')[0]+'", not ALTR Media' };
+  return { k:'ok', since:p.task_since||'', tracked:+p.tracked_secs||0, trackedProj:+p.tracked_proj_secs||0, task:p.task };
+}
+/* attended clock: 15-second slices while the tab is visible and the VA touched the page within 90 s */
+var ACT={ last:Date.now(), key:'' };
+function actKey(){ return 'altr_tl_'+String(USER&&USER.id||'x').toUpperCase()+'_'+phtToday(); }
+function toolToday(){ try{ return parseInt(localStorage.getItem(actKey())||'0',10)||0; }catch(e){ return 0; } }
+function actBump(){ ACT.last=Date.now(); }
+['click','keydown','pointerdown','touchstart','scroll','wheel'].forEach(function(ev){ try{ document.addEventListener(ev, actBump, { passive:true, capture:true }); }catch(e){} });
+setInterval(function(){
+  try{
+    if(!USER || document.hidden) return;
+    if(Date.now()-ACT.last>90000) return;
+    var k=actKey(), v=(parseInt(localStorage.getItem(k)||'0',10)||0)+15; localStorage.setItem(k, String(v));
+    if(v%300===0) toolSync();                       // every 5 attended minutes
+  }catch(e){}
+}, 15000);
+var _tsLast=0;
+async function toolSync(force){
+  try{
+    if(!USER || isLead()) return; if(!force && Date.now()-_tsLast<4*60000) return; _tsLast=Date.now();
+    await linkLoad(false); var st=linkState(LINK.me); if(st.k==='unknown' || !LINK.me || LINK.me.tracked_secs===undefined) return;
+    var tracked=Math.floor(((+LINK.me.tracked_proj_secs)||(+LINK.me.tracked_secs)||0)/300)*300, tool=Math.floor(toolToday()/300)*300;
+    if(!tracked && !tool) return;
+    apiPost({ action:'altr_tool_time', date:phtToday(), tracked_secs:tracked, tool_secs:tool, name:myName() }).catch(function(){});
+  }catch(e){}
+}
+setInterval(function(){ toolSync(false); }, 5*60000);
+function hm(secs){ secs=Math.max(0,Math.round(secs||0)); var h=Math.floor(secs/3600), m=Math.round((secs%3600)/60); return h?(h+'h '+(m<10?'0':'')+m+'m'):(m+'m'); }
+function covPct(timed, tracked){ return tracked>0?Math.min(100, Math.round(timed/tracked*100)):null; }
+function covColor(pct){ return pct==null?'var(--ink3)':(pct>=70?'var(--lime)':(pct>=50?'#f59e0b':'#ef4444')); }
+async function linkGate(what){
+  if(isLead()) return true;
+  await linkLoad(true);
+  var st=linkState(LINK.me);
+  if(st.k==='ok' || st.k==='unknown') return true;
+  openModal('<div class="md-h"><h3>'+IC.clock+' Start your time tracker first</h3><p>'+esc(st.why.charAt(0).toUpperCase()+st.why.slice(1))+'. '+(what||'A tick')+' only counts while the portal timer is running on ALTR Media — that is the clock your work is measured against.</p></div>'+
+    '<div class="md-b"><ol style="font-size:13px;line-height:1.7;margin:0 0 0 18px"><li>Open the portal → <b>Attendance &amp; Time</b>.</li><li>Pick the ALTR Media project and press <b>Start</b>.</li><li>Come back here and tick again.</li></ol></div>'+
+    '<div class="md-f"><a class="btn sec" href="https://portal.jmbvirtuals.com/" target="_blank" rel="noopener">Open the portal ↗</a><button class="btn pri" onclick="closeModal(false);linkLoad(true).then(renderView)">I started it — check again</button></div>');
+  return false;
+}
+function linkBanner(){
+  if(isLead()) return '';
+  var st=linkState(LINK.me); if(st.k==='unknown') return '';
+  var tool=toolToday();
+  if(st.k==='ok'){
+    var tracked=st.trackedProj||st.tracked, pct=covPct(tool, tracked);
+    return '<div class="banner" style="background:rgba(163,230,53,.12);border-color:rgba(163,230,53,.45)"><span style="font-size:18px">⏱</span><div style="flex:1"><b>Portal timer running</b> · '+esc(st.task)+(st.since?' · since '+esc(new Date(st.since).toLocaleTimeString('en-US',{ timeZone:'Asia/Manila', hour:'numeric', minute:'2-digit' })):'')+
+      '<div class="muted" style="font-size:12px;margin-top:2px">Tracked today <b>'+hm(tracked)+'</b> · active in the Studio <b>'+hm(tool)+'</b>'+(pct!=null?' · <b style="color:'+covColor(pct)+'">'+pct+'%</b>':'')+' — keep the Studio open and tick as you go, not in one go at the end.</div></div></div>';
+  }
+  return '<div class="banner warn">'+IC.clock+'<div style="flex:1"><b>Your portal timer is not running on ALTR Media</b> — '+esc(st.why)+'. Posting, sourcing and reel ticks will not count until it is.</div><a class="btn sm dark" href="https://portal.jmbvirtuals.com/" target="_blank" rel="noopener">Open the portal</a><button class="btn sm sec" onclick="linkLoad(true).then(renderView)">Check again</button></div>';
+}
+
 /* ── presence ── */
 function pingPresence(){ if(!USER||document.hidden) return; apiGet({ action:'altr_presence', employee_id:USER.id, name:myName(), photo:USER.photo||'' },0).catch(function(){}); apiGet({ action:'altr_presence_list' },0).then(function(d){ var L=(d&&d.users)||(d&&d.list)||[]; var p=$('pres'); if(!p) return; p.innerHTML=L.slice(0,6).map(function(u){ return face(u.employee_id, u.name||u.employee_id, u.photo, 'pv').replace('<img ','<img title="'+esc(natName(u.name||u.employee_id))+'" ').replace('<span ','<span title="'+esc(natName(u.name||u.employee_id))+'" '); }).join('')+(L.length>6?'<span class="more">+'+(L.length-6)+'</span>':''); }).catch(function(){}); }
 setInterval(pingPresence, 60000);
@@ -1461,10 +1559,10 @@ function scMonth(){
   else h+='<div class="banner warn">'+IC.dots+'<div><b>Not published yet for '+esc(monthLabel(m.month))+'.</b> Numbers below are live; publishing writes them to the portal scorecard (source "altr"). Publish again any time — the latest copy wins.</div></div>';
   var t=m.team||{};
   h+='<div class="kpis">'+kpi('Account health',t.health!=null?Math.round(t.health*100)+'%':'—','team · active share of accounts','var(--lime)')+kpi('QA accuracy',t.accuracy!=null?Math.round(t.accuracy)+'%':'—','team · reels found vs expected','var(--cy)')+kpi('Promo momentum',t.promo!=null?Math.round(t.promo*100)+'%':'—','live promotions gaining this month','var(--mag2)')+kpi('VAs',rows.length,m.from+' → '+m.to,'var(--ink2)')+'</div>';
-  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th><th>Days</th><th>Productivity</th><th>Posted</th><th>Sourced</th><th>QA</th><th>Results</th><th>ALTR score</th><th>Points</th></tr></thead><tbody>';
-  if(!rows.length) h+='<tr><td colspan="9" class="empty">No frozen days yet — the first day close (End of day, Record day, or opening the tool after midnight) starts the ledger.</td></tr>';
+  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th><th>Days</th><th>Productivity</th><th>Posted</th><th>Sourced</th><th>QA</th><th>Results</th><th title="Active in the Studio vs tracked in the portal, month to date">Studio time</th><th>ALTR score</th><th>Points</th></tr></thead><tbody>';
+  if(!rows.length) h+='<tr><td colspan="10" class="empty">No frozen days yet — the first day close (End of day, Record day, or opening the tool after midnight) starts the ledger.</td></tr>';
   rows.forEach(function(o){ var P=o.productivity, Q=o.quality, R=o.results;
-    h+='<tr class="r" onclick="scExplain(\''+jsq(o.va)+'\')"><td class="c1">'+esc(natName(o.name||o.employee_id))+(o.employee_id?'':' <span class="muted" title="roster slot without an employee ID — not published">· no ID</span>')+'</td><td class="num">'+o.days+'</td><td class="num" style="font-weight:800;color:'+scTone(P.score)+'">'+pct(P.score)+'</td><td class="num muted">'+P.posted+'/'+P.post_target+'</td><td class="num muted">'+P.sourced+'/'+P.src_target+'</td><td class="num" style="font-weight:800;color:'+scTone(Q.score)+'">'+pct(Q.score)+(Q.days?'<span class="muted" style="font-weight:600"> · '+Q.days+'d</span>':'')+'</td><td class="num" style="font-weight:800;color:'+scTone(R.score)+'">'+pct(R.score)+'</td><td class="num" style="font-weight:800;font-family:\'Space Grotesk\',sans-serif;font-size:15px;color:'+scTone(o.total)+'">'+pct(o.total)+'</td><td class="num muted">'+(o.points!=null?o.points+' / '+o.max:'—')+'</td></tr>'; });
+    h+='<tr class="r" onclick="scExplain(\''+jsq(o.va)+'\')"><td class="c1">'+esc(natName(o.name||o.employee_id))+(o.employee_id?'':' <span class="muted" title="roster slot without an employee ID — not published">· no ID</span>')+'</td><td class="num">'+o.days+'</td><td class="num" style="font-weight:800;color:'+scTone(P.score)+'">'+pct(P.score)+'</td><td class="num muted">'+P.posted+'/'+P.post_target+'</td><td class="num muted">'+P.sourced+'/'+P.src_target+'</td><td class="num" style="font-weight:800;color:'+scTone(Q.score)+'">'+pct(Q.score)+(Q.days?'<span class="muted" style="font-weight:600"> · '+Q.days+'d</span>':'')+'</td><td class="num" style="font-weight:800;color:'+scTone(R.score)+'">'+pct(R.score)+'</td>'+(function(){ var C=o.coverage||{}; return '<td class="num" style="font-weight:800;color:'+covColor(C.pct)+'">'+(C.pct==null?'—':Math.round(C.pct)+'%')+(C.days?'<span class="muted" style="font-weight:600"> · '+C.days+'d'+(C.low_days?' · <span style="color:#ef4444">'+C.low_days+' low</span>':'')+'</span>':'')+'</td>'; })()+'<td class="num" style="font-weight:800;font-family:\'Space Grotesk\',sans-serif;font-size:15px;color:'+scTone(o.total)+'">'+pct(o.total)+'</td><td class="num muted">'+(o.points!=null?o.points+' / '+o.max:'—')+'</td></tr>'; });
   return h+'</tbody></table></div><div class="hint" style="margin-top:8px">Click a VA for the breakdown. Productivity = (posted + sourced) ÷ targets on worked days · QA = the lead\'s daily scores averaged · Results = account health, QA accuracy and promo momentum relative to the team.</div>';
 }
 async function scLoadMonth(){ SC.loading=true; try{ var d=await apiGet({ action:'altr_scorecard', by_id:myId(), month:SC.month },0); SC.m=d&&d.ok?d:{ month:SC.month, error:(d&&d.error)||'network', rows:[] }; }catch(e){ SC.m={ month:SC.month, error:'network', rows:[] }; } SC.loading=false; if(VIEW==='score') renderView(); }
@@ -1485,10 +1583,10 @@ function scDays(){
   var d=SC.d; if(!d || d.date!==SC.day){ if(!SC.loading) scLoadDay(); return '<div class="row" style="margin-bottom:12px"><input type="date" value="'+esc(SC.day)+'" onchange="SC.day=this.value;SC.d=null;renderView()" style="padding:7px 10px;font-weight:700"></div><div class="kpis"><div class="skel"></div></div>'; }
   if(d.error) return '<div class="card empty">'+esc(d.error)+'</div>';
   var h='<div class="tbar"><input type="date" value="'+esc(SC.day)+'" onchange="SC.day=this.value;SC.d=null;renderView()" style="padding:7px 10px;font-weight:700"><button class="btn sm sec" onclick="SC.day=altrDAddC(SC.day,-1);SC.d=null;renderView()">‹ prev</button><button class="btn sm sec" onclick="SC.day=altrDAddC(SC.day,1);SC.d=null;renderView()">next ›</button><span class="chip">'+(SC.day===phtToday()?'today · live numbers':'frozen numbers')+'</span><span class="sp"></span><button class="btn sm sec" onclick="scFillAll()">Use every suggestion</button></div>';
-  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th><th>Posted</th><th>Sourced</th><th>Suggested</th><th>Rule hits</th><th>Your score /10</th><th>Note</th></tr></thead><tbody>';
-  if(!d.rows.length) h+='<tr><td colspan="7" class="empty">Nobody had a target on this day.</td></tr>';
+  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th><th>Posted</th><th>Sourced</th><th title="Active in the Studio vs tracked in the portal">Studio time</th><th>Suggested</th><th>Rule hits</th><th>Your score /10</th><th>Note</th></tr></thead><tbody>';
+  if(!d.rows.length) h+='<tr><td colspan="8" class="empty">Nobody had a target on this day.</td></tr>';
   d.rows.forEach(function(o){ var id=o.va.replace(/[^a-z0-9]/gi,'_');
-    h+='<tr><td class="c1">'+esc(natName(o.name||o.va))+'</td><td class="num">'+o.posted+'/'+o.post_target+'</td><td class="num">'+o.sourced+'/'+o.src_target+'</td><td class="num" style="font-weight:800;color:'+scTone(o.suggested*10)+'">'+o.suggested+'</td><td style="white-space:normal;max-width:320px">'+((o.hits||[]).length?o.hits.map(function(x){ return '<span class="pill" style="background:rgba(255,61,154,.12);color:#ffb3d1;margin:1px 3px 1px 0" title="−'+x.d+'">'+esc(x.t)+' −'+x.d+'</span>'; }).join(''):'<span class="muted">clean</span>')+'</td>'+
+    h+='<tr><td class="c1">'+esc(natName(o.name||o.va))+'</td><td class="num">'+o.posted+'/'+o.post_target+'</td><td class="num">'+o.sourced+'/'+o.src_target+'</td>'+(function(){ var tk=+o.tracked_secs||0, tm=+o.tool_secs||0, pc=covPct(tm,tk); return '<td style="white-space:nowrap">'+(tk||tm?(hm(tm)+' <span class="muted">/ '+hm(tk)+'</span>'+(pc!=null?' <b style="color:'+covColor(pc)+'">'+pc+'%</b>':'')):'<span class="muted">—</span>')+'</td>'; })()+'<td class="num" style="font-weight:800;color:'+scTone(o.suggested*10)+'">'+o.suggested+'</td><td style="white-space:normal;max-width:320px">'+((o.hits||[]).length?o.hits.map(function(x){ return '<span class="pill" style="background:rgba(255,61,154,.12);color:#ffb3d1;margin:1px 3px 1px 0" title="−'+x.d+'">'+esc(x.t)+' −'+x.d+'</span>'; }).join(''):'<span class="muted">clean</span>')+'</td>'+
       '<td><input id="qa-'+id+'" type="number" min="0" max="10" step="0.5" value="'+(o.qa===null?'':o.qa)+'" placeholder="'+o.suggested+'" style="width:76px;padding:6px 8px;font-weight:800" onchange="scSetQa(\''+jsq(o.va)+'\',\''+jsq(o.name)+'\',this.value,document.getElementById(\'qn-'+id+'\').value)"></td><td><input id="qn-'+id+'" value="'+esc(o.qa_note||'')+'" placeholder="note (optional)" style="width:180px;padding:6px 8px" onchange="scSetQa(\''+jsq(o.va)+'\',\''+jsq(o.name)+'\',document.getElementById(\'qa-'+id+'\').value,this.value)"></td></tr>'; });
   h+='</tbody></table></div>';
   h+='<div class="card pad" style="margin-top:12px"><div class="ch-h"><b>Rules behind the suggestion</b><span>start at 10, deduct per hit · your number is final</span></div>'+(d.rules||[]).map(function(r){ return '<div class="rep"><span style="flex:1">'+esc(r.n)+'</span><b class="mag">−'+r.d+(r.max?' · max '+r.max:'')+'</b></div>'; }).join('')+'</div>';
@@ -1509,7 +1607,7 @@ async function loadMyMonth(){ try{ var d=await apiGet({ action:'altr_my_month', 
 function myMonthCard(){
   var d=SC.my; if(!d) return '';
   var m=d.me; if(!m) return '<div class="card pad s4"><div class="ch-h"><b>My month</b><span>'+esc(monthLabel(d.month))+'</span></div><div class="muted">No frozen days yet — your first day shows after End of day.</div></div>';
-  return '<div class="card pad s4"><div class="ch-h"><b>My month</b><span>'+esc(monthLabel(d.month))+' · '+m.days+' day'+(m.days===1?'':'s')+'</span></div><div class="row" style="gap:16px"><div><div class="lbl">Productivity</div><div class="big" style="font-size:26px;color:'+scTone(m.productivity.score)+'">'+pct(m.productivity.score)+'</div></div><div><div class="lbl">QA</div><div class="big" style="font-size:26px;color:'+scTone(m.quality.score)+'">'+pct(m.quality.score)+'</div></div><div><div class="lbl">Results</div><div class="big" style="font-size:26px;color:'+scTone(m.results.score)+'">'+pct(m.results.score)+'</div></div><div style="margin-left:auto;text-align:right"><div class="lbl">ALTR score</div><div class="big" style="font-size:26px;color:'+scTone(m.total)+'">'+pct(m.total)+'</div></div></div><div class="hint">'+m.productivity.posted+'/'+m.productivity.post_target+' posted · '+m.productivity.sourced+'/'+m.productivity.src_target+' sourced this month</div></div>';
+  return '<div class="card pad s4"><div class="ch-h"><b>My month</b><span>'+esc(monthLabel(d.month))+' · '+m.days+' day'+(m.days===1?'':'s')+'</span></div><div class="row" style="gap:16px"><div><div class="lbl">Productivity</div><div class="big" style="font-size:26px;color:'+scTone(m.productivity.score)+'">'+pct(m.productivity.score)+'</div></div><div><div class="lbl">QA</div><div class="big" style="font-size:26px;color:'+scTone(m.quality.score)+'">'+pct(m.quality.score)+'</div></div><div><div class="lbl">Results</div><div class="big" style="font-size:26px;color:'+scTone(m.results.score)+'">'+pct(m.results.score)+'</div></div><div style="margin-left:auto;text-align:right"><div class="lbl">ALTR score</div><div class="big" style="font-size:26px;color:'+scTone(m.total)+'">'+pct(m.total)+'</div></div></div><div class="hint">'+m.productivity.posted+'/'+m.productivity.post_target+' posted · '+m.productivity.sourced+'/'+m.productivity.src_target+' sourced this month'+(function(){ var C=m.coverage||{}; return (C.pct==null)?'':' · Studio time <b style="color:'+covColor(C.pct)+'">'+Math.round(C.pct)+'%</b> of '+(C.tracked_h||0)+'h tracked'+(C.low_days?' · <span style="color:#ef4444">'+C.low_days+' low day'+(C.low_days===1?'':'s')+'</span>':''); })()+'</div></div>';
 }
 
 /* ── DAILY REEL — the client's scheduled reel, reposted every day on the big repost accounts ── */
@@ -1547,6 +1645,7 @@ function reelCard(it, all, mine, isToday){
 }
 async function reelTick(id, key, on){
   var it=(STATE.repost_schedule||[]).filter(function(x){ return String(x.id)===String(id); })[0]; if(!it) return;
+  if(on && !(await linkGate('A reel tick'))) return;   // portal timer must be running on ALTR (Oct 7)
   var d=doneList(it); if(on&&d.indexOf(key)<0) d.push(key); if(!on) d=d.filter(function(k){ return k!==key; }); it.done_accts=d.join('|||'); renderView();
   try{ var r=await apiPost({ action:'repost_sched_tick', id:id, key:key, on:on }); if(r&&r.error) toast(r.error); else { if(r.repost_id) it.repost_id=r.repost_id; it.status=r.status; toast(on?'Reposted on '+acctLbl(key):'Un-ticked'); loadState(true); } }catch(e){ toast('Save failed'); }
 }
