@@ -1487,7 +1487,7 @@ function linkState(p){
 var ACT={ last:Date.now(), key:'' };
 function actKey(){ return 'altr_tl_'+String(USER&&USER.id||'x').toUpperCase()+'_'+phtToday(); }
 function toolToday(){ try{ return parseInt(localStorage.getItem(actKey())||'0',10)||0; }catch(e){ return 0; } }
-function actBump(){ ACT.last=Date.now(); }
+function actBump(){ var was=ACT.last; ACT.last=Date.now(); if(Date.now()-was>60000){ try{ tbSend(false); }catch(e){} } }
 ['click','keydown','pointerdown','touchstart','scroll','wheel'].forEach(function(ev){ try{ document.addEventListener(ev, actBump, { passive:true, capture:true }); }catch(e){} });
 setInterval(function(){
   try{
@@ -1533,6 +1533,45 @@ function linkBanner(){
   return '<div class="banner warn">'+IC.clock+'<div style="flex:1"><b>Your portal timer is not running on ALTR Media</b> — '+esc(st.why)+'. Posting, sourcing and reel ticks will not count until it is.</div><a class="btn sm dark" href="https://portal.jmbvirtuals.com/" target="_blank" rel="noopener">Open the portal</a><button class="btn sm sec" onclick="linkLoad(true).then(renderView)">Check again</button></div>';
 }
 
+/* ═══════════ TOOL HEARTBEAT → PORTAL (owner, Oct 7) — the link the other way ═══════════
+   The portal stops a ALTR Media timer when this tool shows no work for 10 minutes. "Work" here =
+   clicking / typing / ticking in the Studio in the last 90 s. While that is true this page writes
+   { employee_id, tool:"altr", last_active } to Supabase tool_beat about once a minute (also from a background
+   tab — the work often happens on the phone screen, not in this tab). Missing table → it goes quiet and retries later. */
+var TB={ act:Date.now(), sent:0, off:0 };
+Object.defineProperty(TB, 'act', { get:function(){ return (typeof ACT!=='undefined' && ACT.last) || 0; }, set:function(v){ try{ ACT.last=v; }catch(e){} } });
+function tbActive(){ try{ if(false) return true; }catch(e){} return !document.hidden && (Date.now()-TB.act)<90000; }
+function tbSend(force){
+  try{
+    var me=USER?String(USER.id||'').toUpperCase():''; if(!me) return;
+    if(Date.now()<TB.off) return;
+    if(!force && (Date.now()-TB.sent)<55000) return;
+    if(!tbActive()) return;
+    TB.sent=Date.now();
+    fetch(SB_URL+'/rest/v1/tool_beat?on_conflict=employee_id,tool', { method:'POST', keepalive:true,
+      headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json', Prefer:'resolution=merge-duplicates,return=minimal' },
+      body:JSON.stringify({ employee_id:me, tool:"altr", last_active:new Date().toISOString() }) })
+      .then(function(r){ if(r.status===404 || r.status===400) TB.off=Date.now()+10*60000; }).catch(function(){});
+  }catch(e){}
+}
+setInterval(function(){ tbSend(false); }, 30000);
+/* SELF-REFRESH (Oct 7) — same as Reddit Central: the page watches its own ETag on Netlify and reloads itself within
+   ~2 minutes of a new altr-studio.html going live. It waits while a box is open, a write is in flight or a field has focus. */
+var _pageTag=null;
+async function pageWatch(){
+  try{
+    var r=await fetch(location.pathname+'?w='+Date.now(), { method:'HEAD', cache:'no-store' });
+    var tag=r.headers.get('etag')||r.headers.get('last-modified')||''; if(!tag) return;
+    if(_pageTag===null){ _pageTag=tag; return; }
+    if(tag===_pageTag) return;
+    var ae=document.activeElement, typing=ae && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.type!=='checkbox';
+    var busy=($('modal')&&$('modal').classList.contains('on')) || PENDING>0 || (typeof _cellQ!=='undefined' && _cellQ.length) || typing;
+    if(busy) return;
+    _pageTag=tag; toast('ALTR Studio was updated — refreshing…');
+    setTimeout(function(){ try{ var u=new URL(location.href); u.searchParams.set('v', String(Date.now())); location.replace(u.toString()); }catch(e){ location.reload(); } }, 3000);
+  }catch(e){}
+}
+setTimeout(pageWatch, 15000); setInterval(pageWatch, 120000);
 /* ── presence ── */
 function pingPresence(){ if(!USER||document.hidden) return; apiGet({ action:'altr_presence', employee_id:USER.id, name:myName(), photo:USER.photo||'' },0).catch(function(){}); apiGet({ action:'altr_presence_list' },0).then(function(d){ var L=(d&&d.users)||(d&&d.list)||[]; var p=$('pres'); if(!p) return; p.innerHTML=L.slice(0,6).map(function(u){ return face(u.employee_id, u.name||u.employee_id, u.photo, 'pv').replace('<img ','<img title="'+esc(natName(u.name||u.employee_id))+'" ').replace('<span ','<span title="'+esc(natName(u.name||u.employee_id))+'" '); }).join('')+(L.length>6?'<span class="more">+'+(L.length-6)+'</span>':''); }).catch(function(){}); }
 setInterval(pingPresence, 60000);

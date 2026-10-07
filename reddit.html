@@ -1502,7 +1502,7 @@ function tmAll(){
   var now=Date.now(), ch=false; for(var k in o){ if(!o[k] || !o[k].t || now-o[k].t>TM_MAX){ delete o[k]; ch=true; } }
   if(ch) tmPut(o); return o;
 }
-function tmPut(o){ try{ localStorage.setItem(tmKey(), JSON.stringify(o)); }catch(e){} }
+function tmPut(o){ try{ localStorage.setItem(tmKey(), JSON.stringify(o)); }catch(e){} try{ TB.act=Date.now(); setTimeout(function(){ tbSend(true); }, 50); }catch(_b){} }
 function tmGet(id,k){ return tmAll()[id+'|'+k]||null; }
 function tmCount(){ return Object.keys(tmAll()).length; }
 /* ═══════════ PORTAL TIMER LINK (owner, Oct 6) ═══════════
@@ -1524,6 +1524,28 @@ async function sbGet(path){
   finally{ if(tm) clearTimeout(tm); }
 }
 function linkIsReddit(task){ return /reddit/i.test(String(task||'')); }
+/* ═══════════ TOOL HEARTBEAT → PORTAL (owner, Oct 7) — the link the other way ═══════════
+   The portal stops a Reddit timer when this tool shows no work for 10 minutes. "Work" here =
+   a task timer running here, or clicking / typing in this tab in the last 90 s. While that is true this page writes
+   { employee_id, tool:"reddit", last_active } to Supabase tool_beat about once a minute (also from a background
+   tab — the work often happens on the phone screen, not in this tab). Missing table → it goes quiet and retries later. */
+var TB={ act:Date.now(), sent:0, off:0 };
+['click','keydown','pointerdown','touchstart','scroll','wheel'].forEach(function(ev){ try{ document.addEventListener(ev, function(){ var was=TB.act; TB.act=Date.now(); if(Date.now()-was>60000) tbSend(false); }, { passive:true, capture:true }); }catch(e){} });
+function tbActive(){ try{ if(Object.keys(tmAll()).length>0) return true; }catch(e){} return !document.hidden && (Date.now()-TB.act)<90000; }
+function tbSend(force){
+  try{
+    var me=String(USER&&USER.id||'').toUpperCase(); if(!me) return;
+    if(Date.now()<TB.off) return;
+    if(!force && (Date.now()-TB.sent)<55000) return;
+    if(!tbActive()) return;
+    TB.sent=Date.now();
+    fetch(SB_URL+'/rest/v1/tool_beat?on_conflict=employee_id,tool', { method:'POST', keepalive:true,
+      headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json', Prefer:'resolution=merge-duplicates,return=minimal' },
+      body:JSON.stringify({ employee_id:me, tool:"reddit", last_active:new Date().toISOString() }) })
+      .then(function(r){ if(r.status===404 || r.status===400) TB.off=Date.now()+10*60000; }).catch(function(){});
+  }catch(e){}
+}
+setInterval(function(){ tbSend(false); }, 30000);
 async function linkLoad(force){
   var me=String(USER&&USER.id||'').toUpperCase(); if(!me) return;
   try{
