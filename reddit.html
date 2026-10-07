@@ -1100,6 +1100,7 @@ function vToday(){
     (tmOn()?(crGet()?'<button class="btn run" onclick="newAccount()" title="Account exists on the phone? Log it — the timer stops when it is counted"><span class="sq"></span> Creating… <span class="tmv" data-tm="'+crGet().t+'">'+tmFmt(Date.now()-crGet().t)+'</span></button><button class="btn sec sm" onclick="crCancel()" title="Cancel the creation timer">'+IC.x+'</button>'
       :'<button class="btn sec" onclick="crStart()" title="Press when you START creating an account on the iPhone">▶ Start creating</button>'):'')+
     '<button class="btn pri" onclick="newAccount()">'+IC.plus+' Log new account</button></div>';
+  h+=fixBanner();
   if(tmOn() && !(function(){ try{ return localStorage.getItem('rc_tm_seen_'+myId()); }catch(e){ return 1; } })())
     h+='<div class="banner info">'+IC.hour+'<div style="flex:1"><b>New — task timers.</b> Press <b>Start</b> when you begin a session, DMs or a new account, and <b>Finish</b> when it\'s done. For the first days the tool is only <b>learning how long each task normally takes</b> on Vysor, Jailbroken and Blaze+. It is not a race — finishing in seconds gets flagged for review, never rewarded.</div><button class="btn sm sec" onclick="try{localStorage.setItem(\'rc_tm_seen_'+jsq(myId())+'\',\'1\')}catch(e){};renderView()">Got it</button></div>';
   if(tmOn() && tmCount()) tmEnsure();
@@ -1347,6 +1348,7 @@ function rowHtml(r){
   }
   if(m.delreq){ prog='<span class="note w" title="'+esc(vaName(m.delreq.by)+': '+(m.delreq.reason||''))+'">'+IC.trash+' Deletion requested'+(admin?' by '+esc(firstName(m.delreq.by)):' — waiting for admin')+'</span>';
     if(admin) act='<button class="ses" style="border-color:#fecaca;color:#b91c1c" onclick="delDecide(\''+id+'\',\'approve\')">'+IC.trash+' Approve delete</button><button class="ses ok2" onclick="delDecide(\''+id+'\',\'decline\')">Decline</button>'+act; }
+  else if(m.fix && !isDead(r)) prog='<span class="note r" title="The health check could not find this username on Reddit — correct it (typos are a QA finding) or mark it banned">'+IC.search+' Fix the username — not found on Reddit</span>';
   else if(m.hcrep && !isDead(r)) prog='<span class="note b" title="A teammate found this profile '+(m.hcrep.res==='n'?'missing':'banned')+' on Reddit during the daily check">'+IC.ban+' Reported '+(m.hcrep.res==='n'?'not found':'banned')+' — admin will confirm</span>';
   if(held){ prog='<span class="note i">'+IC.pause+' On hold today</span>'; act=''; }
   return '<div class="lr'+(isDead(r)?' dim':'')+'" data-rid="'+esc(r.id)+'" style="--sc:'+sm.c+'">'+
@@ -2820,7 +2822,7 @@ function vHealthAuto(){
         '<td>'+methodPill(r?methodOf(r):x.method,true)+'</td><td>'+esc(baseOf(x.project).n)+'</td><td>'+esc(vaName(r?owner(r):x.va))+'</td>'+
         '<td>'+(lw?esc(fmtD(parseTs(lw))):'—')+(still?' <span class="flag r" title="Session ticked on or after the day Reddit showed it dead">still ticking</span>':'')+'</td>'+
         '<td class="num">'+(x.karma!==''&&x.karma!=null?esc(x.karma):'—')+'</td>'+
-        '<td style="white-space:nowrap">'+(r && !isDead(r) && (x.result==='suspended'||x.result==='notfound')?'<button class="btn sm dark" onclick="hcBan(\''+jsq(x.account_id)+'\',\''+x.result+'\')">Mark banned</button> ':'')+(r?'<button class="btn sm sec" onclick="openRec(\''+jsq(x.account_id)+'\')">Record</button>':'')+'</td></tr>';
+        '<td style="white-space:nowrap">'+(r && M(r).fix?'<span class="flag a" title="Sent back to the owner to correct the username">fix requested</span> ':'')+(r && !isDead(r) && (x.result==='suspended'||x.result==='notfound')?'<button class="btn sm dark" onclick="hcBan(\''+jsq(x.account_id)+'\',\''+x.result+'\')">Mark banned</button> ':'')+(r && !isDead(r) && x.result==='notfound' && !M(r).fix?'<button class="btn sm pri" onclick="fixAsk(\''+jsq(x.account_id)+'\',\'health run\')">Ask to fix username</button> ':'')+(r?'<button class="btn sm sec" onclick="openRec(\''+jsq(x.account_id)+'\')">Record</button>':'')+'</td></tr>';
     }).join('')+'</tbody></table></div>'+
     '<p class="muted" style="font-size:11.5px;margin-top:8px">"Not found" can also mean the username in the tool has a typo — open the link before marking it banned. "Still ticking" = a session was logged for the account on or after the check day.</p>';
   return h;
@@ -3052,13 +3054,53 @@ function ccAdmin(){
       reps.map(function(r){ var x=M(r).hcrep, lw=lastWorked(r);
         return '<tr><td class="c1"><a href="'+qrUrl(r)+'" target="rc-profile" rel="noopener" style="color:inherit">'+esc(r.handle)+' ↗</a></td><td><span class="flag r">'+(x.res==='n'?'Not found':'Banned')+'</span> <span class="muted" style="font-size:11px">'+esc(fmtDT(parseTs(x.at)))+'</span></td><td>'+esc(vaName(x.by))+'</td><td>'+esc(vaName(owner(r)))+'</td>'+
           '<td><span class="pill" style="background:'+stageMeta(r.status).c+'16;color:'+stageMeta(r.status).c+'">'+esc(stageMeta(r.status).n)+'</span></td><td>'+(lw?esc(fmtD(parseTs(lw))):'—')+(lw&&lw>=String(x.day||'')?' <span class="flag r">still ticking</span>':'')+'</td>'+
-          '<td style="white-space:nowrap"><button class="btn sm dark" onclick="ccConfirm(\''+jsq(r.id)+'\')">Confirm banned</button> <button class="btn sm sec" onclick="ccClear(\''+jsq(r.id)+'\')">It\'s alive</button></td></tr>'; }).join('')+
+          '<td style="white-space:nowrap"><button class="btn sm dark" onclick="ccConfirm(\''+jsq(r.id)+'\')">Confirm banned</button> '+(x.res==='n'?'<button class="btn sm pri" onclick="fixAsk(\''+jsq(r.id)+'\',\'cross-check\')" title="Reddit has no such profile — most often a typo in the username. Sends it back to the owner to correct; the correction is a QA finding.">Ask to fix username</button> ':'')+'<button class="btn sm sec" onclick="ccClear(\''+jsq(r.id)+'\')">It\'s alive</button></td></tr>'; }).join('')+
       '</tbody></table></div></div>';
+  }
+  var fixes=fixPending();
+  if(fixes.length){
+    h+='<div class="card pad" style="margin-bottom:12px;border-color:#fde68a"><div class="ch-h"><b style="color:#92400e">Usernames sent back for fixing</b><span>'+fixes.length+' waiting · the owner sees it at the top of their board until it is corrected or marked banned</span></div>'+
+      '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Account</th><th>Owner</th><th>Asked</th><th>From</th><th></th></tr></thead><tbody>'+
+      fixes.map(function(r){ var x=M(r).fix||{}; return '<tr><td class="c1">'+esc(r.handle)+'</td><td>'+esc(vaName(owner(r)))+'</td><td>'+esc(fmtDT(parseTs(x.at)))+'</td><td class="muted">'+esc(x.src||'')+'</td>'+
+        '<td style="white-space:nowrap"><button class="btn sm sec" onclick="fixCancel(\''+jsq(r.id)+'\')">Withdraw</button> <button class="btn sm sec" onclick="openRec(\''+jsq(r.id)+'\')">Record</button></td></tr>'; }).join('')+'</tbody></table></div></div>';
   }
   h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Checker</th><th>Accounts</th><th>Alive ✓</th><th>Reported</th><th>Status</th></tr></thead><tbody>'+(rowsH||'<tr><td colspan="5" class="muted">Needs at least two VAs with live accounts.</td></tr>')+'</tbody></table></div>'+
     (P.unassigned.length?'<p class="muted" style="font-size:11.5px;margin-top:6px">'+P.unassigned.length+' account(s) couldn\'t be assigned — check them in Quick review below.</p>':'');
   return h;
 }
+/* ═══════════ NOT FOUND → FIX THE USERNAME (owner, Oct 7) ═══════════
+   "Not found" from the health check is, more often than not, a typo made when the account was logged.
+   Marking it banned would throw a live account away. So the owner sends it back: meta.fix on the account,
+   the VA sees it highlighted at the top of their board until they correct the username (meta.typo —
+   a QA finding, −0.5 each, max 2 a day) or confirm the account is really gone (marked banned, no finding). */
+function fixPending(){ return (ALL[PROJECT]||ROWS).filter(function(r){ return !isDead(r) && M(r).fix; }); }
+function fixMine(){ var me=myId(); return (ALL[PROJECT]||ROWS).filter(function(r){ return !isDead(r) && M(r).fix && worksFor(r)===me; }); }
+async function fixAsk(id, src){
+  var r=rowById(id); if(!r || !isAdmin()) return;
+  if(await saveMeta(r,{ hcrep:null, fix:{ by:USER.id, at:phtStamp(), day:today(), src:src||'', handle:r.handle } })){ toast(r.handle+' — sent back to '+vaName(owner(r))+' to fix the username'); renderView(); }
+}
+async function fixCancel(id){ var r=rowById(id); if(!r || !isAdmin()) return; if(await saveMeta(r,{ fix:null })){ toast('Withdrawn'); renderView(); } }
+function fixBanner(){
+  var L=fixMine(); if(!L.length) return '';
+  return '<div class="banner bad" style="flex-wrap:wrap;align-items:flex-start">'+IC.search+'<div style="flex:1;min-width:260px"><b>Fix the username on '+L.length+' account'+(L.length===1?'':'s')+'</b> — the daily health check could not find '+(L.length===1?'it':'them')+' on Reddit. '+
+    'If you typed it wrong when you logged it, correct it here (a typo is a QA finding). If the account is really gone, mark it banned.'+
+    '<div style="margin-top:8px;display:grid;gap:6px">'+L.map(function(r){ return '<div class="row" style="gap:6px;flex-wrap:wrap;background:#fff;border:1px solid #fecaca;border-radius:10px;padding:6px 8px">'+
+      '<span style="font-weight:800;min-width:120px">'+esc(r.handle)+'</span><span class="muted" style="font-size:11.5px">asked '+esc(fmtDT(parseTs((M(r).fix||{}).at)))+'</span>'+
+      '<input class="inp" id="fx-'+esc(r.id)+'" value="'+esc(r.handle)+'" placeholder="correct username" style="width:200px;padding:5px 8px" onkeydown="if(event.key===\'Enter\'){ fixSave(\''+jsq(r.id)+'\'); }">'+
+      '<button class="btn sm pri" onclick="fixSave(\''+jsq(r.id)+'\')">Save the correct name</button>'+
+      '<a class="btn sm sec" href="'+qrUrl(r)+'" target="rc-profile" rel="noopener">Open on Reddit ↗</a>'+
+      '<button class="btn sm sec" style="color:#b91c1c" onclick="fixGone(\''+jsq(r.id)+'\')">It\'s really gone — mark banned</button></div>'; }).join('')+'</div></div></div>';
+}
+async function fixSave(id){
+  var r=rowById(id); if(!r) return; var inp=$('fx-'+r.id); var v=String((inp&&inp.value)||'').trim().replace(/^https?:\/\/(www\.)?reddit\.com\/(u|user)\//i,'').replace(/^\/?u\//i,'').replace(/^@/,'').replace(/\/.*$/,'');
+  if(!v){ toast('Type the correct username first.'); return; }
+  if(v===r.handle){ toast('That is the same username. Open the profile on Reddit and check the exact spelling — or mark it banned if it is really gone.'); return; }
+  var old=r.handle, fx=M(r).fix||{};
+  var d=await upd(r.id, { handle:v, meta_patch:JSON.stringify({ fix:null, typo:{ day:today(), at:phtStamp(), from:old, to:v, asked:fx.at||'', by:USER.id } }) });
+  if(d && d.ok){ var m=Object.assign({}, M(r)); delete m.fix; m.typo={ day:today(), at:phtStamp(), from:old, to:v, asked:fx.at||'', by:USER.id }; patchLocal(r.id,{ handle:v, meta:m }); r.handle=v; r.meta=m; EVENTS_AT=0; toast('Username corrected: '+old+' → '+v); renderView(); }
+  else toast('Could not save — '+((d&&d.error)||'try again'));
+}
+async function fixGone(id){ var r=rowById(id); if(!r) return; if(await saveMeta(r,{ fix:null, fixgone:{ at:phtStamp(), by:USER.id } })) banAcct(id); }
 async function ccConfirm(id){
   var r=rowById(id); if(!r) return; var x=M(r).hcrep||{};
   if(await moveTo(r,'banned',{ end_reason:(x.res==='n'?'Other: profile not found on Reddit':'Permanently suspended')+' — reported by '+vaName(x.by)+' in the daily check', meta_patch:JSON.stringify({ hcrep:null }) }, r.handle+' marked banned')) qaHit(r,'cross-check');
@@ -3098,7 +3140,9 @@ var QA_RULES=[
   { k:'tagging',    n:'Accounts not tagged right — method or model missing, or a new account without its phone', d:0.5, u:'each · max 2' },
   { k:'quick',      n:'Session or DMs finished within 20 seconds of starting', d:0.5, u:'each · max 2' },
   { k:'fast',       n:'Under 35% of the team time for that task (once it is learned)', d:0.5, u:'each · max 2' },
-  { k:'cover',      n:'Tool time under half of the portal time (2+ hours tracked) — timers tapped, not worked', d:0, u:'flag only for now' }
+  { k:'cover',      n:'Tool time under half of the portal time (2+ hours tracked) — timers tapped, not worked', d:0, u:'flag only for now' },
+  { k:'typo',       n:'Username typo — the health check could not find the account until the owner corrected the name', d:0.5, u:'each · max 2' },
+  { k:'fix_open',   n:'A username sent back for fixing is still not corrected (or marked banned)', d:0.5, u:'per day it stays open' }
 ];
 function pqRule(k){ for(var i=0;i<QA_RULES.length;i++) if(QA_RULES[i].k===k) return QA_RULES[i]; return { d:0 }; }
 function dAdd(d,n){ var x=new Date(d+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+n); return x.toISOString().slice(0,10); }
@@ -3323,6 +3367,10 @@ function pqFlags(va, day, dr, L){
   if(fast) F.push({ k:'fast', t:fast+' far under the team time', d:Math.min(2,fast*pqRule('fast').d), c:'a' });
   try{ var cv=pqCover(va, day, dr); if(cv && cv.tracked>=7200 && cv.pct!=null && cv.pct<50) F.push({ k:'cover', t:'Tool time '+hm(cv.timed)+' of '+hm(cv.tracked)+' tracked ('+cv.pct+'%)', d:pqRule('cover').d, c:'r', tip:'The portal tracked '+hm(cv.tracked)+' but this tool\'s timers only covered '+hm(cv.timed)+' of it.' }); }catch(_cv){}
   var ps=CFG.process_start||'2026-10-01', untag=allRows().filter(function(r){ return owner(r)===va && !isDead(r) && !isParked(r) && (!methodOf(r) || !r.model || (cdateOf(r)>=ps && !r.device && phoneList(false, r.project).length)); });
+  var typos=allRows().filter(function(r){ return owner(r)===va && M(r).typo && M(r).typo.day===day; });
+  if(typos.length) F.push({ k:'typo', t:typos.length+' username typo'+(typos.length===1?'':'s')+' corrected', d:Math.min(2,typos.length*pqRule('typo').d), c:'r', tip:typos.map(function(r){ var t=M(r).typo; return t.from+' → '+t.to; }).join(' · ') });
+  var openFix=allRows().filter(function(r){ var f=M(r).fix; return owner(r)===va && !isDead(r) && f && String(f.day||'')<=day && (day===today() || String(f.day||'')<day); });
+  if(openFix.length && (day<today() || phtStamp()>day+(SHIFTOF[va]==='night'?' 23:00:00':' 12:00:00'))) F.push({ k:'fix_open', t:openFix.length+' username fix'+(openFix.length===1?'':'es')+' still open', d:pqRule('fix_open').d, c:'a', tip:openFix.map(function(r){ return r.handle+' (asked '+String((M(r).fix||{}).day||'')+')'; }).join(' · ') });
   if(untag.length) F.push({ k:'tagging', t:untag.length+' account'+(untag.length===1?'':'s')+' missing tags', d:Math.min(2,untag.length*pqRule('tagging').d), c:'a', tip:untag.slice(0,12).map(function(r){ return r.handle+': '+[!methodOf(r)?'method':'',!r.model?'model':'',(cdateOf(r)>=ps&&!r.device&&phoneList(false,r.project).length)?'phone':''].filter(String).join(', '); }).join('\n') });
   (EVENTS||[]).forEach(function(e){
     if(e.kind!=='stage' || String(e.by||'').toLowerCase()!==va || bizDayOf(e.at)!==day) return;
