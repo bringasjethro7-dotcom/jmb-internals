@@ -2876,7 +2876,19 @@ function manualSweep(){
    this window. Keys: A = alive, B = banned (suspended), N = not found, S = skip, O = reopen.
    Each answer saves and opens the next profile in the same tab, so a sweep is: look → key → look → key.
    It is still you looking at each page — the tool never loads Reddit by itself. */
-var QR={ on:false, list:[], i:0, done:0, prio:true };
+/* ═══════════ QUICK REVIEW / DAILY HEALTH CHECK — draft → final review → submit (owner, Oct 7) ═══════════
+   A key press no longer saves anything. Answers (A alive · B banned · N not found · S skip) are kept as a DRAFT in
+   this browser; U or ← goes back one profile. After the last profile — or any time with "Review" — one screen shows
+   every answer in one look: Banned / Not found first, each with its profile link, and any answer can be changed or
+   cleared. Only "Submit" saves them (with a double-check prompt when anything is reported banned / not found).
+   VAs pressing B by mistake on a live account was the reason. A draft survives a reload and resumes on Start. */
+var QR={ on:false, list:[], i:0, done:0, prio:true, ans:{}, review:false, sending:null, fail:{} };
+var QR_LBL={ a:'Alive ✓', b:'Banned', n:'Not found', s:'Skip' };
+function qrDraftKey(){ return 'rc_hcdraft_'+myId()+'_'+PROJECT; }
+function qrSave(){ try{ if(QR.on) localStorage.setItem(qrDraftKey(), JSON.stringify({ day:today(), list:QR.list, i:QR.i, ans:QR.ans, t0:QR.t0, review:QR.review })); }catch(e){} }
+function qrDraft(){ try{ var d=JSON.parse(localStorage.getItem(qrDraftKey())||'null'); if(d && d.day===today() && d.list && d.ans && Object.keys(d.ans).length) return d; }catch(e){} return null; }
+function qrClear(){ try{ localStorage.removeItem(qrDraftKey()); }catch(e){} }
+function qrCount(){ var c={ a:0, b:0, n:0, s:0, all:0 }; Object.keys(QR.ans).forEach(function(id){ var k=QR.ans[id]; if(c[k]!=null){ c[k]++; c.all++; } }); return c; }
 function qrQueue(){
   var td=today(), P1=phaseIx('day1');
   var rows=(ALL[PROJECT]||ROWS).filter(function(r){ return !isDead(r) && !isParked(r) && String(M(r).hcok||'')!==td; });
@@ -2888,53 +2900,136 @@ function qrQueue(){
 }
 function qrPanel(rows){
   if(!QR.on){
+    var dr=qrDraft();
+    if(dr){ var na=Object.keys(dr.ans).length;
+      return '<div class="card pad row" style="margin-bottom:12px;gap:12px;border:2px solid #fde68a"><div style="flex:1"><b>'+na+' answer'+(na===1?'':'s')+' not submitted yet</b> — your check is saved as a draft on this computer. Review it and submit, or carry on where you stopped.</div>'+
+        '<button class="btn pri" onclick="qrStart()">Resume &amp; review</button></div>'; }
     var left=qrQueue().length;
-    return '<div class="card pad row" style="margin-bottom:12px;gap:12px"><div style="flex:1"><b>Quick review</b> — '+left+' account'+(left===1?'':'s')+' not checked today. Opens each profile in one reusable tab; answer with a key: <b>A</b> alive · <b>B</b> banned · <b>N</b> not found · <b>S</b> skip.'+
-      '<div class="muted" style="font-size:11.5px;margin-top:3px">Tip: put the profile tab in a window next to this one. Posting-stage accounts come first.</div></div>'+
+    return '<div class="card pad row" style="margin-bottom:12px;gap:12px"><div style="flex:1"><b>Quick review</b> — '+left+' account'+(left===1?'':'s')+' not checked today. Opens each profile in one reusable tab; answer with a key: <b>A</b> alive · <b>B</b> banned · <b>N</b> not found · <b>S</b> skip · <b>U</b> back.'+
+      '<div class="muted" style="font-size:11.5px;margin-top:3px">Nothing is saved until you review and submit at the end. Posting-stage accounts come first.</div></div>'+
       (left?'<button class="btn pri" onclick="qrStart()">'+IC.search+' Start quick review</button>':'<span class="flag g">All checked today ✓</span>')+'</div>';
   }
+  if(QR.review) return qrReviewPanel();
   var id=QR.list[QR.i], r=id?rowById(id):null;
-  if(!r) return '<div class="card pad row" style="margin-bottom:12px"><div style="flex:1"><b>Done ✓</b> — '+QR.done+' checked'+(QR.t0?' in '+Math.max(1,Math.round((Date.now()-QR.t0)/60000))+' min':'')+'. Thank you!</div><button class="btn sec" onclick="QR.on=false;renderView()">Close</button></div>';
-  var sm=stageMeta(r.status), lw=lastWorked(r);
+  if(!r){ QR.review=true; qrSave(); return qrReviewPanel(); }
+  var sm=stageMeta(r.status), lw=lastWorked(r), c=qrCount(), prev=QR.i>0?QR.ans[QR.list[QR.i-1]]:null, prevR=QR.i>0?rowById(QR.list[QR.i-1]):null;
   return '<div class="card pad" style="margin-bottom:12px;border:2px solid #c4b5fd;position:sticky;top:110px;z-index:20">'+
-    '<div class="row" style="gap:10px"><span class="muted" style="font-weight:800;font-size:12px">'+(QR.i+1)+' / '+QR.list.length+'</span>'+
+    '<div class="row" style="gap:10px;flex-wrap:wrap"><span class="muted" style="font-weight:800;font-size:12px">'+(QR.i+1)+' / '+QR.list.length+'</span>'+
       '<div class="prog" style="flex:1;max-width:260px"><i style="width:'+Math.round(QR.i/Math.max(1,QR.list.length)*100)+'%"></i></div><div class="sp"></div>'+
       (QR.t0?'<span class="muted" style="font-size:12px;font-weight:700">'+Math.floor((Date.now()-QR.t0)/60000)+':'+('0'+Math.floor((Date.now()-QR.t0)/1000)%60).slice(-2)+' elapsed</span>':'')+
-      '<button class="btn sm sec" onclick="QR.on=false;renderView()">Stop</button></div>'+
-    '<div class="row" style="margin-top:10px;gap:14px;align-items:center">'+
+      (c.all?'<button class="btn sm sec" onclick="qrToReview()">Review '+c.all+' answer'+(c.all===1?'':'s')+'</button>':'')+
+      '<button class="btn sm sec" onclick="QR.on=false;renderView()" title="Your answers stay as a draft — resume any time today">Pause</button></div>'+
+    (prevR?'<div class="muted" style="font-size:12px;margin-top:6px">Last: <b>'+esc(prevR.handle)+'</b> → <b style="color:'+(prev==='b'||prev==='n'?'#b91c1c':'inherit')+'">'+esc(QR_LBL[prev]||'')+'</b> · wrong key? press <b>U</b> to go back</div>':'')+
+    '<div class="row" style="margin-top:10px;gap:14px;align-items:center;flex-wrap:wrap">'+
       '<div style="flex:1;min-width:220px"><div class="h-d" style="font-size:20px;font-weight:800">'+esc(r.handle)+'</div>'+
         '<div class="row" style="gap:6px;margin-top:5px"><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+'">'+esc(sm.n)+'</span>'+methodPill(methodOf(r),true)+(isAdmin()?'<span class="chip">'+esc(vaName(owner(r)))+'</span>':'')+(lw&&isAdmin()?'<span class="chip">last session '+esc(fmtD(parseTs(lw)))+'</span>':'')+'</div></div>'+
+      (QR.i>0?'<button class="btn sec" onclick="qrBack()">◀ Back <span class="muted">(U)</span></button>':'')+
       '<button class="btn sec" onclick="qrOpen()">↗ Open profile <span class="muted">(O)</span></button>'+
       '<button class="btn" style="background:#ecfdf5;color:#047857;border:1px solid #a7f3d0" onclick="qrAnswer(\'a\')">Alive ✓ <span style="opacity:.6">(A)</span></button>'+
       '<button class="btn dark" onclick="qrAnswer(\'b\')">Banned <span style="opacity:.6">(B)</span></button>'+
       '<button class="btn" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa" onclick="qrAnswer(\'n\')">Not found <span style="opacity:.6">(N)</span></button>'+
       '<button class="btn sec" onclick="qrAnswer(\'s\')">Skip <span class="muted">(S)</span></button></div></div>';
 }
+function qrReviewPanel(){
+  var c=qrCount(), ids=QR.list.filter(function(id){ return QR.ans[id] && rowById(id); }), left=QR.list.filter(function(id){ return !QR.ans[id] && rowById(id); }).length;
+  var ord={ b:0, n:1, s:2, a:3 }; ids.sort(function(x,y){ return (ord[QR.ans[x]]-ord[QR.ans[y]]) || String((rowById(x)||{}).handle).localeCompare(String((rowById(y)||{}).handle)); });
+  var send=QR.sending, nsub=c.a+c.b+c.n;
+  var h='<div class="card pad" style="margin-bottom:12px;border:2px solid #c4b5fd">'+
+    '<div class="row" style="gap:10px;flex-wrap:wrap;align-items:flex-start"><div style="flex:1;min-width:240px"><div style="font-size:17px;font-weight:800">Review before you submit</div>'+
+      '<div class="muted" style="font-size:12.5px;margin-top:2px">Nothing has been sent yet. Look over your answers — especially <b style="color:#b91c1c">Banned</b> and <b style="color:#c2410c">Not found</b>. Wrong click? Change it here.</div></div>'+
+      '<div class="row" style="gap:6px;flex-wrap:wrap"><span class="flag g">'+c.a+' alive</span>'+(c.b?'<span class="flag r">'+c.b+' banned</span>':'')+(c.n?'<span class="flag a" style="background:#ffedd5;color:#c2410c">'+c.n+' not found</span>':'')+(c.s?'<span class="flag" style="background:#f1f2f7;color:var(--ink3)">'+c.s+' skipped</span>':'')+(left?'<span class="flag" style="background:#ede9fe;color:#6d28d9">'+left+' not checked yet</span>':'')+'</div></div>';
+  if(c.b||c.n) h+='<div class="banner bad" style="margin:10px 0 0">'+IC.ban+'<div><b>'+(c.b+c.n)+' account'+(c.b+c.n===1?'':'s')+' reported dead.</b> Open each one ↗ again and make sure — a live account reported banned is pulled from work until the admin clears it.</div></div>';
+  h+='<div class="tbl-w" style="max-height:none;margin-top:10px"><table class="db"><thead><tr><th class="c1">Account</th><th>Stage</th><th>Your answer</th></tr></thead><tbody>'+
+    ids.map(function(id){ var r=rowById(id), k=QR.ans[id], sm=stageMeta(r.status), dead=(k==='b'||k==='n'), fl=QR.fail[id];
+      return '<tr style="'+(dead?'background:#fff1f2':'')+'"><td class="c1"><a href="'+qrUrl(r)+'" target="rc-profile" rel="noopener" style="color:inherit;font-weight:700">'+esc(r.handle)+' ↗</a>'+(fl?' <span class="flag r" title="'+esc(fl)+'">not saved — submit again</span>':'')+'</td>'+
+        '<td><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+'">'+esc(sm.n)+'</span></td>'+
+        '<td><div class="seg" style="max-width:420px">'+['a','b','n','s'].map(function(x){ var on=(x===k);
+          var st=on?(x==='a'?'background:#dcfce7;color:#166534':(x==='b'?'background:#1f2937;color:#fff':(x==='n'?'background:#ffedd5;color:#c2410c':'background:var(--s1);color:var(--ink)'))):'';
+          return '<button class="'+(on?'on':'')+'" style="'+st+'" '+(send?'disabled ':'')+'onclick="qrSet(\''+jsq(id)+'\',\''+x+'\')">'+QR_LBL[x]+'</button>'; }).join('')+
+          '<button title="Clear this answer — the account goes back to not checked" '+(send?'disabled ':'')+'onclick="qrSet(\''+jsq(id)+'\',\'\')" style="flex:0 0 auto">✕</button></div></td></tr>';
+    }).join('')+(ids.length?'':'<tr><td colspan="3" class="muted">No answers yet.</td></tr>')+'</tbody></table></div>';
+  h+='<div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap">'+
+    (left?'<button class="btn sec" '+(send?'disabled ':'')+'onclick="qrContinue()">◀ Continue checking ('+left+' left)</button>':'<button class="btn sec" '+(send?'disabled ':'')+'onclick="qrBack()">◀ Back to the last profile</button>')+
+    '<div class="sp"></div>'+
+    (send?'<span class="muted" style="font-weight:700">Saving '+send.done+' / '+send.total+'…</span>':
+      '<button class="btn sec" onclick="QR.on=false;renderView()">Later</button><button class="btn pri" '+(nsub?'':'disabled ')+'onclick="qrSubmit()">Submit '+nsub+' answer'+(nsub===1?'':'s')+(left?' (and check the rest later)':'')+'</button>')+
+    '</div></div>';
+  return h;
+}
+function qrOpenId(id){ var r=rowById(id); if(!r) return; try{ _qrWin=window.open(qrUrl(r),'rc-profile'); }catch(e){} }
 function qrUrl(r){ return 'https://www.reddit.com/user/'+encodeURIComponent(String(r.handle).replace(/^\/?u\//i,'').trim())+'/'; }
 var _qrWin=null;
-function qrOpen(){ var r=rowById(QR.list[QR.i]); if(!r) return; try{ _qrWin=window.open(qrUrl(r),'rc-profile'); }catch(e){} }
-function qrStart(list){ QR={ on:true, list:(list&&list.length)?list:qrQueue(), i:0, done:0, prio:true, t0:Date.now() }; renderView(); qrOpen(); }
-async function qrAnswer(k){
-  var r=rowById(QR.list[QR.i]); if(!r) return;
-  var cur=r;
-  QR.i++; if(k!=='s') QR.done++;
-  if(!isAdmin()) hcProgress(QR.i>=QR.list.length);
-  renderView(); if(QR.i<QR.list.length) qrOpen();             // next profile opens immediately (same tab)
-  try{
-    if(k==='a') await saveMeta(cur,{ hcok:today(), hcby:USER.id, hcrep:null });
-    else if((k==='b'||k==='n') && !isAdmin()){        // a VA reports — the owner confirms (no VA can ban a teammate's account)
-      await saveMeta(cur,{ hcrep:{ by:USER.id, res:k, at:phtStamp(), day:today() } }); toast('Reported — the admin will confirm');
-    }
-    else if(k==='b'){ if(await moveTo(cur,'banned',{ end_reason:'Permanently suspended: found banned in manual review', meta_patch:JSON.stringify({ hcrep:null }) }, cur.handle+' marked banned')) qaHit(cur,'review'); }
-    else if(k==='n'){ if(await moveTo(cur,'banned',{ end_reason:'Other: profile not found on Reddit (manual review)', meta_patch:JSON.stringify({ hcrep:null }) }, cur.handle+' marked banned (not found)')) qaHit(cur,'review'); }
-  }catch(e){ toast('Could not save '+cur.handle+' — mark it again from the list.'); }
+function qrOpen(){ qrOpenId(QR.list[QR.i]); }
+function qrStart(list){
+  var dr=qrDraft();
+  if(dr){
+    var ids=(list&&list.length)?list:qrQueue(); dr.list=dr.list.concat(ids.filter(function(x){ return dr.list.indexOf(x)<0; }));   // anything new since the draft goes at the end
+    QR={ on:true, list:dr.list, i:Math.min(dr.i||0, dr.list.length), done:0, prio:true, t0:dr.t0||Date.now(), ans:dr.ans, review:!!dr.review || (dr.i||0)>=dr.list.length, sending:null, fail:{} };
+    toast('Picked up your unsubmitted check — nothing was sent yet.'); renderView(); if(!QR.review) qrOpen(); return;
+  }
+  QR={ on:true, list:(list&&list.length)?list:qrQueue(), i:0, done:0, prio:true, t0:Date.now(), ans:{}, review:false, sending:null, fail:{} }; qrSave(); renderView(); qrOpen();
+}
+function qrAnswer(k){
+  if(!QR.on || QR.review || QR.sending) return;
+  var id=QR.list[QR.i]; if(!id || !rowById(id)) return;
+  if(!Object.keys(QR.ans).length && !isAdmin()) hcProgress(false);   // first answer of the day = the start time (QA "late" rule)
+  QR.ans[id]=k;
+  var nx=-1; for(var j=QR.i+1;j<QR.list.length;j++){ if(!QR.ans[QR.list[j]] && rowById(QR.list[j])){ nx=j; break; } }   // next one still unanswered
+  if(nx<0){ QR.i=QR.list.length; QR.review=true; qrSave(); renderView(); return; }
+  QR.i=nx;
+  qrSave(); renderView(); qrOpen();                                    // next profile opens at once (same tab)
+}
+function qrBack(){ if(QR.sending) return; if(QR.review){ QR.review=false; QR.i=Math.max(0, QR.list.length-1); } else if(QR.i>0) QR.i--; qrSave(); renderView(); qrOpen(); }
+function qrToReview(){ QR.review=true; qrSave(); renderView(); }
+function qrContinue(){ var i=QR.list.findIndex(function(id){ return !QR.ans[id] && rowById(id); }); QR.review=false; QR.i=i<0?QR.list.length:i; qrSave(); renderView(); if(i>=0) qrOpen(); }
+function qrSet(id, k){ if(QR.sending) return; if(k) QR.ans[id]=k; else delete QR.ans[id]; delete QR.fail[id]; qrSave(); renderView(); }
+async function qrSaveOne(r, k){
+  if(k==='a') return await saveMeta(r,{ hcok:today(), hcby:USER.id, hcrep:null });
+  if((k==='b'||k==='n') && !isAdmin()) return await saveMeta(r,{ hcrep:{ by:USER.id, res:k, at:phtStamp(), day:today() } });   // a VA reports — the owner confirms
+  if(k==='b'){ var ok=await moveTo(r,'banned',{ end_reason:'Permanently suspended: found banned in manual review', meta_patch:JSON.stringify({ hcrep:null }) }, r.handle+' marked banned'); if(ok) qaHit(r,'review'); return ok; }
+  if(k==='n'){ var ok2=await moveTo(r,'banned',{ end_reason:'Other: profile not found on Reddit (manual review)', meta_patch:JSON.stringify({ hcrep:null }) }, r.handle+' marked banned (not found)'); if(ok2) qaHit(r,'review'); return ok2; }
+  return true;
+}
+async function qrSubmit(){
+  if(QR.sending) return;
+  var ids=QR.list.filter(function(id){ return QR.ans[id] && QR.ans[id]!=='s' && rowById(id); });
+  if(!ids.length){ toast('Nothing to submit — every answer is Skip.'); return; }
+  var dead=ids.filter(function(id){ return QR.ans[id]==='b'||QR.ans[id]==='n'; });
+  if(dead.length){
+    var names=dead.map(function(id){ return '<b>'+esc(rowById(id).handle)+'</b> — '+(QR.ans[id]==='b'?'Banned':'Not found'); }).join('<br>');
+    if(!(await confirmBox('Report '+dead.length+' account'+(dead.length===1?'':'s')+' as dead?', names+'<br><br>'+(isAdmin()?'These will be marked banned right away.':'The admin confirms before anything is banned, but the owner is pulled off the account meanwhile.')+' Did you open each profile and see "suspended" or "nobody goes by that name"?', 'Yes — submit', true))) return;
+  }
+  QR.sending={ done:0, total:ids.length }; QR.fail={}; renderView();
+  var q=ids.slice(), sent=0;
+  async function worker(){ while(q.length){ var id=q.shift(), r=rowById(id), k=QR.ans[id]; var ok=false;
+    try{ ok=r?await qrSaveOne(r,k):true; }catch(e){ ok=false; }
+    if(ok){ delete QR.ans[id]; sent++; } else QR.fail[id]='could not save';
+    QR.sending.done++; if(VIEW==='health') renderView(); } }
+  await Promise.all([worker(), worker(), worker()]);
+  var fails=Object.keys(QR.fail).length, skipped=QR.list.filter(function(id){ return QR.ans[id]==='s'; }).length, left=QR.list.filter(function(id){ return !QR.ans[id] && rowById(id) && !QR.fail[id]; }).length;
+  QR.done=(QR.done||0)+sent; QR.sending=null;
+  if(fails){ qrSave(); toast(sent+' saved · '+fails+' could not be saved — press Submit again'); renderView(); return; }
+  if(!isAdmin()){ var finished=!ccMineLeft().length; hcProgress(finished, true); }
+  Object.keys(QR.ans).forEach(function(id){ if(QR.ans[id]==='s') delete QR.ans[id]; });
+  qrClear(); QR.on=false; QR.review=false;
+  toast('Submitted ✓ '+sent+' answer'+(sent===1?'':'s')+(skipped?' · '+skipped+' skipped — check them later':'')+(dead.length&&!isAdmin()?' · the admin will confirm the dead ones':''));
+  renderView();
+}
+/* after submitting, a VA can still take back their OWN answer for today (wrong tag noticed later) */
+async function ccUndo(id){
+  var r=rowById(id); if(!r) return; var m=M(r), me=myId(), d=today();
+  var mineRep=m.hcrep && String(m.hcrep.by||'').toLowerCase()===me && m.hcrep.day===d, mineOk=String(m.hcok||'')===d && String(m.hcby||'').toLowerCase()===me;
+  if(!mineRep && !mineOk){ toast('Only your own answer from today can be undone.'); return; }
+  if(await saveMeta(r, mineRep?{ hcrep:null }:{ hcok:null, hcby:null })){ toast(r.handle+' — answer taken back, check it again'); renderView(); } else toast('Could not save — try again.');
 }
 document.addEventListener('keydown', function(e){
-  if(!QR.on || VIEW!=='health') return;
+  if(!QR.on || VIEW!=='health' || QR.review || QR.sending) return;
   var t=e.target&&e.target.tagName; if(t==='INPUT'||t==='TEXTAREA'||t==='SELECT') return;
   if($('modal').classList.contains('on')) return;
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
   var k=String(e.key||'').toLowerCase();
   if(k==='a'||k==='b'||k==='n'||k==='s'){ e.preventDefault(); qrAnswer(k); }
+  else if(k==='u'||k==='arrowleft'||k==='backspace'){ e.preventDefault(); qrBack(); }
   else if(k==='o'){ e.preventDefault(); qrOpen(); }
 });
 async function msAlive(id){
@@ -3020,32 +3115,34 @@ function ccGuide(open){
           '<span class="chip" style="background:#fff1f2;color:#9f1239"><b>B</b>&nbsp;Banned — "This account has been suspended"</span>'+
           '<span class="chip" style="background:#fff7ed;color:#c2410c"><b>N</b>&nbsp;Not found — "nobody on Reddit goes by that name" / page not found</span>'+
           '<span class="chip"><b>S</b>&nbsp;Skip — the page didn\'t load</span></div></li>'+
-      '<li>The next profile opens by itself in the same tab. Keep going until it says <b>Done ✓</b>.</li></ol>'+
+      '<li>The next profile opens by itself in the same tab. Pressed the wrong key? <b>U</b> goes back one.</li>'+
+      '<li>At the end you see <b>all your answers on one screen</b> — change any of them, then press <b>Submit</b>. Nothing is saved before that.</li></ol>'+
     '<div class="muted" style="font-size:12px;margin-top:8px">You never get your own accounts, and the list is shuffled every day. Your answers are saved with your name. B and N are reports — the admin confirms them before an account is marked banned.</div></details>';
 }
 function vHealthVA(){
   var mine=ccPrioSort(ccMine()), left=mine.filter(function(r){ return !ccState(r); }), done=mine.length-left.length, est=Math.max(1,Math.ceil(left.length*CC_SEC/60));
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Daily <span class="gtxt">health check</span></h2><p>Check that your teammates\' accounts are really alive on Reddit — before your first session.</p></div>'+
-    (left.length?'<button class="btn pri" onclick="qrStart(ccPrioSort(ccMineLeft()).map(function(r){return r.id;}))">'+IC.search+' Start check</button>':'')+'</div>';
+    (left.length||qrDraft()?'<button class="btn pri" onclick="qrStart(ccPrioSort(ccMineLeft()).map(function(r){return r.id;}))">'+IC.search+(qrDraft()&&!QR.on?' Resume &amp; review':' Start check')+'</button>':'')+'</div>';
   h+=ccGuide(!done);
   if(!mine.length) return h+'<div class="card empty">'+(allRows().length?'Nothing assigned to you today.':'Loading today\'s list…')+'</div>';
   h+='<div class="kpis">'+kpi('Your list today',mine.length,'teammates\' accounts','#a855f7')+kpi('Checked',done,left.length?left.length+' to go':'all done ✓',done===mine.length?'#10b981':'#f59e0b')+kpi('Time needed','~'+est+' min','max '+CC_MAX+' minutes','#0ea5e9')+'</div>';
-  if(QR.on) h+=qrPanel(mine);
+  if(QR.on || qrDraft()) h+=qrPanel(mine);
   else if(!left.length) h+='<div class="banner info" style="background:#ecfdf5;border-color:#a7f3d0;color:#065f46">'+IC.check+'<div><b>All done for today ✓</b> Thank you — you can start your sessions.</div></div>';
   h+='<div class="tbl-w" style="max-height:none;margin-top:10px"><table class="db"><thead><tr><th class="c1">Account</th><th>Stage</th><th>Method</th><th>Today</th><th></th></tr></thead><tbody>'+
     mine.map(function(r){ var st=ccState(r), sm=stageMeta(r.status), m=M(r);
-      var res=st==='ok'?'<span class="flag g">Alive ✓</span>':(st==='rep'?'<span class="flag r">Reported '+(m.hcrep.res==='n'?'not found':'banned')+'</span>':'<span class="flag a">to check</span>');
+      var dk=(QR.ans&&QR.ans[r.id])||((qrDraft()||{ans:{}}).ans[r.id]);
+      var res=st==='ok'?'<span class="flag g">Alive ✓</span>':(st==='rep'?'<span class="flag r">Reported '+(m.hcrep.res==='n'?'not found':'banned')+'</span>':(dk?'<span class="flag" style="background:#ede9fe;color:#6d28d9">draft: '+esc(QR_LBL[dk]||dk)+' · not submitted</span>':'<span class="flag a">to check</span>'));
       return '<tr><td class="c1"><a href="'+qrUrl(r)+'" target="rc-profile" rel="noopener" style="color:inherit">'+esc(r.handle)+' ↗</a></td><td><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+'">'+esc(sm.n)+'</span></td><td>'+methodPill(methodOf(r),true)+'</td><td>'+res+'</td>'+
-        '<td style="white-space:nowrap">'+(st?'':'<button class="btn sm sec" onclick="ccMark(\''+jsq(r.id)+'\',\'a\')">Alive ✓</button> <button class="btn sm dark" onclick="ccMark(\''+jsq(r.id)+'\',\'b\')">Banned</button> <button class="btn sm sec" onclick="ccMark(\''+jsq(r.id)+'\',\'n\')">Not found</button>')+'</td></tr>';
+        '<td style="white-space:nowrap">'+(st?((st==='rep'&&String(m.hcrep.by||'').toLowerCase()===myId())||(st==='ok'&&String(m.hcby||'').toLowerCase()===myId())?'<button class="btn sm sec" onclick="ccUndo(\''+jsq(r.id)+'\')" title="Wrong answer? Take it back and check again">Undo</button>':''):'<button class="btn sm sec" onclick="ccMark(\''+jsq(r.id)+'\',\'a\')">Alive ✓</button> <button class="btn sm dark" onclick="ccMark(\''+jsq(r.id)+'\',\'b\')">Banned</button> <button class="btn sm sec" onclick="ccMark(\''+jsq(r.id)+'\',\'n\')">Not found</button>')+'</td></tr>';
     }).join('')+'</tbody></table></div>';
   return h;
 }
 /* VA side of the QA ledger: when the day's check started, how many are done, and — once the whole
    list is through — the time per account (the "Health check · per account" learning cell). */
-function hcProgress(finished){
+function hcProgress(finished, exact){
   try{
     var d=vaKeyOf(USER.id).slice(0,10), kF='rc_hcfirst_'+myId(), mine=ccMine();
-    var dn=Math.min(mine.length, mine.filter(function(r){ return !!ccState(r); }).length+1);
+    var dn=Math.min(mine.length, mine.filter(function(r){ return !!ccState(r); }).length+(exact?0:1));
     var seen=''; try{ seen=localStorage.getItem(kF)||''; }catch(e){}
     if(seen!==d){ try{ localStorage.setItem(kF,d); }catch(e){} daySnap({ hc_assigned:mine.length, hc_done:dn, hc_first_at:phtStamp() }); }
     if(finished){
@@ -3756,7 +3853,10 @@ async function quizCheck(){
   try{
     var d=await api({ action:'rc_quiz_get', employee_id:USER.id });
     if(d && d.ok && d.version){
-      QZ.d=d; QZ.gate=!!(d.required && !d.passed);
+      /* Oct 7: once passed, never asked again for this SOP version. This browser's own record of the pass counts
+         too — the backend lost passes (version cell read back as a date) and re-asked on every sign-in. */
+      var localOk=false; try{ localOk=localStorage.getItem('rc_quiz_ok_'+d.version+'_'+qzUid())==='1'; }catch(_l){}
+      QZ.d=d; QZ.gate=!!(d.required && !d.passed && !localOk);
       if(d.passed) qzRemember(d.version);
     } else QZ.gate=false;              // no quiz on this backend → nothing to gate on
   }catch(e){ QZ.gate=false; }
