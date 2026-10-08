@@ -391,6 +391,34 @@ table.db tr.dead td{color:var(--ink3)}
 .flag{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:800;border-radius:100px;padding:2px 8px}
 .flag.r{background:#fee2e2;color:#b91c1c}.flag.a{background:#fef3c7;color:#92400e}.flag.g{background:#dcfce7;color:#166534}
 svg text{font-family:'Inter',sans-serif}
+/* insights · live + bottom line (Oct 8) */
+.ins-live{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12px;color:var(--ink2)}
+.ins-live b{color:var(--ink)}
+.ins-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+.ins-dot.on{box-shadow:0 0 0 0 rgba(16,185,129,.45);animation:insPulse 2s infinite}
+@keyframes insPulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.45)}70%{box-shadow:0 0 0 7px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+.ins-dc{margin-bottom:12px;padding:12px 16px}
+.ins-dq{font-size:12px;line-height:1.55;color:var(--ink2);margin-top:8px}
+.ins-dq.warn{background:#fff8eb;border:1px solid #fcd9a0;color:#7c4a03;border-radius:10px;padding:7px 10px;margin-top:6px}
+.ins-dq a{color:var(--ot);font-weight:800}
+.ins-bl{border:1px solid rgba(109,40,217,.18);background:linear-gradient(180deg,#fff, #fbf9ff)}
+.vd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.vd{background:var(--s1);border:1px solid var(--line);border-radius:14px;padding:13px 15px}
+.vchip{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;border-radius:100px;padding:3px 9px}
+.vd-big{font-family:'Sora',sans-serif;font-size:26px;font-weight:800;margin-top:8px;font-variant-numeric:tabular-nums;line-height:1.1}
+.vd-big small{font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:var(--ink3)}
+.vd-tr{font-size:12px;font-weight:700;margin-top:3px}
+.vd-k{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;color:var(--ink2);margin-top:10px}
+.vd-n{font-size:11px;color:var(--ink3);font-weight:600;margin-top:6px}
+.alert.change{background:#fff1f2}.alert.change .ic{background:#fecdd3}
+.alert.pace{background:#fff8eb}.alert.pace .ic{background:#fde68a}
+.alert.info{background:#f0f9ff}.alert.info .ic{background:#bae6fd}
+@media print{
+  header.tb,.no-print,#toast,.scrim,#drawer,#modal{display:none!important}
+  body::before{display:none!important} html,body{background:#fff!important}
+  .card{box-shadow:none!important;break-inside:avoid} .tbl-w{max-height:none!important;overflow:visible!important}
+  .ins-dot.on{animation:none}
+}
 
 /* ── coverage ── */
 .offc{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
@@ -494,6 +522,7 @@ var PROJECT=(function(){
   }catch(e){}
   return 'Reddit';
 })();
+var ALL_ERR={}, EVENTS_ERR='';
 var USER=null, ROWS=[], ALL={}, ALL_AT=0, NAMES={}, SHIFTOF={}, PHOTOOF={}, COVER={}, OFF=null, EVENTS=null, EVENTS_AT=0;
 var CFG={ phones:[], models:{}, niches:[], process_start:'2026-10-01', rest_days:{}, methods:['Vysor','Jailbroken','Blaze+'] };
 var VIEW='today', BASECOUNT={}, BE_BUILD='';
@@ -849,11 +878,13 @@ async function loadAll(force){
   await Promise.all(BASES.map(async function(b){
     try{
       var d=await jget(API+'?'+qs({action:'pa_list', project:b.id})+'&_='+Date.now(), 10000);
+      if(!d || !d.ok || !Array.isArray(d.rows)) throw new Error((d&&d.error)||'no answer');   // keep the last good rows (Oct 8)
       var rows=normRows(((d&&d.rows)||[]).map(function(r){ r.project=r.project||b.id; return r; }));
       ALL[b.id]=rows;   // everyone keeps all rows in memory — the daily cross-check needs other VAs' handles; views still scope by role
       if(b.id===PROJECT) ROWS=scope(rows);   // one set of objects per base, so an edit is never made on a stale copy
       BASECOUNT[b.id]=rows.filter(function(r){ return r.status!=='banned' && !isParked(r) && (isAdmin() || owner(r)===me); }).length;   // parked accounts are not in anyone's total (Oct 6)
-    }catch(e){}
+      delete ALL_ERR[b.id];
+    }catch(e){ ALL_ERR[b.id]=String((e&&e.message)||e||'failed'); }
   }));
   ALL_AT=Date.now(); paintTop();
 }
@@ -861,7 +892,7 @@ function allRows(){ var out=[]; BASES.forEach(function(b){ (ALL[b.id]||[]).forEa
 async function loadEvents(force){
   if(!isAdmin()) return [];
   if(!force && EVENTS && Date.now()-EVENTS_AT<60000) return EVENTS;
-  try{ var d=await jget(API+'?'+qs({action:'rc_events', project:'all', by:USER.id})+'&_='+Date.now(), 20000); if(d && d.ok){ EVENTS=d.events||[]; EVENTS_AT=Date.now(); } }catch(e){}
+  try{ var d=await jget(API+'?'+qs({action:'rc_events', project:'all', by:USER.id})+'&_='+Date.now(), 20000); if(d && d.ok){ EVENTS=d.events||[]; EVENTS_AT=Date.now(); EVENTS_ERR=''; } else EVENTS_ERR=(d&&d.error)||'no answer'; }catch(e){ EVENTS_ERR=String((e&&e.message)||e||'failed'); }
   return EVENTS||[];
 }
 async function loadOff(){
@@ -944,7 +975,8 @@ function go(v){
   if(!tabsFor().some(function(t){ return t[0]===v; })) v='today';
   VIEW=v; try{ sessionStorage.setItem('rc_view', v); }catch(e){}
   paintTabs(); renderView(); window.scrollTo({top:0,behavior:'smooth'});
-  if(v==='insights'||v==='pipeline'||(v==='accounts'&&DB.all)){ loadAll().then(function(){ if(v==='insights') return loadEvents(); }).then(function(){ if(VIEW===v) renderView(); }); }
+  if(v==='insights'){ insLoad(false).then(function(){ if(VIEW===v) renderView(); }); }   // live snapshot, refreshed every minute while open (Oct 8)
+  else if(v==='pipeline'||(v==='accounts'&&DB.all)){ loadAll().then(function(){ if(VIEW===v) renderView(); }); }
 }
 function setBase(id){
   if(id===PROJECT) return;
@@ -1018,7 +1050,7 @@ function start(){
   if(isAdmin()){ try{ var _dk='rc_dc_'+today(); if(!localStorage.getItem(_dk)){ localStorage.setItem(_dk,'1');
     // Day close runs from the owner's page in the background (05i) — never inside a VA's request.
     api({ action:'rc_day_close', by:USER.id, catchup:'1' }).then(function(d){ if(d&&d.ok&&d.closed&&d.closed.length){ toast('Closed '+d.closed.length+' day'+(d.closed.length===1?'':'s')+' → scorecard updated.'); if(VIEW==='prod'){ PQ.st=null; PQ.sc=null; renderView(); } } }).catch(function(){ try{ localStorage.removeItem(_dk); }catch(_r){} }); } }catch(_dc){} }
-  if(VIEW==='insights') loadAll().then(loadEvents).then(renderView);
+  if(VIEW==='insights') insLoad(true).then(renderView);
 }
 
 /* ── modal / drawer plumbing ── */
@@ -2499,13 +2531,163 @@ function vPipeline(){
   return h;
 }
 
-/* ═══════════ INSIGHTS — owner only ═══════════
-   The question this page answers: when accounts die, is it the PLATFORM (a ban wave — bans spread
-   across many models, VAs and phones on the same days) or something in OUR process (bans piling up
-   on one model, one VA or one phone while everyone else is fine)? */
-var INS={ base:'all', range:30, dim:'method' };
+/* ═══════════ INSIGHTS — owner only · rebuilt Oct 8 (live, reconciled, client-ready) ═══════════
+   Jeth (Oct 8): "I want the insights to be more real-time and accurate … there are a few bans on Blaze+ and it
+   still shows 0% on where bans come from … this will be the view of the client — whether they continue these
+   methods, or at what pace they should change the SOP."
+   The page answers three questions from ONE live snapshot:
+     1. Which method keeps accounts alive and gets them posting?  Fair across methods of different size and age:
+        "banned a week" = bans ÷ account-weeks the accounts were alive (not dead ÷ ever created).
+     2. Where in the ladder does each method lose accounts?  The phase is read from each account's history — the
+        last ladder phase before the ban, looking through Temp ban / Spam recovery / On hold. (Before: a ban that
+        came after a temp ban, or a history log that timed out, had no phase and silently vanished → 0%.)
+     3. Is a bad day the platform (a wave across models, VAs, phones) or our process (one group)?
+   DATA: rc_insights (backend rc-2026-10-08a) returns every live account, the bans the 30-day clean-up archived,
+   the status history, and logs stage changes typed straight into the sheet — refreshed every minute while this
+   page is open. A failed refresh keeps the last snapshot on screen and says so. On an older backend it falls back
+   to the board lists + history log and says what is missing. Nothing is dropped silently: untagged, parked and
+   phase-unknown accounts are counted in the data check at the top. */
+var INS={ base:'all', range:30, dim:'method', client:false, cohort:'all' };
+var INSD={ rows:null, ev:null, at:0, serverAt:'', mode:'', err:'', errAt:0, loading:false, lastFixed:0, legacyUntil:0, sig:'', dirty:false, arch:0, ms:0 };
 var DIMS=[['method','Method'],['model','Model'],['va','VA'],['device','Phone'],['base','Base'],['niche','Niche'],['process','Process']];
 var PAL=['#ff6b1a','#f43f5e','#a855f7','#0ea5e9','#14b8a6','#f59e0b','#94a3b8'];
+var INS_W=14;          // the verdict compares the last 14 days with the 14 before
+var INS_MIN_AD=70;     // ≈ 5 accounts × 14 days alive — less exposure than this is "too early to call"
+var INS_KINDS={ create:1, stage:1, ban:1, reinstate:1, park:1, release:1 };
+
+/* ── live data ── */
+function insAllRows(){ return INSD.rows || allRows(); }
+function insEv(){ return INSD.ev || EVENTS || []; }
+function insHash(s){ var h=5381; for(var i=0;i<s.length;i++) h=(((h<<5)+h)+s.charCodeAt(i))>>>0; return h.toString(36); }
+function insSig(){
+  var rows=insAllRows(), ev=insEv(), parts=[];
+  rows.forEach(function(r){ parts.push([r.id,r.status,r.method,r.ended_at,r.stage_at,r.model,r.device,r.assigned_to,r.project,r.niche].join('|')); });
+  var le=ev.length?ev[ev.length-1]:null;
+  return rows.length+':'+ev.length+':'+(le?(le.at+le.account_id+le.kind):'')+':'+insHash(parts.join(';'));
+}
+/* One request, up to 60 s, never retried — a slow answer is waited for instead of started twice on the server. */
+async function insGet(url){
+  var ctl=(typeof AbortController!=='undefined')?new AbortController():null, tm=ctl?setTimeout(function(){ try{ ctl.abort(); }catch(_){} }, 60000):null;
+  try{ var r=await fetch(url, ctl?{ signal:ctl.signal }:undefined), t=await r.text(); if(String(t).trim().charAt(0)==='<') throw new Error('SERVER_BUSY'); return JSON.parse(t); }
+  finally{ if(tm) clearTimeout(tm); }
+}
+/* One refresh. Resolves true when the numbers changed (the caller redraws). Never wipes a good snapshot. */
+async function insLoad(force){
+  if(!USER || !isAdmin() || INSD.loading) return false;
+  if(!force && INSD.at && Date.now()-INSD.at<25000) return false;
+  INSD.loading=true; insPaintLive();
+  var before=INSD.sig;
+  try{
+    var d=null, legacy=Date.now()<INSD.legacyUntil;
+    if(!legacy){
+      try{ d=await insGet(API+'?'+qs({ action:'rc_insights', by:USER.id })+'&_='+Date.now()); }
+      catch(e){ var em=String((e&&e.message)||e||'network error'); if((e&&e.name==='AbortError')||/abort/i.test(em)) em='timed out'; else if(/SERVER_BUSY/.test(em)) em='server busy'; d={ ok:false, error:em }; }
+      if(d && d.error==='MISSING_PARAMS'){ legacy=true; INSD.legacyUntil=Date.now()+10*60000; }   // backend older than rc-2026-10-08a
+    }
+    if(!legacy){
+      if(d && d.ok && Array.isArray(d.rows)){
+        var seen={}, rows=[];
+        d.rows.concat(d.arch||[]).forEach(function(r){ if(r && r.id && !seen[r.id]){ seen[r.id]=1; rows.push(r); } });
+        INSD.rows=normRows(rows);
+        INSD.ev=(d.ev||[]).map(function(e){ return { at:e[0], account_id:e[1], kind:e[2], from:statusKey(e[3]), to:statusKey(e[4]) }; });
+        INSD.mode='live'; INSD.serverAt=d.at||''; INSD.lastFixed=+d.fixed||0; INSD.arch=(d.arch||[]).length; INSD.ms=+d.ms||0;
+        INSD.err=''; INSD.at=Date.now();
+        if(INSD.lastFixed){ EVENTS_AT=0; ALL_AT=0; }          // the sheet fixes touched board rows and history too
+      } else {
+        INSD.err=String((d&&(d.error||d.message))||'no answer'); INSD.errAt=Date.now();
+        if(!INSD.rows) legacy=true;                           // no live snapshot yet — board lists + history log meanwhile (never rows without history)
+      }
+    }
+    if(legacy){
+      await Promise.all([loadAll(true), loadEvents(true)]);
+      INSD.rows=null; INSD.ev=null; INSD.mode='legacy'; INSD.arch=0; INSD.lastFixed=0;
+      var bad=BASES.filter(function(b){ return ALL_ERR[b.id]; }).map(function(b){ return b.n; });
+      var miss=[]; if(bad.length) miss.push(bad.join(' + ')+' did not load'); if(EVENTS===null) miss.push('the history log did not load');
+      if(miss.length){ INSD.err=miss.join(' · '); INSD.errAt=Date.now(); } else if(Date.now()<INSD.legacyUntil) INSD.err='';
+      if(allRows().length) INSD.at=Date.now();
+    }
+  } finally { INSD.loading=false; }
+  INSD.sig=insSig(); insPaintLive();
+  return INSD.sig!==before;
+}
+function insT(t){ if(!t) return '—'; try{ return new Date(t).toLocaleTimeString('en-US',{ timeZone:'Asia/Manila', hour:'numeric', minute:'2-digit', second:'2-digit' }); }catch(e){ return fmtT(new Date(t)); } }
+function insAgo(ms){ var s=Math.max(0,Math.round(ms/1000)); if(s<60) return s+'s ago'; var m=Math.round(s/60); if(m<60) return m+' min ago'; return Math.round(m/60)+' h ago'; }
+function insLiveHtml(){
+  var at=INSD.at, live=INSD.mode==='live', err=!!INSD.err;
+  var dot=INSD.loading?'#0ea5e9':((err||!live)?'#f59e0b':'#10b981');
+  var txt=INSD.loading?(at?'Refreshing…':'Loading the live snapshot…'):(at?('Updated '+insT(at)+' · '+insAgo(Date.now()-at)):'Not loaded yet');
+  return '<span class="ins-dot'+(live&&!err&&!INSD.loading?' on':'')+'" style="background:'+dot+'"></span><b>'+(live?'Live':(INSD.mode==='legacy'?'Board lists':'Insights'))+'</b><span>'+esc(txt)+'</span>'+(at?'<span class="muted">· refreshes every minute</span>':'');
+}
+function insPaintLive(){ var e=$('ins-live'); if(e) e.innerHTML=insLiveHtml(); }
+function insBusy(){
+  var a=document.activeElement, v=$('view');
+  if(a && /^(SELECT|INPUT|TEXTAREA)$/.test(a.tagName||'') && v && v.contains && v.contains(a)) return true;
+  return !!(($('modal')&&$('modal').classList.contains('on'))||($('drawer')&&$('drawer').classList.contains('on')));
+}
+async function insRefresh(){
+  var ch=await insLoad(true);
+  if(VIEW==='insights') renderView();
+  toast(INSD.err?('Refresh failed: '+INSD.err):(ch?'Updated — the numbers changed.':'Up to date — nothing changed since the last refresh.'));
+}
+setInterval(function(){ if(VIEW!=='insights') return; insPaintLive(); if(INSD.dirty && !insBusy()){ INSD.dirty=false; renderView(); } }, 1000);
+setInterval(function(){
+  if(VIEW!=='insights' || !USER || !isAdmin() || document.hidden) return;
+  insLoad(false).then(function(ch){ if(ch && VIEW==='insights'){ if(insBusy()) INSD.dirty=true; else renderView(); } });
+}, 60000);
+document.addEventListener('visibilitychange', function(){
+  if(!document.hidden && VIEW==='insights' && USER && isAdmin() && Date.now()-INSD.at>30000) insLoad(true).then(function(ch){ if(ch && VIEW==='insights') renderView(); });
+});
+
+/* ── where in the ladder ── */
+var _ih={ key:'', map:{} };
+function insHist(){
+  var ev=insEv(), key=(INSD.mode||'x')+'|'+ev.length+'|'+(INSD.ev?INSD.at:EVENTS_AT);
+  if(_ih.key===key) return _ih.map;
+  var m={};
+  ev.forEach(function(e,i){ if(!e || !e.account_id || !INS_KINDS[e.kind]) return; (m[e.account_id]=m[e.account_id]||[]).push({ t:parseTs(e.at), i:i, kind:e.kind, from:statusKey(e.from), to:statusKey(e.to) }); });
+  for(var id in m) m[id].sort(function(a,b){ return ((a.t?a.t.getTime():0)-(b.t?b.t.getTime():0)) || (a.i-b.i); });
+  _ih={ key:key, map:m }; _fp={ key:'', map:{} };
+  return m;
+}
+function ladK(k){ k=statusKey(k); if(k==='new'||k==='creationstandby') return 'creation'; return phaseIx(k)>=0?k:''; }
+/* walk a status trail backwards: the last ladder phase, and the off-ladder state (temp ban, recovery, hold) just before the end */
+function trailBack(trail){
+  var via='';
+  for(var i=trail.length-1;i>=0;i--){ var s=trail[i]; if(!s || s==='banned') continue; var k=ladK(s); if(k) return { k:k, via:via }; if(!via) via=s; }
+  return { k:'', via:via };
+}
+/* The ladder phase an account was banned in (banned) or sits in (alive). History first; then what the row remembers. */
+function insPhase(r){
+  var map=insHist(), hk=_ih.key;
+  if(r._ip && r._ip.key===hk) return r._ip;
+  var h=map[r.id]||[], out;
+  if(isDead(r)){
+    var ban=-1; for(var i=h.length-1;i>=0;i--) if(h[i].kind==='ban'){ ban=i; break; }
+    var trail=[]; for(var j=0;j<(ban>=0?ban:h.length);j++){ trail.push(h[j].from); trail.push(h[j].to); }
+    if(ban>=0) trail.push(h[ban].from);
+    out=trailBack(trail); out.src=out.k?'history':'';
+    if(!out.k){ var mk=ladK(M(r).bphase)||ladK(M(r).prev); if(mk){ out.k=mk; out.src='record'; } }
+  } else {
+    var k=ladK(r.status);
+    if(k) out={ k:k, via:'', src:'status' };
+    else {
+      var tr=[]; h.forEach(function(e){ tr.push(e.from); tr.push(e.to); });
+      out=trailBack(tr); out.via=r.status; out.src=out.k?'history':'';
+      if(!out.k){ var mk2=ladK(M(r).prev); if(mk2){ out.k=mk2; out.src='record'; } }
+    }
+  }
+  out.key=hk; r._ip=out; return out;
+}
+/* first time each account was at Day 1 Posting or beyond (history) */
+var _fp={ key:'', map:{} };
+function insFirstPost(){
+  insHist(); if(_fp.key===_ih.key) return _fp.map;
+  var P1=phaseIx('day1'), m={};
+  insEv().forEach(function(e){ if(!e || !e.account_id) return; if(phaseIx(statusKey(e.to))>=P1){ var t=parseTs(e.at); if(t && (!m[e.account_id] || t<m[e.account_id])) m[e.account_id]=t; } else if(phaseIx(statusKey(e.from))>=P1 && !m[e.account_id]) m[e.account_id]=parseTs(e.at)||new Date(); });
+  _fp={ key:_ih.key, map:m }; return m;
+}
+function reachedPost(r, fp){ var P1=phaseIx('day1'); return !!(fp||insFirstPost())[r.id] || phaseIx(r.status)>=P1 || phaseIx(insPhase(r).k)>=P1; }
+
 function dimVal(r, dim){
   if(dim==='method') return methodOf(r)||'(not tagged)';
   if(dim==='model') return r.model||'(no model)';
@@ -2516,56 +2698,59 @@ function dimVal(r, dim){
   if(dim==='process') return processOf(r)==='iphone'?'iPhone process':'Before Oct 1';
   return '—';
 }
-/* An account with no value for the dimension (no method tag, no model, no phone, no niche) says nothing
-   about that dimension — the Bans-per-day chart leaves it out rather than stacking an "untagged" bar. */
-function dimMissing(r, dim){
-  if(dim==='model') return !r.model;
-  if(dim==='device') return !r.device;
-  if(dim==='niche') return !r.niche;
-  return false;
-}
+function dimMissing(r, dim){ if(dim==='model') return !r.model; if(dim==='device') return !r.device; if(dim==='niche') return !r.niche; return false; }
 function dimLabel(d){ for(var i=0;i<DIMS.length;i++) if(DIMS[i][0]===d) return DIMS[i][1]; return d; }
+function insDims(){ return DIMS.filter(function(d){ return !INS.client || (d[0]!=='va' && d[0]!=='device'); }); }
 function median(a){ if(!a.length) return null; a=a.slice().sort(function(x,y){ return x-y; }); var m=Math.floor(a.length/2); return a.length%2?a[m]:Math.round((a[m-1]+a[m])/2); }
 function pct(n,d){ return d?Math.round(n/d*1000)/10:0; }
-/* Exposure = accounts alive at the start of the window + accounts created inside it.
-   Ban rate = bans in the window ÷ exposure. Fair across groups of different sizes. */
-function exposure(rows, startD){
-  var s=parseTs(startD);
-  return rows.filter(function(r){ var e=endedAt(r); return !e || e>=s; }).length;
-}
-/* Insights only reads accounts that carry a method (owner, Oct 5): an account with no method tag says
-   nothing about which approach works, so it is left out of every number on this page. */
-function insData(){
-  var rows=(INS.base==='all'?allRows():(ALL[INS.base]||[])).filter(function(r){ return !!methodOf(r) && !isParked(r); });   // parked accounts are out of every report (Oct 6)
-  var banEv={}; (EVENTS||[]).forEach(function(e){ if(e.kind==='ban') banEv[e.account_id]=e; });
-  var end=today(), start=INS.range?addDays(end,-(INS.range-1)):null;
+/* Exposure = accounts alive at the start of the window + accounts created inside it (share-of-accounts view). */
+function exposure(rows, startD){ var s=parseTs(startD); return rows.filter(function(r){ var e=endedAt(r); return !e || e>=s; }).length; }
+/* Account-days alive inside [a, b) — the fair denominator: a method with old accounts and one with new ones compare honestly. */
+/* created: the row's own date, else its first history line (rows typed into the sheet may have none) */
+function insCreated(r){ var c=createdAt(r); if(c) return c; var h=insHist()[r.id]; return (h&&h.length&&h[0].t)?h[0].t:null; }
+function insAD(rows, a, b){ var A=a.getTime(), B=b.getTime(), s=0; rows.forEach(function(r){ var c=insCreated(r); if(!c) return; var e=endedAt(r); if(isDead(r) && !e) return; var x=Math.max(A,c.getTime()), y=Math.min(B,(e||new Date()).getTime()); if(y>x) s+=(y-x)/864e5; }); return s; }
+function insBans(rows, a, b){ var A=a.getTime(), B=b.getTime(); return rows.filter(function(r){ if(!isDead(r) || !insCreated(r)) return false; var e=endedAt(r); return !!e && e.getTime()>=A && e.getTime()<B; }).length; }
+function perWk(b, ad){ return ad>0 ? b/ad*7 : null; }
+function fmtWk(x){ if(x==null) return '—'; if(x>=1) return '100%+'; var p=x*100; return (p>=10?Math.round(p):Math.round(p*10)/10)+'%'; }
+function untag(h){ return String(h||'').replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/\s+/g,' ').trim(); }
+
+/* Every number on the page comes from here. Accounts with no method say nothing about which method works, and
+   parked accounts are out of every report — both are counted in the data check instead of vanishing. */
+function insData(range){
+  if(range===undefined) range=INS.range;
+  insHist();
+  var seen={}, all=[], okBase={}; BASES.forEach(function(b){ okBase[b.id]=1; });
+  insAllRows().forEach(function(r){ if(!r || !r.id || seen[r.id] || !okBase[r.project]) return; seen[r.id]=1; if(INS.base!=='all' && r.project!==INS.base) return; all.push(r); });
+  var rows=all.filter(function(r){ return !!methodOf(r) && !isParked(r); });
+  var end=phtDate(new Date()), start=range?addDays(end,-(range-1)):null;          // calendar day, so a 2 AM ban counts today
   if(!start){ var mn=end; rows.forEach(function(r){ var c=createdAt(r); if(c){ var d=phtDate(c); if(d<mn) mn=d; } }); start=mn; }
   var days=[]; for(var d=start; d<=end; d=addDays(d,1)){ days.push(d); if(days.length>400) break; }
-  var bans=rows.filter(isDead).map(function(r){ var e=endedAt(r); var ev=banEv[r.id]; return { r:r, at:e, day:e?phtDate(e):'', from:(ev&&ev.from)||M(r).prev||'', exact:endedExact(r) }; })
-    .filter(function(b){ return b.day && b.day>=start && b.day<=end; });
-  return { rows:rows, start:start, end:end, days:days, bans:bans };
+  var mk=function(r){ var e=endedAt(r), p=insPhase(r); return { r:r, at:e, day:e?phtDate(e):'', from:p.k, via:p.via, exact:endedExact(r) && !/Google Sheet/i.test(r.end_reason||'') }; };
+  var banAll=rows.filter(isDead).map(mk);
+  return { all:all, rows:rows, start:start, end:end, days:days, banAll:banAll, range:range,
+           bans:banAll.filter(function(b){ return b.day && b.day>=start && b.day<=end; }) };
 }
 function detect(D){
   var out=[], byDay={};
   D.bans.forEach(function(b){ (byDay[b.day]=byDay[b.day]||[]).push(b); });
-  var avg=D.bans.length/Math.max(1,D.days.length);
-  var marks={};
+  var avg=D.bans.length/Math.max(1,D.days.length), marks={};
   Object.keys(byDay).sort().reverse().forEach(function(day){
     var B=byDay[day], n=B.length; if(n<3) return;
     function top(dim){ var g={}; B.forEach(function(b){ var k=dimVal(b.r,dim); g[k]=(g[k]||0)+1; }); var ks=Object.keys(g).sort(function(a,b){ return g[b]-g[a]; }); return { k:ks[0], n:g[ks[0]], distinct:ks.length, share:g[ks[0]]/n }; }
     var tm=top('model'), tv=top('va'), td=top('device'), tb=top('base');
-    var conc=[]; if(tm.share>=0.7&&tm.n>=3) conc.push('model <b>'+esc(tm.k)+'</b>'); if(tv.share>=0.7&&tv.n>=3) conc.push('VA <b>'+esc(tv.k)+'</b>'); if(td.share>=0.7&&td.n>=3&&td.k.indexOf('(')!==0) conc.push('phone <b>'+esc(td.k)+'</b>');
-    var wave=(tm.distinct>=3 && tm.share<0.6 && tv.distinct>=3);
-    var when=fmtD(parseTs(day));
+    var conc=[], dims=[];
+    if(tm.share>=0.7&&tm.n>=3){ conc.push('model <b>'+esc(tm.k)+'</b>'); dims.push('model'); }
+    if(tv.share>=0.7&&tv.n>=3){ conc.push('VA <b>'+esc(tv.k)+'</b>'); dims.push('va'); }
+    if(td.share>=0.7&&td.n>=3&&td.k.indexOf('(')!==0){ conc.push('phone <b>'+esc(td.k)+'</b>'); dims.push('device'); }
+    var wave=(tm.distinct>=3 && tm.share<0.6 && tv.distinct>=3), when=fmtD(parseTs(day));
     if(wave){ marks[day]='wave';
-      out.push({ t:'wave', h:'<b>'+when+' — likely a ban wave.</b> '+n+' bans spread across '+tm.distinct+' models, '+tv.distinct+' VAs and '+td.distinct+' phones'+(tb.distinct>1?' on '+tb.distinct+' bases':'')+'.', s:'Wide spread on one day points to the platform, not to one person or one setup. Normal day in this range: '+avg.toFixed(1)+' bans.' });
+      out.push({ t:'wave', day:day, h:'<b>'+when+' — likely a ban wave.</b> '+n+' bans spread across '+tm.distinct+' models, '+tv.distinct+' VAs and '+td.distinct+' phones'+(tb.distinct>1?' on '+tb.distinct+' bases':'')+'.', s:'Wide spread on one day points to the platform, not to one person or one setup. Normal day in this range: '+avg.toFixed(1)+' bans.' });
     } else if(conc.length){ marks[day]='conc';
-      out.push({ t:'conc', h:'<b>'+when+' — bans concentrated:</b> '+Math.max(tm.n,tv.n)+' of '+n+' on '+conc.join(' and ')+'.', s:'When one model, VA or phone takes most of the day\'s bans while the rest are fine, check that process — the steps, the phone, and who handled it.' });
+      out.push({ t:'conc', day:day, dims:dims, h:'<b>'+when+' — bans concentrated:</b> '+Math.max(tm.n,tv.n)+' of '+n+' on '+conc.join(' and ')+'.', s:'When one model, VA or phone takes most of the day\'s bans while the rest are fine, check that process — the steps, the phone, and who handled it.' });
     } else if(n>=Math.max(3,avg*3)){ marks[day]='conc';
-      out.push({ t:'conc', h:'<b>'+when+' — ban spike:</b> '+n+' bans (normal day: '+avg.toFixed(1)+').', s:'Not clearly a wave and not clearly one group — open the day in Accounts to compare.' });
+      out.push({ t:'conc', day:day, h:'<b>'+when+' — ban spike:</b> '+n+' bans (normal day: '+avg.toFixed(1)+').', s:'Not clearly a wave and not clearly one group — open the day in Accounts to compare.' });
     }
   });
-  // rolling 7-day: one group's ban RATE far above everyone else's
   var s7=addDays(D.end,-6), recent=D.bans.filter(function(b){ return b.day>=s7; });
   ['va','model','device'].forEach(function(dim){
     var groups={}; D.rows.forEach(function(r){ var k=dimVal(r,dim); (groups[k]=groups[k]||[]).push(r); });
@@ -2573,103 +2758,248 @@ function detect(D){
       if(k.indexOf('(')===0) return;
       var nb=recent.filter(function(b){ return dimVal(b.r,dim)===k; }).length; if(nb<3) return;
       var ex=exposure(groups[k], s7), rest=D.rows.filter(function(r){ return dimVal(r,dim)!==k; });
-      var nbR=recent.length-nb, exR=exposure(rest, s7);
-      var rate=nb/Math.max(1,ex), rateR=nbR/Math.max(1,exR);
-      if(rate>=0.1 && rate>=2*Math.max(rateR,0.01)){
-        out.push({ t:'conc', h:'<b>'+dimLabel(dim)+' '+esc(k)+':</b> '+nb+' bans in 7 days — '+Math.round(rate*100)+'% of its accounts vs '+Math.round(rateR*100)+'% for everyone else.', s:'Same week, same platform — a rate this far above the rest is worth a look at this '+dimLabel(dim).toLowerCase()+'\'s routine.' });
-      }
+      var nbR=recent.length-nb, exR=exposure(rest, s7), rate=nb/Math.max(1,ex), rateR=nbR/Math.max(1,exR);
+      if(rate>=0.1 && rate>=2*Math.max(rateR,0.01))
+        out.push({ t:'conc', dim:dim, k:k, h:'<b>'+dimLabel(dim)+' '+esc(k)+':</b> '+nb+' bans in 7 days — '+Math.round(rate*100)+'% of its accounts vs '+Math.round(rateR*100)+'% for everyone else.', s:'Same week, same platform — a rate this far above the rest is worth a look at this '+dimLabel(dim).toLowerCase()+'\'s routine.' });
     });
   });
   return { alerts:out, marks:marks };
 }
+function insAlerts(A){
+  if(!INS.client) return A.alerts;
+  var hid=0, list=A.alerts.filter(function(a){ var p=(a.dim==='va'||a.dim==='device') || (a.dims||[]).some(function(x){ return x==='va'||x==='device'; }); if(p) hid++; return !p; });
+  if(hid) list.push({ t:'conc', h:'<b>'+hid+' signal'+(hid===1?' points':'s point')+' at one VA or one phone</b> — handled internally.', s:'Those are process checks on our side, not a method or SOP question.' });
+  return list;
+}
+/* Phase × method: of the accounts that REACHED each phase, how many were banned WHILE in it. Every ban is placed —
+   one whose phase can't be read from its history lands in "Phase unknown", so each column adds up. */
+function phaseStats(rows){
+  var ms=methodsList().filter(function(m){ return rows.some(function(r){ return methodOf(r)===m; }); });
+  rows.forEach(function(r){ var m=methodOf(r); if(m && ms.indexOf(m)<0) ms.push(m); });
+  var C={};
+  ms.forEach(function(m){ C[m]={ reach:PH.map(function(){ return 0; }), died:PH.map(function(){ return 0; }), unkDead:0, unkAlive:0, dead:0, n:0, via:{} }; });
+  rows.forEach(function(r){
+    var c=C[methodOf(r)]; if(!c) return; c.n++;
+    var p=insPhase(r), ix=phaseIx(p.k), dead=isDead(r); if(dead) c.dead++;
+    if(ix<0){ if(dead) c.unkDead++; else c.unkAlive++; return; }
+    for(var i=0;i<=ix;i++) c.reach[i]++;
+    if(dead){ c.died[ix]++; if(p.via) c.via[p.via]=(c.via[p.via]||0)+1; }
+  });
+  var worst={};
+  ms.forEach(function(m){ var w=null; PH.forEach(function(p,i){ var n=C[m].reach[i], d=C[m].died[i]; if(n>=3 && d>0){ var rt=d/n; if(!w || rt>w.rate) w={ i:i, k:p.k, rate:rt, d:d, n:n }; } }); worst[m]=w; });
+  return { ms:ms, C:C, worst:worst };
+}
+function sopList(){
+  var a=(CFG && Array.isArray(CFG.sop_changes)) ? CFG.sop_changes
+        : [{ d:(CFG.process_start||SOP_START), n:'iPhone process' }, { d:'2026-10-05', n:'Client SOP changes (phase plans, DMs, recovery, profile check)' }];
+  return a.filter(function(x){ return x && /^\d{4}-\d{2}-\d{2}$/.test(String(x.d||'')); }).map(function(x){ return { d:String(x.d), n:String(x.n||'SOP change') }; })
+          .sort(function(x,y){ return x.d<y.d?-1:(x.d>y.d?1:0); });
+}
+
+/* ═══ THE BOTTOM LINE — per method: Keep / Watch / Change / Too early, and what to do with the SOP ═══
+   Last 14 days vs the 14 before. "Change" = losing accounts at least twice as fast as the best method (3+ bans),
+   or one phase taking 40%+ of the accounts that reach it (5+ reached, 3+ banned). "Watch" = 1.5× the best,
+   1.5× its own previous 14 days, or one phase at 25%+. Under ~5 accounts × 14 days alive = too early to call. */
+var VERD={ keep:{ t:'Keep', c:'#047857', bg:'#dcfce7', s:'keep running it' }, watch:{ t:'Watch', c:'#b45309', bg:'#fef3c7', s:'watch it closely' },
+           change:{ t:'Change', c:'#b91c1c', bg:'#fee2e2', s:'change the SOP or move away' }, early:{ t:'Too early', c:'#475569', bg:'#e2e8f0', s:'not enough accounts yet' } };
+function insVerdict(){
+  var D=insData(28), now=new Date(), W=INS_W*864e5, a=new Date(now.getTime()-W), a0=new Date(now.getTime()-2*W);
+  /* phases for the verdict come from the same 14 days: accounts alive at some point in them, bans inside them */
+  var PS=phaseStats(D.rows.filter(function(r){ if(!isDead(r)) return true; var e=endedAt(r); return !!e && e>=a; })), fp=insFirstPost(), A=detect(D);
+  var st=PS.ms.map(function(m){
+    var rows=D.rows.filter(function(r){ return methodOf(r)===m; }), dead=rows.filter(isDead);
+    var ad=insAD(rows,a,now), b=insBans(rows,a,now), ad0=insAD(rows,a0,a), b0=insBans(rows,a0,a);
+    return { m:m, n:rows.length, alive:rows.length-dead.length, ad:ad, b:b, w:perWk(b,ad), ad0:ad0, b0:b0, w0:perWk(b0,ad0),
+             made:rows.filter(function(r){ var c=createdAt(r); return c && c>=a; }).length,
+             post:rows.length?rows.filter(function(r){ return reachedPost(r,fp); }).length/rows.length:null,
+             med:median(dead.map(ageDays).filter(function(x){ return x!=null; })), worst:PS.worst[m] };
+  });
+  var ok=st.filter(function(s){ return s.ad>=INS_MIN_AD && s.w!=null; }), best=null, bestM='';
+  ok.forEach(function(s){ if(best==null || s.w<best){ best=s.w; bestM=s.m; } });
+  st.forEach(function(s){
+    s.vs=(best!=null && ok.length>1 && s.m!==bestM && s.w!=null && s.ad>=INS_MIN_AD)?(best>0?s.w/best:(s.w>0?99:1)):null;
+    s.tr=(s.w0!=null && s.ad0>=INS_MIN_AD && s.w!=null)?(s.w0>0?s.w/s.w0:(s.w>0?99:1)):null;
+    var wp=s.worst;
+    if(s.ad<INS_MIN_AD) s.v='early';
+    else if((s.b>=3 && s.vs!=null && s.vs>=2 && s.w-best>=0.03) || (wp && wp.n>=5 && wp.d>=3 && wp.rate>=0.4)) s.v='change';
+    else if((s.b>=2 && s.vs!=null && s.vs>=1.5) || (s.b>=3 && s.tr!=null && s.tr>=1.5) || (wp && wp.n>=4 && wp.d>=2 && wp.rate>=0.25)) s.v='watch';
+    else s.v='keep';
+  });
+  var recs=[];
+  /* 1 · a method losing accounts much faster than the best one */
+  st.forEach(function(s){ if(s.v==='change' && s.vs!=null && s.vs>=2)
+    recs.push({ t:'change', ic:'⛔', h:'<b>'+esc(s.m)+'</b> is losing accounts '+(s.vs>=10?'10+':(Math.round(s.vs*10)/10))+'× faster than <b>'+esc(bestM)+'</b> — '+fmtWk(s.w)+' of its live accounts banned a week vs '+fmtWk(best)+'.',
+                s:'Make new accounts on '+bestM+' until the way '+s.m+' is run changes, then compare the next 15–20 accounts.' }); });
+  /* 2 · the pace into one phase */
+  st.forEach(function(s){ var wp=s.worst; if(s.v==='early' || !wp || !(wp.rate>=0.25 && wp.n>=4 && wp.d>=2)) return;
+    var prev=wp.i>0?PH[wp.i-1]:null, others=st.filter(function(o){ return o.m!==s.m; }).map(function(o){ var c=PS.C[o.m]; var n=c.reach[wp.i], d=c.died[wp.i]; return n>=3?(esc(o.m)+' '+Math.round(d/n*100)+'% ('+d+' of '+n+')'):''; }).filter(Boolean);
+    recs.push({ t:'pace', ic:'🐢', h:'<b>'+esc(s.m)+': slow the pace into '+esc(PH[wp.i].n)+'</b> — '+wp.d+' of '+wp.n+' accounts that reached it were banned there ('+Math.round(wp.rate*100)+'%).'+(others.length?' Same phase: '+others.join(', ')+'.':''),
+                s:(prev?'Keep accounts longer in '+prev.n+', or lighten the '+PH[wp.i].n+' plan — then':'Lighten this phase — then')+' judge it on the next 15–20 accounts that reach it.' }); });
+  /* 3 · platform waves — not an SOP question */
+  var a14=phtDate(a), waves=Object.keys(A.marks).filter(function(d){ return A.marks[d]==='wave' && d>=a14; }).sort();
+  if(waves.length) recs.push({ t:'wave', ic:'🌊', h:'<b>'+waves.map(function(d){ return fmtD(parseTs(d)); }).join(', ')+'</b> '+(waves.length===1?'looks':'look')+' like a platform-wide ban wave — bans spread across many models, VAs and phones on the same day.',
+                              s:'A wave comes from Reddit, not from the SOP. Don\'t change the SOP because of those days alone.' });
+  /* 4 · bans piling on one VA / phone / model — process, not method */
+  var s7=addDays(D.end,-6), proc=A.alerts.filter(function(x){ return x.t==='conc' && (x.dim || (x.dims && x.dims.length)) && (!x.day || x.day>=s7); });
+  if(proc.length){
+    var names=proc.map(function(x){ return x.dim?(dimLabel(x.dim)+' '+x.k):untag(x.h).replace(/^.*?concentrated:\s*/,''); }).slice(0,3);
+    recs.push({ t:'pace', ic:'🔧', h:INS.client?'<b>Some recent bans are concentrated on one VA, phone or model</b> — a process issue being checked on our side, not a method problem.':('<b>Recent bans concentrated</b> — '+esc(names.join(' · '))+'.'),
+                s:'Fix that first — it is not a reason to change the SOP for everyone.' });
+  }
+  /* 5 · did the latest SOP change help? */
+  var L=sopList().filter(function(x){ var t=parseTs(x.d); return t && t<=new Date(now.getTime()-3*864e5); });
+  if(L.length){
+    var c=L[L.length-1], ct=parseTs(c.d), bA=new Date(ct.getTime()-W), adB=insAD(D.rows,bA,ct), bB=insBans(D.rows,bA,ct), adA=insAD(D.rows,ct,now), bAft=insBans(D.rows,ct,now);
+    var wB=perWk(bB,adB), wA=perWk(bAft,adA), lab='<b>'+esc(c.n)+'</b> ('+fmtD(ct)+')';
+    if(adB>=INS_MIN_AD && adA>=INS_MIN_AD && wB!=null && wA!=null){
+      if(wA<=wB*0.75) recs.push({ t:'ok', ic:'✅', h:'Since '+lab+': banned a week fell from '+fmtWk(wB)+' to '+fmtWk(wA)+'.', s:'The change is working — keep it, and change only one more thing at a time.' });
+      else if(wA>=wB*1.25 && bAft>=3) recs.push({ t:'change', ic:'⚠️', h:'Since '+lab+': banned a week rose from '+fmtWk(wB)+' to '+fmtWk(wA)+'.', s:'Review that change first — check the wave note above before blaming it.' });
+      else recs.push({ t:'info', ic:'≈', h:'Since '+lab+': about the same — '+fmtWk(wB)+' before, '+fmtWk(wA)+' after.', s:'No clear effect yet. Give it more days before the next change.' });
+    } else recs.push({ t:'info', ic:'⏳', h:'Too early to judge '+lab+'.', s:'Needs about 5 accounts × 14 days alive on each side of the change.' });
+  }
+  if(!recs.some(function(x){ return x.t==='change' || x.t==='pace' || x.t==='wave'; }))
+    recs.unshift({ t:'ok', ic:'✅', h:'<b>No method is clearly worse right now.</b>', s:'Keep the current SOP and pace; check again next week.' });
+  /* 6 · how fast can a change be judged */
+  var pace=st.filter(function(s){ return s.made>0; }).map(function(s){ var wk=s.made/(INS_W/7); return { m:s.m, wk:wk, wks:Math.max(1, Math.ceil(15/Math.max(0.5,wk))) }; });
+  if(pace.length){
+    recs.push({ t:'info', ic:'⏱', h:'<b>Pace for SOP changes:</b> '+pace.map(function(p){ return esc(p.m)+' makes '+(Math.round(p.wk*10)/10)+' new a week → a fair read in ~'+p.wks+' week'+(p.wks===1?'':'s'); }).join(' · ')+'.',
+                s:'A change can be judged once 15–20 accounts have run under it. Change one thing at a time, and wait that long before the next.' });
+  }
+  return { st:st, recs:recs, best:best, bestM:bestM, A:A, D:D, PS:PS };
+}
+function insBottomLine(V){
+  var tiles=V.st.map(function(s){
+    var c=methodColor(s.m), vd=VERD[s.v], tr='';
+    if(s.v!=='early' && s.w0!=null && s.ad0>=INS_MIN_AD){ var up=s.w>s.w0*1.15, dn=s.w<s.w0*0.85; tr='<div class="vd-tr" style="color:'+(up?'#b91c1c':(dn?'#047857':'var(--ink3)'))+'">'+(up?'↑':(dn?'↓':'→'))+' from '+fmtWk(s.w0)+' the 14 days before</div>'; }
+    else if(s.v!=='early') tr='<div class="vd-tr muted">no earlier 14 days to compare</div>';
+    return '<div class="vd" style="border-top:3px solid '+c+'"><div class="row" style="justify-content:space-between"><b style="color:'+c+';font-size:14.5px">'+esc(s.m)+'</b><span class="vchip" style="background:'+vd.bg+';color:'+vd.c+'">'+vd.t+'</span></div>'+
+      (s.v==='early'?'<div class="vd-big" style="color:var(--ink3)">'+s.n+'<small> account'+(s.n===1?'':'s')+' so far</small></div><div class="vd-tr muted">needs ~5 accounts alive for 14 days</div>'
+                    :'<div class="vd-big">'+fmtWk(s.w)+'<small> banned a week</small></div>'+tr)+
+      '<div class="vd-k"><span>Reached posting <b>'+(s.post==null?'—':Math.round(s.post*100)+'%')+'</b></span><span>Median life <b>'+(s.med==null?'—':s.med+'d')+'</b></span>'+
+        (s.worst?'<span title="'+s.worst.d+' of '+s.worst.n+' accounts that reached it in the last 14 days were banned there">Riskiest now <b>'+esc(PH[s.worst.i].n)+' '+Math.round(s.worst.rate*100)+'%</b></span>':'')+'</div>'+
+      '<div class="vd-n">'+s.n+' accounts · '+s.alive+' alive · '+s.b+' ban'+(s.b===1?'':'s')+' in 14 days · '+s.made+' new</div></div>';
+  }).join('');
+  return '<div class="card pad ins-bl"><div class="ch-h"><b>The bottom line</b><span>per method · last 14 days vs the 14 before</span><div style="flex:1"></div>'+
+      '<button class="btn sm sec no-print" onclick="insCopy()">'+IC.doc+' Copy for the client</button><button class="btn sm sec no-print" onclick="window.print()">'+IC.dl+' Print / PDF</button></div>'+
+    (tiles?'<div class="vd-grid">'+tiles+'</div><p class="muted" style="font-size:11.5px;margin-top:8px">"Banned a week" = bans ÷ the weeks its accounts were alive — big and small, old and new methods compare fairly.</p>':'<div class="muted">No accounts with a method yet.</div>')+
+    '<div class="ch-h" style="margin:16px 0 8px"><b>What to do with the SOP</b><span>from the numbers below · one change at a time</span></div>'+
+    V.recs.map(function(r){ return '<div class="alert '+r.t+'"><div class="ic">'+r.ic+'</div><div>'+r.h+'<small>'+r.s+'</small></div></div>'; }).join('')+'</div>';
+}
+function insSummaryText(){
+  var keep=INS.client; INS.client=true;
+  try{
+    var V=insVerdict(), D=V.D, L=[], baseTxt=INS.base==='all'?BASES.map(function(b){ return b.n; }).join(' + '):baseOf(INS.base).n;
+    L.push('Reddit accounts — '+baseTxt+' · insights as of '+fmtDT(new Date(INSD.at||Date.now())));
+    L.push(''); L.push('Bottom line (last 14 days vs the 14 before):');
+    V.st.forEach(function(s){ L.push('• '+s.m+' — '+VERD[s.v].t.toUpperCase()+' ('+VERD[s.v].s+'): '+(s.v==='early'?(s.n+' accounts so far'):(fmtWk(s.w)+' of live accounts banned a week'+((s.w0!=null&&s.ad0>=INS_MIN_AD)?' (before: '+fmtWk(s.w0)+')':'')))+
+      (s.post!=null?' · '+Math.round(s.post*100)+'% reached posting':'')+(s.worst?' · riskiest phase: '+PH[s.worst.i].n+' ('+s.worst.d+' of '+s.worst.n+' banned there)':'')); });
+    L.push(''); L.push('What to do with the SOP:');
+    V.recs.forEach(function(r){ L.push('• '+untag(r.h)+' '+untag(r.s)); });
+    L.push(''); L.push('Counted: '+D.rows.length+' accounts with a method · '+D.banAll.length+' bans all-time. "Banned a week" = bans ÷ the weeks the accounts were alive.');
+    return L.join('\n');
+  } finally { INS.client=keep; }
+}
+function insCopy(){
+  var t=insSummaryText();
+  var fall=function(){ openModal('<h3 style="margin-bottom:8px">Summary for the client</h3><p class="muted" style="margin-bottom:8px">Select all and copy.</p><textarea class="inp" style="width:100%;height:320px;font-size:12px" readonly>'+esc(t)+'</textarea><div class="row" style="justify-content:flex-end;margin-top:10px"><button class="btn pri" onclick="closeModal()">Done</button></div>'); };
+  try{ navigator.clipboard.writeText(t).then(function(){ toast('Copied — paste it to the client (no VA names in it).'); }, fall); }catch(e){ fall(); }
+}
+
+/* ═══ THE PAGE ═══ */
+function insDataCheck(D){
+  var dead=D.banAll, known=dead.filter(function(b){ return b.from; }).length, arch=D.rows.filter(function(r){ return r.arch; }).length;
+  var per=BASES.filter(function(b){ return INS.base==='all' || b.id===INS.base; }).map(function(b){ return esc(b.n)+' '+D.rows.filter(function(r){ return r.project===b.id; }).length; }).join(' · ');
+  var un=D.all.filter(function(r){ return !methodOf(r) && !isParked(r); }), unB=un.filter(isDead).length, parked=D.all.filter(isParked).length;
+  var warn=[], note=[];
+  if(INSD.err) warn.push('Last refresh failed ('+esc(INSD.err)+') at '+insT(INSD.errAt)+(INSD.at?' — showing the snapshot from '+insT(INSD.at):'')+'. Retrying every minute.');
+  if(INSD.mode==='legacy') warn.push(Date.now()<INSD.legacyUntil?'<b>Older Reddit script</b> — bans archived after 30 days and stage changes typed straight into the Google Sheet are not counted yet. Paste <b>rc-2026-10-08a</b> (Apps Script → Deploy → New version).':'The live snapshot did not load — showing the board lists meanwhile.');
+  if(un.length) warn.push('<b>'+un.length+'</b> account'+(un.length===1?'':'s')+' with no method'+(unB?' — including <b>'+unB+' ban'+(unB===1?'':'s')+'</b> —':'')+' '+(un.length===1?'is':'are')+' not in these numbers. <a href="#" onclick="DB.meth=\'\';DB.all=true;DB.life=\'all\';DB.va=\'all\';DB.model=\'\';DB.phone=\'\';go(\'accounts\');return false">Tag '+(un.length===1?'it':'them')+' →</a>');
+  if(dead.length>known) warn.push('<b>'+(dead.length-known)+'</b> ban'+(dead.length-known===1?' has':'s have')+' no known phase (banned before the history log began, or never moved in the tool) — shown as "Phase unknown", still counted everywhere else.');
+  if(INSD.lastFixed) note.push(INSD.lastFixed+' stage change'+(INSD.lastFixed===1?'':'s')+' typed straight into the Google Sheet '+(INSD.lastFixed===1?'was':'were')+' just logged (dated when found).');
+  if(parked) note.push(parked+' on hold / archived — left out by design.');
+  return '<div class="card pad ins-dc"><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><div class="ins-live" id="ins-live">'+insLiveHtml()+'</div><div style="flex:1"></div>'+
+      '<button class="btn sm sec no-print" onclick="insRefresh()"'+(INSD.loading?' disabled':'')+'>'+IC.swap+' Refresh now</button></div>'+
+    '<div class="ins-dq">✓ Counting <b>'+D.rows.length+'</b> accounts with a method'+(per?' ('+per+')':'')+' · <b>'+dead.length+'</b> bans all-time'+(arch?' — '+arch+' archived by the 30-day clean-up, still counted':'')+
+      ' · ban phase known for <b>'+known+'</b> of '+dead.length+' · '+insEv().length.toLocaleString()+' history lines'+(note.length?' · '+note.join(' · '):'')+'</div>'+
+    warn.map(function(w){ return '<div class="ins-dq warn">⚠ '+w+'</div>'; }).join('')+'</div>';
+}
 function vInsights(){
   if(!isAdmin()) return '<div class="card empty">Owner only.</div>';
-  if(!allRows().length) return '<div class="card empty">Loading every base…</div>';
-  var D=insData(), A=detect(D);
-  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Insights</h2><p>Accounts per method — Vysor, Jailbroken, Blaze+ — how they live, where in the ladder bans come from, and whether bans are waves or concentrated on one model, VA or phone.</p></div>'+
-    '<select class="sel" onchange="INS.base=this.value;renderView()"><option value="all">All bases</option>'+BASES.map(function(b){ return '<option value="'+esc(b.id)+'"'+(INS.base===b.id?' selected':'')+'>'+esc(b.n)+'</option>'; }).join('')+'</select>'+
-    '<div class="seg" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(INS.range===x[0]?'on':'')+'" onclick="INS.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div></div>';
-  if(EVENTS===null) h+='<div class="banner info">'+IC.hist+'<div>Loading the history log…</div></div>';
-  // KPIs
-  var alive=D.rows.filter(function(r){ return !isDead(r); }).length;
-  var created=D.rows.filter(function(r){ var c=createdAt(r); return c && phtDate(c)>=D.start; }).length;
-  var ex=exposure(D.rows, D.start), rate=pct(D.bans.length, ex);
+  if(!insAllRows().length){
+    if(!INSD.loading && !INSD.at && (!INSD.errAt || Date.now()-INSD.errAt>20000)) insLoad(true).then(function(){ if(VIEW==='insights') renderView(); });
+    if(INSD.at && !INSD.err) return '<div class="card empty">No Reddit accounts yet.</div>';
+    return '<div class="card empty">'+(INSD.err?'Could not load Insights ('+esc(INSD.err)+') — retrying every minute. <a href="#" onclick="insRefresh();return false" style="color:var(--ot);font-weight:800">Retry now</a>':'Loading the live snapshot of every base…')+'</div>';
+  }
+  if(INS.client && (INS.dim==='va'||INS.dim==='device')) INS.dim='method';
+  var D=insData(), A=detect(D), V=insVerdict();
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Insights'+(INS.client?' <span class="vchip" style="background:#ede9fe;color:#6d28d9;vertical-align:4px">Client view</span>':'')+'</h2><p>Which method keeps Reddit accounts alive and posting, where in the ladder each one loses accounts, and whether bans are platform waves or our process — live from every account.</p></div>'+
+    '<select class="sel no-print" onchange="INS.base=this.value;renderView()"><option value="all">All bases</option>'+BASES.map(function(b){ return '<option value="'+esc(b.id)+'"'+(INS.base===b.id?' selected':'')+'>'+esc(b.n)+'</option>'; }).join('')+'</select>'+
+    '<div class="seg no-print" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(INS.range===x[0]?'on':'')+'" onclick="INS.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div>'+
+    '<label class="chk no-print" style="margin:0" title="Hides VA and phone names — safe to screen-share"><input type="checkbox" '+(INS.client?'checked':'')+' onchange="INS.client=this.checked;renderView()"> Client view</label></div>';
+  h+=insDataCheck(D);
+  h+=insBottomLine(V);
+  /* KPIs for the chosen range */
+  var sD=parseTs(D.start), now=new Date(), adR=insAD(D.rows,sD,now), bR=insBans(D.rows,sD,now);
+  var alive=D.rows.filter(function(r){ return !isDead(r); }).length, created=D.rows.filter(function(r){ var c=createdAt(r); return c && phtDate(c)>=D.start; }).length;
   var lives=D.bans.map(function(b){ return ageDays(b.r); }).filter(function(x){ return x!=null; }), med=median(lives);
-  var elig=D.rows.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)>=14; });
-  var surv14=elig.filter(function(r){ var a=ageDays(r); return !isDead(r) || (a!=null && a>14); }).length;
-  h+='<div class="kpis">'+kpi('Alive now',alive,D.rows.length+' ever logged','#a855f7')+kpi('Created',created,'in this range','#ff6b1a')+kpi('Banned',D.bans.length,'in this range','#ef4444')+
-    kpi('Ban rate',rate+'%','bans ÷ accounts exposed','#f43f5e')+kpi('Median life',med==null?'—':med+'d','created → banned','#0ea5e9')+kpi('Alive at day 14',elig.length?pct(surv14,elig.length)+'%':'—',elig.length+' accounts old enough','#10b981')+'</div>';
+  var elig=D.rows.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)>=14; }), surv14=elig.filter(function(r){ var a=ageDays(r); return !isDead(r) || (a!=null && a>14); }).length;
+  var rl=INS.range?('last '+INS.range+' days'):'all time';
+  h+='<div class="kpis" style="margin-top:12px">'+kpi('Alive now',alive,D.rows.length+' with a method','#a855f7')+kpi('Created',created,rl,'#ff6b1a')+kpi('Banned',D.bans.length,rl,'#ef4444')+
+    kpi('Banned a week',fmtWk(perWk(bR,adR)),'bans ÷ account-weeks alive · '+rl,'#f43f5e')+kpi('Median life',med==null?'—':med+'d','created → banned · '+rl,'#0ea5e9')+kpi('Alive at day 14',elig.length?pct(surv14,elig.length)+'%':'—',elig.length+' accounts old enough','#10b981')+'</div>';
   h+=methodCompare(D);
-  // alerts
-  h+='<div class="ig" style="margin-top:12px"><div class="card pad s8"><div class="ch-h"><b>Bans per day</b><span>stacked by '+dimLabel(INS.dim).toLowerCase()+' · ▲ wave · ● concentrated</span><div class="sp" style="flex:1"></div>'+
-    '<select class="sel" onchange="INS.dim=this.value;renderView()">'+DIMS.map(function(d){ return '<option value="'+d[0]+'"'+(INS.dim===d[0]?' selected':'')+'>By '+d[1].toLowerCase()+'</option>'; }).join('')+'</select></div>'+
-    banChart(D, A.marks)+'</div>'+
-    '<div class="card pad s4"><div class="ch-h"><b>What the pattern says</b><span>'+A.alerts.length+' signal'+(A.alerts.length===1?'':'s')+'</span></div>'+
-    (A.alerts.length?A.alerts.slice(0,8).map(function(a){ return '<div class="alert '+a.t+'"><div class="ic">'+(a.t==='wave'?'🌊':'⚠️')+'</div><div>'+a.h+'<small>'+a.s+'</small></div></div>'; }).join('')
+  h+='<div class="ig" style="margin-top:12px">';
+  h+='<div class="card pad"><div class="ch-h"><b>Where bans come from — by phase and method</b><span>of the accounts that reached each phase, how many were banned there</span><div style="flex:1"></div>'+
+    '<div class="seg no-print" style="width:auto">'+[['all','All time'],['range','Created '+(INS.range?'in the last '+INS.range+' days':'— all')]].map(function(x){ return '<button class="'+(INS.cohort===x[0]?'on':'')+'" onclick="INS.cohort=\''+x[0]+'\';renderView()">'+x[1]+'</button>'; }).join('')+'</div></div>'+phaseMethod(D)+'</div>';
+  var alerts=insAlerts(A);
+  h+='<div class="card pad s8"><div class="ch-h"><b>Bans per day</b><span>stacked by '+dimLabel(INS.dim).toLowerCase()+' · ▲ wave · ● concentrated · ┆ SOP change</span><div class="sp" style="flex:1"></div>'+
+    '<select class="sel no-print" onchange="INS.dim=this.value;renderView()">'+insDims().map(function(d){ return '<option value="'+d[0]+'"'+(INS.dim===d[0]?' selected':'')+'>By '+d[1].toLowerCase()+'</option>'; }).join('')+'</select></div>'+banChart(D, A.marks)+'</div>'+
+    '<div class="card pad s4"><div class="ch-h"><b>What the pattern says</b><span>'+alerts.length+' signal'+(alerts.length===1?'':'s')+'</span></div>'+
+    (alerts.length?alerts.slice(0,8).map(function(a){ return '<div class="alert '+a.t+'"><div class="ic">'+(a.t==='wave'?'🌊':'⚠️')+'</div><div>'+a.h+'<small>'+a.s+'</small></div></div>'; }).join('')
       :'<div class="alert ok"><div class="ic">✓</div><div><b>No waves and no concentrated bans</b> in this range.<small>Signals need at least 3 bans on a day, or 3 in a week for one group.</small></div></div>')+'</div>';
-  // breakdown
+  h+='<div class="card pad"><div class="ch-h"><b>Since each SOP change</b><span>banned a week under each version of the SOP — a ban counts under the SOP in force that day · dates in Settings → SOP changes</span></div>'+sopPeriods(D)+'</div>';
   h+='<div class="card pad"><div class="ch-h"><b>By '+dimLabel(INS.dim).toLowerCase()+'</b><span>ban rate in range vs. everyone — "Check" means at least 3 bans and twice the overall rate</span></div>'+breakdown(D, INS.dim)+'</div>';
-  // stage at death + survival
-  h+='<div class="card pad"><div class="ch-h"><b>Where bans come from — by phase and method</b><span>of the accounts that reached each phase, how many were banned there · all-time, this base</span></div>'+phaseMethod(D)+'</div>';
-  h+='<div class="card pad s6"><div class="ch-h"><b>Stage when banned</b><span>bans in this range, all methods</span></div>'+deathStages(D)+'</div>';
+  h+='<div class="card pad s6"><div class="ch-h"><b>Phase when banned</b><span>bans in this range, all methods · via = the state just before the ban</span></div>'+deathStages(D)+'</div>';
   h+='<div class="card pad s6"><div class="ch-h"><b>Survival by age</b><span>% still alive at each day of age · before Oct 1 vs iPhone process</span></div>'+survival(D)+'</div>';
   h+='<div class="card pad"><div class="ch-h"><b>Old process vs iPhone process</b><span>accounts created before / from '+esc(fmtD(parseTs(CFG.process_start||SOP_START)))+' — all-time, this base filter</span></div>'+cohorts(D)+'</div>';
   h+='</div>';
   var approx=D.bans.filter(function(b){ return !b.exact; }).length;
-  if(approx) h+='<p class="muted" style="font-size:11.5px;margin-top:10px">'+approx+' ban date'+(approx===1?' was':'s were')+' recorded before the history log existed and use the last board update (approximate). Every ban from now on is stamped exactly.</p>';
+  if(approx) h+='<p class="muted" style="font-size:11.5px;margin-top:10px">'+approx+' ban date'+(approx===1?' is':'s are')+' approximate — banned before the history log existed, or typed straight into the Google Sheet (dated when the tool found it, within minutes once the new script is in). Bans marked in the tool are stamped exactly.</p>';
   return h;
 }
-function afterInsights(){}
-/* ── METHOD COMPARISON — the research view ──
-   Same ladder, three approaches. For each: how many accounts, how many died, how long they live,
-   how many survive the first week, how many reach posting and how fast. Best value per column is
-   highlighted. All-time within the base filter; accounts without a method are not part of Insights. */
+function afterInsights(){ insPaintLive(); }
+/* ── METHOD COMPARISON — the research view ── */
 function methodCompare(D){
-  var P1=phaseIx('day1'), firstPost={};
-  (EVENTS||[]).forEach(function(e){ if(phaseIx(e.to)>=P1){ var t=parseTs(e.at); if(t && (!firstPost[e.account_id] || t<firstPost[e.account_id])) firstPost[e.account_id]=t; } });
-  var reached=function(r){ return !!firstPost[r.id] || phaseIx(r.status)>=P1 || phaseIx(M(r).prev)>=P1; };
-  var ms=methodsList(), rowsBy={}; ms.forEach(function(m){ rowsBy[m]=[]; });
-  D.rows.forEach(function(r){ var m=methodOf(r); if(!rowsBy[m]) rowsBy[m]=[]; rowsBy[m].push(r); });
-  var keys=Object.keys(rowsBy).filter(function(k){ return k && rowsBy[k].length; });
-  ms.forEach(function(m){ if(keys.indexOf(m)<0) keys.unshift(m); });
-  keys=ms.concat(keys.filter(function(k){ return ms.indexOf(k)<0; }));
+  var fp=insFirstPost(), now=new Date(), sD=parseTs(D.start);
+  var keys=phaseStats(D.rows).ms, ms=methodsList();
+  ms.forEach(function(m){ if(keys.indexOf(m)<0) keys.push(m); });
   var stats=keys.map(function(m){
-    var rows=rowsBy[m]||[], dead=rows.filter(isDead), n=rows.length;
+    var rows=D.rows.filter(function(r){ return methodOf(r)===m; }), dead=rows.filter(isDead), n=rows.length;
     var lives=dead.map(ageDays).filter(function(x){ return x!=null; });
-    var el7=rows.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)>=7; });
-    var s7=el7.filter(function(r){ var a=ageDays(r); return !isDead(r)||(a!=null&&a>7); }).length;
-    var ttp=rows.map(function(r){ var t=firstPost[r.id], c=createdAt(r); return (t&&c)?Math.max(0,dayDiff(c,t)):null; }).filter(function(x){ return x!=null; });
-    var inR=D.bans.filter(function(b){ return methodOf(b.r)===m; }).length;
-    return { m:m, n:n, alive:n-dead.length, dead:dead.length, rate:n?dead.length/n:null, med:median(lives), s7:el7.length?s7/el7.length:null, el7:el7.length,
-             post:n?rows.filter(reached).length/n:null, ttp:median(ttp), ttpN:ttp.length, inR:inR };
+    var el7=rows.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)>=7; }), s7=el7.filter(function(r){ var a=ageDays(r); return !isDead(r)||(a!=null&&a>7); }).length;
+    var ttp=rows.map(function(r){ var t=fp[r.id], c=createdAt(r); return (t&&c)?Math.max(0,dayDiff(c,t)):null; }).filter(function(x){ return x!=null; });
+    var adR=insAD(rows,sD,now), bR=insBans(rows,sD,now);
+    return { m:m, n:n, alive:n-dead.length, dead:dead.length, rate:n?dead.length/n:null, wk:adR>=INS_MIN_AD/2?perWk(bR,adR):null, med:median(lives), s7:el7.length?s7/el7.length:null, el7:el7.length,
+             post:n?rows.filter(function(r){ return reachedPost(r,fp); }).length/n:null, ttp:median(ttp), ttpN:ttp.length, inR:bR };
   });
   function best(key, low){ var v=stats.filter(function(s){ return s.n>=3 && s[key]!=null; }).map(function(s){ return s[key]; }); if(v.length<2) return null; return low?Math.min.apply(null,v):Math.max.apply(null,v); }
-  var B={ rate:best('rate',true), med:best('med'), s7:best('s7'), post:best('post'), ttp:best('ttp',true) };
+  var B={ rate:best('rate',true), wk:best('wk',true), med:best('med'), s7:best('s7'), post:best('post'), ttp:best('ttp',true) };
   function cell(s,key,txt){ var hi=(B[key]!=null && s[key]===B[key] && s.n>=3); return '<td class="num" style="'+(hi?'font-weight:800;color:#047857;background:#ecfdf5':'')+'">'+txt+'</td>'; }
+  var rl=INS.range?INS.range+'d':'all';
   return '<div class="card pad" style="margin-top:12px"><div class="ch-h"><b>Method comparison</b><span>Vysor vs Jailbroken vs Blaze+ — same ladder, different approach · best in each column is green (needs 3+ accounts)</span></div>'+
-    '<div class="row" style="gap:12px;margin-bottom:12px;align-items:stretch">'+stats.map(function(s){
-      var c=methodColor(s.m);
-      return '<div class="card" style="flex:1 1 200px;padding:13px 15px;border-top:3px solid '+c+'"><div class="row" style="justify-content:space-between"><b style="color:'+c+';font-size:14px">'+esc(s.m)+'</b><span class="muted" style="font-size:11.5px;font-weight:700">'+s.n+' account'+(s.n===1?'':'s')+'</span></div>'+
-        '<div class="row" style="gap:16px;margin-top:8px">'+
-          '<div><div class="lbl">Alive</div><div class="h-d" style="font-size:20px;font-weight:800">'+s.alive+'</div></div>'+
-          '<div><div class="lbl">Ban rate</div><div class="h-d" style="font-size:20px;font-weight:800;color:'+(s.rate>0.3?'#b91c1c':'inherit')+'">'+(s.rate==null?'—':Math.round(s.rate*100)+'%')+'</div></div>'+
-          '<div><div class="lbl">Reached posting</div><div class="h-d" style="font-size:20px;font-weight:800">'+(s.post==null?'—':Math.round(s.post*100)+'%')+'</div></div>'+
-        '</div></div>';
-    }).join('')+'</div>'+
-    '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Method</th><th>Accounts</th><th>Alive</th><th>Banned</th><th>Ban rate</th><th>Median life</th><th>Alive at day 7</th><th>Reached posting</th><th>Days to posting</th><th>Bans in range</th></tr></thead><tbody>'+
+    '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Method</th><th>Accounts</th><th>Alive</th><th>Banned (all-time)</th><th>Banned %</th><th>Banned a week · '+rl+'</th><th>Median life</th><th>Alive at day 7</th><th>Reached posting</th><th>Days to posting</th><th>Bans · '+rl+'</th></tr></thead><tbody>'+
     stats.map(function(s){
-      return '<tr class="r" onclick="DB.meth=\''+jsq(s.m)+'\';DB.all=true;DB.life=\'all\';DB.va=\'all\';DB.model=\'\';DB.phone=\'\';go(\'accounts\')"><td class="c1">'+methodPill(s.m,true)+'</td><td class="num">'+s.n+'</td><td class="num">'+s.alive+'</td><td class="num">'+s.dead+'</td>'+
-        cell(s,'rate',s.rate==null?'—':(Math.round(s.rate*1000)/10)+'%')+cell(s,'med',s.med==null?'—':s.med+'d')+
+      return '<tr class="r" onclick="DB.meth=\''+jsq(s.m)+'\';DB.all=true;DB.life=\'all\';DB.va=\'all\';DB.model=\'\';DB.phone=\'\';go(\'accounts\')"><td class="c1">'+methodPill(s.m,true)+'</td><td class="num">'+s.n+'</td><td class="num">'+s.alive+'</td><td class="num" style="font-weight:800">'+s.dead+'</td>'+
+        cell(s,'rate',s.rate==null?'—':(Math.round(s.rate*1000)/10)+'%')+cell(s,'wk',s.wk==null?'<span class="muted">too few</span>':fmtWk(s.wk))+cell(s,'med',s.med==null?'—':s.med+'d')+
         cell(s,'s7',s.s7==null?'too new':Math.round(s.s7*100)+'% of '+s.el7)+cell(s,'post',s.post==null?'—':Math.round(s.post*100)+'%')+
         cell(s,'ttp',s.ttp==null?'—':s.ttp+'d <span class="muted">('+s.ttpN+')</span>')+'<td class="num">'+(s.inR||'·')+'</td></tr>';
     }).join('')+'</tbody></table></div>'+
-    '<p class="muted" style="font-size:11.5px;margin-top:4px">"Days to posting" counts from creation to the first move into Day 1 Posting, from the history log — it fills in as accounts climb. Small groups swing a lot; compare once each method has 15–20 accounts.</p></div>';
+    '<p class="muted" style="font-size:11.5px;margin-top:4px">"Banned %" = banned ÷ every account ever made (favours newer methods). "Banned a week" = bans ÷ the weeks the accounts were alive in the range — the fair comparison. Small groups swing a lot; compare once each method has 15–20 accounts.</p></div>';
 }
 function banChart(D, marks){
-  var dim=INS.dim, tot={}, bans=D.bans.filter(function(b){ return !dimMissing(b.r,dim); }), left=D.bans.length-bans.length;
+  var dim=INS.dim, tot={}, bans=D.bans.filter(function(b){ return !dimMissing(b.r,dim); });
   bans.forEach(function(b){ var k=dimVal(b.r,dim); tot[k]=(tot[k]||0)+1; });
   var keys=Object.keys(tot).sort(function(a,b){ return tot[b]-tot[a]; }), top=keys.slice(0,6), col={};
-  top.forEach(function(k,i){ col[k]=PAL[i]; });
+  top.forEach(function(k,i){ col[k]=(dim==='method')?methodColor(k):PAL[i]; });
   var per={}, cr={}, mx=1, mxc=1;
   bans.forEach(function(b){ var k=top.indexOf(dimVal(b.r,dim))>=0?dimVal(b.r,dim):'Other'; var p=(per[b.day]=per[b.day]||{}); p[k]=(p[k]||0)+1; });
   D.rows.forEach(function(r){ var c=createdAt(r); if(!c) return; var d=phtDate(c); if(d>=D.start&&d<=D.end) cr[d]=(cr[d]||0)+1; });
@@ -2678,90 +3008,98 @@ function banChart(D, marks){
   var top4=Math.max(4, Math.ceil(Math.max(mx,mxc)/4)*4), sc=(H-B-T)/top4;
   var g='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;'+(n>45?'min-width:'+(n*12)+'px;':'')+'height:auto;display:block">';
   for(var i=0;i<=4;i++){ var y=H-B-(H-B-T)*i/4, v=top4*i/4; g+='<line x1="'+L+'" x2="'+(W-6)+'" y1="'+y+'" y2="'+y+'" stroke="rgba(17,19,34,.07)"/><text x="'+(L-6)+'" y="'+(y+3)+'" font-size="9.5" fill="#7f859c" text-anchor="end">'+v+'</text>'; }
+  sopList().forEach(function(c){ var ix=D.days.indexOf(c.d); if(ix<0) return; var x=(L+ix*step).toFixed(1);
+    g+='<line x1="'+x+'" x2="'+x+'" y1="'+(T-8)+'" y2="'+(H-B)+'" stroke="#6d28d9" stroke-opacity=".55" stroke-dasharray="3 3"><title>'+esc(fmtD(parseTs(c.d))+' · '+c.n)+'</title></line>'+
+       '<text x="'+(+x+3)+'" y="'+(T-1)+'" font-size="9" font-weight="700" fill="#6d28d9">'+esc(c.n.length>22?c.n.slice(0,21)+'…':c.n)+'</text>'; });
   var path='';
   D.days.forEach(function(d,ix){
-    var x=L+ix*step+(step-bw)/2, y=H-B, p=per[d]||{}, s=0;
-    top.concat(['Other']).forEach(function(k){ var v=p[k]||0; if(!v) return; var hh=v*sc; y-=hh; s+=v;
+    var x=L+ix*step+(step-bw)/2, y=H-B, p=per[d]||{};
+    top.concat(['Other']).forEach(function(k){ var v=p[k]||0; if(!v) return; var hh=v*sc; y-=hh;
       g+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+hh.toFixed(1)+'" rx="2" fill="'+(col[k]||PAL[6])+'"><title>'+esc(fmtD(parseTs(d))+' · '+k+': '+v)+'</title></rect>'; });
     var cy=H-B-(cr[d]||0)*sc; path+=(ix?'L':'M')+(L+ix*step+step/2).toFixed(1)+' '+cy.toFixed(1);
     if(marks[d]) g+=(marks[d]==='wave'?'<path d="M'+(x+bw/2-5)+' '+(y-5)+' l5 -8 l5 8z" fill="#e11d48"/>':'<circle cx="'+(x+bw/2)+'" cy="'+(y-6)+'" r="3.5" fill="#f59e0b"/>');
     var every=Math.ceil(n/12); if(ix%every===0 || ix===n-1) g+='<text x="'+(L+ix*step+step/2)+'" y="'+(H-8)+'" font-size="9.5" fill="#7f859c" text-anchor="middle">'+esc(fmtD(parseTs(d)))+'</text>';
   });
-  g+='<path d="'+path+'" fill="none" stroke="#14161f" stroke-opacity=".28" stroke-width="1.5" stroke-dasharray="3 3"/>';
-  g+='</svg>';
-  var leg='<div class="legend">'+top.map(function(k){ return '<span><i style="background:'+col[k]+'"></i>'+esc(k)+' · '+tot[k]+'</span>'; }).join('')+(keys.length>6?'<span><i style="background:'+PAL[6]+'"></i>Other</span>':'')+
-    '<span><i style="background:none;border-top:2px dashed rgba(17,19,34,.35);height:0;width:14px;border-radius:0"></i>created per day</span>'+'</div>';
-  if(!bans.length) leg='<div class="legend"><span>No bans in this range.</span><span><i style="background:none;border-top:2px dashed rgba(17,19,34,.35);height:0;width:14px;border-radius:0"></i>created per day</span></div>';
+  g+='<path d="'+path+'" fill="none" stroke="#14161f" stroke-opacity=".28" stroke-width="1.5" stroke-dasharray="3 3"/></svg>';
+  var left=D.bans.length-bans.length, crLeg='<span><i style="background:none;border-top:2px dashed rgba(17,19,34,.35);height:0;width:14px;border-radius:0"></i>created per day</span>'+(left?'<span class="muted">+ '+left+' ban'+(left===1?'':'s')+' with no '+esc(dimLabel(dim).toLowerCase())+' recorded (not stacked)</span>':'');
+  var leg=bans.length?'<div class="legend">'+top.map(function(k){ return '<span><i style="background:'+col[k]+'"></i>'+esc(k)+' · '+tot[k]+'</span>'; }).join('')+(keys.length>6?'<span><i style="background:'+PAL[6]+'"></i>Other</span>':'')+crLeg+'</div>'
+                     :'<div class="legend"><span>No bans in this range.</span>'+crLeg+'</div>';
   return '<div style="overflow-x:auto">'+g+'</div>'+leg;
 }
 function breakdown(D, dim){
   var groups={}; D.rows.forEach(function(r){ var k=dimVal(r,dim); (groups[k]=groups[k]||[]).push(r); });
-  var exAll=exposure(D.rows, D.start), rAll=D.bans.length/Math.max(1,exAll);
-  var s7=addDays(D.end,-6);
+  var exAll=exposure(D.rows, D.start), rAll=D.bans.length/Math.max(1,exAll), s7=addDays(D.end,-6);
   var list=Object.keys(groups).map(function(k){
     var rows=groups[k], b=D.bans.filter(function(x){ return dimVal(x.r,dim)===k; });
-    var ex=exposure(rows, D.start), rate=b.length/Math.max(1,ex);
-    var lives=rows.filter(isDead).map(ageDays).filter(function(x){ return x!=null; });
-    var st={}; b.forEach(function(x){ var s=x.from?stageMeta(x.from).n:'unknown'; st[s]=(st[s]||0)+1; });
-    var topSt=Object.keys(st).sort(function(a,c){ return st[c]-st[a]; })[0]||'';
+    var ex=exposure(rows, D.start), rate=b.length/Math.max(1,ex), lives=rows.filter(isDead).map(ageDays).filter(function(x){ return x!=null; });
+    var st={}; b.forEach(function(x){ var s=x.from?stageMeta(x.from).n:'phase unknown'; st[s]=(st[s]||0)+1; });
     return { k:k, n:rows.length, alive:rows.filter(function(r){ return !isDead(r); }).length, b:b.length, rate:rate, med:median(lives),
-             b7:b.filter(function(x){ return x.day>=s7; }).length, st:topSt };
+             b7:b.filter(function(x){ return x.day>=s7; }).length, st:Object.keys(st).sort(function(a,c){ return st[c]-st[a]; })[0]||'' };
   }).sort(function(a,b){ return b.b-a.b || b.n-a.n; });
   var maxRate=Math.max.apply(null, list.map(function(o){ return o.rate; }).concat([0.0001]));
   return '<div class="tbl-w" style="max-height:420px"><table class="db"><thead><tr><th class="c1">'+esc(dimLabel(dim))+'</th><th>Accounts</th><th>Alive</th><th>Banned</th><th>Ban rate</th><th></th><th>Median life</th><th>Bans · 7d</th><th>Died most in</th><th>Flag</th></tr></thead><tbody>'+
     list.map(function(o){
       var fl=(o.b>=3 && o.rate>=2*rAll)?'<span class="flag r">Check</span>':((o.b>=2 && o.rate>=1.5*rAll)?'<span class="flag a">Watch</span>':'<span class="flag g">OK</span>');
-      var w=o.rate/maxRate*100;
       return '<tr class="r" onclick="drillDim(\''+jsq(dim)+'\',\''+jsq(o.k)+'\')"><td class="c1">'+esc(o.k)+'</td><td class="num">'+o.n+'</td><td class="num">'+o.alive+'</td><td class="num" style="font-weight:800">'+o.b+'</td><td class="num">'+(Math.round(o.rate*1000)/10)+'%</td>'+
-        '<td style="min-width:90px"><div class="prog"><i style="width:'+Math.max(2,Math.min(100,w))+'%;background:'+(o.rate>=2*rAll&&o.b>=3?'#ef4444':'var(--grad)')+'"></i></div></td>'+
+        '<td style="min-width:90px"><div class="prog"><i style="width:'+Math.max(2,Math.min(100,o.rate/maxRate*100))+'%;background:'+(o.rate>=2*rAll&&o.b>=3?'#ef4444':'var(--grad)')+'"></i></div></td>'+
         '<td class="num">'+(o.med==null?'—':o.med+'d')+'</td><td class="num">'+(o.b7||'·')+'</td><td>'+esc(o.st||'—')+'</td><td>'+fl+'</td></tr>';
-    }).join('')+
-    '<tr class="grp"><td colspan="10">Overall ban rate in range: '+Math.round(rAll*1000)/10+'%</td></tr></tbody></table></div>';
+    }).join('')+'<tr class="grp"><td colspan="10">Overall ban rate in range: '+Math.round(rAll*1000)/10+'%</td></tr></tbody></table></div>';
 }
 function drillDim(dim,k){
   if(dim==='va'){ var id=''; Object.keys(NAMES).forEach(function(x){ if(vaName(x)===k) id=x; }); allRows().forEach(function(r){ if(vaName(owner(r))===k) id=owner(r); }); DB.va=id||'all'; DB.model=''; DB.phone=''; }
   else if(dim==='model'){ DB.model=k.indexOf('(')===0?'':k; DB.va='all'; DB.phone=''; }
   else if(dim==='device'){ DB.phone=k.indexOf('(')===0?'':k; DB.va='all'; DB.model=''; }
+  else if(dim==='method'){ DB.meth=k.indexOf('(')===0?'':k; DB.va='all'; DB.model=''; DB.phone=''; }
   DB.all=true; DB.life='all'; DB.q=''; DB.grp=''; DB.sort='ended'; DB.dir=-1; go('accounts');
 }
 function deathStages(D){
   if(!D.bans.length) return '<div class="muted">No bans in this range.</div>';
-  var st={}; D.bans.forEach(function(b){ var k=b.from||'?'; st[k]=(st[k]||0)+1; });
-  var ks=Object.keys(st).sort(function(a,b){ return (a==='?')-(b==='?') || stageOrd(a)-stageOrd(b); }), mx=0; ks.forEach(function(k){ mx=Math.max(mx,st[k]); });
-  return ks.map(function(k){ var sm=k==='?'?{n:'Unknown (before history)',c:'#cbd5e1'}:stageMeta(k);
-    return '<div class="hb"><div class="l">'+esc(sm.n)+'</div><div class="b"><i style="width:'+(st[k]/mx*100)+'%;background:'+sm.c+'"></i></div><div class="n">'+st[k]+'</div></div>'; }).join('');
+  var st={}, via={}; D.bans.forEach(function(b){ var k=b.from||'?'; st[k]=(st[k]||0)+1; if(b.via){ (via[k]=via[k]||{}); via[k][b.via]=(via[k][b.via]||0)+1; } });
+  var ks=Object.keys(st).sort(function(a,b){ return (a==='?')-(b==='?') || phaseIx(a)-phaseIx(b); }), mx=0; ks.forEach(function(k){ mx=Math.max(mx,st[k]); });
+  return ks.map(function(k){ var sm=k==='?'?{n:'Phase unknown',c:'#cbd5e1'}:stageMeta(k), v=via[k]?Object.keys(via[k]).map(function(x){ return via[k][x]+' via '+stageMeta(x).n; }).join(', '):'';
+    return '<div class="hb"><div class="l" title="'+esc(sm.n)+'">'+esc(sm.n)+'</div><div class="b"><i style="width:'+(st[k]/mx*100)+'%;background:'+sm.c+'"></i></div><div class="n">'+st[k]+'</div></div>'+(v?'<div class="muted" style="font-size:10.5px;margin:-3px 0 4px 128px">'+esc(v)+'</div>':''); }).join('');
 }
-/* Phase × method: for every phase of the ladder, of the accounts that REACHED it (alive there now or
-   further, or banned there or further), how many were banned WHILE in it. Same ladder, three approaches —
-   the row where one method's rate jumps is where that method breaks. */
 function phaseMethod(D){
-  var ms=methodsList().filter(function(m){ return D.rows.some(function(r){ return methodOf(r)===m; }); });
-  if(!ms.length) return '<div class="muted">No accounts with a method yet.</div>';
-  var banEv={}; (EVENTS||[]).forEach(function(e){ if(e.kind==='ban') banEv[e.account_id]=e; });
-  var far=function(r){                                                  // furthest phase index reached; -1 = unknown
-    var k=r.status;
-    if(isDead(r)){ var ev=banEv[r.id]; k=(ev&&ev.from)||M(r).prev||''; }
-    else if(k==='recovery'||k==='tempban') k=M(r).prev||'warming';
-    if(k==='new'||k==='creationstandby') k='creation';
-    return phaseIx(k);
-  };
-  var C={}; ms.forEach(function(m){ C[m]={ reach:[], died:[], unknown:0 }; PH.forEach(function(){ C[m].reach.push(0); C[m].died.push(0); }); });
-  D.rows.forEach(function(r){ var m=methodOf(r), c=C[m]; if(!c) return; var ix=far(r);
-    if(ix<0){ if(isDead(r)) c.unknown++; return; }
-    for(var i=0;i<=ix;i++) c.reach[i]++; if(isDead(r)) c.died[ix]++; });
-  var worst={}; ms.forEach(function(m){ var w=-1, wi=-1; PH.forEach(function(p,i){ var n=C[m].reach[i]; if(n>=3){ var rt=C[m].died[i]/n; if(rt>w && C[m].died[i]>0){ w=rt; wi=i; } } }); worst[m]=wi; });
-  var rows=PH.map(function(p,i){
+  var rows=D.rows; if(INS.cohort==='range' && INS.range) rows=rows.filter(function(r){ var c=createdAt(r); return c && phtDate(c)>=D.start; });
+  var PS=phaseStats(rows), ms=PS.ms, C=PS.C;
+  if(!ms.length) return '<div class="muted">'+(INS.cohort==='range'?'No accounts with a method were created in this range.':'No accounts with a method yet.')+'</div>';
+  var body=PH.map(function(p,i){
     if(!ms.some(function(m){ return C[m].reach[i]>0; })) return '';
     return '<tr><td class="c1"><span class="pill" style="background:'+p.c+'16;color:'+p.c+'">'+esc(p.n)+'</span></td>'+ms.map(function(m){
       var n=C[m].reach[i], d=C[m].died[i]; if(!n) return '<td class="num muted">·</td>';
-      var rt=d/n, hot=worst[m]===i;
+      var rt=d/n, hot=PS.worst[m] && PS.worst[m].i===i;
       return '<td class="num" style="'+(hot?'background:#fff1f2;':'')+'"><b style="color:'+(d?(rt>=0.25?'#b91c1c':(rt>=0.1?'#b45309':'var(--ink)')):'#047857')+'">'+(d?Math.round(rt*100)+'%':'0%')+'</b> <span class="muted" style="font-size:11px">'+d+' of '+n+'</span>'+(hot?' <span style="font-size:10px;font-weight:800;color:#b91c1c">worst</span>':'')+'</td>';
     }).join('')+'</tr>';
   }).join('');
-  var unk=ms.reduce(function(s,m){ return s+C[m].unknown; },0);
-  return '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Phase</th>'+ms.map(function(m){ return '<th>'+methodPill(m,true)+'</th>'; }).join('')+'</tr></thead><tbody>'+rows+'</tbody></table></div>'+
+  if(ms.some(function(m){ return C[m].unkDead; }))
+    body+='<tr><td class="c1"><span class="pill" style="background:#e2e8f0;color:#475569">Phase unknown</span></td>'+ms.map(function(m){ var u=C[m].unkDead; return '<td class="num">'+(u?'<b>'+u+'</b> <span class="muted" style="font-size:11px">banned</span>':'<span class="muted">·</span>')+'</td>'; }).join('')+'</tr>';
+  body+='<tr class="grp"><td class="c1">All phases</td>'+ms.map(function(m){ var c=C[m]; return '<td class="num"><b>'+c.dead+'</b> banned of '+c.n+' <span class="muted">('+(c.n?Math.round(c.dead/c.n*100):0)+'%)</span></td>'; }).join('')+'</tr>';
+  var vias=[]; ms.forEach(function(m){ var v=C[m].via; Object.keys(v).forEach(function(k){ vias.push(esc(m)+': '+v[k]+' after '+esc(stageMeta(k).n)); }); });
+  return '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Phase</th>'+ms.map(function(m){ return '<th>'+methodPill(m,true)+'</th>'; }).join('')+'</tr></thead><tbody>'+body+'</tbody></table></div>'+
     '<p class="muted" style="font-size:11.5px;margin-top:8px">Read across a row to compare methods at the same phase; read down a column to see where one method loses accounts. "<b>worst</b>" marks each method\'s riskiest phase (needs 3+ accounts). '+
-    'Phases fill in as accounts climb the ladder.</p>';
+    'A ban is placed in the last ladder phase the account was in — a Temp ban, Spam recovery or hold before it is looked through'+(vias.length?' ('+vias.join(' · ')+')':'')+'. Every ban is counted: the bottom row matches the method comparison.</p>';
+}
+function sopPeriods(D){
+  var L=sopList(), now=new Date(), first=null;
+  D.rows.forEach(function(r){ var c=createdAt(r); if(c && (!first || c<first)) first=c; });
+  if(!first) return '<div class="muted">No accounts yet.</div>';
+  var cuts=L.filter(function(x){ var t=parseTs(x.d); return t && t>first && t<now; });
+  if(!cuts.length) return '<div class="muted">No SOP change dates inside the data yet — add them in Settings → SOP changes.</div>';
+  var P=[{ a:first, b:parseTs(cuts[0].d), n:'Before '+cuts[0].n, d:'' }];
+  cuts.forEach(function(c,i){ P.push({ a:parseTs(c.d), b:(i+1<cuts.length)?parseTs(cuts[i+1].d):now, n:c.n, d:c.d }); });
+  var ms=phaseStats(D.rows).ms;
+  P.forEach(function(p){ p.ad=insAD(D.rows,p.a,p.b); p.bn=insBans(D.rows,p.a,p.b); p.w=perWk(p.bn,p.ad); p.per={};
+    ms.forEach(function(m){ var rr=D.rows.filter(function(r){ return methodOf(r)===m; }), ad=insAD(rr,p.a,p.b), bn=insBans(rr,p.a,p.b); p.per[m]={ ad:ad, bn:bn, w:ad>=INS_MIN_AD/2?perWk(bn,ad):null }; }); });
+  var good=P.filter(function(p){ return p.ad>=INS_MIN_AD && p.w!=null; }), lo=null, hi=null;
+  good.forEach(function(p){ if(lo==null||p.w<lo) lo=p.w; if(hi==null||p.w>hi) hi=p.w; });
+  var col=function(w,ad){ if(w==null || ad<INS_MIN_AD || good.length<2 || lo===hi) return ''; return w===lo?'color:#047857;font-weight:800':(w===hi?'color:#b91c1c;font-weight:800':''); };
+  var t='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">SOP in force</th><th>From</th><th>Days</th><th>Account-weeks</th><th>Bans</th><th>Banned a week</th>'+ms.map(function(m){ return '<th>'+methodPill(m,true)+'</th>'; }).join('')+'</tr></thead><tbody>'+
+    P.map(function(p){ var days=Math.max(0,Math.round((p.b-p.a)/864e5));
+      return '<tr><td class="c1">'+esc(p.n)+'</td><td>'+(p.d?esc(fmtD(parseTs(p.d))):'<span class="muted">start</span>')+'</td><td class="num">'+days+'</td><td class="num">'+Math.round(p.ad/7)+'</td><td class="num" style="font-weight:800">'+p.bn+'</td>'+
+        '<td class="num" style="'+col(p.w,p.ad)+'">'+(p.ad>=INS_MIN_AD?fmtWk(p.w):'<span class="muted">too few</span>')+'</td>'+
+        ms.map(function(m){ var x=p.per[m]; return '<td class="num">'+(x.w==null?'<span class="muted">·</span>':fmtWk(x.w)+' <span class="muted" style="font-size:11px">('+x.bn+')</span>')+'</td>'; }).join('')+'</tr>'; }).join('')+
+    '</tbody></table></div>';
+  return t+'<p class="muted" style="font-size:11.5px;margin-top:8px">"Banned a week" = bans ÷ the weeks accounts were alive under that SOP, so a short period with a big fleet and a long one with a small fleet compare fairly. Green = best period, red = worst (needs ~5 accounts × 14 days alive).</p>';
 }
 function survival(D){
   var maxT=30, W=520, H=200, L=34, B=24, T=12;
@@ -2784,16 +3122,13 @@ function survival(D){
   return g+'<div class="legend">'+series.map(function(s){ return '<span><i style="background:'+s.c+'"></i>'+esc(s.n)+' · '+s.size+' accounts'+(s.pts.length<2?' (too new to plot)':'')+'</span>'; }).join('')+'</div>';
 }
 function cohorts(D){
-  /* Reached posting = it is (or was, per its history) at Day 1 Posting or beyond. */
-  var P1=phaseIx('day1'), seen={};
-  (EVENTS||[]).forEach(function(e){ if(phaseIx(e.to)>=P1 || phaseIx(e.from)>=P1) seen[e.account_id]=1; });
-  var reachPost=function(r){ return seen[r.id] || phaseIx(r.status)>=P1 || phaseIx(M(r).prev)>=P1; };
+  var fp=insFirstPost();
   var rowsC=[['legacy','Before Oct 1'],['iphone','iPhone process']].map(function(c){
     var rows=D.rows.filter(function(r){ return processOf(r)===c[0]; }), dead=rows.filter(isDead);
     var el7=rows.filter(function(r){ var cc=createdAt(r); return cc && dayDiff(cc)>=7; }), s7=el7.filter(function(r){ var a=ageDays(r); return !isDead(r)||(a!=null&&a>7); }).length;
     var lives=dead.map(ageDays).filter(function(x){ return x!=null; });
     return '<tr><td class="c1">'+c[1]+'</td><td class="num">'+rows.length+'</td><td class="num">'+(rows.length-dead.length)+'</td><td class="num">'+dead.length+'</td><td class="num">'+pct(dead.length,rows.length)+'%</td>'+
-      '<td class="num">'+(median(lives)==null?'—':median(lives)+'d')+'</td><td class="num">'+(el7.length?pct(s7,el7.length)+'% of '+el7.length:'too new')+'</td><td class="num">'+pct(rows.filter(reachPost).length,rows.length)+'%</td></tr>';
+      '<td class="num">'+(median(lives)==null?'—':median(lives)+'d')+'</td><td class="num">'+(el7.length?pct(s7,el7.length)+'% of '+el7.length:'too new')+'</td><td class="num">'+pct(rows.filter(function(r){ return reachedPost(r,fp); }).length,rows.length)+'%</td></tr>';
   });
   return '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Process</th><th>Accounts</th><th>Alive</th><th>Banned</th><th>Banned %</th><th>Median life</th><th>Alive at day 7</th><th>Reached posting</th></tr></thead><tbody>'+rowsC.join('')+'</tbody></table></div>'+
     '<p class="muted" style="font-size:11.5px;margin-top:8px">The iPhone process started '+esc(fmtD(parseTs(CFG.process_start||SOP_START)))+' — give it two to three weeks before reading much into the comparison.</p>';
@@ -3741,7 +4076,7 @@ function vSettings(){
   return sub+vSettingsLists();
 }
 function vSettingsLists(){
-  if(!SET){ SET=JSON.parse(JSON.stringify(CFG)); SET_SNAP=JSON.stringify(SET); }
+  if(!SET){ SET=JSON.parse(JSON.stringify(CFG)); if(!Array.isArray(SET.sop_changes)) SET.sop_changes=sopList(); SET_SNAP=JSON.stringify(SET); }
   if(!SET.models) SET.models={};
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Settings</h2><p>The pick-lists VAs choose from when they log an account.</p></div><button class="btn sec" onclick="SET=null;renderView()">Discard changes</button><button class="btn pri" id="set-go" onclick="setSave()">Save settings</button></div>';
   h+='<div class="ig">'+(isAdmin()?qzAdminCard():'')+'<div class="card pad s6"><div class="ch-h"><b>Company iPhones</b><span>every account traces back to one phone · each phone belongs to one base — Altz only for now</span></div>'+
@@ -3770,6 +4105,13 @@ function vSettingsLists(){
     '<input class="inp" style="width:150px;padding:4px 9px;font-size:12px" placeholder="+ add niche" onkeydown="if(event.key===\'Enter\'&&this.value.trim()){SET.niches.push(this.value.trim());renderView();}"></div></div>';
   h+='<div class="card pad s6"><div class="ch-h"><b>iPhone process start</b><span>splits "before" vs "iPhone process" in Insights</span></div>'+
     '<input class="inp" type="date" value="'+esc(SET.process_start||SOP_START)+'" onchange="SET.process_start=this.value"></div>';
+  if(!Array.isArray(SET.sop_changes)) SET.sop_changes=sopList();
+  h+='<div class="card pad s6"><div class="ch-h"><b>SOP changes</b><span>marked on Insights — each one is compared with the weeks before it, so the client sees whether it worked</span></div>'+
+    SET.sop_changes.map(function(x,i){ return '<div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:nowrap"><input class="inp" type="date" style="width:150px" value="'+esc(x.d)+'" onchange="SET.sop_changes['+i+'].d=this.value">'+
+      '<input class="inp" style="flex:1" value="'+esc(x.n)+'" placeholder="What changed (e.g. slower Day 1 Posting)" oninput="SET.sop_changes['+i+'].n=this.value">'+
+      '<button class="ghost" title="Remove" onclick="SET.sop_changes.splice('+i+',1);renderView()">'+IC.x+'</button></div>'; }).join('')+
+    '<button class="btn sm sec" onclick="SET.sop_changes.push({ d:phtDate(new Date()), n:\'\' });renderView()">'+IC.plus+' Add an SOP change</button>'+
+    '<div class="hint muted" style="font-size:11px;margin-top:6px">Add one every time the SOP changes — Insights then shows "banned a week" before and after it.</div></div>';
   var sw=SET.sc_weights||(SET.sc_weights={ p:20, q:20, r:10 }), swT=(+sw.p||0)+(+sw.q||0)+(+sw.r||0);
   h+='<div class="card pad s6"><div class="ch-h"><b>Scorecard weights</b><span>the Reddit Central share of each VA\'s overall scorecard</span></div>'+
     '<div class="f2" style="grid-template-columns:repeat(3,1fr)">'+[['p','Productivity'],['q','QA'],['r','Results']].map(function(x){
