@@ -554,7 +554,7 @@ function apiGet(params, ttl){
   return p.then(clone);
 }
 function apiPost(obj){
-  PENDING++; LAST_ACT=Date.now();
+  PENDING++; LAST_ACT=Date.now(); try{ ACT.work=Date.now(); }catch(_w){}
   obj=Object.assign({}, obj, { by: obj.by||myName(), by_id: obj.by_id||myId() });   // every write says who, by ID — the backend checks the role
   return fetch(ALTR_URL, { method:'POST', body:JSON.stringify(obj) }).then(function(r){ return r.json(); })
     .finally(function(){ _cache={}; PENDING=Math.max(0,PENDING-1); LAST_ACT=Date.now(); });
@@ -676,7 +676,7 @@ function livePoll(){
   loadState(true);
 }
 setInterval(livePoll, 45000);
-setInterval(function(){ linkLoad(false).then(function(){ if(VIEW==='delivery'||VIEW==='sourcing') renderView(); }); }, 60000); setTimeout(function(){ linkLoad(true).then(renderView); }, 2500);
+setInterval(function(){ linkLoad(false).then(function(){ try{ var st=linkState(LINK.me); if(wtGet() && (st.k==='off'||st.k==='other')) wtStop('Work timer stopped — '+st.why); }catch(_w){} if(VIEW==='delivery'||VIEW==='sourcing') renderView(); }); }, 60000); setTimeout(function(){ linkLoad(true).then(renderView); }, 2500);
 document.addEventListener('visibilitychange', function(){ if(!document.hidden) livePoll(); });
 
 /* ── derived model ── */
@@ -999,7 +999,7 @@ function vDelivery(){
   var mine=all?phones:phones.filter(function(p){ return set[String(p.phone)]; });
   var prog=postProgress(set), nu=nextUp(prog), nk=nu?keyOf(nu.a):'';
   var h=topBar('Delivery', all?'the whole fleet — phones, posting, who is where':'your phones and your accounts', (lead?scopeSeg(PF)+'<button class="btn sm sec" onclick="autoAssignPosting()">Auto-assign phones</button>':''));
-  h+=linkBanner();
+  h+=linkBanner()+wtBar('Posting');
   if(!all && !mine.length) h+='<div class="banner warn">'+IC.phone+'<div><b>No phones assigned to you'+(lead?' on the posting roster':' yet')+'.</b> '+(lead?'Pick a person and phones in Settings → Team.':'Ask your lead to put you on the posting roster (Settings → Team).')+'</div></div>';
   try{ var rk='altr2_phchk_'+myId()+'_'+phtToday(); if(mine.length && !sessionStorage.getItem(rk)){ h+='<div class="banner info">'+IC.phone+'<div style="flex:1"><b>Check your phones first.</b> Tap each phone to set its real status — a disconnected or on-hold phone drops out of today\'s targets by itself.</div><button class="btn sm pri" onclick="sessionStorage.setItem(\''+rk+'\',1);this.closest(\'.banner\').remove()">Done</button></div>'; } }catch(e){}
   var down=mine.filter(function(p){ return isDown(p.phone); }), iss=mine.filter(function(p){ return phoneStatus(p.phone)==='issue'; }), disc=mine.filter(function(p){ return phoneStatus(p.phone)==='disconnected'; }), hold=mine.filter(function(p){ return phoneStatus(p.phone)==='hold'; });
@@ -1172,7 +1172,7 @@ async function autoAssignPosting(){
 function vSourcing(){
   // a VA sees only the phones on their SOURCING roster (Jeth, Oct 5)
   var lead=isLead(), all=lead&&SF.scope!=='mine', set=all?null:mySrcPhones(), map=sourceMap(), sp=srcProgress(set);
-  var h=linkBanner()+topBar('Sourcing <em>pipeline</em>', 'Red = a cycle to source · orange = sourced and queued · green = posted. '+(lead?'Click a box to cycle it, + adds the next cycle, right-click renumbers.':'Click a red box when you have sourced that cycle.'), lead?scopeSeg(SF)+'<button class="btn sm sec" onclick="autoAssignSrc()">Auto-assign phones</button><button class="btn sm sec" onclick="recordDay()">Record day</button>':'');
+  var h=linkBanner()+wtBar('Sourcing')+topBar('Sourcing <em>pipeline</em>', 'Red = a cycle to source · orange = sourced and queued · green = posted. '+(lead?'Click a box to cycle it, + adds the next cycle, right-click renumbers.':'Click a red box when you have sourced that cycle.'), lead?scopeSeg(SF)+'<button class="btn sm sec" onclick="autoAssignSrc()">Auto-assign phones</button><button class="btn sm sec" onclick="recordDay()">Record day</button>':'');
   if(!all){ var myPh=(STATE.phones||[]).filter(function(p){ return set[String(p.phone)]; }).sort(function(a,b){ return fnum(a.phone)-fnum(b.phone); });
     if(!myPh.length) h+='<div class="banner warn">'+IC.phone+'<div><b>No phones assigned to you on the sourcing roster.</b> '+(lead?'Pick a person and phones in Settings → Team.':'Ask your lead to put you on the sourcing roster (Settings → Team).')+'</div></div>';
     else h+='<div class="comp" style="margin-bottom:14px"><div class="comp-h"><b>My phones</b><span class="chip">'+myPh.filter(function(p){ return !isDown(p.phone); }).length+'/'+myPh.length+' in play</span><span class="muted" style="font-size:11px;font-weight:700">tap a phone to set its status</span></div><div class="ph-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:6px">'+myPh.map(function(p){ return phoneRow(p, null); }).join('')+'</div></div>';
@@ -1484,15 +1484,46 @@ function linkState(p){
   return { k:'ok', since:p.task_since||'', tracked:+p.tracked_secs||0, trackedProj:+p.tracked_proj_secs||0, task:p.task };
 }
 /* attended clock: 15-second slices while the tab is visible and the VA touched the page within 90 s */
-var ACT={ last:Date.now(), key:'' };
+var ACT={ last:Date.now(), key:'', work:0 };
+/* ═══ WORK TIMER (owner, Oct 8) ═══
+   ALTR work happens on the phones, so "clicking in the Studio" alone made the portal stop VAs who were busy posting.
+   Now the Studio has a timer like Reddit Central's: ▶ Start when you begin posting / sourcing, ■ Stop when you finish.
+   While it runs, the Studio counts you as working — even with the tab in the background — AS LONG AS something is
+   ticked or noted in the Studio at least every 30 minutes (any box, note, reel tick or phone check). 30 minutes with
+   nothing ticked → it stops counting (and the portal's 10-minute rule takes over). The portal stopping, or switching
+   away from ALTR, stops this timer too. */
+var WT_IDLE=30*60*1000;
+function wtKey(){ return 'altr_wt_'+String(USER&&USER.id||'x').toUpperCase(); }
+function wtGet(){ try{ var v=JSON.parse(localStorage.getItem(wtKey())||'null'); if(v && v.t && (Date.now()-v.t)<14*3600*1000) return v; }catch(e){} return null; }
+function wtLive(){ var w=wtGet(); return !!(w && (Date.now()-Math.max(ACT.work||0, w.t))<WT_IDLE); }
+async function wtStart(lane){
+  if(!(await linkGate('The work timer'))) return;
+  try{ localStorage.setItem(wtKey(), JSON.stringify({ t:Date.now(), lane:lane||'Posting' })); }catch(e){}
+  ACT.work=Date.now(); ACT.last=Date.now(); try{ tbSend(true); }catch(_s){}
+  toast('Work timer started — tick each account as you finish it'); renderView();
+}
+function wtStop(why){ try{ localStorage.removeItem(wtKey()); }catch(e){} try{ tbSend(true); }catch(_s){} if(why) toast(why); renderView(); }
+function wtClock(ms){ var x=Math.max(0,Math.floor(ms/1000)), h=Math.floor(x/3600), m=Math.floor(x%3600/60), s2=x%60, p=function(n){ return n<10?'0'+n:''+n; }; return p(h)+':'+p(m)+':'+p(s2); }
+function wtBar(lane){
+  if(!USER || isOwner()) return '';
+  var w=wtGet();
+  if(!w) return '<div class="banner info" id="wt-bar" style="align-items:center"><span style="font-size:18px">⏱</span><div style="flex:1"><b>Work timer</b> — press Start when you begin '+esc(lane.toLowerCase())+'. It keeps your Studio time counting while you work on the phones; tick each account as you finish it.</div><button class="btn pri sm" onclick="wtStart(\''+jsq(lane)+'\')">▶ Start · '+esc(lane)+'</button></div>';
+  var idle=Date.now()-Math.max(ACT.work||0, w.t), warn=idle>20*60*1000;
+  return '<div class="banner" id="wt-bar" style="align-items:center;background:'+(warn?'rgba(245,158,11,.14)':'rgba(163,230,53,.14)')+';border-color:'+(warn?'rgba(245,158,11,.5)':'rgba(163,230,53,.5)')+'"><span style="font-size:18px">⏱</span>'+
+    '<div style="flex:1"><b id="wt-clock" style="font-variant-numeric:tabular-nums">'+wtClock(Date.now()-w.t)+'</b> · '+esc(w.lane)+
+    '<div class="muted" id="wt-hint" style="font-size:12px;margin-top:2px">'+(idle>=WT_IDLE?'<b style="color:#ef4444">Not counting — nothing ticked for 30 minutes.</b> Tick an account to continue.':(warn?'Last tick '+Math.floor(idle/60000)+' min ago — tick something soon (the timer stops counting after 30 min without a tick).':'Last tick '+Math.floor(idle/60000)+' min ago'))+'</div></div>'+
+    '<button class="btn sm sec" onclick="wtStop(\'Work timer stopped\')">■ Stop</button></div>';
+}
+setInterval(function(){ try{ var w=wtGet(), c=document.getElementById('wt-clock'); if(w && c) c.textContent=wtClock(Date.now()-w.t); }catch(e){} }, 1000);
 function actKey(){ return 'altr_tl_'+String(USER&&USER.id||'x').toUpperCase()+'_'+phtToday(); }
 function toolToday(){ try{ return parseInt(localStorage.getItem(actKey())||'0',10)||0; }catch(e){ return 0; } }
 function actBump(){ var was=ACT.last; ACT.last=Date.now(); if(Date.now()-was>60000){ try{ tbSend(false); }catch(e){} } }
 ['click','keydown','pointerdown','touchstart','scroll','wheel'].forEach(function(ev){ try{ document.addEventListener(ev, actBump, { passive:true, capture:true }); }catch(e){} });
 setInterval(function(){
   try{
-    if(!USER || document.hidden) return;
-    if(Date.now()-ACT.last>90000) return;
+    if(!USER) return;
+    var attended=!document.hidden && (Date.now()-ACT.last)<=90000;
+    if(!attended && !wtLive()) return;             // work timer running + a tick in the last 30 min also counts (phone work)
     var k=actKey(), v=(parseInt(localStorage.getItem(k)||'0',10)||0)+15; localStorage.setItem(k, String(v));
     if(v%300===0) toolSync();                       // every 5 attended minutes
   }catch(e){}
@@ -1540,8 +1571,10 @@ function linkBanner(){
    tab — the work often happens on the phone screen, not in this tab). Missing table → it goes quiet and retries later. */
 var TB={ act:Date.now(), sent:0, off:0, ext:true, openSent:0 };
 Object.defineProperty(TB, 'act', { get:function(){ return (typeof ACT!=='undefined' && ACT.last) || 0; }, set:function(v){ try{ ACT.last=v; }catch(e){} } });
-function tbActive(){ try{ if(false) return true; }catch(e){} return !document.hidden && (Date.now()-TB.act)<90000; }
+function tbActive(){ try{ if(wtLive()) return true; }catch(e){} return !document.hidden && (Date.now()-TB.act)<90000; }
 function tbInfo(){ var td=0; try{ td=toolToday(); }catch(e){}
+  var w=null; try{ w=wtGet(); }catch(e){}
+  if(w) return { run_since:new Date(w.t).toISOString(), run_label:w.lane+(wtLive()?'':' — not counting (nothing ticked for 30 min)'), today_secs:td };
   var on=!document.hidden && (Date.now()-((typeof ACT!=='undefined'&&ACT.last)||0))<90000;
   return { run_since:null, run_label: on ? 'Working in the Studio' : null, today_secs: td }; }
 function tbPost(body){
