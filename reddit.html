@@ -1529,23 +1529,41 @@ function linkIsReddit(task){ return /reddit/i.test(String(task||'')); }
    a task timer running here, or clicking / typing in this tab in the last 90 s. While that is true this page writes
    { employee_id, tool:"reddit", last_active } to Supabase tool_beat about once a minute (also from a background
    tab — the work often happens on the phone screen, not in this tab). Missing table → it goes quiet and retries later. */
-var TB={ act:Date.now(), sent:0, off:0 };
+var TB={ act:Date.now(), sent:0, off:0, ext:true, openSent:0 };
 ['click','keydown','pointerdown','touchstart','scroll','wheel'].forEach(function(ev){ try{ document.addEventListener(ev, function(){ var was=TB.act; TB.act=Date.now(); if(Date.now()-was>60000) tbSend(false); }, { passive:true, capture:true }); }catch(e){} });
 function tbActive(){ try{ if(Object.keys(tmAll()).length>0) return true; }catch(e){} return !document.hidden && (Date.now()-TB.act)<90000; }
+function tbInfo(){ var o={}; try{ o=tmAll(); }catch(e){}
+  var best=null; Object.keys(o).forEach(function(k){ if(o[k] && o[k].t && (!best || o[k].t<o[best].t)) best=k; });
+  var lbl=''; if(best){ var parts=best.split('|'), id=parts[0], k=parts[1]||'', r=null; try{ r=rowById(id); }catch(e){}
+    lbl = id==='__create' ? 'Creating an account' : ((/^s\d/.test(k) ? 'Session '+k.slice(1) : (k==='c' ? 'Creation' : 'Task'))+(r&&r.handle?' · '+r.handle:'')); }
+  var n=Object.keys(o).length; if(n>1) lbl+=' (+'+(n-1)+' more)';
+  var td=0; try{ td=timedToday(); }catch(e){}
+  return { run_since: best ? new Date(o[best].t).toISOString() : null, run_label: lbl || null, today_secs: td }; }
+function tbPost(body){
+  return fetch(SB_URL+'/rest/v1/tool_beat?on_conflict=employee_id,tool', { method:'POST', keepalive:true,
+    headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json', Prefer:'resolution=merge-duplicates,return=minimal' },
+    body:JSON.stringify(body) });
+}
+/* Two signals (Oct 8): last_active = real work (the 10-minute rule); open_at = this tool is open and signed in as you
+   (the portal's pairing step before Start), sent every ~30 s with what the tool timer is doing right now. */
 function tbSend(force){
   try{
     var me=String(USER&&USER.id||'').toUpperCase(); if(!me) return;
-    if(Date.now()<TB.off) return;
-    if(!force && (Date.now()-TB.sent)<55000) return;
-    if(!tbActive()) return;
-    TB.sent=Date.now();
-    fetch(SB_URL+'/rest/v1/tool_beat?on_conflict=employee_id,tool', { method:'POST', keepalive:true,
-      headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json', Prefer:'resolution=merge-duplicates,return=minimal' },
-      body:JSON.stringify({ employee_id:me, tool:"reddit", last_active:new Date().toISOString() }) })
-      .then(function(r){ if(r.status===404 || r.status===400) TB.off=Date.now()+10*60000; }).catch(function(){});
+    var now=Date.now(); if(now<TB.off) return;
+    var act=tbActive(), dueAct=act && (force || now-TB.sent>=55000), dueOpen=TB.ext && (force || now-TB.openSent>=30000);
+    if(!dueAct && !dueOpen) return;
+    var body={ employee_id:me, tool:"reddit" };
+    if(dueAct){ body.last_active=new Date().toISOString(); TB.sent=now; }
+    if(TB.ext){ var x=tbInfo()||{}; body.open_at=new Date().toISOString(); body.run_since=x.run_since||null; body.run_label=x.run_label||null; body.today_secs=Math.max(0,Math.round(x.today_secs||0)); TB.openSent=now; }
+    if(!body.last_active && !body.open_at) return;
+    tbPost(body).then(function(r){
+      if(r.status===404){ TB.off=Date.now()+10*60000; return; }
+      if(r.status===400 && TB.ext){ TB.ext=false; if(body.last_active) tbPost({ employee_id:me, tool:"reddit", last_active:body.last_active }).catch(function(){}); }   // pairing columns not added yet
+    }).catch(function(){});
   }catch(e){}
 }
-setInterval(function(){ tbSend(false); }, 30000);
+setInterval(function(){ tbSend(false); }, 15000); setTimeout(function(){ tbSend(true); }, 3000);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) tbSend(true); });
 async function linkLoad(force){
   var me=String(USER&&USER.id||'').toUpperCase(); if(!me) return;
   try{

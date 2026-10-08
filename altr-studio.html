@@ -1538,23 +1538,37 @@ function linkBanner(){
    clicking / typing / ticking in the Studio in the last 90 s. While that is true this page writes
    { employee_id, tool:"altr", last_active } to Supabase tool_beat about once a minute (also from a background
    tab — the work often happens on the phone screen, not in this tab). Missing table → it goes quiet and retries later. */
-var TB={ act:Date.now(), sent:0, off:0 };
+var TB={ act:Date.now(), sent:0, off:0, ext:true, openSent:0 };
 Object.defineProperty(TB, 'act', { get:function(){ return (typeof ACT!=='undefined' && ACT.last) || 0; }, set:function(v){ try{ ACT.last=v; }catch(e){} } });
 function tbActive(){ try{ if(false) return true; }catch(e){} return !document.hidden && (Date.now()-TB.act)<90000; }
+function tbInfo(){ var td=0; try{ td=toolToday(); }catch(e){}
+  var on=!document.hidden && (Date.now()-((typeof ACT!=='undefined'&&ACT.last)||0))<90000;
+  return { run_since:null, run_label: on ? 'Working in the Studio' : null, today_secs: td }; }
+function tbPost(body){
+  return fetch(SB_URL+'/rest/v1/tool_beat?on_conflict=employee_id,tool', { method:'POST', keepalive:true,
+    headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json', Prefer:'resolution=merge-duplicates,return=minimal' },
+    body:JSON.stringify(body) });
+}
+/* Two signals (Oct 8): last_active = real work (the 10-minute rule); open_at = this tool is open and signed in as you
+   (the portal's pairing step before Start), sent every ~30 s with what the tool timer is doing right now. */
 function tbSend(force){
   try{
     var me=USER?String(USER.id||'').toUpperCase():''; if(!me) return;
-    if(Date.now()<TB.off) return;
-    if(!force && (Date.now()-TB.sent)<55000) return;
-    if(!tbActive()) return;
-    TB.sent=Date.now();
-    fetch(SB_URL+'/rest/v1/tool_beat?on_conflict=employee_id,tool', { method:'POST', keepalive:true,
-      headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json', Prefer:'resolution=merge-duplicates,return=minimal' },
-      body:JSON.stringify({ employee_id:me, tool:"altr", last_active:new Date().toISOString() }) })
-      .then(function(r){ if(r.status===404 || r.status===400) TB.off=Date.now()+10*60000; }).catch(function(){});
+    var now=Date.now(); if(now<TB.off) return;
+    var act=tbActive(), dueAct=act && (force || now-TB.sent>=55000), dueOpen=TB.ext && (force || now-TB.openSent>=30000);
+    if(!dueAct && !dueOpen) return;
+    var body={ employee_id:me, tool:"altr" };
+    if(dueAct){ body.last_active=new Date().toISOString(); TB.sent=now; }
+    if(TB.ext){ var x=tbInfo()||{}; body.open_at=new Date().toISOString(); body.run_since=x.run_since||null; body.run_label=x.run_label||null; body.today_secs=Math.max(0,Math.round(x.today_secs||0)); TB.openSent=now; }
+    if(!body.last_active && !body.open_at) return;
+    tbPost(body).then(function(r){
+      if(r.status===404){ TB.off=Date.now()+10*60000; return; }
+      if(r.status===400 && TB.ext){ TB.ext=false; if(body.last_active) tbPost({ employee_id:me, tool:"altr", last_active:body.last_active }).catch(function(){}); }   // pairing columns not added yet
+    }).catch(function(){});
   }catch(e){}
 }
-setInterval(function(){ tbSend(false); }, 30000);
+setInterval(function(){ tbSend(false); }, 15000); setTimeout(function(){ tbSend(true); }, 3000);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) tbSend(true); });
 /* SELF-REFRESH (Oct 7) — same as Reddit Central: the page watches its own ETag on Netlify and reloads itself within
    ~2 minutes of a new altr-studio.html going live. It waits while a box is open, a write is in flight or a field has focus. */
 var _pageTag=null;
