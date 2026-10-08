@@ -315,6 +315,20 @@ table.db tr.dead td{color:var(--ink3)}
 .tl .ev small{display:block;color:var(--ink3);font-size:11px;font-weight:600;margin-top:2px}
 #modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-46%) scale(.98);width:min(520px,calc(100vw - 24px));max-height:calc(100vh - 40px);overflow:auto;background:var(--s1);border-radius:20px;box-shadow:0 30px 80px -20px rgba(17,19,34,.45);z-index:95;opacity:0;pointer-events:none;transition:all .2s}
 #modal.on{opacity:1;pointer-events:auto;transform:translate(-50%,-50%)}
+#modal.wide{width:min(900px,calc(100vw - 24px))}
+#modal.wide .seg button{white-space:nowrap;padding:7px 12px}
+.xf-step{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin:16px 0 7px;display:flex;align-items:center;gap:8px}
+.xf-step b{background:var(--ink);color:#fff;border-radius:100px;width:18px;height:18px;display:inline-grid;place-items:center;font-size:10.5px;letter-spacing:0}
+.xf-wrap{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:12px}
+.xf-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.xf-tbl td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.xf-tbl tr:last-child td{border-bottom:none}
+.xf-tbl tr.off td{opacity:.5}
+.xf-to{font-weight:800;color:var(--ot)}
+.xf-bar{display:flex;align-items:center;gap:10px;padding:4px 0}
+.xf-bar .tr{flex:1;height:8px;background:var(--s3);border-radius:8px;overflow:hidden;position:relative}
+.xf-bar .tr i{position:absolute;top:0;bottom:0;left:0;background:#cbd5e1}
+.xf-bar .tr em{position:absolute;top:0;bottom:0;background:var(--o)}
 .md-h{padding:20px 22px 6px}
 .md-h h3{font-family:'Sora',sans-serif;font-size:18px}
 .md-h p{color:var(--ink2);font-size:12.5px;margin-top:4px;line-height:1.5}
@@ -1055,7 +1069,7 @@ function start(){
 
 /* ── modal / drawer plumbing ── */
 var _mResolve=null;
-function openModal(html){ var m=$('modal'); m.innerHTML=html; m.classList.add('on'); $('scrim').classList.add('on'); var f=m.querySelector('input:not([type=checkbox]):not([type=radio]),select,textarea'); if(f) setTimeout(function(){ try{ f.focus(); }catch(e){} },60); }
+function openModal(html){ var m=$('modal'); m.classList.remove('wide'); m.innerHTML=html; m.classList.add('on'); $('scrim').classList.add('on'); var f=m.querySelector('input:not([type=checkbox]):not([type=radio]),select,textarea'); if(f) setTimeout(function(){ try{ f.focus(); }catch(e){} },60); }
 function closeModal(v){ $('modal').classList.remove('on'); if(!$('drawer').classList.contains('on')) $('scrim').classList.remove('on'); if(_mResolve){ var r=_mResolve; _mResolve=null; r(v); } }
 function closeAll(){ closeModal(false); $('drawer').classList.remove('on'); $('scrim').classList.remove('on'); }
 document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeAll(); });
@@ -2098,6 +2112,12 @@ function toastUndo(msg){
 async function undoLast(){
   if(_undoing) return;
   var e=UNDO.pop(); if(!e){ toast('Nothing to undo.'); return; }
+  if(e.kind==='xfer'){   // a permanent transfer batch: each account back to the VA it had
+    _undoing=true;
+    try{ var bk={}; e.items.forEach(function(it){ if(it.prev) (bk[String(it.prev).toLowerCase()]=bk[String(it.prev).toLowerCase()]||[]).push(it.id); }); var ur=await xferRun(bk, 'undo', true); }
+    finally { _undoing=false; }
+    toast(ur && ur.fail?('Undo: '+ur.done.length+' moved back · '+ur.fail+' failed'):('Undone — '+e.label)); return;
+  }
   if(e.kind==='bulk'){   // a client hold / archive / release batch: one call back the other way
     _undoing=true;
     try{
@@ -2271,6 +2291,7 @@ function vAccounts(){
     h+='<div class="row" style="gap:8px;margin:-4px 0 12px;align-items:center;flex-wrap:wrap">'+
       (liveN?'<span class="muted" style="font-size:12px;font-weight:700">With the '+liveN+' live account'+(liveN===1?'':'s')+' shown:</span><button class="btn sm sec" onclick="HOLD.mode=\'filter\';holdOpen(\'onhold\')">'+IC.pause+' Hold for a client…</button><button class="btn sm sec" onclick="HOLD.mode=\'filter\';holdOpen(\'archived\')">'+IC.doc+' Archive…</button>':'')+
       (parkedN?'<span class="muted" style="font-size:12px;font-weight:700;margin-left:'+(liveN?'10px':'0')+'">'+parkedN+' parked shown:</span><button class="btn sm sec" style="color:#047857" onclick="HOLD.mode=\'filter\';bulkRelease()">'+IC.up+' Release…</button>':'')+
+      (rows.length?'<button class="btn sm sec" onclick="xferOpen(null, dbRows().map(function(r){ return r.id; }), \'Accounts filter ('+rows.length+')\')">'+IC.swap+' Transfer…</button>':'')+
       '<button class="btn sm dark" onclick="HOLD.mode=\'paste\';holdOpen(\'onhold\')">📋 Paste a list from the client</button>'+
       '<span class="muted" style="font-size:11.5px">e.g. filter the Jailbroken phone first · parked accounts are out of every number · Ctrl+Z undoes a batch</span></div>';
   }
@@ -2329,7 +2350,7 @@ function timelineOf(r, evs){
     else if(e.kind==='stage') t=stageMeta(e.from).n+' → '+stageMeta(e.to).n;
     else if(e.kind==='ban') t='Banned from '+stageMeta(e.from).n+(e.note?' · '+e.note:'');
     else if(e.kind==='reinstate') t='Reinstated → '+stageMeta(e.to).n;
-    else if(e.kind==='assign') t=vaName(e.from)+' → '+vaName(e.to);
+    else if(e.kind==='assign') t=(e.from?vaName(e.from):'nobody')+' → '+vaName(e.to)+(e.note?' · '+e.note:'');
     else if(e.kind==='edit') t=(e.note||'field')+': '+(e.from||'—')+' → '+(e.to||'—');
     else if(e.kind==='delreq') t='Deletion requested'+(e.note?' — “'+e.note+'”':'');
     else if(e.kind==='deldecline') t='Deletion declined'+(e.note?' — '+e.note:'');
@@ -2371,6 +2392,7 @@ function drawRec(r, evs){
       (r.notes?'<div class="note g" style="margin-bottom:12px">'+esc(r.notes)+'</div>':'')+
       '<div class="row" style="margin-bottom:16px">'+(canEdit?'<button class="btn sm sec" onclick="editRec(\''+jsq(r.id)+'\')">'+IC.edit+' Edit details</button>':'')+
         (!isDead(r)&&canEdit?'<button class="btn sm sec" onclick="banAcct(\''+jsq(r.id)+'\')">'+IC.ban+' Banned…</button>':'')+
+        (isAdmin()?'<button class="btn sm sec" onclick="xferOpen(null,[\''+jsq(r.id)+'\'])">'+IC.swap+' Transfer…</button>':'')+
         (canEdit?'<button class="btn sm sec" style="color:#b91c1c" onclick="delAcct(\''+jsq(r.id)+'\')">'+IC.trash+' Delete</button>':'')+'</div>'+
       '<div class="sec-h" style="margin-top:4px"><b>History</b><span>'+(evs===null?'loading…':tl.length+' event'+(tl.length===1?'':'s'))+'</span><hr></div>'+
       '<div class="tl">'+tl.map(function(x){
@@ -2400,13 +2422,14 @@ async function editSave(id){
   var f={}, v=function(x){ var el=$(x); return el?String(el.value||'').trim():null; };
   var h=v('ed-h'); if(h!=null && h && h!==r.handle) f.handle=h.replace(/^\/?u\//i,'');
   [['method','ed-me'],['model','ed-m'],['device','ed-d'],['niche','ed-n']].forEach(function(p){ var x=v(p[1]); if(x!=null && x!==String(r[p[0]]||'')) f[p[0]]=x; });
-  var va=v('ed-va'); if(va && va!==owner(r)) f.assigned_to=va;
+  var va=v('ed-va'); if(va && va!==owner(r)){ f.assigned_to=va.toUpperCase(); f.note='permanent transfer (Edit details)'; }
   var no=v('ed-no'); if(no!==String(r.notes||'')) f.notes=no;
   if(!Object.keys(f).length){ closeModal(); return; }
   $('ed-go').disabled=true;
   var prevMethod=String(r.method||'');
   var d=await upd(id, f);
-  if(d&&d.ok){ patchLocal(id, f); EVENTS_AT=0; closeModal();
+  if(d&&d.ok){ var prevOw=String(r.assigned_to||r.created_by||''); delete f.note; patchLocal(id, f); EVENTS_AT=0; closeModal();
+    if(f.assigned_to!==undefined && f.method===undefined){ undoPush({ kind:'xfer', label:r.handle+' back with '+vaName(prevOw), items:[{ id:id, prev:prevOw }] }); toastUndo('Saved — '+r.handle+' now with '+vaName(f.assigned_to)); renderView(); if($('drawer').classList.contains('on')) openRec(id); return; }
     if(f.method!==undefined){ undoPush({ kind:'method', label:r.handle+' method back to '+(prevMethod||'untagged'), items:[{ id:id, method:prevMethod }] }); toastUndo('Saved — tagged '+f.method); } else toast('Saved.');
     renderView(); if($('drawer').classList.contains('on')) openRec(id); }
   else { $('ed-go').disabled=false; toast(d&&d.error==='MODEL_NOT_ALLOWED'?'That model isn\'t on the list — only the owner can add models (Settings).':'Could not save: '+((d&&d.error)||'unknown')); }
@@ -4038,32 +4061,244 @@ async function cvQuickHold(from){
 }
 async function cvLift(idsCsv){ var ids=String(idsCsv).split(',').filter(Boolean); if(await setCover(ids,'')){ toast('Lifted.'); renderView(); loadOff(); } }
 
-/* Permanent transfer — a VA leaving the project. Ownership moves for good; history keeps both names. */
-function xferOpen(preset){
-  var rows=ALL[PROJECT]||ROWS, holders={}; rows.forEach(function(r){ var o=owner(r); if(o) holders[o]=(holders[o]||0)+1; });
-  preset=String(preset||'').toLowerCase();
-  openModal('<div class="md-h"><h3>Permanent transfer · '+esc(baseOf(PROJECT).n)+'</h3><p>For a VA leaving the project. Ownership moves for good; output already earned stays where it was earned, and every move is written to each account\'s history.</p></div><div class="md-b">'+
-    '<div class="f2"><div class="fld"><label>From (departing VA)</label><select class="sel" id="xf-from">'+Object.keys(holders).sort(function(a,b){ return (isGone(b)-isGone(a)) || vaName(a).localeCompare(vaName(b)); }).map(function(k){ return '<option value="'+esc(k)+'"'+(k===preset?' selected':'')+'>'+esc(vaName(k))+(isGone(k)?' (deactivated)':'')+' · '+holders[k]+'</option>'; }).join('')+'</select></div>'+
-    '<div class="fld"><label>To</label><select class="sel" id="xf-to">'+allVaIds().map(function(k){ return '<option value="'+esc(k)+'">'+esc(vaName(k))+'</option>'; }).join('')+'</select></div></div>'+
-    '<label class="chk"><input type="checkbox" id="xf-dead"> Include banned and temp-banned accounts</label>'+
-    '</div><div class="md-f"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn dark" id="xf-go" onclick="xferGo()">Transfer permanently</button></div>');
+/* ═══════════ PERMANENT TRANSFER — exactly the accounts you pick, to exactly who you pick (owner, Oct 8) ═══════════
+   Jeth: "it doesn't need to transfer all the accounts … when the VE resigned the accounts left behind will reassign
+   to the new VE or existing VEs … accounts created by other VE are being permanently transferred to another VE."
+   1 · Why      Resigned / left · Handover · Rebalance · Other (+ a note) — written on every account's history line.
+   2 · Which    a VA's accounts, the client's / OM's pasted usernames, the Accounts filter, or the account you opened.
+                Tick one by one, a whole phone at once, or all; search and stage filter; banned hidden unless asked.
+   3 · Who      One VA · Split between VAs (fewest accounts first, or the same number each; a phone's accounts stay
+                together) · Choose per account. The list shows where each ticked account lands before anything moves.
+   Then one confirm. Only the owner changes: stage, sessions and output already earned stay; whoever logged an
+   account keeps its creation credit. Today's cover on a moved account is lifted. Ctrl+Z / Undo puts the batch back.
+   Backend rc-2026-10-08b moves a whole batch per receiving VA in one call; older backends go account by account. */
+var XF=null;
+function xfDefault(){ return { why:'handover', note:'', src:'va', from:'', text:'', ids:null, idsLbl:'', tick:{}, q:'', grp:'', dead:false,
+  dest:'one', to:'', split:{}, bal:'load', keepPhone:true, per:{}, armed:false }; }
+function xfPool(){ var seen={}; return holdPool().filter(function(r){ if(!r || seen[r.id]) return false; seen[r.id]=1; return true; }); }
+function xfLiveLoad(){ var L={}; xfPool().forEach(function(r){ if(!isDead(r) && !isParked(r)){ var o=owner(r); if(o) L[o]=(L[o]||0)+1; } }); return L; }
+function xfCands(){ return allVaIds().filter(function(k){ return OWNERS.indexOf(k)<0; }); }
+function xfSrcRows(){
+  var pool=xfPool(), out;
+  if(XF.src==='va') out=XF.from?pool.filter(function(r){ return owner(r)===XF.from; }):[];
+  else if(XF.src==='paste') out=matchHandles(parseHandles(XF.text), pool).hit;
+  else out=(XF.ids||[]).map(rowById).filter(Boolean);
+  if(!XF.dead) out=out.filter(function(r){ return !isDead(r); });
+  return out.slice().sort(function(a,b){ return (a.device?0:1)-(b.device?0:1) || String(a.device||'').localeCompare(String(b.device||'')) || stageOrd(a.status)-stageOrd(b.status) || String(a.handle).localeCompare(String(b.handle)); });
 }
-async function xferGo(){
-  var from=$('xf-from').value, to=$('xf-to').value, dead=$('xf-dead').checked;
-  if(!from||!to||from===to){ toast('Pick two different VAs.'); return; }
-  var ids=(ALL[PROJECT]||ROWS).filter(function(r){ return owner(r)===from && (dead || (r.status!=='banned'&&r.status!=='tempban')); }).map(function(r){ return r.id; });
-  if(!ids.length){ toast('No accounts to move.'); return; }
-  closeModal();
-  if(!(await confirmBox('Transfer '+ids.length+' account(s) permanently?', esc(vaName(from))+' → '+esc(vaName(to))+'. This is not a one-day cover.', 'Transfer', true))) return;
-  var ok=0, fail=0;
-  for(var i=0;i<ids.length;i+=5){
-    await Promise.all(ids.slice(i,i+5).map(async function(id){
-      try{ var r0=rowById(id)||{}; var note=String(r0.notes||''); note=(note?note+' ':'')+'[transferred '+from+' → '+to+' '+today()+']';
-        var d=await upd(id,{ assigned_to:to, notes:note, note:'permanent transfer' }); if(d&&d.ok){ ok++; r0.assigned_to=to; r0.notes=note; } else fail++; }catch(e){ fail++; }
-    }));
+function xfVisible(rows){
+  var q=XF.q.trim().toLowerCase();
+  return rows.filter(function(r){
+    if(XF.grp && groupOf(r.status).k!==XF.grp) return false;
+    if(q && [r.handle,r.device,r.model,methodOf(r),vaName(r.created_by),vaName(owner(r))].join(' ').toLowerCase().indexOf(q)<0) return false;
+    return true;
+  });
+}
+function xfTicked(){ return xfSrcRows().filter(function(r){ return XF.tick[r.id]; }); }
+function xfTickDefault(){
+  XF.tick={};
+  var all=(XF.src!=='va') || XF.why==='resigned' || isGone(XF.from);
+  if(all) xfSrcRows().forEach(function(r){ if(!isDead(r)) XF.tick[r.id]=1; });
+}
+/* where each ticked account lands → { id: to } (to = lower-case employee id) */
+function xfPlan(){
+  var rows=xfTicked(), plan={};
+  if(XF.dest==='one'){ if(XF.to) rows.forEach(function(r){ plan[r.id]=XF.to; }); return plan; }
+  if(XF.dest==='per'){ rows.forEach(function(r){ if(XF.per[r.id]) plan[r.id]=XF.per[r.id]; }); return plan; }
+  var tos=xfCands().filter(function(k){ return XF.split[k]; }); if(!tos.length) return plan;
+  var groups=[], byKey={};
+  rows.forEach(function(r){ var k=(XF.keepPhone && r.device)?('p:'+String(r.device).toLowerCase()):('a:'+r.id); if(!byKey[k]){ byKey[k]={ k:k, rows:[] }; groups.push(byKey[k]); } byKey[k].rows.push(r); });
+  groups.sort(function(a,b){ return b.rows.length-a.rows.length; });   // biggest phone first, so the halves come out even
+  var load=xfLiveLoad(), cur={}; tos.forEach(function(t){ cur[t]=XF.bal==='load'?(load[t]||0):0; });
+  groups.forEach(function(g){
+    var best=tos[0]; tos.forEach(function(t){ if(cur[t]<cur[best]) best=t; });
+    g.rows.forEach(function(r){ plan[r.id]=best; }); cur[best]+=g.rows.length;
+  });
+  return plan;
+}
+function xferOpen(preset, ids, lbl){
+  if(!isAdmin()){ toast('Only the owner can transfer accounts.'); return; }
+  XF=xfDefault();
+  preset=String(preset||'').toLowerCase();
+  if(ids && ids.length){ XF.src='ids'; XF.ids=ids.slice(); XF.idsLbl=lbl||(ids.length===1?'This account':'Selected ('+ids.length+')'); XF.why='handover'; }
+  else {
+    var gone=Object.keys(goneHolders(xfPool()));
+    XF.from=preset||'';
+    if(XF.from && isGone(XF.from)) XF.why='resigned';
+    else if(!XF.from && gone.length){ XF.from=gone[0]; XF.why='resigned'; }
   }
-  var covered=ids.filter(function(id){ return COVER[id]; }); if(covered.length) await setCover(covered,'');
-  EVENTS_AT=0; toast(fail?(ok+' moved · '+fail+' FAILED — reload and retry'):(ok+' account(s) now with '+vaName(to))); renderView();
+  if(XF.src==='ids' && XF.ids.length===1){ var r1=rowById(XF.ids[0]); if(r1) XF.from=owner(r1); }
+  xfTickDefault();
+  if(!allRows().length) loadAll().then(function(){ if(XF){ if(XF.src==='va') xfTickDefault(); xfPaint(true); } });
+  var whyB=[['resigned','Resigned / left'],['handover','Handover'],['rebalance','Rebalance'],['other','Other']];
+  openModal('<div class="md-h"><h3>'+IC.swap+' Permanent transfer</h3><p>Pick exactly which accounts move and who gets them. Only the owner changes — the stage, sessions and output already earned stay, and whoever logged an account keeps its creation credit. Every move is written to the account\'s history; Undo (Ctrl+Z) puts the batch back.</p></div>'+
+    '<div class="md-b">'+
+      '<div class="xf-step"><b>1</b>Why</div>'+
+      '<div class="row" style="gap:8px;flex-wrap:wrap"><div class="seg" style="width:auto">'+whyB.map(function(x){ return '<button id="xfw-'+x[0]+'" class="'+(XF.why===x[0]?'on':'')+'" onclick="xfWhy(\''+x[0]+'\')">'+x[1]+'</button>'; }).join('')+'</div>'+
+        '<input class="inp" id="xf-note" maxlength="200" placeholder="Note (optional) — e.g. last day Oct 10, new VA starts Monday" style="flex:1;min-width:200px" oninput="XF.note=this.value"></div>'+
+      '<div class="xf-step"><b>2</b>Which accounts</div>'+
+      '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center">'+
+        '<div class="seg" style="width:auto" id="xf-srcs"></div>'+
+        '<select class="sel" id="xf-from" onchange="XF.from=this.value;xfTickDefault();xfPaint(true)" style="min-width:220px"></select></div>'+
+      '<div id="xf-paste" style="display:none;margin-top:8px"><textarea class="inp" id="xf-t" rows="3" placeholder="u/username — one per line, commas, or profile links. Paste the message as it is." style="width:100%;resize:vertical" oninput="XF.text=this.value;xfPasteSoon()"></textarea></div>'+
+      '<div class="row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px">'+
+        '<input class="inp" id="xf-q" placeholder="Search username, phone, model…" style="flex:1;min-width:160px" oninput="XF.q=this.value;xfPaint()">'+
+        '<select class="sel" onchange="XF.grp=this.value;xfPaint()"><option value="">All stages</option>'+GROUPS.filter(function(g){ return g.k!=='ban'; }).map(function(g){ return '<option value="'+g.k+'">'+g.n+'</option>'; }).join('')+'</select>'+
+        '<label class="chip" style="cursor:pointer;background:var(--s1);border:1px solid var(--line)"><input type="checkbox" onchange="XF.dead=this.checked;if(!XF.dead)xfUntickDead();xfPaint(true)" style="accent-color:var(--o)"> Show banned</label>'+
+        '<button class="btn sm sec" onclick="xfTickAll(true)">Tick shown</button><button class="btn sm sec" onclick="xfTickAll(false)">Clear</button></div>'+
+      '<div id="xf-phones" class="row" style="gap:6px;flex-wrap:wrap;margin-top:8px"></div>'+
+      '<div class="xf-wrap" id="xf-list" style="margin-top:8px"></div>'+
+      '<div class="xf-step"><b>3</b>Who gets them</div>'+
+      '<div class="seg" style="width:auto;display:inline-flex">'+[['one','One VA'],['split','Split between VAs'],['per','Choose per account']].map(function(x){ return '<button id="xfd-'+x[0]+'" class="'+(XF.dest===x[0]?'on':'')+'" onclick="xfDest(\''+x[0]+'\')">'+x[1]+'</button>'; }).join('')+'</div>'+
+      '<div id="xf-destbox" style="margin-top:8px"></div>'+
+      '<div id="xf-prev" style="margin-top:10px"></div>'+
+      '<div class="muted" style="font-size:11.5px;margin-top:6px">New VA not in the lists? Add them in the admin console first — they show up here after a reload.</div>'+
+    '</div>'+
+    '<div class="md-f"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn pri" id="xf-go" onclick="xferGo()">Transfer</button></div>');
+  $('modal').classList.add('wide');
+  xfPaint(true);
+}
+function xfWhy(w){ XF.why=w; XF.armed=false; ['resigned','handover','rebalance','other'].forEach(function(x){ var b=$('xfw-'+x); if(b) b.classList.toggle('on', x===w); });
+  if(w==='resigned' && XF.src==='va' && XF.from && !xfTicked().length){ xfTickDefault(); xfPaint(true); } else xfPaint(); }
+function xfSrc(s){ XF.src=s; XF.armed=false; xfTickDefault(); xfPaint(true); if(s==='paste'){ try{ $('xf-t').focus(); }catch(e){} } }
+function xfDest(d){
+  if(d==='per' && XF.dest!=='per'){ var p=xfPlan(); xfTicked().forEach(function(r){ if(!XF.per[r.id] && p[r.id]) XF.per[r.id]=p[r.id]; }); }   // fine-tune what the split / one-VA plan proposed
+  XF.dest=d; XF.armed=false; ['one','split','per'].forEach(function(x){ var b=$('xfd-'+x); if(b) b.classList.toggle('on', x===d); }); xfPaint(true);
+}
+var _xfT=null; function xfPasteSoon(){ clearTimeout(_xfT); _xfT=setTimeout(function(){ xfTickDefault(); xfPaint(true); }, 250); }
+function xfTick(id, on){ if(on) XF.tick[id]=1; else delete XF.tick[id]; XF.armed=false; xfPaint(true); }
+function xfTickAll(on){ xfVisible(xfSrcRows()).forEach(function(r){ if(on && !isDead(r)) XF.tick[r.id]=1; else if(!on) delete XF.tick[r.id]; }); XF.armed=false; xfPaint(true); }
+function xfUntickDead(){ for(var id in XF.tick){ var r=rowById(id); if(r && isDead(r)) delete XF.tick[id]; } }
+function xfPhone(dev){
+  var rows=xfSrcRows().filter(function(r){ return String(r.device||'')===dev && !isDead(r); });
+  var allOn=rows.length && rows.every(function(r){ return XF.tick[r.id]; });
+  rows.forEach(function(r){ if(allOn) delete XF.tick[r.id]; else XF.tick[r.id]=1; }); XF.armed=false; xfPaint(true);
+}
+function xfSetTo(v){ XF.to=v; XF.armed=false; xfPaint(); }
+function xfSplit(k, on){ if(on) XF.split[k]=1; else delete XF.split[k]; XF.armed=false; xfPaint(true); }
+function xfPer(id, v){ if(v) XF.per[id]=v; else delete XF.per[id]; XF.armed=false; xfPaint(); }
+function xfPerFill(v){ if(!v) return; xfTicked().forEach(function(r){ if(!XF.per[r.id]) XF.per[r.id]=v; }); XF.armed=false; xfPaint(true); }
+function xfCandLbl(k, load, offs){ return vaName(k)+(SHIFTOF[k]==='night'?' 🌙':'')+' · '+(load[k]||0)+' live'+(offs[k]?' · off today':''); }
+/* full=true also rebuilds the source tabs, VA picker, phone chips and destination box (not on every keystroke) */
+function xfPaint(full){
+  if(!XF || !$('xf-list')) return;
+  var pool=xfPool(), load=xfLiveLoad(), offs=offIds(), cands=xfCands(), multiBase={};
+  pool.forEach(function(r){ multiBase[r.project]=1; }); multiBase=Object.keys(multiBase).length>1;
+  var src=xfSrcRows(), vis=xfVisible(src), plan=xfPlan(), ticked=src.filter(function(r){ return XF.tick[r.id]; });
+  if(full){
+    var srcs=[['va','From a VA'],['paste','Paste usernames']].concat(XF.ids?[['ids',XF.idsLbl]]:[]).concat(VIEW==='accounts' && XF.src!=='ids'?[['filter','Accounts filter ('+dbRows().length+')']]:[]);
+    $('xf-srcs').innerHTML=srcs.map(function(x){ return '<button class="'+(XF.src===x[0]?'on':'')+'" onclick="'+(x[0]==='filter'?'XF.ids=dbRows().map(function(r){return r.id;});XF.idsLbl=\'Accounts filter\';xfSrc(\'ids\')':'xfSrc(\''+x[0]+'\')')+'">'+esc(x[1])+'</button>'; }).join('');
+    var holders={}; pool.forEach(function(r){ var o=owner(r); if(o && OWNERS.indexOf(o)<0){ holders[o]=holders[o]||{ live:0, all:0 }; holders[o].all++; if(!isDead(r)) holders[o].live++; } });
+    var hk=Object.keys(holders).filter(function(k){ return holders[k].live || k===XF.from; }).sort(function(a,b){ return (isGone(b)-isGone(a)) || vaName(a).localeCompare(vaName(b)); });
+    var fs=$('xf-from'); fs.style.display=XF.src==='va'?'':'none';
+    fs.innerHTML='<option value="">— pick the VA —</option>'+hk.map(function(k){ return '<option value="'+esc(k)+'"'+(k===XF.from?' selected':'')+'>'+esc(vaName(k))+(isGone(k)?' (deactivated)':'')+' · '+holders[k].live+' live</option>'; }).join('');
+    $('xf-paste').style.display=XF.src==='paste'?'':'none';
+    var t=$('xf-t'); if(t && t.value!==XF.text) t.value=XF.text;
+    var dev={}; src.forEach(function(r){ if(r.device && !isDead(r)) dev[r.device]=(dev[r.device]||0)+1; });
+    var dk=Object.keys(dev).sort();
+    $('xf-phones').innerHTML=dk.length>1||(dk.length===1&&src.length>1)?'<span class="muted" style="font-size:11.5px;font-weight:700;align-self:center">Tick a whole phone:</span>'+dk.map(function(d){
+      var on=src.filter(function(r){ return r.device===d && !isDead(r); }).every(function(r){ return XF.tick[r.id]; });
+      return '<button class="chip'+(on?' sel':'')+'" style="cursor:pointer;border:1px solid var(--line)" onclick="xfPhone(\''+jsq(d)+'\')">'+IC.phone+' '+esc(d)+' · '+dev[d]+'</button>'; }).join(''):'';
+    var db=$('xf-destbox');
+    if(XF.dest==='one') db.innerHTML='<select class="sel" id="xf-to" onchange="xfSetTo(this.value)" style="min-width:260px"><option value="">— pick who gets them —</option>'+cands.filter(function(k){ return !(XF.src==='va' && k===XF.from); }).map(function(k){ return '<option value="'+esc(k)+'"'+(k===XF.to?' selected':'')+'>'+esc(xfCandLbl(k,load,offs))+'</option>'; }).join('')+'</select>';
+    else if(XF.dest==='split') db.innerHTML='<div class="alist" style="max-height:150px;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr))">'+cands.filter(function(k){ return !(XF.src==='va' && k===XF.from); }).map(function(k){ return '<label><input type="checkbox" '+(XF.split[k]?'checked':'')+' onchange="xfSplit(\''+jsq(k)+'\',this.checked)"> '+esc(xfCandLbl(k,load,offs))+'</label>'; }).join('')+'</div>'+
+      '<div class="row" style="gap:10px;flex-wrap:wrap;margin-top:8px;align-items:center"><div class="seg" style="width:auto"><button class="'+(XF.bal==='load'?'on':'')+'" onclick="XF.bal=\'load\';XF.armed=false;xfPaint(true)">Fewest accounts first</button><button class="'+(XF.bal==='even'?'on':'')+'" onclick="XF.bal=\'even\';XF.armed=false;xfPaint(true)">Same number each</button></div>'+
+      '<label class="chip" style="cursor:pointer;background:var(--s1);border:1px solid var(--line)"><input type="checkbox" '+(XF.keepPhone?'checked':'')+' onchange="XF.keepPhone=this.checked;XF.armed=false;xfPaint(true)" style="accent-color:var(--o)"> Keep each phone\'s accounts with one VA</label>'+
+      '<button class="btn sm sec" onclick="xfDest(\'per\')">Fine-tune per account…</button></div>';
+    else db.innerHTML='<div class="row" style="gap:8px;align-items:center"><span class="muted" style="font-size:12px">Pick a VA on each ticked row below.</span><select class="sel" onchange="xfPerFill(this.value);this.value=\'\'"><option value="">Fill the empty ones with…</option>'+cands.map(function(k){ return '<option value="'+esc(k)+'">'+esc(xfCandLbl(k,load,offs))+'</option>'; }).join('')+'</select></div>';
+  }
+  // the account list
+  var L=$('xf-list'), st=L.scrollTop, h='';
+  if(XF.src==='va' && !XF.from) h='<div class="muted" style="padding:16px;font-size:12.5px">Pick the VA whose accounts you are moving.</div>';
+  else if(XF.src==='paste' && !parseHandles(XF.text).length) h='<div class="muted" style="padding:16px;font-size:12.5px">Paste the usernames above — the matches show here.</div>';
+  else if(!vis.length) h='<div class="muted" style="padding:16px;font-size:12.5px">'+(src.length?'Nothing matches the search / stage filter.':'No accounts here'+(XF.dead?'':' (banned hidden)')+'.')+'</div>';
+  else {
+    h='<table class="xf-tbl"><tbody>'+vis.map(function(r){
+      var on=!!XF.tick[r.id], sm=stageMeta(r.status), ow=owner(r), cb=String(r.created_by||'').toLowerCase(), c=coverOf(r), dest=plan[r.id];
+      var land;
+      if(!on) land='<span class="muted">—</span>';
+      else if(XF.dest==='per') land='<select class="sel" style="padding:4px 8px;font-size:12px" onclick="event.stopPropagation()" onchange="xfPer(\''+jsq(r.id)+'\',this.value)"><option value="">— pick —</option>'+cands.filter(function(k){ return k!==ow; }).map(function(k){ return '<option value="'+esc(k)+'"'+(XF.per[r.id]===k?' selected':'')+'>'+esc(vaName(k))+'</option>'; }).join('')+'</select>';
+      else land=dest?(dest===ow?'<span class="muted">already theirs</span>':'<span class="xf-to">→ '+esc(vaName(dest))+'</span>'):'<span class="muted">pick below</span>';
+      return '<tr class="'+(on?'':'off')+'"><td style="width:26px"><input type="checkbox" '+(on?'checked':'')+' onchange="xfTick(\''+jsq(r.id)+'\',this.checked)" style="accent-color:var(--o)"></td>'+
+        '<td><b>'+esc(r.handle)+'</b>'+(multiBase?' <span class="chip" style="font-size:10px;background:'+baseOf(r.project).c+'18;color:'+baseOf(r.project).c+'">'+esc(baseOf(r.project).n)+'</span>':'')+'</td>'+
+        '<td><span class="pill" style="background:'+sm.c+'18;color:'+sm.c+'">'+esc(sm.n)+'</span></td>'+
+        '<td class="muted" style="font-size:12px">'+esc(r.device||'—')+'</td>'+
+        '<td style="font-size:12px">'+(XF.src!=='va'?'<span title="Owner now">'+esc(vaName(ow))+'</span>':'')+(cb && cb!==ow?'<div class="muted" style="font-size:11px">logged by '+esc(vaName(cb))+'</div>':'')+(c?'<div class="muted" style="font-size:11px">'+(c==='__hold__'?'held today':'covered today by '+esc(vaName(c)))+'</div>':'')+'</td>'+
+        '<td style="text-align:right;white-space:nowrap">'+land+'</td></tr>';
+    }).join('')+'</tbody></table>';
+  }
+  L.innerHTML=h; L.scrollTop=st;
+  // preview: who gets how many
+  var by={}, same=0, missing=0, covered=0;
+  ticked.forEach(function(r){ var t=plan[r.id]; if(!t){ missing++; return; } if(t===owner(r)){ same++; return; } (by[t]=by[t]||[]).push(r); if(coverOf(r)) covered++; });
+  var tk=Object.keys(by).sort(function(a,b){ return by[b].length-by[a].length; }), n=tk.reduce(function(s,k){ return s+by[k].length; },0), mx=1;
+  tk.forEach(function(k){ mx=Math.max(mx,(load[k]||0)+by[k].length); });
+  var p='<div style="font-weight:800;font-size:13px">'+ticked.length+' ticked'+(src.length>ticked.length?' of '+src.length:'')+(n?' · '+n+' will move':'')+'</div>';
+  if(tk.length) p+='<div style="margin-top:6px">'+tk.map(function(k){ var a=load[k]||0, b=by[k].filter(function(r){ return !isDead(r) && !isParked(r); }).length;
+    return '<div class="xf-bar"><span style="width:150px;font-weight:700;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(vaName(k))+(offs[k]?' <span class="muted" style="font-size:10.5px">off today</span>':'')+'</span>'+
+      '<span class="tr"><i style="width:'+(a/mx*100)+'%"></i><em style="left:'+(a/mx*100)+'%;width:'+(b/mx*100)+'%"></em></span>'+
+      '<span style="width:120px;text-align:right;font-size:12px"><b>+'+by[k].length+'</b> <span class="muted">· '+a+' → '+(a+b)+' live</span></span></div>'; }).join('')+'</div>';
+  if(missing) p+='<div class="note w" style="display:block">'+missing+' ticked account'+(missing===1?' has':'s have')+' nobody to go to yet — '+(XF.dest==='one'?'pick the VA':XF.dest==='split'?'tick at least one VA to split between':'pick a VA on '+(missing===1?'that row':'those rows'))+'.</div>';
+  if(same) p+='<div class="muted" style="font-size:12px;margin-top:4px">'+same+' already belong to that VA — skipped.</div>';
+  if(covered) p+='<div class="muted" style="font-size:12px;margin-top:4px">Today\'s cover on '+covered+' of them is lifted — the new owner works them from today.</div>';
+  if(XF.armed && n) p+='<div class="note w" style="display:block;margin-top:8px"><b>Permanent.</b> '+n+' account'+(n===1?'':'s')+' change owner now. Reason on each history line: '+esc(xfReason())+'. Click the button again to confirm.</div>';
+  $('xf-prev').innerHTML=p;
+  var go=$('xf-go'); if(go){ go.disabled=!n; go.style.opacity=n?'':'.5'; go.className='btn '+(XF.armed?'dark':'pri'); go.textContent=XF.armed?('Yes — move '+n+' for good'):('Transfer '+(n||'')+' permanently'); }
+}
+function xfReason(){ var w={ resigned:'Resigned / left', handover:'Handover', rebalance:'Rebalance', other:'Other' }[XF.why]||''; var nt=String(XF.note||'').trim(); return (w+(nt?' — '+nt:'')).slice(0,280); }
+async function xferGo(){
+  if(!XF) return;
+  var plan=xfPlan(), groups={}, n=0;
+  xfTicked().forEach(function(r){ var t=plan[r.id]; if(!t || t===owner(r)) return; (groups[t]=groups[t]||[]).push(r.id); n++; });
+  if(!n){ toast('Tick the accounts and pick who gets them.'); return; }
+  if(XF.why==='other' && !String(XF.note||'').trim()){ toast('Write a short note for "Other" — it goes on every account\'s history.'); try{ $('xf-note').focus(); }catch(e){} return; }
+  if(!XF.armed){ XF.armed=true; xfPaint(); return; }
+  var reason=xfReason(); closeModal(); XF=null;
+  var res=await xferRun(groups, reason, false);
+  if(res.done.length) undoPush({ kind:'xfer', label:res.done.length+' account'+(res.done.length===1?'':'s')+' back with their previous VA', items:res.done.map(function(x){ return { id:x.id, prev:x.prev }; }) });
+  var tos={}; res.done.forEach(function(x){ tos[x.to]=(tos[x.to]||0)+1; });
+  var msg=res.done.length+' moved for good'+(Object.keys(tos).length?' → '+Object.keys(tos).map(function(k){ return firstName(k)+' '+tos[k]; }).join(', '):'')+(res.fail?' · '+res.fail+' FAILED — reload and retry':'')+(res.skipped?' · '+res.skipped+' skipped':'');
+  if(res.done.length) toastUndo(msg); else toast(msg);
+}
+/* groups = { to: [ids] }. Returns { done:[{id,prev,to}], fail, skipped }. restore=true is the undo path. */
+async function xferRun(groups, reason, restore){
+  var done=[], fail=0, skipped=0, legacy=!(BE_BUILD && BE_BUILD>='rc-2026-10-08b'), total=0;
+  Object.keys(groups).forEach(function(k){ total+=groups[k].length; });
+  toast((restore?'Moving back ':'Moving ')+total+'…');
+  var note=(restore?'undo':'permanent transfer')+(reason?' · '+reason:'');
+  for(var to in groups){
+    var ids=groups[to], i=0, tries=0;
+    while(i<ids.length){
+      var chunk=ids.slice(i,i+80), d=null;
+      if(!legacy){
+        try{ d=await apiPost({ action:'pa_bulk', by:USER.id, op:'assign', to:to, ids:chunk.join(','), reason:reason||'', restore:restore?'1':'' }); }catch(e){ d=null; }
+        if(d && d.error==='BUSY' && tries<3){ tries++; await new Promise(function(r){ setTimeout(r,2500); }); continue; }
+        tries=0;
+        if(d && d.ok){
+          var sk={}; (d.skipped||[]).forEach(function(x){ sk[x.id]=1; }); (d.notfound||[]).forEach(function(x){ sk[x]=1; });
+          chunk.forEach(function(id){ if(sk[id]){ skipped++; return; } var prev=(d.prev&&d.prev[id])||''; patchLocal(id,{ assigned_to:d.to||to }); done.push({ id:id, prev:prev, to:String(d.to||to).toLowerCase() }); });
+          i+=80; continue;
+        }
+        if(d && d.error==='OWNER_ONLY'){ toast('Only the owner can transfer accounts.'); return { done:done, fail:fail+total-done.length-skipped, skipped:skipped }; }
+        if(d && (d.error==='BAD_OP' || d.error==='UNKNOWN_ACTION')) legacy=true;   // older backend: fall through, account by account
+        else { fail+=chunk.length; i+=80; continue; }
+      }
+      for(var j=0;j<chunk.length;j+=5){
+        await Promise.all(chunk.slice(j,j+5).map(async function(id){
+          var r0=rowById(id)||{}, prev=String(r0.assigned_to||r0.created_by||'');
+          if(prev.toLowerCase()===String(to).toLowerCase()){ skipped++; return; }
+          try{ var dd=await upd(id,{ assigned_to:String(to).toUpperCase(), note:note }); if(dd&&dd.ok){ patchLocal(id,{ assigned_to:String(to).toUpperCase() }); done.push({ id:id, prev:prev, to:String(to).toLowerCase() }); } else fail++; }catch(e){ fail++; }
+        }));
+      }
+      i+=80;
+    }
+  }
+  var covered=done.map(function(x){ return x.id; }).filter(function(id){ return COVER[id]; });
+  if(covered.length && !restore) await setCover(covered,'');
+  EVENTS_AT=0; renderView();
+  if($('drawer').classList.contains('on')){ var did=$('drawer').getAttribute('data-id'); if(did && rowById(did)) openRec(did); }
+  setTimeout(function(){ loadAll(true).then(renderView); }, 1500);
+  return { done:done, fail:fail, skipped:skipped };
 }
 
 /* ═══════════ SETTINGS — owner only ═══════════ */
