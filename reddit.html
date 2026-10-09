@@ -2975,7 +2975,7 @@ function vPipeline(){
      2. Where in the ladder does each method lose accounts?  The phase is read from each account's history — the
         last ladder phase before the ban, looking through Temp ban / Spam recovery / On hold. (Before: a ban that
         came after a temp ban, or a history log that timed out, had no phase and silently vanished → 0%.)
-     3. Is a bad day the platform (a wave across models, VAs, phones) or our process (one group)?
+     3. Is a bad day the platform (a ban wave = 90%+ of an operation's live accounts banned together — Jeth, Oct 9) or our process (one group)?
    DATA: rc_insights (backend rc-2026-10-08a) returns every live account, the bans the 30-day clean-up archived,
    the status history, and logs stage changes typed straight into the sheet — refreshed every minute while this
    page is open. A failed refresh keeps the last snapshot on screen and says so. On an older backend it falls back
@@ -3190,25 +3190,49 @@ function insData(range){
   return { all:all, rows:rows, start:start, end:end, days:days, banAll:banAll, range:range,
            bans:banAll.filter(function(b){ return b.day && b.day>=start && b.day<=end; }) };
 }
+/* BAN WAVE (Jeth, Oct 9): a wave is when ~90% of an operation's live accounts get banned together — NOT "several
+   bans on one day". Per base (each operation) and day d: the accounts live at the start of d (made before d, not banned
+   before d, not parked). If 90%+ of them (and at least 5) are banned on d or the next day — an overnight wave splits
+   across two dates — those days are wave days for that base. */
+var INS_WAVE_PCT=0.9, INS_WAVE_MIN=5;
+function insWaves(D){
+  var by={}, out={};
+  (D.all||[]).forEach(function(r){ if(isParked(r)) return; (by[r.project]=by[r.project]||[]).push(r); });
+  Object.keys(by).forEach(function(pj){
+    var R=by[pj].map(function(r){ var c=createdAt(r), e=endedAt(r); return { c:c?phtDate(c):'', e:e?phtDate(e):'' }; });
+    var days={}; R.forEach(function(x){ if(x.e) days[x.e]=1; });
+    Object.keys(days).sort().forEach(function(d){
+      var live=R.filter(function(x){ return x.c && x.c<d && (!x.e || x.e>=d); }); if(live.length<INS_WAVE_MIN) return;
+      var d2=addDays(d,1), hit=live.filter(function(x){ return x.e===d || x.e===d2; }).length;
+      if(hit<INS_WAVE_PCT*live.length) return;
+      var w={ base:pj, d:d, live:live.length, hit:hit, pct:hit/live.length };
+      [d,d2].forEach(function(k){ if(live.some(function(x){ return x.e===k; })){ var L=out[k]=out[k]||[]; if(!L.some(function(y){ return y.base===pj; })) L.push(w); } });
+    });
+  });
+  return out;
+}
 function detect(D){
   var out=[], byDay={};
   D.bans.forEach(function(b){ (byDay[b.day]=byDay[b.day]||[]).push(b); });
-  var avg=D.bans.length/Math.max(1,D.days.length), marks={};
+  var avg=D.bans.length/Math.max(1,D.days.length), marks={}, WV=insWaves(D);
+  Object.keys(WV).filter(function(d){ return d>=D.start && d<=D.end; }).sort().reverse().forEach(function(day){
+    marks[day]='wave';
+    out.push({ t:'wave', day:day, h:'<b>'+fmtD(parseTs(day))+' — ban wave.</b> '+WV[day].map(function(w){ return '<b>'+esc(baseOf(w.base).n)+'</b>: '+w.hit+' of '+w.live+' live accounts banned ('+Math.round(w.pct*100)+'%)'+(w.d!==day?' — started '+fmtD(parseTs(w.d)):''); }).join(' · ')+'.',
+      s:'90% or more of an operation\'s live accounts went down together — that\'s the platform, not one VA, model or phone.' });
+  });
   Object.keys(byDay).sort().reverse().forEach(function(day){
-    var B=byDay[day], n=B.length; if(n<3) return;
+    var B=byDay[day], n=B.length; if(n<3 || marks[day]) return;
     function top(dim){ var g={}; B.forEach(function(b){ var k=dimVal(b.r,dim); g[k]=(g[k]||0)+1; }); var ks=Object.keys(g).sort(function(a,b){ return g[b]-g[a]; }); return { k:ks[0], n:g[ks[0]], distinct:ks.length, share:g[ks[0]]/n }; }
     var tm=top('model'), tv=top('va'), td=top('device'), tb=top('base');
     var conc=[], dims=[];
     if(tm.share>=0.7&&tm.n>=3){ conc.push('model <b>'+esc(tm.k)+'</b>'); dims.push('model'); }
     if(tv.share>=0.7&&tv.n>=3){ conc.push('VA <b>'+esc(tv.k)+'</b>'); dims.push('va'); }
     if(td.share>=0.7&&td.n>=3&&td.k.indexOf('(')!==0){ conc.push('phone <b>'+esc(td.k)+'</b>'); dims.push('device'); }
-    var wave=(tm.distinct>=3 && tm.share<0.6 && tv.distinct>=3), when=fmtD(parseTs(day));
-    if(wave){ marks[day]='wave';
-      out.push({ t:'wave', day:day, h:'<b>'+when+' — likely a ban wave.</b> '+n+' bans spread across '+tm.distinct+' models, '+tv.distinct+' VAs and '+td.distinct+' phones'+(tb.distinct>1?' on '+tb.distinct+' bases':'')+'.', s:'Wide spread on one day points to the platform, not to one person or one setup. Normal day in this range: '+avg.toFixed(1)+' bans.' });
-    } else if(conc.length){ marks[day]='conc';
+    var spread=(tm.distinct>=3 && tm.share<0.6 && tv.distinct>=3), when=fmtD(parseTs(day));
+    if(conc.length){ marks[day]='conc';
       out.push({ t:'conc', day:day, dims:dims, h:'<b>'+when+' — bans concentrated:</b> '+Math.max(tm.n,tv.n)+' of '+n+' on '+conc.join(' and ')+'.', s:'When one model, VA or phone takes most of the day\'s bans while the rest are fine, check that process — the steps, the phone, and who handled it.' });
     } else if(n>=Math.max(3,avg*3)){ marks[day]='conc';
-      out.push({ t:'conc', day:day, h:'<b>'+when+' — ban spike:</b> '+n+' bans (normal day: '+avg.toFixed(1)+').', s:'Not clearly a wave and not clearly one group — open the day in Accounts to compare.' });
+      out.push({ t:'conc', day:day, h:'<b>'+when+' — ban spike:</b> '+n+' bans (normal day: '+avg.toFixed(1)+')'+(spread?', spread across '+tm.distinct+' models and '+tv.distinct+' VAs':'')+'.', s:'Not a ban wave (that needs 90%+ of the live accounts banned together) and not clearly one group — open the day in Accounts to compare.' });
     }
   });
   var s7=addDays(D.end,-6), recent=D.bans.filter(function(b){ return b.day>=s7; });
@@ -3342,8 +3366,7 @@ function insBottomLine(V){
   return '<div class="card pad ins-bl"><div class="ch-h"><b>The bottom line</b><span>per method · last 14 days vs the 14 before</span><div style="flex:1"></div>'+
       '<button class="btn sm sec no-print" onclick="insCopy()">'+IC.doc+' Copy for the client</button><button class="btn sm sec no-print" onclick="window.print()">'+IC.dl+' Print / PDF</button></div>'+
     (tiles?'<div class="vd-grid">'+tiles+'</div><p class="muted" style="font-size:11.5px;margin-top:8px">"Banned a week" = bans ÷ the weeks its accounts were alive — big and small, old and new methods compare fairly.</p>':'<div class="muted">No accounts with a method yet.</div>')+
-    '<div class="ch-h" style="margin:16px 0 8px"><b>What to do with the SOP</b><span>from the numbers below · one change at a time</span></div>'+
-    V.recs.map(function(r){ return '<div class="alert '+r.t+'"><div class="ic">'+r.ic+'</div><div>'+r.h+'<small>'+r.s+'</small></div></div>'; }).join('')+'</div>';
+    '</div>';   /* "What to do with the SOP" removed (Oct 9, Jeth: not accurate) */
 }
 function insSummaryText(){
   var keep=INS.client; INS.client=true;
@@ -3353,8 +3376,6 @@ function insSummaryText(){
     L.push(''); L.push('Bottom line (last 14 days vs the 14 before):');
     V.st.forEach(function(s){ L.push('• '+s.m+' — '+VERD[s.v].t.toUpperCase()+' ('+VERD[s.v].s+'): '+(s.v==='early'?(s.n+' accounts so far'):(fmtWk(s.w)+' of live accounts banned a week'+((s.w0!=null&&s.ad0>=INS_MIN_AD)?' (before: '+fmtWk(s.w0)+')':'')))+
       (s.post!=null?' · '+Math.round(s.post*100)+'% reached posting':'')+(s.worst?' · riskiest phase: '+PH[s.worst.i].n+' ('+s.worst.d+' of '+s.worst.n+' banned there)':'')); });
-    L.push(''); L.push('What to do with the SOP:');
-    V.recs.forEach(function(r){ L.push('• '+untag(r.h)+' '+untag(r.s)); });
     L.push(''); L.push('Counted: '+D.rows.length+' accounts with a method · '+D.banAll.length+' bans all-time. "Banned a week" = bans ÷ the weeks the accounts were alive.');
     return L.join('\n');
   } finally { INS.client=keep; }
@@ -3415,7 +3436,7 @@ function vInsights(){
     '<select class="sel no-print" onchange="INS.dim=this.value;renderView()">'+insDims().map(function(d){ return '<option value="'+d[0]+'"'+(INS.dim===d[0]?' selected':'')+'>By '+d[1].toLowerCase()+'</option>'; }).join('')+'</select></div>'+banChart(D, A.marks)+'</div>'+
     '<div class="card pad s4"><div class="ch-h"><b>What the pattern says</b><span>'+alerts.length+' signal'+(alerts.length===1?'':'s')+'</span></div>'+
     (alerts.length?alerts.slice(0,8).map(function(a){ return '<div class="alert '+a.t+'"><div class="ic">'+(a.t==='wave'?'🌊':'⚠️')+'</div><div>'+a.h+'<small>'+a.s+'</small></div></div>'; }).join('')
-      :'<div class="alert ok"><div class="ic">✓</div><div><b>No waves and no concentrated bans</b> in this range.<small>Signals need at least 3 bans on a day, or 3 in a week for one group.</small></div></div>')+'</div>';
+      :'<div class="alert ok"><div class="ic">✓</div><div><b>No ban waves and no concentrated bans</b> in this range.<small>A ban wave = 90% or more of an operation\'s live accounts banned together. Other signals need at least 3 bans on a day, or 3 in a week for one group.</small></div></div>')+'</div>';
   h+='<div class="card pad"><div class="ch-h"><b>Since each SOP change</b><span>banned a week under each version of the SOP — a ban counts under the SOP in force that day · dates in Settings → SOP changes</span></div>'+sopPeriods(D)+'</div>';
   h+='<div class="card pad"><div class="ch-h"><b>By '+dimLabel(INS.dim).toLowerCase()+'</b><span>ban rate in range vs. everyone — "Check" means at least 3 bans and twice the overall rate</span></div>'+breakdown(D, INS.dim)+'</div>';
   h+='<div class="card pad s6"><div class="ch-h"><b>Phase when banned</b><span>bans in this range, all methods · via = the state just before the ban</span></div>'+deathStages(D)+'</div>';
