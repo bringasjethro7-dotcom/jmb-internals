@@ -214,7 +214,7 @@ body::before{content:'';position:fixed;inset:-20% -10% auto;height:520px;z-index
    SOPs, each with their own tab, but in one link or place only."
    • One page, one tab per client. Each tab IS that client's tool (its own board and its own SOP flow).
    • A VA sees only their own client's tab(s); the owner sees every tab plus Team (who is on which client).
-     A VA is on a client when: Jeth added them in Team, OR they own cards on that client's board, OR their
+     A VA is on a client when the WORKLOG says so (time tracked on its project, last 60 days), OR they own cards on its board, OR their
      portal timer is running on that client's project right now.
    • Timer link, same as Reddit Central / ALTR Studio: work only counts while the portal timer runs on that
      client's project (the pairing box waits for it), and the hub writes its heartbeat to Supabase tool_beat
@@ -226,7 +226,6 @@ body::before{content:'';position:fixed;inset:-20% -10% auto;height:520px;z-index
 var API='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
 var SB_URL='https://rvyrnkjqxnijxydloujk.supabase.co', SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2eXJua2pxeG5panh5ZGxvdWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NzAwODQsImV4cCI6MjA5NzE0NjA4NH0.SwkSkmbeWrhm5PZZDSZ1Z4hbjpQ0L2CRtuKQmpHshBE';
 var OWNER_IDS=['JMBEAST','ADMIN'];
-var HUB_PROJECT='Client Hub', HUB_CFG_HANDLE='members';   // hub settings live in the generic board store (ProjectAccounts)
 
 var IC={
   hub:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>',
@@ -1187,11 +1186,16 @@ document.addEventListener('click', function(e){ document.querySelectorAll('detai
 /* ═══════════ THE HUB — tabs, who sees what, Team ═══════════ */
 var HUB=(function(){
   var MODS={ 'design-shopify':DS };
-  var S={ view:'', ready:false, cfg:{ members:{} }, cfgId:'', cfgLoaded:false, saving:false };
+  /* WHO IS ON A CLIENT = THE WORKLOG (Jeth, Oct 9: "just based on the worklog") — anyone who tracked time on that
+     client's project in the last WL_DAYS days. Nothing is added by hand. The project names come from the portal's
+     own project list (anything matching the client), so "Imperium IG Reels" counts for Imperium. Also on the client:
+     whoever owns cards on its board, and whoever's portal timer is running on it right now (a brand-new VA). */
+  var WL_DAYS=60;
+  var S={ view:'', ready:false, wl:{}, wlProj:{}, wlLoaded:false, wlAt:0 };
   function norm(id){ return String(id||'').trim().toUpperCase(); }
-  function cfgList(cid){ var L=(S.cfg.members||{})[cid]; return Array.isArray(L)?L.map(norm).filter(Boolean):[]; }
+  function wlList(cid){ return (S.wl[cid]||[]).slice(); }
   function autoList(cid){ var m=MODS[cid]; return (m && m.owners)?m.owners().map(norm):[]; }
-  function membersOf(cid){ var o={}; cfgList(cid).concat(autoList(cid)).forEach(function(x){ o[x]=1; }); return Object.keys(o); }
+  function membersOf(cid){ var o={}; wlList(cid).concat(autoList(cid)).forEach(function(x){ o[x]=1; }); return Object.keys(o); }
   /* a VA is on a client when Jeth added them (Team), they own cards on its board, or their timer runs on it now */
   function myClients(){
     if(isOwner()) return CLIENTS.slice();
@@ -1247,7 +1251,7 @@ var HUB=(function(){
     if(!c){
       main.innerHTML='<div class="card empty"><div class="big" style="--g:var(--grad)">'+IC.hub+'</div><h3>You\'re not on a client here yet</h3>'+
         '<p>The Client Hub holds the tools for our smaller clients — '+CLIENTS.map(function(x){ return '<b>'+esc(x.name)+'</b>'; }).join(', ')+'. '+
-        'You get your client\'s tab once the admin adds you, or as soon as your portal timer runs on that client\'s project.</p>'+
+        'Your client\'s tab appears once you\'ve tracked time on that client\'s project in the portal — or right away while your portal timer runs on it.</p>'+
         '<p style="margin-top:14px"><button class="btn sec" onclick="linkLoad(true).then(function(){ HUB.boot(true); })">Check again</button></p></div>';
       return;
     }
@@ -1259,7 +1263,7 @@ var HUB=(function(){
     if(c.live && MODS[c.id]) MODS[c.id].render(body);
     else body.innerHTML='<div class="card empty"><div class="big">'+IC.wait+'</div><h3>'+esc(c.name)+' — '+esc(c.kind)+'</h3>'+
       (isOwner()
-        ?'<p>This tab is ready and VAs can already be put on it in <b>Team</b>. The tool itself gets built from the '+esc(c.name)+' SOP — send it over and it goes live right here, same link.</p><p style="margin-top:14px"><button class="btn sec" onclick="HUB.pick(\'team\')">Open Team</button></p>'
+        ?'<p>This tab is ready — VAs who track time on '+esc(c.project)+' already land here (from the worklog). The tool itself gets built from the '+esc(c.name)+' SOP — send it over and it goes live right here, same link.</p><p style="margin-top:14px"><button class="btn sec" onclick="HUB.pick(\'team\')">Open Team</button></p>'
         :'<p>Your '+esc(c.name)+' tool is being built from the SOP and will open right here, same link. Until then, keep following your current process.</p>')+'</div>';
   }
   function repaint(){ renderTabs(); var c=cur(); if(c && c.live && MODS[c.id] && $('cbody') && $('cbody').firstChild && MODS[c.id].paint) MODS[c.id].paint(); else renderMain(); renderMe(); }
@@ -1270,68 +1274,57 @@ var HUB=(function(){
     else if(!cur() && !isOwner()){ var v=initialView(); if(v) pick(v, true); else renderTabs(); }
     else renderTabs();
   }
-  /* ── hub settings (Team) live in the generic board store: project "Client Hub", one row "members" ── */
-  async function loadCfg(){
+  /* the worklog: the portal's project list → the names that belong to each client → who logged time on them */
+  function ymd(d){ return new Intl.DateTimeFormat('en-CA',{ timeZone:'Asia/Manila' }).format(d); }
+  async function loadTeams(force){
+    if(!force && S.wlLoaded && Date.now()-S.wlAt<10*60000) return;
     try{
-      var d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(HUB_PROJECT)+'&_='+Date.now(), 1);
-      var row=((d&&d.rows)||[]).filter(function(r){ return String(r.handle||'').toLowerCase()===HUB_CFG_HANDLE; })[0];
-      if(row){ S.cfgId=row.id; S.cfg=Object.assign({ members:{} }, row.meta||{}); }
-      S.cfgLoaded=true;
+      var c=JSON.parse(sessionStorage.getItem('hub_wl')||'null');
+      if(!force && c && c.at && Date.now()-c.at<10*60000){ S.wl=c.wl||{}; S.wlProj=c.proj||{}; S.wlLoaded=true; S.wlAt=c.at; return; }
+    }catch(e){}
+    try{
+      var tp=await jFetch(API+'?action=get_tracker_projects&_='+Date.now(), 1), names={};
+      ((tp&&tp.projects)||[]).forEach(function(p){ var n=String(p.project||'').trim(); if(n) names[n]=1; });
+      var from=ymd(new Date(Date.now()-WL_DAYS*864e5)), wl={}, proj={}, jobs=[];
+      CLIENTS.forEach(function(c){
+        var mine=Object.keys(names).filter(function(n){ return c.match.test(n); });
+        if(!mine.length) mine=[c.project];                                   // not in the list yet → try the plain name
+        proj[c.id]=mine; wl[c.id]=[];
+        mine.forEach(function(n){ jobs.push(jFetch(API+'?action=get_worklog&project='+encodeURIComponent(n)+'&from='+from+'&lean=1&_='+Date.now(), 1).then(function(d){
+          ((d&&d.worklog)||[]).forEach(function(w){ var id=norm(w.employee_id); if(id && wl[c.id].indexOf(id)<0) wl[c.id].push(id); });
+        }).catch(function(){})); });
+      });
+      await Promise.all(jobs);
+      S.wl=wl; S.wlProj=proj; S.wlLoaded=true; S.wlAt=Date.now();
+      try{ sessionStorage.setItem('hub_wl', JSON.stringify({ at:S.wlAt, wl:wl, proj:proj })); }catch(e){}
     }catch(e){}
   }
-  async function saveCfg(){
-    if(S.saving) return false; S.saving=true;
-    var meta=JSON.stringify({ members:S.cfg.members||{}, by:myId(), at:new Date().toISOString() });
-    try{
-      var d;
-      if(S.cfgId) d=await jFetch(API+'?action=pa_update&id='+encodeURIComponent(S.cfgId)+'&meta='+encodeURIComponent(meta)+'&_='+Date.now(), 1);
-      else { d=await jFetch(API+'?action=pa_add&project='+encodeURIComponent(HUB_PROJECT)+'&handle='+HUB_CFG_HANDLE+'&status=config&meta='+encodeURIComponent(meta)+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now(), 0);
-        if(d && d.ok && d.id) S.cfgId=d.id;
-        if(d && d.error==='DUPLICATE'){ await loadCfg(); S.saving=false; return saveCfg(); } }
-      S.saving=false;
-      if(d && d.ok){ toast('Saved.'); return true; }
-      toast('Could not save — '+((d&&d.error)||'try again')+'.'); return false;
-    }catch(e){ S.saving=false; toast('Connection error — not saved.'); return false; }
-  }
   function renderTeam(main){
-    var ids=Object.keys(NAMES).map(function(k){ return k.toUpperCase(); }).sort();
-    var dl='<datalist id="tm-dl">'+ids.map(function(id){ return '<option value="'+esc(id)+'">'+esc(vaName(id))+'</option>'; }).join('')+'</datalist>';
     var link='https://internals.jmbvirtuals.com/clients.html';
     main.innerHTML='<div class="pane" style="--g:linear-gradient(135deg,#64748b,#334155);--c:#475569">'+
-      '<div class="phead"><div><h2><em>Team</em></h2><div class="chips"><span class="chip">who is on which client</span><span class="chip">VAs only see their own client\'s tab</span></div></div></div>'+
-      '<div class="card" style="padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:240px"><b style="font-size:13.5px">One link for every small-client VA</b><div class="muted" style="margin-top:3px">'+esc(link)+' — each VA lands on their own client. Anyone with cards on a board is on that client automatically; add the rest here.</div></div>'+
-        '<button class="btn sm sec" onclick="HUB.copyLink()">Copy link</button></div>'+
+      '<div class="phead"><div><h2><em>Team</em></h2><div class="chips"><span class="chip">from the worklog · last '+WL_DAYS+' days</span><span class="chip">VAs only see their own client\'s tab</span></div></div></div>'+
+      '<div class="card" style="padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:240px"><b style="font-size:13.5px">One link for every small-client VA</b><div class="muted" style="margin-top:3px">'+esc(link)+' — each VA lands on their own client, worked out from the worklog: anyone who tracked time on that client\'s project in the last '+WL_DAYS+' days. Nothing to add by hand.</div></div>'+
+        '<button class="btn sm sec" onclick="HUB.refreshTeams()">Refresh</button><button class="btn sm sec" onclick="HUB.copyLink()">Copy link</button></div>'+
       '<div class="tm-grid">'+CLIENTS.map(function(c){
-        var cfg=cfgList(c.id), auto=autoList(c.id);
+        var wl=wlList(c.id), auto=autoList(c.id);
         var chips=membersOf(c.id).map(function(id){
-          var manual=cfg.indexOf(id)>=0, onBoard=auto.indexOf(id)>=0;
-          return '<span class="mc" title="'+esc(id)+'">'+avatar(id,'a')+esc(vaName(id))+(onBoard?' <small>on board</small>':'')+(manual?'<button title="Remove" onclick="HUB.rm(\''+c.id+'\',\''+jsq(id)+'\')">×</button>':'')+'</span>';
+          var src=wl.indexOf(id)>=0?'worklog':(auto.indexOf(id)>=0?'on board':'');
+          return '<span class="mc" title="'+esc(id)+'">'+avatar(id,'a')+esc(vaName(id))+(src?' <small>'+src+'</small>':'')+'</span>';
         }).join('');
+        var pj=(S.wlProj[c.id]||[]).map(function(n){ return '<b>'+esc(n)+'</b>'; }).join(', ');
         return '<div class="card tm-c" style="--g:'+c.g+'"><div class="tm-h"><span class="ic">'+IC[c.icon]+'</span><div style="flex:1"><b>'+esc(c.name)+'</b><small>'+esc(c.kind)+' · '+(c.live?'live':'waiting for the SOP')+'</small></div>'+
           '<button class="btn sm sec" onclick="HUB.pick(\''+c.id+'\')">Open</button></div>'+
-          '<div class="mem">'+(chips||'<span class="muted">No VAs yet.</span>')+'</div>'+
-          '<div class="tm-add"><input id="tm-in-'+c.id+'" list="tm-dl" placeholder="Employee ID, e.g. JMB021" onkeydown="if(event.key===\'Enter\')HUB.addMember(\''+c.id+'\')"><button class="btn sm" onclick="HUB.addMember(\''+c.id+'\')">Add</button></div></div>';
-      }).join('')+'</div>'+dl+
-      (S.cfgLoaded?'':'<p class="muted" style="margin-top:10px">Couldn\'t read the saved team yet — showing who is on the boards. Adding still works.</p>')+'</div>';
+          '<div class="mem">'+(chips||'<span class="muted">Nobody has tracked time on it in the last '+WL_DAYS+' days.</span>')+'</div>'+
+          '<div class="muted" style="margin-top:10px;font-size:11.5px">Worklog project'+((S.wlProj[c.id]||[]).length===1?'':'s')+': '+(pj||'—')+'</div></div>';
+      }).join('')+'</div>'+
+      (S.wlLoaded?'':'<p class="muted" style="margin-top:10px">Couldn\'t read the worklog just now — showing who is on the boards. Press Refresh to try again.</p>')+'</div>';
   }
-  async function addMember(cid){
-    var inp=$('tm-in-'+cid), id=norm(inp&&inp.value); if(!id) return;
-    if(Object.keys(NAMES).length && !NAMES[id.toLowerCase()] && !confirm(id+' isn\'t in the employee list. Add anyway?')) return;
-    var L=cfgList(cid); if(L.indexOf(id)>=0){ toast(vaName(id)+' is already on '+clientById(cid).name+'.'); return; }
-    S.cfg.members=S.cfg.members||{}; S.cfg.members[cid]=L.concat([id]);
-    renderTeam($('main')); renderTabs();
-    await saveCfg();
-  }
-  async function rm(cid, id){
-    S.cfg.members[cid]=cfgList(cid).filter(function(x){ return x!==norm(id); });
-    renderTeam($('main')); renderTabs();
-    await saveCfg();
-  }
+  async function refreshTeams(){ toast('Reading the worklog…'); await loadTeams(true); renderTabs(); if(S.view==='team') renderTeam($('main')); toast('Team updated from the worklog.'); }
   function copyLink(){ var t='https://internals.jmbvirtuals.com/clients.html'; try{ navigator.clipboard.writeText(t).then(function(){ toast('Link copied.'); }, function(){ prompt('Copy the link:', t); }); }catch(e){ prompt('Copy the link:', t); } }
   /* first load: boards + team + the portal link together, then land on the right tab */
   async function boot(again){
     if(!again){ Object.keys(MODS).forEach(function(k){ try{ MODS[k].paintCached(); }catch(e){} }); renderTabs(); renderMain(); }
-    var tasks=[loadCfg(), linkLoad(true)].concat(Object.keys(MODS).map(function(k){ return MODS[k].load(); }));
+    var tasks=[loadTeams(again), linkLoad(true)].concat(Object.keys(MODS).map(function(k){ return MODS[k].load(); }));
     await Promise.race([Promise.all(tasks.map(function(p){ return p.catch?p.catch(function(){}):p; })), new Promise(function(r){ setTimeout(r, 15000); })]);
     S.ready=true;
     var v=(again||!S.view)?initialView():S.view; S.view=v||'';
@@ -1339,7 +1332,7 @@ var HUB=(function(){
     try{ linkAfter(); }catch(e){}
   }
   return { S:S, pick:pick, cur:cur, myClients:myClients, membersOf:membersOf, repaint:repaint, repaintLink:repaintLink, onData:onData, boot:boot,
-           addMember:addMember, rm:rm, copyLink:copyLink, renderMe:renderMe, loadCfg:loadCfg };
+           refreshTeams:refreshTeams, copyLink:copyLink, renderMe:renderMe, loadTeams:loadTeams };
 })();
 
 /* ── sign in ── */
@@ -1365,7 +1358,7 @@ function start(){
   setTimeout(function(){ tbSend(true); }, 2500);
   /* keep the boards fresh: every minute while visible, and on focus */
   setInterval(function(){ if(!document.hidden) DS.load(); }, 60000);
-  setInterval(function(){ if(!document.hidden && isOwner()) HUB.loadCfg(); }, 5*60000);
+  setInterval(function(){ if(!document.hidden) HUB.loadTeams(true).then(function(){ HUB.repaint(); }); }, 10*60000);
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) DS.load(); });
   window.addEventListener('focus', function(){ DS.load(); });
 }

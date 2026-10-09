@@ -398,6 +398,22 @@ table.db tr.dead td{color:var(--ink3)}
 .legend span{display:inline-flex;gap:5px;align-items:center}
 .legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
 .hb{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12px}
+/* phase when banned — per method (Oct 9) */
+.pm{display:grid;gap:0;font-size:12px;overflow-x:auto}
+.pm>div{padding:7px 10px;border-top:1px solid var(--line);display:flex;align-items:center;gap:8px;min-width:0}
+.pm>.h{border-top:none;padding-bottom:9px;flex-direction:column;align-items:flex-start;gap:3px}
+.pm>.h small{font-size:10.5px;color:var(--ink3);font-weight:700}
+.pm .ph{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pm .ph i{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:7px;flex:none}
+.pm .cell{flex-direction:column;align-items:stretch;gap:3px}
+.pm .row1{display:flex;align-items:center;gap:8px}
+.pm .bar{flex:1;height:10px;border-radius:6px;background:rgba(17,19,34,.06);overflow:hidden;min-width:40px}
+.pm .bar i{display:block;height:100%;border-radius:6px}
+.pm .n{font:800 12.5px Sora,Inter,sans-serif;min-width:58px;text-align:right;white-space:nowrap}
+.pm .n small{font:700 10.5px Inter,sans-serif;color:var(--ink3);margin-left:3px}
+.pm .via{font-size:10.5px;color:var(--ink3)}
+.pm .top{background:rgba(244,63,94,.05)}
+.pm .tot{font-weight:800}
 .hb .l{width:120px;flex:none;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hb .b{flex:1;height:14px;background:var(--s3);border-radius:5px;overflow:hidden}
 .hb .b i{display:block;height:100%;border-radius:5px}
@@ -3441,8 +3457,8 @@ function vInsights(){
       :'<div class="alert ok"><div class="ic">✓</div><div><b>No ban waves and no concentrated bans</b> in this range.<small>A ban wave = 90% or more of an operation\'s live accounts banned together. Other signals need at least 3 bans on a day, or 3 in a week for one group.</small></div></div>')+'</div>';
   h+='<div class="card pad"><div class="ch-h"><b>Since each SOP change</b><span>banned a week under each version of the SOP — a ban counts under the SOP in force that day · dates in Settings → SOP changes</span></div>'+sopPeriods(D)+'</div>';
   h+='<div class="card pad"><div class="ch-h"><b>By '+dimLabel(INS.dim).toLowerCase()+'</b><span>ban rate in range vs. everyone — "Check" means at least 3 bans and twice the overall rate</span></div>'+breakdown(D, INS.dim)+'</div>';
-  h+='<div class="card pad s6"><div class="ch-h"><b>Phase when banned</b><span>bans in this range, all methods · via = the state just before the ban</span></div>'+deathStages(D)+'</div>';
-  h+='<div class="card pad s6"><div class="ch-h"><b>Survival by age</b><span>% still alive at each day of age · before Oct 1 vs iPhone process</span></div>'+survival(D)+'</div>';
+  h+='<div class="card pad"><div class="ch-h"><b>Phase when banned — per method</b><span>bans in this range · one column per method · % = share of that method\'s bans · tinted = its most · via = the state just before the ban</span></div>'+deathByMethod(D)+'</div>';
+  h+='<div class="card pad"><div class="ch-h"><b>Survival by age — per method</b><span>% still alive at each day of age · one line per method</span></div>'+survivalByMethod(D)+'</div>';
   h+='<div class="card pad"><div class="ch-h"><b>Old process vs iPhone process</b><span>accounts created before / from '+esc(fmtD(parseTs(CFG.process_start||SOP_START)))+' — all-time, this base filter</span></div>'+cohorts(D)+'</div>';
   h+='</div>';
   var approx=D.bans.filter(function(b){ return !b.exact; }).length;
@@ -3583,6 +3599,68 @@ function sopPeriods(D){
         ms.map(function(m){ var x=p.per[m]; return '<td class="num">'+(x.w==null?'<span class="muted">·</span>':fmtWk(x.w)+' <span class="muted" style="font-size:11px">('+x.bn+')</span>')+'</td>'; }).join('')+'</tr>'; }).join('')+
     '</tbody></table></div>';
   return t+'<p class="muted" style="font-size:11.5px;margin-top:8px">"Banned a week" = bans ÷ the weeks accounts were alive under that SOP, so a short period with a big fleet and a long one with a small fleet compare fairly. Green = best period, red = worst (needs ~5 accounts × 14 days alive).</p>';
+}
+/* PHASE WHEN BANNED — PER METHOD (Jeth, Oct 9): one column per method, so Vysor, Jailbroken and Blaze+ can be compared
+   phase by phase. Count = bans of that method in that phase (in range); % = share of that method's bans; the cell with
+   each method's most bans is tinted. "via" = the state just before the ban (Temp ban, Spam recovery, hold). */
+function deathByMethod(D){
+  if(!D.bans.length) return '<div class="muted">No bans in this range.</div>';
+  var ms=methodsList().filter(function(m){ return D.bans.some(function(b){ return methodOf(b.r)===m; }); });
+  D.bans.forEach(function(b){ var m=methodOf(b.r); if(m && ms.indexOf(m)<0) ms.push(m); });
+  var cnt={}, tot={}, via={}, phases={}, mx=0, top={};
+  D.bans.forEach(function(b){ var m=methodOf(b.r); if(!m) return; var k=b.from||'?', key=m+'|'+k; phases[k]=1;
+    cnt[key]=(cnt[key]||0)+1; tot[m]=(tot[m]||0)+1; if(b.via){ var v=via[key]=via[key]||{}; v[b.via]=(v[b.via]||0)+1; } });
+  Object.keys(cnt).forEach(function(k){ mx=Math.max(mx,cnt[k]); var m=k.split('|')[0]; if(!top[m] || cnt[k]>cnt[top[m]]) top[m]=k; });
+  var ks=Object.keys(phases).sort(function(a,b){ return (a==='?')-(b==='?') || phaseIx(a)-phaseIx(b); });
+  var cols='minmax(130px,170px) repeat('+ms.length+',minmax(150px,1fr))';
+  var h='<div class="pm" style="grid-template-columns:'+cols+'"><div class="h"><b style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Phase</b></div>'+
+    ms.map(function(m){ return '<div class="h">'+methodPill(m,true)+'<small>'+(tot[m]||0)+' ban'+((tot[m]||0)===1?'':'s')+' in range</small></div>'; }).join('');
+  ks.forEach(function(k){
+    var sm=k==='?'?{ n:'Phase unknown', c:'#cbd5e1' }:stageMeta(k);
+    h+='<div class="ph" title="'+esc(sm.n)+'"><i style="background:'+sm.c+'"></i>'+esc(sm.n)+'</div>';
+    ms.forEach(function(m){
+      var key=m+'|'+k, n=cnt[key]||0, c=methodColor(m);
+      if(!n){ h+='<div class="cell"><div class="row1"><div class="bar"></div><span class="n muted">·</span></div></div>'; return; }
+      var v=via[key]?Object.keys(via[key]).map(function(x){ return via[key][x]+' via '+stageMeta(x).n; }).join(', '):'';
+      h+='<div class="cell'+(top[m]===key?' top':'')+'" title="'+esc(m)+' · '+esc(sm.n)+': '+n+' of '+tot[m]+' bans">'+
+        '<div class="row1"><div class="bar"><i style="width:'+(n/mx*100).toFixed(1)+'%;background:'+c+'"></i></div><span class="n">'+n+'<small>'+Math.round(n/tot[m]*100)+'%</small></span></div>'+
+        (v?'<div class="via">'+esc(v)+'</div>':'')+'</div>';
+    });
+  });
+  h+='<div class="ph tot">All phases</div>'+ms.map(function(m){ return '<div class="cell"><div class="row1 tot"><span style="flex:1">'+(tot[m]||0)+' banned</span>'+(top[m]?'<span class="muted" style="font-size:10.5px;font-weight:700">most: '+esc(top[m].split('|')[1]==='?'?'Phase unknown':stageMeta(top[m].split('|')[1]).n)+'</span>':'')+'</div></div>'; }).join('');
+  return h+'</div>';
+}
+/* SURVIVAL BY AGE — PER METHOD (Jeth, Oct 9): one line per method — of the accounts at least t days old, the share still
+   alive at day t. A line stops where fewer than 3 accounts are that old. */
+function survivalByMethod(D){
+  var maxT=30, W=1000, H=250, L=36, B=24, T=14;
+  var ms=methodsList().filter(function(m){ return D.rows.some(function(r){ return methodOf(r)===m; }); });
+  D.rows.forEach(function(r){ var m=methodOf(r); if(m && ms.indexOf(m)<0) ms.push(m); });
+  var series=ms.map(function(m){
+    var rows=D.rows.filter(function(r){ return methodOf(r)===m; }), pts=[];
+    for(var t=0;t<=maxT;t++){
+      var el=rows.filter(function(r){ var cc=createdAt(r); return cc && dayDiff(cc)>=t; }); if(el.length<3) break;
+      var al=el.filter(function(r){ var a=ageDays(r); return !isDead(r) || (a!=null && a>t); }).length;
+      pts.push([t, al/el.length, el.length]);
+    }
+    return { n:m, c:methodColor(m), pts:pts, size:rows.length, dead:rows.filter(isDead).length };
+  });
+  if(!series.length) return '<div class="muted">No accounts with a method yet.</div>';
+  var X=function(t){ return L+(W-L-8)*t/maxT; }, Y=function(v){ return T+(H-B-T)*(1-v); };
+  var g='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
+  for(var i=0;i<=4;i++){ var y=T+(H-B-T)*i/4; g+='<line x1="'+L+'" x2="'+(W-8)+'" y1="'+y+'" y2="'+y+'" stroke="rgba(17,19,34,.07)"/><text x="'+(L-6)+'" y="'+(y+3)+'" font-size="9.5" fill="#7f859c" text-anchor="end">'+(100-i*25)+'%</text>'; }
+  [0,7,14,21,30].forEach(function(t){ g+='<text x="'+X(t)+'" y="'+(H-6)+'" font-size="9.5" fill="#7f859c" text-anchor="'+(t===0?'start':(t===maxT?'end':'middle'))+'">day '+t+'</text>'; });
+  series.forEach(function(s){ if(s.pts.length<2) return;
+    var d=s.pts.map(function(p,ix){ return (ix?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1); }).join('');
+    g+='<path d="'+d+'" fill="none" stroke="'+s.c+'" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>';
+    s.pts.forEach(function(p){ g+='<circle cx="'+X(p[0]).toFixed(1)+'" cy="'+Y(p[1]).toFixed(1)+'" r="6" fill="transparent"><title>'+esc(s.n)+' · day '+p[0]+': '+Math.round(p[1]*100)+'% alive of '+p[2]+' accounts that old</title></circle>'; });
+    var lp=s.pts[s.pts.length-1];
+    var nearEnd=X(lp[0])>W-60;
+    g+='<circle cx="'+X(lp[0])+'" cy="'+Y(lp[1])+'" r="3.8" fill="'+s.c+'"/><text x="'+(X(lp[0])+(nearEnd?-7:7))+'" y="'+(Y(lp[1])-(nearEnd?7:-3.5))+'" font-size="10.5" font-weight="800" text-anchor="'+(nearEnd?'end':'start')+'" fill="'+s.c+'">'+Math.round(lp[1]*100)+'%</text>'; });
+  g+='</svg>';
+  return g+'<div class="legend">'+series.map(function(s){ var lp=s.pts[s.pts.length-1];
+    return '<span><i style="background:'+s.c+'"></i>'+esc(s.n)+' · '+s.size+' accounts · '+s.dead+' banned'+(s.pts.length<2?' (too new to plot)':(' · '+Math.round(lp[1]*100)+'% alive at day '+lp[0]))+'</span>'; }).join('')+'</div>'+
+    '<p class="muted" style="font-size:11.5px;margin-top:6px">Each point: of the accounts at least that many days old, how many were still alive at that age. A line stops where fewer than 3 accounts are that old yet.</p>';
 }
 function survival(D){
   var maxT=30, W=520, H=200, L=34, B=24, T=12;
