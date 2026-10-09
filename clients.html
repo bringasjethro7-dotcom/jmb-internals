@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Client Hub · JMB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ═══════════ CLIENT HUB — every small client (1–3 VAs) in one link, one tab each (Jeth, Oct 9 2026) ═══════════ */
+:root{
+  --bg:#f4f5f9; --s1:#ffffff; --s2:#fafbfd; --s3:#f1f2f7;
+  --ink:#14161f; --ink2:#4b5164; --ink3:#7f859c; --ink4:#a9aec0;
+  --line:rgba(17,19,34,.08); --line2:rgba(17,19,34,.14);
+  --o:#FF6B1A; --t:#14B8A6; --tl:#0F766E; --ok:#10b981; --warn:#f59e0b; --bad:#ef4444;
+  --grad:linear-gradient(120deg,#2dd4bf 0%,#0ea5e9 50%,#6366f1 100%);
+  --sh1:0 1px 2px rgba(17,19,34,.05),0 1px 1px rgba(17,19,34,.03);
+  --sh2:0 10px 30px -12px rgba(17,19,34,.18),0 2px 6px rgba(17,19,34,.05);
+  --r:16px; --cc:#14B8A6; --cg:linear-gradient(135deg,#2dd4bf,#0e7490);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg)}
+body{font-family:Inter,system-ui,-apple-system,sans-serif;color:var(--ink);min-height:100vh;-webkit-font-smoothing:antialiased;font-size:14px}
+button{font-family:inherit}
+.hide{display:none!important}
+.muted{color:var(--ink3);font-size:12.5px}
+/* ── background wash ── */
+body::before{content:'';position:fixed;inset:-20% -10% auto;height:520px;z-index:-1;pointer-events:none;
+  background:radial-gradient(600px 260px at 12% 10%,rgba(45,212,191,.16),transparent 70%),radial-gradient(520px 240px at 88% 0%,rgba(99,102,241,.12),transparent 70%)}
+/* ── sign-in ── */
+#signin{max-width:390px;margin:12vh auto 0;background:var(--s1);border:1px solid var(--line);border-radius:22px;padding:30px 28px 26px;text-align:center;box-shadow:var(--sh2)}
+#signin .mark{width:58px;height:58px;margin:0 auto 14px;border-radius:17px;background:var(--grad);display:grid;place-items:center;color:#fff;box-shadow:0 14px 30px -12px rgba(14,165,233,.8)}
+#signin .mark svg{width:28px;height:28px}
+#signin h1{font:800 22px Sora,sans-serif;letter-spacing:-.01em}
+#signin p{font-size:12.5px;color:var(--ink2);margin-top:6px;line-height:1.5}
+#signin input{width:100%;padding:11px 13px;border:1px solid var(--line2);border-radius:11px;font:inherit;font-size:14px;margin-top:10px;background:var(--s2);outline:none}
+#signin input:focus{border-color:var(--t);box-shadow:0 0 0 3px rgba(20,184,166,.16)}
+#signin button{width:100%;margin-top:14px;background:var(--grad);color:#fff;border:none;border-radius:12px;padding:12px;font-weight:800;cursor:pointer;font-size:14px}
+#si-err{display:none;color:#b91c1c;font-size:12.5px;margin-top:10px}
+/* ── header ── */
+.hb{position:sticky;top:0;z-index:40;background:rgba(244,245,249,.82);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line)}
+.hb-in{max-width:1320px;margin:0 auto;padding:12px 18px 0;display:flex;flex-direction:column;gap:10px}
+.hb-top{display:flex;align-items:center;gap:12px}
+.brand{display:flex;align-items:center;gap:11px;min-width:0}
+.brand .mk{width:38px;height:38px;border-radius:12px;background:var(--grad);display:grid;place-items:center;color:#fff;flex:none;box-shadow:0 10px 22px -12px rgba(14,165,233,.9)}
+.brand .mk svg{width:20px;height:20px}
+.brand b{font:800 17px Sora,sans-serif;letter-spacing:-.01em;display:block}
+.brand small{font-size:11.5px;color:var(--ink3);font-weight:600}
+.sp{flex:1}
+.me{display:flex;align-items:center;gap:9px;background:var(--s1);border:1px solid var(--line);border-radius:999px;padding:4px 6px 4px 4px;box-shadow:var(--sh1)}
+.me .av{width:28px;height:28px;border-radius:50%;background:var(--cg);color:#fff;display:grid;place-items:center;font:800 11px Sora,sans-serif;overflow:hidden;flex:none}
+.me .av img{width:100%;height:100%;object-fit:cover}
+.me span{font-size:12.5px;font-weight:700;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.me em{font-style:normal;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--tl);background:rgba(20,184,166,.12);border-radius:999px;padding:2px 7px}
+.me button{border:none;background:var(--s3);color:var(--ink2);border-radius:999px;padding:5px 10px;font-size:11.5px;font-weight:700;cursor:pointer}
+/* ── client tabs ── */
+.ctabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:0;margin:0 -2px}
+.ctabs::-webkit-scrollbar{display:none}
+.ct{position:relative;display:flex;align-items:center;gap:10px;padding:9px 14px 12px 10px;border:none;background:none;cursor:pointer;border-radius:12px 12px 0 0;color:var(--ink2);white-space:nowrap;transition:background .15s,color .15s}
+.ct:hover{background:rgba(17,19,34,.04)}
+.ct .ic{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;color:#fff;flex:none;background:var(--g);box-shadow:0 8px 16px -10px var(--c);opacity:.85;transition:transform .2s,opacity .2s}
+.ct .ic svg{width:16px;height:16px}
+.ct .tx{text-align:left;line-height:1.15}
+.ct .tx b{display:block;font-size:13.5px;font-weight:800;color:inherit}
+.ct .tx small{font-size:11px;font-weight:600;color:var(--ink3)}
+.ct .soon{font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#a16207;background:rgba(245,158,11,.14);border-radius:999px;padding:2px 7px;margin-left:2px}
+.ct::after{content:'';position:absolute;left:12px;right:12px;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--g);transform:scaleX(0);transition:transform .25s cubic-bezier(.3,1.4,.5,1)}
+.ct.on{color:var(--ink)}
+.ct.on .ic{opacity:1;transform:translateY(-1px)}
+.ct.on::after{transform:scaleX(1)}
+.ct.gear .ic{background:linear-gradient(135deg,#64748b,#334155)}
+/* ── page ── */
+.wrap{max-width:1320px;margin:0 auto;padding:18px 18px 70px}
+.pane{animation:paneIn .35s cubic-bezier(.2,.8,.3,1) both}
+@keyframes paneIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.phead{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.phead h2{font:800 24px Sora,sans-serif;letter-spacing:-.015em;line-height:1.1}
+.phead h2 em{font-style:normal;background:var(--g);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.phead .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;color:var(--ink2);background:var(--s1);border:1px solid var(--line);border-radius:999px;padding:3px 10px}
+.chip i{width:7px;height:7px;border-radius:50%;background:var(--c)}
+.card{background:var(--s1);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh1)}
+.empty{padding:46px 24px;text-align:center}
+.empty .big{width:64px;height:64px;margin:0 auto 14px;border-radius:20px;display:grid;place-items:center;color:#fff;background:var(--g,var(--grad));box-shadow:0 16px 30px -16px var(--c,#0ea5e9)}
+.empty .big svg{width:30px;height:30px}
+.empty h3{font:800 18px Sora,sans-serif}
+.empty p{color:var(--ink2);font-size:13px;line-height:1.6;max-width:520px;margin:8px auto 0}
+.btn{border:none;border-radius:10px;padding:9px 15px;font-weight:800;font-size:12.5px;cursor:pointer;background:var(--grad);color:#fff}
+.btn.sec{background:var(--s1);color:var(--ink2);border:1px solid var(--line2)}
+.btn.sm{padding:6px 11px;font-size:11.5px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(10px);background:#14161f;color:#fff;border-radius:12px;padding:11px 18px;font-size:13px;font-weight:700;opacity:0;transition:.3s;pointer-events:none;z-index:99999;max-width:min(560px,92vw);text-align:center;box-shadow:0 18px 40px -16px rgba(0,0,0,.6)}
+.toast.on{opacity:1;transform:translateX(-50%)}
+/* ── Team (owner) ── */
+.tm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.tm-c{padding:16px 16px 14px;position:relative;overflow:hidden}
+.tm-c::before{content:'';position:absolute;left:0;top:0;right:0;height:4px;background:var(--g)}
+.tm-h{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.tm-h .ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;color:#fff;background:var(--g);flex:none}
+.tm-h .ic svg{width:17px;height:17px}
+.tm-h b{font-size:14.5px;font-weight:800;display:block}
+.tm-h small{font-size:11.5px;color:var(--ink3);font-weight:600}
+.mem{display:flex;flex-wrap:wrap;gap:6px;min-height:30px}
+.mc{display:inline-flex;align-items:center;gap:6px;background:var(--s3);border-radius:999px;padding:3px 4px 3px 3px;font-size:12px;font-weight:700}
+.mc .a{width:22px;height:22px;border-radius:50%;background:var(--g);color:#fff;display:grid;place-items:center;font:800 9.5px Sora,sans-serif;overflow:hidden}
+.mc .a img{width:100%;height:100%;object-fit:cover}
+.mc small{font-size:10px;color:var(--ink3);font-weight:700}
+.mc button{border:none;background:rgba(17,19,34,.08);width:18px;height:18px;border-radius:50%;cursor:pointer;color:var(--ink2);font-size:12px;line-height:1;margin-right:2px}
+.tm-add{display:flex;gap:6px;margin-top:12px}
+.tm-add input{flex:1;padding:8px 11px;border:1px solid var(--line2);border-radius:10px;font:inherit;font-size:12.5px;background:var(--s2);outline:none}
+.tm-add input:focus{border-color:var(--t)}
+/* ═══════════ DESIGN & SHOPIFY (moved in from design-shopify.html) — scoped under .c-ds ═══════════ */
+.c-ds{--waiting:#94a3b8;--editing:#6366f1;--drive:#f59e0b;--shopify:#10b981;--website:#059669;--hold:#64748b;--issue:#ef4444}
+.c-ds .sub{color:var(--ink2);font-size:12.5px;line-height:1.55;margin:-4px 0 14px;max-width:880px}
+.c-ds .top{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:10px;margin-bottom:14px}
+.c-ds .stat{background:var(--s1);border:1px solid var(--line);border-radius:14px;padding:10px 14px;text-align:center;box-shadow:var(--sh1)}
+.c-ds .stat b{font:800 21px Sora,sans-serif;display:block}
+.c-ds .stat span{font-size:10.5px;color:var(--ink3);font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.c-ds .stat.waiting b{color:var(--waiting)} .c-ds .stat.editing b{color:var(--editing)} .c-ds .stat.drive b{color:var(--drive)} .c-ds .stat.shopify b{color:var(--shopify)} .c-ds .stat.website b{color:var(--website)} .c-ds .stat.issue b{color:var(--issue)}
+.c-ds .addbox{display:flex;gap:8px;flex-wrap:wrap;background:var(--s1);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:14px;box-shadow:var(--sh1)}
+.c-ds .addbox input,.c-ds .addbox select{flex:1;min-width:150px;padding:9px 11px;border:1px solid var(--line2);border-radius:10px;font:inherit;font-size:13px;background:var(--s2);outline:none}
+.c-ds .addbox input:focus{border-color:var(--website)}
+.c-ds .addbox button{background:linear-gradient(135deg,#10b981,#065f46);color:#fff;border:none;border-radius:10px;padding:9px 16px;font-weight:800;cursor:pointer}
+.c-ds .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:12px}
+.c-ds .col{background:var(--s1);border:1px solid var(--line);border-radius:15px;padding:12px;min-height:120px;box-shadow:var(--sh1)}
+.c-ds .col h3{font-size:13px;font-weight:800;display:flex;align-items:center;gap:7px;margin-bottom:10px}
+.c-ds .col h3 i{width:9px;height:9px;border-radius:50%;flex:none}
+.c-ds .col.waiting h3 i{background:var(--waiting)} .c-ds .col.editing h3 i{background:var(--editing)} .c-ds .col.drive h3 i{background:var(--drive)} .c-ds .col.shopify h3 i{background:var(--shopify)} .c-ds .col.website h3 i{background:var(--website)} .c-ds .col.hold h3 i{background:var(--hold)} .c-ds .col.issue h3 i{background:var(--issue)}
+.c-ds .acct{border:1px solid var(--line);border-radius:11px;padding:8px 10px;margin-bottom:7px;font-size:12.5px;background:var(--s1);box-shadow:0 1px 2px rgba(15,23,42,.05);transition:box-shadow .15s,transform .15s}
+.c-ds .acct:hover{box-shadow:0 8px 22px rgba(15,23,42,.09);transform:translateY(-1px)}
+.c-ds .acct b{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.c-ds .acct .who{font-size:10.5px;color:var(--ink3);margin:2px 0 6px}
+.c-ds .acct .btns{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.c-ds .acct button{border:1px solid var(--line2);background:var(--s1);border-radius:8px;padding:4px 8px;font-size:10.5px;font-weight:800;cursor:pointer;color:var(--ink2)}
+.c-ds .acct button.go{border-color:rgba(16,185,129,.5);color:#0f766e;background:rgba(16,185,129,.08)}
+.c-ds .acct button.warn{border-color:rgba(245,158,11,.5);color:#92400e;background:rgba(245,158,11,.08)}
+.c-ds .kmenu{position:relative}
+.c-ds .kmenu summary{list-style:none;cursor:pointer;width:27px;height:27px;border:1px solid var(--line2);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--ink3);font-weight:900;background:var(--s1);font-size:14px}
+.c-ds .kmenu summary::-webkit-details-marker{display:none}
+.c-ds .kmenu[open] summary{background:var(--bg)}
+.c-ds .kmenu .dd{position:absolute;right:0;top:31px;z-index:30;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(15,23,42,.16);padding:6px;min-width:210px;display:flex;flex-direction:column;gap:2px}
+.c-ds .kmenu .dd button{border:none;background:none;text-align:left;padding:8px 10px;border-radius:8px;font:700 12px Inter,sans-serif;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.c-ds .kmenu .dd button:hover{background:var(--bg)}
+.c-ds .kmenu .dd button.danger{color:#b91c1c}
+.c-ds .kmenu .dd .sep{height:1px;background:var(--line);margin:4px 6px}
+.c-ds .pvwrap{background:var(--s1);border:1px solid var(--line);border-radius:16px;padding:14px 18px 8px;box-shadow:var(--sh1);margin-bottom:14px}
+.c-ds .pvrow{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
+.c-ds .pvrow.first{border-top:none}
+.c-ds .pvav{width:36px;height:36px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font:800 12.5px Sora,sans-serif;color:#fff}
+.c-ds .pvbar{height:14px;border-radius:9px;background:rgba(15,23,42,.07);overflow:hidden;position:relative}
+.c-ds .pvbar i{display:block;height:100%;border-radius:9px;transition:width .4s;background-image:linear-gradient(90deg,#34d399,#059669);position:relative;overflow:hidden}
+.c-ds .pvbar i::after{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.35) 50%,transparent 60%);animation:dsShine 2.4s infinite}
+@keyframes dsShine{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+.c-ds .pvpct{font-family:Sora,sans-serif;font-weight:800;min-width:118px;text-align:right;line-height:1.25}
+.c-ds .sopbox{background:var(--s1);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:14px;box-shadow:var(--sh1)}
+.c-ds .sopbox summary{list-style:none;cursor:pointer;font-size:12.5px;font-weight:800;color:var(--ink2)}
+.c-ds .sopbox summary::-webkit-details-marker{display:none}
+.c-ds .sopbox summary::after{content:' ▾'} .c-ds .sopbox[open] summary::after{content:' ▴'}
+.c-ds .sopgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:10px}
+.c-ds .sopph{background:rgba(15,23,42,.03);border-radius:10px;padding:9px 11px;font-size:11.5px;color:var(--ink2);line-height:1.55}
+.c-ds .sopph b{display:block;font-size:11.5px;color:var(--ink);margin-bottom:3px}
+.c-ds .vpill{border:1px solid var(--line2);background:var(--s1);color:var(--ink2);border-radius:999px;padding:6px 13px;font:800 12px Inter,sans-serif;cursor:pointer;white-space:nowrap}
+.c-ds .vpill.on{border-color:#065f46;background:rgba(16,185,129,.12);color:#065f46}
+.c-ds .q{width:100%;max-width:340px;padding:9px 13px;border:1px solid var(--line2);border-radius:999px;font:inherit;font-size:13px;background:var(--s1);margin-bottom:12px;outline:none}
+/* QC modal */
+#qcmask{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9000;align-items:center;justify-content:center;padding:16px}
+#qcmask.on{display:flex}
+#qcbox{background:#fff;border-radius:18px;padding:22px;max-width:440px;width:100%;box-shadow:0 24px 60px rgba(15,23,42,.3);max-height:88vh;overflow:auto}
+#qcbox h2{font:800 17px Sora,sans-serif;margin-bottom:2px}
+#qcbox .qsub{font-size:12px;color:var(--ink3);margin-bottom:12px}
+.qcitem{display:flex;align-items:flex-start;gap:9px;padding:8px 10px;border:1px solid var(--line2);border-radius:10px;margin-bottom:6px;font-size:12.5px;font-weight:700;color:var(--ink2);cursor:pointer}
+.qcitem input{margin-top:2px;accent-color:#059669}
+.qcitem.ok{border-color:rgba(16,185,129,.45);background:rgba(16,185,129,.06);color:#065f46}
+#qc-pub{width:100%;margin-top:10px;background:linear-gradient(135deg,#10b981,#065f46);color:#fff;border:none;border-radius:11px;padding:12px;font:800 14px Inter,sans-serif;cursor:pointer}
+#qc-pub:disabled{opacity:.4;cursor:not-allowed}
+#qc-close{width:100%;margin-top:7px;background:none;border:1px solid var(--line2);border-radius:11px;padding:10px;font:800 12.5px Inter,sans-serif;color:var(--ink3);cursor:pointer}
+@media (max-width:640px){.hb-in{padding:10px 12px 0}.wrap{padding:14px 12px 60px}.brand small{display:none}.me span{display:none}.phead h2{font-size:20px}}
+</style>
+</head>
+<body>
+<div id="signin">
+  <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg></div>
+  <h1>Client Hub</h1>
+  <p>Every small client's tool in one place.<br>Sign in with your Employee ID and PIN.</p>
+  <input id="si-id" placeholder="Employee ID" autocomplete="username"><input id="si-pin" type="password" placeholder="PIN" autocomplete="current-password">
+  <button id="si-go" onclick="signIn()">Sign in</button><div id="si-err"></div>
+</div>
+
+<div id="app" class="hide">
+  <header class="hb"><div class="hb-in">
+    <div class="hb-top">
+      <div class="brand"><div class="mk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg></div>
+        <div><b>Client Hub</b><small>JMB · every small client, one link</small></div></div>
+      <div class="sp"></div>
+      <div class="me" id="me"></div>
+    </div>
+    <nav class="ctabs" id="ctabs"></nav>
+  </div></header>
+  <main class="wrap" id="main"></main>
+</div>
+
+<div id="qcmask"><div id="qcbox">
+  <h2>Final Quality Review</h2>
+  <div class="qsub" id="qc-name"></div>
+  <div id="qc-items"></div>
+  <button id="qc-pub" disabled onclick="DS.qcPublish()">Publish → Website (+1 output)</button>
+  <button id="qc-close" onclick="DS.qcClose()">Cancel</button>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   CLIENT HUB (Jeth, Oct 9 2026) — "a tool that compiles all small clients who only have 1–3 VAs. Different
+   SOPs, each with their own tab, but in one link or place only."
+   • One page, one tab per client. Each tab IS that client's tool (its own board and its own SOP flow).
+   • A VA sees only their own client's tab(s); the owner sees every tab plus Team (who is on which client).
+     A VA is on a client when: Jeth added them in Team, OR they own cards on that client's board, OR their
+     portal timer is running on that client's project right now.
+   • Timer link, same as Reddit Central / ALTR Studio: work only counts while the portal timer runs on that
+     client's project (the pairing box waits for it), and the hub writes its heartbeat to Supabase tool_beat
+     (tool "clients") so the portal can pair with it and stop a timer when the hub shows no work for 10 min.
+   • Outputs go through the proof gate → po_bump, which is what the portal scorecard (productivity) reads.
+   Adding a client later = one entry in CLIENTS + its module (see DS for the shape: mount / render / poll).
+   Backend: the main portal API only (pa_* board store, po_bump, proof_save) — no new script, nothing to paste.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+var API='https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec';
+var SB_URL='https://rvyrnkjqxnijxydloujk.supabase.co', SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ2eXJua2pxeG5panh5ZGxvdWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1NzAwODQsImV4cCI6MjA5NzE0NjA4NH0.SwkSkmbeWrhm5PZZDSZ1Z4hbjpQ0L2CRtuKQmpHshBE';
+var OWNER_IDS=['JMBEAST','ADMIN'];
+var HUB_PROJECT='Client Hub', HUB_CFG_HANDLE='members';   // hub settings live in the generic board store (ProjectAccounts)
+
+var IC={
+  hub:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>',
+  shop:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1.2 11.2a1.6 1.6 0 0 1-1.6 1.4H7.8a1.6 1.6 0 0 1-1.6-1.4z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg>',
+  reels:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M3 8.5h18M8 3l3 5.5M13.5 3l3 5.5"/><path d="M10.3 12.2v4.6l4-2.3z" fill="currentColor"/></svg>',
+  gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19.5v-1a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5v1"/><circle cx="10" cy="8" r="3.5"/><path d="M17.5 8.5v5M15 11h5"/></svg>',
+  wait:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12M6 21h12M7 3c0 5 10 6 10 9s-10 4-10 9M17 3c0 5-10 6-10 9"/></svg>'
+};
+/* THE CLIENTS. match = how the client's project is written in the portal timer (the link uses it).
+   live:false = the tab is there (and VAs can be put on it) but the tool is waiting for its SOP. */
+var CLIENTS=[
+  { id:'design-shopify', name:'Design & Shopify', client:'Torchlight', kind:'Design · Shopify', project:'Design & Shopify', match:/shopify|torchlight/i,
+    c:'#059669', g:'linear-gradient(135deg,#34d399,#059669 55%,#065f46)', icon:'shop', live:true, mod:'DS' },
+  { id:'imperium', name:'Imperium', client:'Imperium', kind:'IG Reels', project:'Imperium', match:/imperium/i,
+    c:'#dd2a7b', g:'linear-gradient(135deg,#f58529,#dd2a7b 55%,#8134af)', icon:'reels', live:false },
+  { id:'project2', name:'Project 2', client:'Project 2', kind:'IG Reels', project:'Project 2', match:/project\s*2\b/i,
+    c:'#8134af', g:'linear-gradient(135deg,#a855f7,#8134af 55%,#4f46e5)', icon:'reels', live:false }
+];
+function clientById(id){ for(var i=0;i<CLIENTS.length;i++) if(CLIENTS[i].id===id) return CLIENTS[i]; return null; }
+function clientOfTask(task){ task=String(task||''); for(var i=0;i<CLIENTS.length;i++) if(CLIENTS[i].match.test(task)) return CLIENTS[i]; return null; }
+
+/* ── helpers ── */
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function jsq(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+var _tt=null;
+function toast(m){ var t=$('toast'); if(!t) return; t.textContent=m; t.classList.add('on'); clearTimeout(_tt); _tt=setTimeout(function(){ t.classList.remove('on'); }, 2600); }
+function phtToday(){ try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date()); }catch(e){ return new Date(Date.now()+8*3600e3).toISOString().slice(0,10); } }
+/* business day: rolls at 8 AM PHT (same clock as the portal's Data Center) */
+function today(){ try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-8*3600*1000)); }catch(e){ return new Date(Date.now()-8*3600*1000).toISOString().slice(0,10); } }
+async function jFetch(url, tries){
+  tries=(tries==null)?2:tries;
+  for(var a=0;a<=tries;a++){
+    try{
+      var ctl=(typeof AbortController!=='undefined')?new AbortController():null;
+      var tm=ctl?setTimeout(function(){ try{ ctl.abort(); }catch(_){} },12000):null;
+      var r=await fetch(url, ctl?{signal:ctl.signal}:undefined);
+      if(tm) clearTimeout(tm);
+      return await r.json();
+    }catch(e){ if(a===tries) throw e; await new Promise(function(res){ setTimeout(res, 600*(a+1)); }); }
+  }
+}
+function apiGet(q){ var u=API+'?'+Object.keys(q).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(q[k]==null?'':q[k]); }).join('&')+'&_='+Date.now(); return jFetch(u, 1); }
+
+/* ── who is signed in ── */
+var USER=null, ROLE='va';
+function isOwner(){ return ROLE==='owner'; }
+function myId(){ return String((USER&&USER.id)||'').toUpperCase(); }
+
+/* ── employee directory (names, shifts, photos) ── */
+var NAMES={}, SHIFTOF={}, PHOTOOF={};
+function drivePhoto(u){ u=String(u||''); if(!u) return ''; var m=u.match(/[-\w]{25,}/); return m?('https://drive.google.com/thumbnail?id='+m[0]+'&sz=w128'):u; }
+(function(){ try{ var c=JSON.parse(sessionStorage.getItem('jmb_empdir')||'null');
+  if(c && c.N && (Date.now()-(c.t||0))<24*3600*1000){ NAMES=c.N||{}; SHIFTOF=c.S||{}; PHOTOOF=c.P||{}; } }catch(e){} })();
+var _nmTry=0;
+async function loadNames(){
+  try{
+    var d=null;
+    try{ d=await jFetch(API+'?action=emp_dir&_='+Date.now(), 1); }catch(_e1){}
+    if(!d || !d.employees || !d.employees.length) d=await jFetch(API+'?action=get_all_employees&_='+Date.now(), 1);
+    if(!d || !d.employees || !d.employees.length) throw new Error('empty');
+    d.employees.forEach(function(e){
+      var k=String(e.employee_id).toLowerCase();
+      NAMES[k]=e.full_name||e.employee_id;
+      var sh=String(e.shift||'').toLowerCase(); if(!sh && e.payslips && e.payslips.length) sh=String((e.payslips[0]||{}).shift||'').toLowerCase();
+      SHIFTOF[k]=sh; PHOTOOF[k]=drivePhoto(e.photo||'');
+    });
+    try{ sessionStorage.setItem('jmb_empdir', JSON.stringify({ N:NAMES, S:SHIFTOF, P:PHOTOOF, t:Date.now() })); }catch(_p){}
+    try{ HUB.repaint(); }catch(_r){}
+  }catch(e){
+    _nmTry++; setTimeout(loadNames, Math.min(300000, 30000*Math.pow(2,_nmTry-1)) + Math.random()*10000);
+  }
+}
+function vaName(id){ return NAMES[String(id||'').toLowerCase()]||id||'—'; }
+function initials(name){ return String(name||'?').split(/\s+/).slice(0,2).map(function(w){ return w.charAt(0); }).join('').toUpperCase()||'?'; }
+function avatar(id, cls){ var k=String(id||'').toLowerCase(), p=PHOTOOF[k]; return '<span class="'+(cls||'a')+'">'+(p?'<img src="'+esc(p)+'" alt="">':esc(initials(vaName(id))))+'</span>'; }
+/* shift-aware "this shift" key — a night VA's shift that started yesterday 8 PM is still today's work */
+function vaKeyOf(empId){
+  var sh=SHIFTOF[String(empId||'').toLowerCase()];
+  if(sh==='night'){ var d=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-20*3600*1000)); return d+'·PM'; }
+  return today()+'·AM';
+}
+function markOk(v, empId){
+  if(!v) return false;
+  if(v===vaKeyOf(empId)) return true;
+  var sh=SHIFTOF[String(empId||'').toLowerCase()];
+  return sh!=='night' && v===today();
+}
+
+/* PAIRFX — injected by outputs/pairfx/build.py */
+/* ═══ PAIRFX BEGIN (generated from pairfx.js — edit there, rebuild) ═══ */
+/* ═══ PAIRFX — the portal timer ⇄ tool timer link, drawn (Jeth, Oct 9 2026) ═══
+   One look everywhere the two timers meet — the portal, Reddit Central and ALTR Studio:
+     [ Portal ⏱ ] ───── ● ───── [ Tool ]
+   search  — one side is lit, the other is dim and pinging; a signal runs down a dashed track; the hub spins.
+   lock    — both halves of the beam fill toward the middle, the hub pops a check, a shock-ring and sparks fly,
+             the waiting side lights up (≈1.2 s), then it settles into…
+   linked  — a solid beam with light pulses running both ways (the heartbeat), a chain on the hub, live clocks.
+   broken  — the beam is cut at the hub, the tool side greys out, the hub shows "!" — something stopped.
+   PFX.html(o) builds a stage (size lg = the big pairing box, sm = the strip under a timer / in a banner).
+   PFX.lock(el) plays the lock → linked moment on a stage that is already on screen.
+   PFX.celebrate(o) pops a small card at the top of the page with the lock moment (non-blocking, ~3.6 s).
+   Live clocks: any element with data-pfx-since="<ms>" ticks HH:MM:SS; data-pfx-copy="<id>" mirrors that
+   element's text (the portal's own timer). Loops keep their phase across re-renders (negative delays), and
+   prefers-reduced-motion turns every loop off. Same source in every page (portal, Reddit Central, ALTR Studio, Client Hub) — edit pairfx.js, rebuild.     */
+var PFX=(function(){
+  var CSS=`
+.pfx{--pa1:#FFB067;--pa2:#FF6B1A;--pa3:#E8452A;--tb1:#c4b5fd;--tb2:#8B5CF6;--tb3:#6D28D9;--tglow:139,92,246;--tink:#fff;--ok1:#34d399;--ok2:#059669;--bad:#f43f5e;position:relative;font-family:inherit;-webkit-font-smoothing:antialiased;box-sizing:border-box;text-align:left}
+.pfx *,.pfx *::before,.pfx *::after{box-sizing:border-box}
+.pfx.t-altr{--tb1:#e6ff9e;--tb2:#c6ff4d;--tb3:#22d3ee;--tglow:198,255,77;--tink:#0b0a14}
+.pfx.t-clients{--tb1:#99f6e4;--tb2:#14b8a6;--tb3:#0e7490;--tglow:20,184,166;--tink:#fff}
+.pfx svg{display:block;width:100%;height:100%}
+/* ── nodes ── */
+.pfx-n{position:relative;display:grid;place-items:center;color:#fff;background:linear-gradient(145deg,var(--pa1),var(--pa2) 55%,var(--pa3));box-shadow:0 10px 26px -10px rgba(255,107,26,.75),inset 0 1px 0 rgba(255,255,255,.4);transition:filter .5s,opacity .5s,transform .5s,box-shadow .5s;z-index:2}
+.pfx-n.tool{color:var(--tink);background:linear-gradient(145deg,var(--tb1),var(--tb2) 55%,var(--tb3));box-shadow:0 10px 26px -10px rgba(var(--tglow),.8),inset 0 1px 0 rgba(255,255,255,.45)}
+.pfx-n .ic{width:46%;height:46%}
+.pfx-n .r{position:absolute;inset:-5px;border-radius:inherit;border:2px solid rgba(255,255,255,.55);opacity:0;pointer-events:none}
+.pfx-n.tool .r{border-color:rgba(var(--tglow),.75)}
+.pfx-n.portal .r{border-color:rgba(255,150,80,.8)}
+.pfx-s-search .pfx-n.wait{filter:grayscale(.9) brightness(.7);opacity:.62;animation:pfxBreath 2.2s ease-in-out infinite}
+.pfx-s-search .pfx-n.wait .r{animation:pfxPing 2.2s cubic-bezier(.2,.7,.3,1) infinite}
+.pfx-s-search .pfx-n.wait .r+.r{animation-delay:1.1s}
+.pfx-s-search .pfx-n.lit .r{animation:pfxEmit 1.7s ease-out infinite}
+.pfx-s-broken .pfx-n.tool,.pfx-s-broken.pfx-rev .pfx-n.portal{filter:grayscale(1) brightness(.75);opacity:.5}
+.pfx-s-broken.pfx-rev .pfx-n.tool{filter:none;opacity:1}
+.pfx-s-lock .pfx-n.portal{animation:pfxPop .7s cubic-bezier(.3,1.7,.5,1) both;animation-delay:calc(var(--pfx-lockd,0ms) + 0ms)}
+.pfx-s-lock .pfx-n.tool{animation:pfxPop .7s cubic-bezier(.3,1.7,.5,1) both;animation-delay:calc(var(--pfx-lockd,0ms) + 380ms)}
+.pfx-s-lock .pfx-n.wait,.pfx-s-linked .pfx-n{filter:none;opacity:1}
+.pfx-s-linked .pfx-n.portal{box-shadow:0 0 0 3px rgba(255,107,26,.16),0 10px 26px -10px rgba(255,107,26,.75),inset 0 1px 0 rgba(255,255,255,.4)}
+.pfx-s-linked .pfx-n.tool{box-shadow:0 0 0 3px rgba(var(--tglow),.18),0 10px 26px -10px rgba(var(--tglow),.8),inset 0 1px 0 rgba(255,255,255,.45)}
+/* ── beam ── */
+.pfx-beam{position:relative;min-width:40px}
+.pfx-sig,.pfx-fx{position:absolute;inset:0;pointer-events:none}
+.pfx-rev .pfx-sig{transform:scaleX(-1)}
+.pfx-trk{position:absolute;left:0;right:0;top:50%;height:2px;margin-top:-1px;opacity:0;background:repeating-linear-gradient(90deg,currentColor 0 6px,transparent 6px 12px);color:rgba(255,255,255,.3);background-size:12px 2px;transition:opacity .3s}
+.pfx-s-search .pfx-trk{opacity:1;animation:pfxDash .6s linear infinite}
+.pfx-pkt{position:absolute;top:50%;left:0;width:44px;height:3px;margin-top:-1.5px;border-radius:3px;opacity:0;background:linear-gradient(90deg,transparent,rgba(255,190,140,.95))}
+.pfx-pkt::after{content:'';position:absolute;right:-4px;top:50%;width:8px;height:8px;margin-top:-4px;border-radius:50%;background:#fff;box-shadow:0 0 10px 3px rgba(255,150,70,.95)}
+.pfx-rev .pfx-pkt{background:linear-gradient(90deg,transparent,rgba(var(--tglow),.95))}
+.pfx-rev .pfx-pkt::after{box-shadow:0 0 10px 3px rgba(var(--tglow),.95)}
+.pfx-s-search .pfx-pkt{animation:pfxPkt 1.7s cubic-bezier(.45,0,.55,1) infinite}
+.pfx-fl,.pfx-fr{position:absolute;top:50%;height:3px;margin-top:-1.5px;width:50%;border-radius:3px;transform:scaleX(0)}
+.pfx-fl{left:0;transform-origin:0 50%;background:linear-gradient(90deg,var(--pa2),#ffc9a0);box-shadow:0 0 12px rgba(255,120,40,.7)}
+.pfx-fr{right:0;transform-origin:100% 50%;background:linear-gradient(270deg,var(--tb2),#f5f3ff);box-shadow:0 0 12px rgba(var(--tglow),.7)}
+.pfx-s-lock .pfx-fl,.pfx-s-lock .pfx-fr{animation:pfxFill .46s cubic-bezier(.7,0,.25,1) both;animation-delay:var(--pfx-lockd,0ms)}
+.pfx-s-linked .pfx-fl,.pfx-s-linked .pfx-fr{transform:scaleX(1)}
+.pfx-s-broken .pfx-fl{transform:scaleX(.74);background:linear-gradient(90deg,var(--pa2),#fb7185);box-shadow:none}
+.pfx-s-broken .pfx-fr{transform:scaleX(.74);background:linear-gradient(270deg,#64748b,#fb7185);box-shadow:none;animation:pfxFlick 2.4s steps(1) infinite;animation-delay:var(--ph,0ms)}
+.pfx-flow{position:absolute;left:0;right:0;top:50%;height:3px;margin-top:-1.5px;overflow:hidden;opacity:0;border-radius:3px}
+.pfx-flow::before,.pfx-flow::after{content:'';position:absolute;top:0;bottom:0;width:26%;left:-26%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.95),transparent)}
+.pfx-s-linked .pfx-flow{opacity:1}
+.pfx-s-linked .pfx-flow::before{animation:pfxFlow 2.4s ease-in-out infinite;animation-delay:var(--ph,0ms)}
+.pfx-s-linked .pfx-flow::after{animation:pfxFlowR 2.4s ease-in-out infinite;animation-delay:calc(var(--ph,0ms) - 1200ms)}
+/* ── hub ── */
+.pfx-hub{position:absolute;left:50%;top:50%;border-radius:50%;display:grid;place-items:center;background:#1c1828;color:rgba(255,255,255,.6);box-shadow:0 0 0 1px rgba(255,255,255,.14),0 6px 18px -6px rgba(0,0,0,.6);z-index:3;transition:background .35s,color .35s}
+.pfx-hub i{position:absolute;inset:0;display:grid;place-items:center;opacity:0;transform:scale(.4);transition:opacity .25s,transform .35s cubic-bezier(.3,1.6,.5,1)}
+.pfx-hub i svg{width:48%;height:48%}
+.pfx-s-search .pfx-hub .h-link,.pfx-s-linked .pfx-hub .h-link,.pfx-s-lock .pfx-hub .h-ok,.pfx-s-broken .pfx-hub .h-bad{opacity:1;transform:scale(1)}
+.pfx-s-search .pfx-hub .h-link{opacity:.55}
+.pfx-hub .sp{position:absolute;inset:-3px;border-radius:50%;opacity:0;background:conic-gradient(from 0deg,transparent 0 62%,rgba(255,170,100,.95) 86%,transparent 100%);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 2.5px),#000 calc(100% - 2px));mask:radial-gradient(farthest-side,transparent calc(100% - 2.5px),#000 calc(100% - 2px))}
+.pfx-rev .pfx-hub .sp{background:conic-gradient(from 0deg,transparent 0 62%,rgba(var(--tglow),.95) 86%,transparent 100%)}
+.pfx-s-search .pfx-hub .sp{opacity:1;animation:pfxSpin 1.1s linear infinite}
+.pfx-s-lock .pfx-hub,.pfx-s-linked .pfx-hub{background:linear-gradient(135deg,var(--ok1),var(--ok2));color:#fff;box-shadow:0 0 0 3px rgba(52,211,153,.18),0 6px 20px -4px rgba(16,185,129,.7)}
+.pfx-s-lock .pfx-hub{animation:pfxHubPop .6s cubic-bezier(.3,1.8,.5,1) both;animation-delay:calc(var(--pfx-lockd,0ms) + 400ms)}
+.pfx-s-linked .pfx-hub{animation:pfxBreathHub 2.4s ease-in-out infinite;animation-delay:var(--ph,0ms)}
+.pfx-s-broken .pfx-hub{background:linear-gradient(135deg,#fb7185,#e11d48);color:#fff;box-shadow:0 0 0 3px rgba(244,63,94,.18)}
+.pfx-s-broken .pfx-hub::after{content:'';position:absolute;inset:-4px;border-radius:50%;border:2px solid rgba(244,63,94,.7);animation:pfxPing 1.8s ease-out infinite;animation-delay:var(--ph,0ms)}
+.pfx-wave{position:absolute;left:50%;top:50%;border-radius:50%;border:2px solid var(--ok1);opacity:0;pointer-events:none;z-index:1}
+.pfx-s-lock .pfx-wave{animation:pfxWave .85s cubic-bezier(.2,.7,.3,1) both;animation-delay:calc(var(--pfx-lockd,0ms) + 420ms)}
+.pfx-s-lock .pfx-wave+.pfx-wave{animation-delay:calc(var(--pfx-lockd,0ms) + 560ms);border-color:rgba(255,255,255,.7)}
+.pfx.beat .pfx-hub{animation:pfxBeat .6s ease-out}
+.pfx-spk{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;pointer-events:none;z-index:4;animation:pfxSpk .8s cubic-bezier(.15,.7,.3,1) forwards}
+/* ── labels ── */
+.pfx-nm{font-weight:800;letter-spacing:-.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pfx-sb{font-weight:600;opacity:.62;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pfx-sb.ok{opacity:1;color:#10b981}
+.pfx-sb.bad{opacity:1;color:#f43f5e}
+.pfx-clk{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+/* ── lg: the pairing box stage ── */
+.pfx-lg{height:178px;border-radius:18px;overflow:hidden;color:#f5f3ff;background:radial-gradient(90% 120% at 12% 42%,rgba(255,107,26,.24),transparent 58%),radial-gradient(90% 120% at 88% 42%,rgba(var(--tglow),.20),transparent 58%),linear-gradient(180deg,#14111f,#0b0914);box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+.pfx-lg::before{content:'';position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px);background-size:22px 22px;-webkit-mask-image:radial-gradient(ellipse at 50% 40%,#000 25%,transparent 75%);mask-image:radial-gradient(ellipse at 50% 40%,#000 25%,transparent 75%);pointer-events:none}
+.pfx-lg::after{content:'';position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 40%,rgba(52,211,153,.38),transparent 55%)}
+.pfx-lg.pfx-s-lock::after{animation:pfxFlash 1s ease-out both;animation-delay:calc(var(--pfx-lockd,0ms) + 420ms)}
+.pfx-lg .pfx-row{position:absolute;inset:0;display:grid;grid-template-columns:116px 1fr 116px;align-items:start;padding:26px 16px 0}
+.pfx-lg .pfx-side{display:flex;flex-direction:column;align-items:center;text-align:center;min-width:0}
+.pfx-lg .pfx-n{width:66px;height:66px;border-radius:21px}
+.pfx-lg .pfx-beam{height:66px;margin:0 -26px}
+.pfx-lg .pfx-hub{width:36px;height:36px;margin:-18px 0 0 -18px}
+.pfx-lg .pfx-wave{width:36px;height:36px;margin:-18px 0 0 -18px}
+.pfx-lg .pfx-nm{margin-top:11px;font-size:12.5px;max-width:112px}
+.pfx-lg .pfx-sb{margin-top:2px;font-size:11px;max-width:112px}
+.pfx-lg .pfx-clk{font-size:12px}
+/* ── sm: the live strip ── */
+.pfx-sm{display:grid;grid-template-columns:auto minmax(0,auto) minmax(46px,1fr) minmax(0,auto) auto;align-items:center;column-gap:10px;padding:9px 12px;border-radius:14px;font-size:12px;line-height:1.35}
+.pfx-sm .pfx-n{width:30px;height:30px;border-radius:10px;box-shadow:0 6px 14px -6px rgba(255,107,26,.7),inset 0 1px 0 rgba(255,255,255,.4)}
+.pfx-sm .pfx-n.tool{box-shadow:0 6px 14px -6px rgba(var(--tglow),.8),inset 0 1px 0 rgba(255,255,255,.45)}
+.pfx-sm .pfx-n .r{inset:-4px}
+.pfx-sm .pfx-beam{height:30px}
+.pfx-sm .pfx-hub{width:20px;height:20px;margin:-10px 0 0 -10px}
+.pfx-sm .pfx-wave{width:20px;height:20px;margin:-10px 0 0 -10px}
+.pfx-sm .pfx-tx{min-width:0;display:flex;flex-direction:column}
+.pfx-sm .pfx-tx.r{text-align:right;align-items:flex-end}
+.pfx-sm .pfx-tx>div{max-width:100%}
+.pfx-sm .pfx-nm{font-size:12px}
+.pfx-sm .pfx-sb{font-size:11px}
+.pfx-sm .pfx-clk{font-size:12.5px;font-weight:800}
+.pfx-sm .pfx-foot{grid-column:1/-1;margin-top:7px;font-size:11.5px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pfx-sm .pfx-foot:empty{display:none}
+.pfx-f{display:contents}
+.pfx-bar{flex:1;min-width:60px;height:5px;border-radius:5px;background:rgba(127,127,140,.22);overflow:hidden}
+.pfx-bar i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--pa2),var(--tb2))}
+.pfx-dark{color:#f5f3ff;background:linear-gradient(90deg,rgba(255,107,26,.12),rgba(255,255,255,.03) 50%,rgba(var(--tglow),.12));box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.pfx-light{color:#14161f;background:linear-gradient(90deg,#fff6ef,#fff 50%,#f5f2ff);box-shadow:inset 0 0 0 1px rgba(17,19,34,.08),0 6px 18px -12px rgba(17,19,34,.25)}
+.pfx-light.t-altr{background:linear-gradient(90deg,#fff6ef,#fff 50%,#f4ffe0)}
+.pfx-light .pfx-trk{color:rgba(17,19,34,.28)}
+.pfx-light.pfx-s-search .pfx-hub{background:#fff;color:#64748b;box-shadow:0 0 0 1px rgba(17,19,34,.12),0 4px 12px -4px rgba(17,19,34,.3)}
+.pfx-light .pfx-fl{background:linear-gradient(90deg,var(--pa3),var(--pa2) 60%,var(--pa1))}
+.pfx-light .pfx-fr{background:linear-gradient(270deg,var(--tb3),var(--tb2) 60%,var(--tb1))}
+.pfx-light .pfx-flow::before,.pfx-light .pfx-flow::after{background:linear-gradient(90deg,transparent,rgba(255,255,255,1),transparent)}
+.pfx-dark.pfx-s-broken{background:linear-gradient(90deg,rgba(244,63,94,.14),rgba(255,255,255,.03) 60%);box-shadow:inset 0 0 0 1px rgba(244,63,94,.28)}
+.pfx-light.pfx-s-broken{background:linear-gradient(90deg,#fff1f2,#fff 70%);box-shadow:inset 0 0 0 1px rgba(244,63,94,.25)}
+.pfx-sm .pfx-act{display:flex;gap:6px;margin-left:auto}
+.pfx-sm .pfx-act a,.pfx-sm .pfx-act button{font:inherit;font-size:11.5px;font-weight:800;border-radius:9px;padding:6px 10px;cursor:pointer;text-decoration:none;border:1px solid transparent;white-space:nowrap}
+.pfx-sm .pfx-act .p{background:linear-gradient(135deg,#FF8A3D,#E8452A);color:#fff}
+.pfx-sm .pfx-act .s{background:transparent;color:inherit;border-color:rgba(127,127,140,.35)}
+/* ── the pairing card (modal body) ── */
+.pfx-card{color:#f5f3ff;background:linear-gradient(180deg,#191526,#100d19);border-radius:22px;padding:20px 20px 18px;box-shadow:0 40px 100px -30px rgba(0,0,0,.85),inset 0 0 0 1px rgba(255,255,255,.08);width:100%;max-width:460px;font-family:inherit;text-align:left}
+.pfx-eyebrow{display:flex;align-items:center;gap:7px;font-size:10.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.55)}
+.pfx-eyebrow .d{width:7px;height:7px;border-radius:50%;background:#FF6B1A;box-shadow:0 0 0 0 rgba(255,107,26,.6);animation:pfxDot 1.6s ease-out infinite}
+.pfx-card.done .pfx-eyebrow .d{background:#34d399;animation:none;box-shadow:0 0 8px rgba(52,211,153,.9)}
+.pfx-ttl{font-size:20px;font-weight:800;letter-spacing:-.01em;margin:6px 0 4px;line-height:1.25}
+.pfx-dsc{font-size:13px;color:rgba(255,255,255,.66);line-height:1.55;margin-bottom:14px}
+.pfx-dsc b{color:#fff}
+.pfx-st{display:flex;align-items:center;gap:9px;margin-top:12px;padding:10px 12px;border-radius:12px;font-size:13px;font-weight:700;background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px rgba(255,255,255,.07);color:#e9e5ff;transition:background .35s,color .35s}
+.pfx-st .el{margin-left:auto;font-variant-numeric:tabular-nums;opacity:.55;font-weight:700;font-size:12px}
+.pfx-st .dots{display:inline-flex;gap:3px}
+.pfx-st .dots i{width:5px;height:5px;border-radius:50%;background:currentColor;animation:pfxDots 1.2s ease-in-out infinite}
+.pfx-st .dots i:nth-child(2){animation-delay:.15s}.pfx-st .dots i:nth-child(3){animation-delay:.3s}
+.pfx-st.ok{background:rgba(16,185,129,.14);box-shadow:inset 0 0 0 1px rgba(52,211,153,.35);color:#6ee7b7}
+.pfx-st.bad{background:rgba(244,63,94,.12);box-shadow:inset 0 0 0 1px rgba(244,63,94,.3);color:#fda4af}
+.pfx-st .tx{transition:opacity .25s}
+.pfx-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+.pfx-step{display:flex;align-items:center;gap:7px;padding:8px 9px;border-radius:11px;font-size:11.5px;font-weight:700;line-height:1.25;color:rgba(255,255,255,.45);background:rgba(255,255,255,.03);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06);transition:all .35s}
+.pfx-step .n{flex:none;font-style:normal;width:19px;height:19px;border-radius:50%;display:grid;place-items:center;font-size:10.5px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);transition:all .35s}
+.pfx-step.on{color:#fff;background:rgba(255,107,26,.10);box-shadow:inset 0 0 0 1px rgba(255,107,26,.45)}
+.pfx-step.on .n{background:#FF6B1A;color:#fff;box-shadow:0 0 0 4px rgba(255,107,26,.18)}
+.pfx-step.dn{color:rgba(255,255,255,.75)}
+.pfx-step.dn .n{background:#10b981;color:#fff;font-size:0}
+.pfx-step.dn .n::after{content:'✓';font-size:11px}
+.pfx-step span b{color:#fff}
+.pfx-btns{display:flex;gap:8px;margin-top:14px}
+.pfx-btn{font:inherit;font-weight:800;font-size:14px;border-radius:13px;padding:13px 16px;cursor:pointer;text-decoration:none;text-align:center;border:none;transition:transform .15s,filter .15s}
+.pfx-btn:active{transform:scale(.97)}
+.pfx-btn.p{flex:1;color:#fff;background:linear-gradient(135deg,#FF8A3D,#FF6B1A 50%,#E8452A);box-shadow:0 12px 28px -12px rgba(255,107,26,.9)}
+.pfx-btn.p:hover{filter:brightness(1.07)}
+.pfx-btn.s{color:#e9e5ff;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+.pfx-card.done .pfx-btns{display:none}
+.pfx-ov{position:fixed;inset:0;z-index:9960;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(8,6,14,.62);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);animation:pfxFade .25s ease-out both}
+.pfx-ov.out{animation:pfxFadeOut .3s ease-in both}
+.pfx-ov .pfx-card{animation:pfxRise .45s cubic-bezier(.2,1.2,.4,1) both}
+/* ── the "linked" card ── */
+.pfx-cel{position:fixed;left:50%;top:14px;z-index:99990;width:min(390px,calc(100vw - 20px));transform:translateX(-50%);color:#f5f3ff;background:rgba(20,17,31,.94);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-radius:18px;padding:12px 12px 12px;box-shadow:0 24px 60px -18px rgba(0,0,0,.75),inset 0 0 0 1px rgba(255,255,255,.1);font-family:inherit;cursor:pointer;animation:pfxDrop .5s cubic-bezier(.2,1.3,.4,1) both;text-align:left}
+.pfx-cel.out{animation:pfxLift .35s ease-in both}
+.pfx-cel .hd{display:flex;align-items:center;gap:8px;padding:0 2px 9px}
+.pfx-cel .hd b{font-size:14px;font-weight:800}
+.pfx-cel .hd span{margin-left:auto;font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#6ee7b7}
+.pfx-cel .ft{font-size:12px;color:rgba(255,255,255,.62);padding:9px 2px 0;line-height:1.45}
+@keyframes pfxBreath{0%,100%{transform:scale(1)}50%{transform:scale(.95)}}
+@keyframes pfxPing{0%{opacity:.85;transform:scale(1)}100%{opacity:0;transform:scale(1.55)}}
+@keyframes pfxEmit{0%{opacity:.7;transform:scale(1)}70%,100%{opacity:0;transform:scale(1.28)}}
+@keyframes pfxDash{to{background-position:12px 0}}
+@keyframes pfxPkt{0%{left:0;opacity:0}15%{opacity:1}82%{opacity:1}100%{left:calc(100% - 44px);opacity:0}}
+@keyframes pfxFill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes pfxFlick{0%,100%{opacity:1}46%{opacity:.35}50%{opacity:1}54%{opacity:.5}58%{opacity:1}}
+@keyframes pfxFlow{0%{left:-26%}62%,100%{left:100%}}
+@keyframes pfxFlowR{0%{left:100%}62%,100%{left:-26%}}
+@keyframes pfxSpin{to{transform:rotate(360deg)}}
+@keyframes pfxPop{0%{transform:scale(1)}35%{transform:scale(.88)}70%{transform:scale(1.1)}100%{transform:scale(1)}}
+@keyframes pfxHubPop{0%{transform:scale(.6)}60%{transform:scale(1.28)}100%{transform:scale(1)}}
+@keyframes pfxBreathHub{0%,100%{box-shadow:0 0 0 3px rgba(52,211,153,.16),0 6px 20px -4px rgba(16,185,129,.6)}50%{box-shadow:0 0 0 6px rgba(52,211,153,.10),0 6px 24px -2px rgba(16,185,129,.8)}}
+@keyframes pfxWave{0%{opacity:.95;transform:scale(.6)}100%{opacity:0;transform:scale(3.4)}}
+@keyframes pfxBeat{0%{transform:scale(1)}40%{transform:scale(1.25)}100%{transform:scale(1)}}
+@keyframes pfxSpk{0%{opacity:1;transform:translate(0,0) scale(1)}100%{opacity:0;transform:translate(var(--x),var(--y)) scale(.3)}}
+@keyframes pfxFlash{0%{opacity:0}25%{opacity:1}100%{opacity:0}}
+@keyframes pfxDot{0%{box-shadow:0 0 0 0 rgba(255,107,26,.6)}100%{box-shadow:0 0 0 8px rgba(255,107,26,0)}}
+@keyframes pfxDots{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-2px)}}
+@keyframes pfxFade{from{opacity:0}to{opacity:1}}
+@keyframes pfxFadeOut{to{opacity:0}}
+@keyframes pfxRise{from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes pfxDrop{from{opacity:0;transform:translate(-50%,-24px) scale(.96)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes pfxLift{to{opacity:0;transform:translate(-50%,-16px) scale(.97)}}
+@media (max-width:520px){.pfx-lg .pfx-row{grid-template-columns:96px 1fr 96px;padding:24px 8px 0}.pfx-lg .pfx-beam{margin:0 -16px}.pfx-steps{grid-template-columns:1fr}.pfx-sm{column-gap:7px;padding:8px 10px}}
+@media (prefers-reduced-motion:reduce){.pfx *,.pfx *::before,.pfx *::after,.pfx,.pfx-ov,.pfx-cel,.pfx-card{animation-duration:1ms!important;animation-iteration-count:1!important;animation-delay:0ms!important;transition:none!important}}
+`;
+  var ICON={
+    portal:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7.6"/><path d="M12 13.5V9.6M9.4 2.6h5.2M12 2.6v3.2M18.6 6.4l1.6-1.6"/></svg>',
+    reddit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.2A2.7 2.7 0 0 1 6.7 3.5h10.6A2.7 2.7 0 0 1 20 6.2v7.6a2.7 2.7 0 0 1-2.7 2.7H10.4L5.6 20.4v-3.9A2.7 2.7 0 0 1 4 13.8z"/><path d="M8.6 10h.01M12 10h.01M15.4 10h.01" stroke-width="3"/></svg>',
+    altr:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3.2"/><path d="M10.2 9.4v5.2l4.4-2.6z" fill="currentColor"/></svg>',
+    clients:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>',
+    link:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/></svg>',
+    ok:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.6l4.3 4.3L19 7.2"/></svg>',
+    bad:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><path d="M12 6.5v7M12 17.6h.01"/></svg>'
+  };
+  var _tk=null;
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function css(){
+    try{ if(!document.getElementById('pfx-css')){ var s=document.createElement('style'); s.id='pfx-css'; s.textContent=CSS; (document.head||document.documentElement).appendChild(s); } }catch(e){}
+    if(!_tk){ _tk=setInterval(function(){ tick(); }, 1000); try{ ['pointerdown','keydown'].forEach(function(ev){ document.addEventListener(ev, function u(){ ctx(); document.removeEventListener(ev, u, true); }, true); }); }catch(e){} }
+  }
+  function clock(sec){ sec=Math.max(0,Math.floor(sec||0)); var h=Math.floor(sec/3600), m=Math.floor(sec%3600/60), x=sec%60, p=function(n){ return n<10?'0'+n:''+n; }; return p(h)+':'+p(m)+':'+p(x); }
+  function tick(doc){
+    try{
+      var now=Date.now(); doc=doc||document;
+      doc.querySelectorAll('[data-pfx-since]').forEach(function(e){ var t=+e.getAttribute('data-pfx-since'); if(t) e.textContent=clock((now-t)/1000); });
+      doc.querySelectorAll('[data-pfx-copy]').forEach(function(e){ var s=document.getElementById(e.getAttribute('data-pfx-copy')); if(s && e.textContent!==s.textContent) e.textContent=s.textContent; });
+    }catch(e){}
+  }
+  /* o: { size:'lg'|'sm', tool:'reddit'|'altr', toolName, state, rev, theme:'dark'|'light', id, cls,
+          pName, pSub, pSince, pCopy, tName, tSub, tSince, foot, lockAt }  — pSub/tSub are HTML (escape before) */
+  function html(o){
+    css();
+    o=o||{}; var size=o.size==='sm'?'sm':'lg', tool=(o.tool==='altr'||o.tool==='clients')?o.tool:'reddit', st=o.state||'search', style='--ph:-'+(Date.now()%2400)+'ms';
+    if(o.lockAt && st==='linked'){ var el=Date.now()-o.lockAt; if(el>=0 && el<1500){ st='lock'; style+=';--pfx-lockd:-'+el+'ms'; } }
+    var cls='pfx pfx-'+size+' t-'+tool+' pfx-s-'+st+(o.rev?' pfx-rev':'')+(size==='sm'?' pfx-'+(o.theme==='light'?'light':'dark'):'')+(o.cls?' '+o.cls:'');
+    var pWait=!!o.rev, tWait=!o.rev;
+    var pNode='<div class="pfx-n portal '+(pWait?'wait':'lit')+'"><i class="r"></i><i class="r"></i><span class="ic">'+ICON.portal+'</span></div>';
+    var tNode='<div class="pfx-n tool '+(tWait?'wait':'lit')+'"><i class="r"></i><i class="r"></i><span class="ic">'+(ICON[tool])+'</span></div>';
+    var beam='<div class="pfx-beam"><div class="pfx-sig"><div class="pfx-trk"></div><div class="pfx-pkt"></div></div>'+
+      '<div class="pfx-fx"><div class="pfx-fl"></div><div class="pfx-fr"></div><div class="pfx-flow"></div><div class="pfx-wave"></div><div class="pfx-wave"></div>'+
+      '<div class="pfx-hub"><span class="sp"></span><i class="h-link">'+ICON.link+'</i><i class="h-ok">'+ICON.ok+'</i><i class="h-bad">'+ICON.bad+'</i></div></div></div>';
+    var clk=function(since, copy){ return since?'<span class="pfx-clk" data-pfx-since="'+(+since)+'">'+clock((Date.now()-since)/1000)+'</span>':(copy?'<span class="pfx-clk" data-pfx-copy="'+esc(copy)+'">'+esc((document.getElementById(copy)||{}).textContent||'')+'</span>':''); };
+    var pNm=esc(o.pName||'Portal timer'), tNm=esc(o.tName||o.toolName||(tool==='altr'?'ALTR Studio':(tool==='clients'?'Client Hub':'Reddit Central')));
+    var pClk=clk(o.pSince, o.pCopy), tClk=clk(o.tSince, o.tCopy);
+    var h;
+    if(size==='lg'){
+      h='<div class="pfx-row"><div class="pfx-side">'+pNode+'<div class="pfx-nm">'+pNm+'</div><div class="pfx-sb pfx-psub">'+(pClk||o.pSub||'')+'</div></div>'+beam+
+        '<div class="pfx-side">'+tNode+'<div class="pfx-nm">'+tNm+'</div><div class="pfx-sb pfx-tsub">'+(tClk||o.tSub||'')+'</div></div></div>';
+    } else {
+      h=pNode+'<div class="pfx-tx"><div class="pfx-nm">'+pNm+'</div><div class="pfx-sb pfx-psub">'+(pClk?pClk+(o.pSub?' · '+o.pSub:''):(o.pSub||''))+'</div></div>'+beam+
+        '<div class="pfx-tx r"><div class="pfx-nm">'+tNm+'</div><div class="pfx-sb pfx-tsub">'+(tClk?tClk+(o.tSub?' · '+o.tSub:''):(o.tSub||''))+'</div></div>'+tNode+
+        '<div class="pfx-foot">'+(o.foot||'')+'</div>';
+    }
+    return '<div class="'+cls+'"'+(o.id?' id="'+esc(o.id)+'"':'')+' style="'+style+'">'+h+'</div>';
+  }
+  function setState(el, st){ if(!el) return; el.className=el.className.replace(/\bpfx-s-\w+/g,'').replace(/\s+/g,' ').trim()+' pfx-s-'+st; el.style.setProperty('--pfx-lockd','0ms'); el.style.setProperty('--ph','-'+(Date.now()%2400)+'ms'); }
+  function sparks(el){
+    try{
+      var fx=el.querySelector('.pfx-fx'); if(!fx) return; var big=el.classList.contains('pfx-lg'), n=big?16:10, cols=['#34d399','#ffffff','#FFB067','#FF6B1A', el.classList.contains('t-altr')?'#c6ff4d':'#a78bfa'];
+      var od=el.ownerDocument||document; for(var i=0;i<n;i++){ (function(i){ var s=od.createElement('span'); s.className='pfx-spk'; var a=(i/n)*Math.PI*2+Math.random()*.5, d=(big?34:18)+Math.random()*(big?40:16);
+        s.style.setProperty('--x', (Math.cos(a)*d).toFixed(1)+'px'); s.style.setProperty('--y', (Math.sin(a)*d*0.8).toFixed(1)+'px');
+        s.style.background=cols[i%cols.length]; s.style.boxShadow='0 0 8px '+cols[i%cols.length]; if(!big){ s.style.width=s.style.height='4px'; s.style.margin='-2px 0 0 -2px'; }
+        fx.appendChild(s); setTimeout(function(){ try{ s.remove(); }catch(e){} }, 900); })(i); }
+    }catch(e){}
+  }
+  /* the lock → linked moment on a stage already on screen; cb runs when it has settled (~1.25 s) */
+  function lock(el, cb, opt){
+    if(typeof el==='string') el=document.getElementById(el);
+    if(!el){ if(cb) cb(); return; }
+    setState(el,'lock');
+    setTimeout(function(){ sparks(el); }, 420);
+    if(!opt || opt.sound!==false) setTimeout(function(){ chime(opt&&opt.vol); }, 400);
+    setTimeout(function(){ setState(el,'linked'); if(cb) cb(); }, 1250);
+  }
+  function beat(el){ if(typeof el==='string') el=document.getElementById(el); if(!el) return; el.classList.remove('beat'); void el.offsetWidth; el.classList.add('beat'); setTimeout(function(){ try{ el.classList.remove('beat'); }catch(e){} }, 650); }
+  var _ac=null;
+  function ctx(){ try{ if(typeof auAudio==='function'){ var c=auAudio(); if(c) return c; } var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return null; if(!_ac) _ac=new AC(); if(_ac.state==='suspended') _ac.resume().catch(function(){}); return _ac; }catch(e){ return null; } }
+  /* a soft two-note "click-in": a low tick as the beam locks, then a bright bell fifth */
+  function chime(vol){
+    try{
+      if(document.hidden) return; var c=ctx(); if(!c || c.state!=='running') return; var t=c.currentTime, v=(vol==null?0.12:vol);
+      var m=c.createGain(); m.gain.value=v; m.connect(c.destination);
+      var tick=c.createOscillator(), tg=c.createGain(); tick.type='triangle'; tick.frequency.setValueAtTime(320,t); tick.frequency.exponentialRampToValueAtTime(140,t+0.08);
+      tg.gain.setValueAtTime(0.0001,t); tg.gain.exponentialRampToValueAtTime(0.9,t+0.005); tg.gain.exponentialRampToValueAtTime(0.0001,t+0.12); tick.connect(tg); tg.connect(m); tick.start(t); tick.stop(t+0.14);
+      [[880,0.04,0.7],[1318.5,0.13,0.9]].forEach(function(n){ [[1,1],[2,.28],[3,.1]].forEach(function(hm){
+        var o=c.createOscillator(), g=c.createGain(); o.type='sine'; o.frequency.value=n[0]*hm[0];
+        g.gain.setValueAtTime(0.0001,t+n[1]); g.gain.exponentialRampToValueAtTime(0.6*hm[1],t+n[1]+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+n[1]+n[2]/hm[0]);
+        o.connect(g); g.connect(m); o.start(t+n[1]); o.stop(t+n[1]+n[2]+0.05); }); });
+    }catch(e){}
+  }
+  /* the small card at the top: { tool, toolName, title, sub, rev, pSince, tSub, vol } */
+  function celebrate(o){
+    css(); o=o||{};
+    try{
+      var old=document.getElementById('pfx-cel'); if(old) old.remove();
+      var c=document.createElement('div'); c.id='pfx-cel'; c.className='pfx-cel'; c.setAttribute('role','status');
+      c.innerHTML='<div class="hd"><b>'+esc(o.title||'Timers linked')+'</b><span>● Linked</span></div>'+
+        html({ size:'sm', theme:'dark', tool:o.tool, toolName:o.toolName, state:'search', rev:o.rev, id:'pfx-cel-st', pSince:o.pSince, pSub:o.pSub||(o.pSince?'':'running'), tSub:o.tSub||'you' })+
+        (o.sub?'<div class="ft">'+esc(o.sub)+'</div>':'');
+      document.body.appendChild(c);
+      var gone=false, close=function(){ if(gone) return; gone=true; c.classList.add('out'); setTimeout(function(){ try{ c.remove(); }catch(e){} }, 360); };
+      c.onclick=close;
+      setTimeout(function(){ lock('pfx-cel-st', null, { vol:o.vol }); }, 380);
+      setTimeout(close, o.ms||3800);
+    }catch(e){}
+  }
+  /* The pairing box — a blocking card that waits for the other side and plays the lock when it shows up.
+     o: { tool, toolName, rev, eyebrow, title, desc (HTML), steps:[a,b,c], open:{ url, label }, waitMsgs:[...],
+          check: async () => 'ok' | 'wait' | 'skip'  ('skip' = cannot tell → let them through),
+          every (ms, 3000), timeout (ms, 10 min), okTitle, okDesc (HTML), okStatus, holdMs (after lock, 1600),
+          pSub, tSub, okTSub, okPSince, onTimeout, vol }   → Promise<boolean>                                    */
+  function pairBox(o){
+    css(); o=o||{};
+    return new Promise(function(res){
+      var old=document.getElementById('pfx-ov'); if(old) old.remove();
+      var ov=document.createElement('div'); ov.id='pfx-ov'; ov.className='pfx-ov'; ov.setAttribute('role','dialog'); ov.setAttribute('aria-modal','true');
+      var steps=(o.steps||[]).map(function(s,i){ return '<div class="pfx-step'+(i===0?' on':'')+'" data-k="'+i+'"><i class="n">'+(i+1)+'</i><span>'+s+'</span></div>'; }).join('');
+      ov.innerHTML='<div class="pfx-card" id="pfx-card"><div class="pfx-eyebrow"><span class="d"></span>'+esc(o.eyebrow||'Timer link')+'</div>'+
+        '<div class="pfx-ttl" id="pfx-ttl">'+esc(o.title||'')+'</div><div class="pfx-dsc" id="pfx-dsc">'+(o.desc||'')+'</div>'+
+        html({ size:'lg', tool:o.tool, toolName:o.toolName, state:'search', rev:o.rev, id:'pfx-stage', pName:o.pName, tName:o.tName, pSub:o.pSub, tSub:o.tSub })+
+        '<div class="pfx-st" id="pfx-st"><span class="dots"><i></i><i></i><i></i></span><span class="tx" id="pfx-stt">'+esc((o.waitMsgs||['Waiting…'])[0])+'</span><span class="el" id="pfx-el">0:00</span></div>'+
+        (steps?'<div class="pfx-steps" id="pfx-steps">'+steps+'</div>':'')+
+        '<div class="pfx-btns">'+(o.open?'<a class="pfx-btn p" id="pfx-open" href="'+esc(o.open.url)+'" target="_blank" rel="noopener">'+esc(o.open.label)+'</a>':'')+'<button type="button" class="pfx-btn s" id="pfx-x">Cancel</button></div></div>';
+      document.body.appendChild(ov);
+      var done=false, t0=Date.now(), busy=false, msgI=0, fails=0;
+      var step=function(k){ var L=ov.querySelectorAll('.pfx-step'); L.forEach(function(e,i){ e.classList.toggle('dn', i<k); e.classList.toggle('on', i===k); }); };
+      var finish=function(v, fast){ if(done) return; done=true; clearInterval(iv); clearInterval(ui); document.removeEventListener('keydown', onKey, true);
+        ov.classList.add('out'); setTimeout(function(){ try{ ov.remove(); }catch(e){} }, fast?0:300); res(v); };
+      var onKey=function(e){ if(e.key==='Escape'){ e.stopPropagation(); finish(false); } };
+      document.addEventListener('keydown', onKey, true);
+      ov.querySelector('#pfx-x').onclick=function(){ finish(false); };
+      var op=ov.querySelector('#pfx-open'); if(op) op.addEventListener('click', function(){ step(1); setTimeout(function(){ poll(); }, 1500); });
+      var ui=setInterval(function(){
+        if(done) return; var s=Math.floor((Date.now()-t0)/1000), e=document.getElementById('pfx-el'); if(e) e.textContent=Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60);
+        var M=o.waitMsgs||[]; if(M.length>1 && s>0 && s%4===0){ msgI=(msgI+1)%M.length; var tx=document.getElementById('pfx-stt'); if(tx){ tx.style.opacity=0; setTimeout(function(){ tx.textContent=M[msgI]; tx.style.opacity=1; }, 220); } }
+      }, 1000);
+      var won=function(){
+        done=true; clearInterval(iv); clearInterval(ui);
+        step((o.steps||[]).length);
+        var card=document.getElementById('pfx-card'); if(card) card.classList.add('done');
+        var st=document.getElementById('pfx-st'); if(st){ st.className='pfx-st ok'; st.innerHTML='<span style="width:18px;height:18px;display:inline-block">'+ICON.ok+'</span><span class="tx">'+esc(o.okStatus||'Linked')+'</span><span class="el">'+(document.getElementById('pfx-el')||{}).textContent+'</span>'; }
+        var tt=document.getElementById('pfx-ttl'); if(tt && o.okTitle) tt.textContent=o.okTitle;
+        var dd=document.getElementById('pfx-dsc'); if(dd && o.okDesc) dd.innerHTML=o.okDesc;
+        var stg=document.getElementById('pfx-stage');
+        if(stg){ var ts=stg.querySelector(o.rev?'.pfx-psub':'.pfx-tsub'); if(ts){ setTimeout(function(){ var v=o.rev?o.okPSub:o.okTSub; if(typeof v==='function') v=v(); ts.className=ts.className+' ok'; ts.innerHTML=v||(o.rev?'running ✓':'signed in ✓'); }, 520); }
+          if(o.okPSince){ var ps0=(o.okPSince===true)?Date.now()+900:o.okPSince, ps=stg.querySelector('.pfx-psub'); if(ps && !o.rev) setTimeout(function(){ ps.innerHTML='<span class="pfx-clk" data-pfx-since="'+ps0+'">00:00:00</span>'; ps.classList.add('ok'); }, 900); } }
+        lock(stg, null, { vol:o.vol });
+        setTimeout(function(){ document.removeEventListener('keydown', onKey, true); ov.classList.add('out'); setTimeout(function(){ try{ ov.remove(); }catch(e){} }, 300); res(true); }, 1250+(o.holdMs==null?1600:o.holdMs));
+      };
+      var poll=async function(){
+        if(done || busy) return; busy=true;
+        try{
+          if(Date.now()-t0>(o.timeout||10*60*1000)){ finish(false); if(o.onTimeout) o.onTimeout(); return; }
+          var r=null; try{ r=await o.check(); }catch(e){ r=null; }
+          if(done) return;
+          if(r==='ok'){ won(); return; }
+          if(r==='skip'){ finish(true, true); return; }
+          if(r==null){ if(++fails>=3){ finish(true, true); } return; }
+          fails=0;
+        } finally { busy=false; }
+      };
+      var iv=setInterval(poll, o.every||3000);
+      setTimeout(poll, 600);
+    });
+  }
+  return { css:css, cssText:function(){ return CSS; }, tickDoc:function(d){ tick(d); }, html:html, pairBox:pairBox, setState:setState, lock:lock, sparks:sparks, beat:beat, chime:chime, celebrate:celebrate, clock:clock, esc:esc, ICON:ICON };
+})();
+
+/* ═══ PAIRFX END ═══ */
+
+/* ═══════════ PORTAL TIMER LINK — same rule as Reddit Central and ALTR Studio ═══════════
+   The portal publishes its live timer in the presence row it keeps in Supabase (task · since · tracked seconds).
+   The hub reads it: a VA's work in a client tab only goes ahead while their portal timer runs on that client's
+   project. Owner exempt. No presence row / Supabase down → the gate stands down (never blocks). */
+var LINK={ me:null, at:0, lockAt:0 };
+async function sbGet(path){
+  var ctl=(typeof AbortController!=='undefined')?new AbortController():null, tm=ctl?setTimeout(function(){ try{ ctl.abort(); }catch(_){} },8000):null;
+  try{ var r=await fetch(SB_URL+'/rest/v1/'+path, { headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY }, signal:ctl?ctl.signal:undefined }); if(!r.ok) throw new Error('sb '+r.status); return await r.json(); }
+  finally{ if(tm) clearTimeout(tm); }
+}
+async function linkLoad(force){
+  var me=myId(); if(!me || isOwner()) return;
+  if(!force && Date.now()-LINK.at<20000) return;
+  try{
+    var one=await sbGet('presence?select=employee_id,status,last_seen,task,task_since,tracked_secs,tracked_proj_secs&employee_id=eq.'+encodeURIComponent(me));
+    LINK.me=(one&&one[0])||null; LINK.at=Date.now();
+  }catch(e){}
+  try{ linkAfter(); }catch(_la){}
+}
+function linkState(p, cl){
+  if(!p) return { k:'unknown', why:'no presence row' };
+  if(p.task===undefined || p.tracked_secs===undefined) return { k:'unknown', why:'portal link not set up yet' };
+  var age=Date.now()-(Date.parse(p.last_seen||'')||0);
+  if(age>4*60000) return { k:'off', why:'the portal has been closed or asleep for '+Math.round(age/60000)+' min' };
+  if(String(p.status||'')!=='working') return { k:'off', why:(p.status==='paused'?'your portal timer is paused':(p.status==='idle'?'the portal shows you idle':'your portal timer is not running')) };
+  if(cl && !cl.match.test(String(p.task||''))) return { k:'other', why:'your portal timer is on "'+String(p.task||'').split(' · ')[0]+'", not '+cl.name };
+  return { k:'ok', since:p.task_since||'', tracked:+p.tracked_secs||0, trackedProj:+p.tracked_proj_secs||0, task:p.task };
+}
+function linkShort(st){ var w=String(st&&st.why||''); return st&&st.k==='other'?'on another project':(/paused/.test(w)?'paused':(/idle/.test(w)?'idle':(/closed|asleep/.test(w)?'portal closed':'not running'))); }
+function linkMarkSeen(st){ try{ localStorage.setItem('pfx_cel_clients_'+myId(), String(st&&st.since||'')); }catch(e){} }
+/* the gate: resolves true when the work may go ahead (waits for the portal timer in the handshake box) */
+async function linkGate(cl, what){
+  if(isOwner() || !cl || !cl.live) return true;
+  await linkLoad(true);
+  var st=linkState(LINK.me, cl);
+  if(st.k==='ok' || st.k==='unknown') return true;
+  if(typeof PFX==='undefined' || !PFX.pairBox) return true;
+  var id=myId(), w=String(what||'This step');
+  var ok=await PFX.pairBox({
+    tool:'clients', toolName:'Client Hub', rev:true, eyebrow:'Timer link · '+cl.name,
+    title:'Start your portal timer',
+    desc:esc(st.why.charAt(0).toUpperCase()+st.why.slice(1))+'. '+esc(w)+' only counts while your portal timer runs on <b>'+esc(cl.project)+'</b> — this box carries on by itself the moment it does.',
+    steps:['Open the portal','Start a <b>'+esc(cl.project)+'</b> task','It carries on by itself'],
+    open:{ url:'https://portal.jmbvirtuals.com/', label:'Open the portal ↗' },
+    waitMsgs:['Waiting for your portal timer…','Pick '+cl.project+' and press Start','Keep this open — it continues by itself'],
+    pName:'Portal timer', pSub:esc(linkShort(st)), tName:cl.name, tSub:'you · '+esc(id),
+    okTitle:'Linked to your portal timer', okDesc:'Your portal timer is running on '+esc(cl.project)+'. '+esc(w)+' goes ahead now.',
+    okStatus:'Linked — carrying on',
+    okPSub:function(){ var s=linkState(LINK.me, cl), t=Date.parse(s.since||'')||0; return t?'<span class="pfx-clk" data-pfx-since="'+t+'">'+PFX.clock((Date.now()-t)/1000)+'</span>':'running ✓'; },
+    holdMs:1100, every:4000, timeout:10*60*1000, vol:0.1,
+    check:async function(){ await linkLoad(true); var s=linkState(LINK.me, cl); if(s.k==='ok'){ linkMarkSeen(s); return 'ok'; } if(s.k==='unknown') return 'skip'; return 'wait'; },
+    onTimeout:function(){ toast('Still no portal timer — start it in the portal, then try again.'); }
+  });
+  if(ok) try{ HUB.repaintLink(); }catch(_r){}
+  return ok;
+}
+/* the first time the hub sees the timer running on this client (per timer segment) → a small "Linked" card */
+function linkAfter(){
+  try{
+    var cl=HUB.cur(); if(!USER || isOwner() || !cl || !cl.live) return;
+    var st=linkState(LINK.me, cl); if(st.k!=='ok' || !st.since || document.hidden) return;
+    var seen=''; try{ seen=localStorage.getItem('pfx_cel_clients_'+myId())||''; }catch(e){}
+    if(seen===String(st.since)) return;
+    linkMarkSeen(st); LINK.lockAt=Date.now();
+    try{ HUB.repaintLink(); }catch(_r){}
+    if(document.getElementById('pfx-ov') || typeof PFX==='undefined') return;
+    var t=Date.parse(st.since)||0;
+    PFX.celebrate({ tool:'clients', toolName:cl.name, rev:true, title:'Linked to your portal timer', sub:String(st.task||cl.project).split(' · ')[0]+' · your work in '+cl.name+' counts now', pSince:t||null, tSub:'you · '+myId(), vol:0.08 });
+  }catch(e){}
+}
+/* while the link is down and this tab is visible, check the portal every 6 s so the link shows up quickly */
+setInterval(function(){ try{ var cl=HUB.cur(); if(!USER || isOwner() || !cl || !cl.live || document.hidden || document.getElementById('pfx-ov')) return; var k=linkState(LINK.me, cl).k; if(k==='off'||k==='other') linkLoad(true).then(function(){ HUB.repaintLink(); }); }catch(e){} }, 6000);
+setInterval(function(){ try{ if(USER && !isOwner()) linkLoad(false).then(function(){ HUB.repaintLink(); }); }catch(e){} }, 30000);
+function hm(secs){ secs=Math.max(0,Math.round(secs||0)); var h=Math.floor(secs/3600), m=Math.round((secs%3600)/60); return h?(h+'h '+(m<10?'0':'')+m+'m'):(m+'m'); }
+function linkBanner(cl){
+  if(isOwner() || !cl || !cl.live || typeof PFX==='undefined') return '';
+  var st=linkState(LINK.me, cl); if(st.k==='unknown') return '';
+  var id=myId();
+  if(st.k==='ok'){
+    var t=Date.parse(st.since||'')||0, tracked=st.trackedProj||st.tracked;
+    return '<div style="margin-bottom:14px">'+PFX.html({ size:'sm', theme:'light', tool:'clients', state:'linked', rev:true, lockAt:LINK.lockAt, pName:'Portal timer', pSince:t||null, pSub:esc(String(st.task||'').split(' · ')[0]), tName:cl.name, tSub:'you · '+esc(id),
+      foot:'<span>Tracked on '+esc(cl.project)+' today <b>'+hm(tracked)+'</b> · active in the hub <b>'+hm(actToday())+'</b></span><span style="opacity:.7;flex-basis:100%">Keep this tab open while you work — the portal stops your timer after 10 minutes with no activity here.</span>' })+'</div>';
+  }
+  return '<div style="margin-bottom:14px">'+PFX.html({ size:'sm', theme:'light', tool:'clients', state:'broken', rev:true, pName:'Portal timer', pSub:'<span class="bad">'+esc(linkShort(st))+'</span>', tName:cl.name, tSub:'you · '+esc(id),
+    foot:'<span><b>Your portal timer is not running on '+esc(cl.project)+'</b> — '+esc(st.why)+'. Work in this tab counts once it is.</span><span class="pfx-act"><a class="p" href="https://portal.jmbvirtuals.com/" target="_blank" rel="noopener">Open the portal ↗</a><button class="s" onclick="linkLoad(true).then(HUB.repaintLink)">Check again</button></span>' })+'</div>';
+}
+
+/* ═══════════ HEARTBEAT → PORTAL (tool "clients") ═══════════
+   last_active = real work in the hub (click / type / scroll in the last 90 s, tab visible) — the portal's 10-minute rule.
+   open_at     = the hub is open and signed in as you (the portal's pairing step before Start), every ~30 s.
+   Missing table / columns → it goes quiet and retries later. Owners don't send (they're never paired). */
+var ACT={ last:Date.now() };
+function actKey(){ return 'hub_act_'+myId()+'_'+phtToday(); }
+function actToday(){ try{ return parseInt(localStorage.getItem(actKey())||'0',10)||0; }catch(e){ return 0; } }
+function actBump(){ var was=ACT.last; ACT.last=Date.now(); if(Date.now()-was>60000){ try{ tbSend(false); }catch(e){} } }
+['click','keydown','pointerdown','touchstart','scroll','wheel'].forEach(function(ev){ try{ document.addEventListener(ev, actBump, { passive:true, capture:true }); }catch(e){} });
+setInterval(function(){ try{ if(!USER || isOwner()) return; if(document.hidden || (Date.now()-ACT.last)>90000) return; localStorage.setItem(actKey(), String(actToday()+15)); }catch(e){} }, 15000);
+var TB={ sent:0, off:0, ext:true, openSent:0 };
+function tbActive(){ return !document.hidden && (Date.now()-ACT.last)<90000; }
+function tbPost(body){
+  return fetch(SB_URL+'/rest/v1/tool_beat?on_conflict=employee_id,tool', { method:'POST', keepalive:true,
+    headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json', Prefer:'resolution=merge-duplicates,return=minimal' },
+    body:JSON.stringify(body) });
+}
+function tbSend(force){
+  try{
+    var me=myId(); if(!me || isOwner()) return;
+    var now=Date.now(); if(now<TB.off) return;
+    var act=tbActive(), dueAct=act && (force || now-TB.sent>=55000), dueOpen=TB.ext && (force || now-TB.openSent>=30000);
+    if(!dueAct && !dueOpen) return;
+    var body={ employee_id:me, tool:'clients' };
+    if(dueAct){ body.last_active=new Date().toISOString(); TB.sent=now; }
+    if(TB.ext){ var cl=HUB.cur(); body.open_at=new Date().toISOString(); body.run_since=null; body.run_label=act&&cl?('Working in '+cl.name):null; body.today_secs=actToday(); TB.openSent=now; }
+    if(!body.last_active && !body.open_at) return;
+    tbPost(body).then(function(r){
+      if(r.status===404){ TB.off=Date.now()+10*60000; return; }
+      if(r.status===400 && TB.ext){ TB.ext=false; if(body.last_active) tbPost({ employee_id:me, tool:'clients', last_active:body.last_active }).catch(function(){}); }
+    }).catch(function(){});
+  }catch(e){}
+}
+setInterval(function(){ tbSend(false); }, 15000);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) tbSend(true); });
+
+/* ══════════════ PROOF OF WORK — shared by every client tab ══════════════
+   Every counted output needs a screenshot first. bump(project, task, n) is the single choke point: it opens the
+   proof panel and only posts the count (po_bump → the portal scorecard's productivity) once the screenshots are
+   saved. Cancel rejects, which stops the caller — nothing is marked done that wasn't counted.
+   Screenshots go straight to Supabase storage (Apps Script only records the URL); if storage is down they fall
+   back to the Apps Script upload, so a VA is never blocked. Capture uses getDisplayMedia: pick the window once. */
+var SHOT={ stream:null, video:null, max:5 };
+function shotSupported(){ return !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia); }
+function shotLive(){ return !!(SHOT.stream && SHOT.stream.getVideoTracks().length && SHOT.stream.getVideoTracks()[0].readyState==='live'); }
+async function shotStart(){
+  if(!shotSupported()){ toast('This browser can\'t capture windows — use 📎 to attach a file.'); return false; }
+  try{
+    toast('Pick the window you\'re working in.');
+    SHOT.stream=await navigator.mediaDevices.getDisplayMedia({ video:{ frameRate:1 }, audio:false });
+    SHOT.video=document.createElement('video'); SHOT.video.srcObject=SHOT.stream; SHOT.video.muted=true;
+    await SHOT.video.play();
+    SHOT.stream.getVideoTracks()[0].addEventListener('ended', function(){ SHOT.stream=null; SHOT.video=null; toast('Screen sharing stopped — 📷 picks a window again.'); });
+    toast('Window locked in — 📷 is one click from now on.');
+    return true;
+  }catch(e){ toast('Capture cancelled.'); return false; }
+}
+function shotStop(){ try{ if(SHOT.stream) SHOT.stream.getTracks().forEach(function(t){ t.stop(); }); }catch(e){} SHOT.stream=null; SHOT.video=null; }
+function shotGrab(){
+  if(!shotLive()) return null;
+  var v=SHOT.video, w=v.videoWidth, h=v.videoHeight; if(!w||!h) return null;
+  var max=1000, sw=w, sh=h; if(sw>max||sh>max){ var r=Math.min(max/sw,max/sh); sw=Math.round(sw*r); sh=Math.round(sh*r); }
+  var c=document.createElement('canvas'); c.width=sw; c.height=sh; c.getContext('2d').drawImage(v,0,0,sw,sh);
+  return c.toDataURL('image/jpeg',0.62);
+}
+function proofCompress(file){
+  return new Promise(function(res,rej){
+    var fr=new FileReader();
+    fr.onload=function(){ var im=new Image();
+      im.onload=function(){ var max=1000, w=im.width, h=im.height; if(w>max||h>max){ var r=Math.min(max/w,max/h); w=Math.round(w*r); h=Math.round(h*r); }
+        var c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(im,0,0,w,h); res(c.toDataURL('image/jpeg',0.62)); };
+      im.onerror=function(){ rej(new Error('bad image')); }; im.src=fr.result; };
+    fr.onerror=function(){ rej(new Error('read failed')); }; fr.readAsDataURL(file);
+  });
+}
+var PROOF={ imgs:[], ctx:null, resolve:null, reject:null };
+var PSUPA_BUCKET='proof', _psb=null;
+function psb(){ if(_psb) return _psb; var Lib=window.supabase||window.Supabase; if(!Lib||!Lib.createClient) return null; try{ _psb=Lib.createClient(SB_URL,SB_KEY); }catch(e){ _psb=null; } return _psb; }
+function _dataUrlToBlob(d){ var m=/^data:([^;]+);base64,(.*)$/.exec(d); if(!m) return null; var bin=atob(m[2]), a=new Uint8Array(bin.length); for(var i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return new Blob([a],{type:m[1]}); }
+async function psUpload(dataUrl, emp, label){
+  var sb=psb(); if(!sb) throw new Error('no client');
+  var blob=_dataUrlToBlob(dataUrl); if(!blob) throw new Error('bad image');
+  var d=new Date(), ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  var safe=String(label||'proof').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40)||'proof';
+  var path=(emp||'unknown')+'/'+ym+'/'+safe+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,7)+'.jpg';
+  var up=await sb.storage.from(PSUPA_BUCKET).upload(path, blob, { contentType:'image/jpeg', upsert:false });
+  if(up.error) throw up.error;
+  var u=sb.storage.from(PSUPA_BUCKET).getPublicUrl(path).data.publicUrl; if(!u) throw new Error('no url');
+  return u;
+}
+/* each image starts uploading the moment it's attached; Save only waits for what's still in flight */
+var PUP={ q:{} };
+function pupKey(d){ return d.length+'|'+d.slice(-24); }
+function pupStart(dataUrl, ctx){
+  var k=pupKey(dataUrl); if(PUP.q[k]) return PUP.q[k];
+  var st={ state:'up', id:null, url:null }, emp=myId(), label=(ctx&&(ctx.task||ctx.project))||'proof';
+  st.p=psUpload(dataUrl, emp, label)
+    .then(function(u){ st.state='done'; st.url=u; pupPaint(); return st; })
+    .catch(function(){
+      return fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({ action:'proof_img', employee_id:emp, task:(ctx&&ctx.task)||'', date:today(), image:dataUrl }) })
+        .then(function(r){ return r.json(); })
+        .then(function(d){ if(d && d.ok && d.id){ st.state='done'; st.id=d.id; } else st.state='fail'; pupPaint(); return st; })
+        .catch(function(){ st.state='fail'; pupPaint(); return st; });
+    });
+  PUP.q[k]=st; pupPaint(); return st;
+}
+function pupPaint(){
+  var el=$('pup-stat'); if(!el) return;
+  var up=0, done=0, fail=0;
+  (PROOF.imgs||[]).map(pupKey).forEach(function(k){ var s=PUP.q[k]; if(!s) return; if(s.state==='up') up++; else if(s.state==='done') done++; else fail++; });
+  el.textContent=fail?(fail+' failed — retried on save'):up?('Uploading '+up+'…  '+done+' attached'):done?(done+' screenshot'+(done>1?'s':'')+' attached — nothing counts until you press Save'):'';
+  el.style.color=fail?'#b91c1c':(up?'#b45309':'#047857');
+}
+async function pupRefs(ctx){
+  var urls=[], ids=[];
+  for(var i=0;i<PROOF.imgs.length;i++){
+    var d=PROOF.imgs[i], k=pupKey(d), st=PUP.q[k];
+    if(!st || st.state==='fail'){ delete PUP.q[k]; st=pupStart(d,ctx); }
+    var r=await st.p; if(!r || r.state!=='done') return null;
+    if(r.url) urls.push(r.url); else if(r.id) ids.push(r.id); else return null;
+  }
+  if(urls.length===PROOF.imgs.length) return { urls:urls };
+  if(ids.length===PROOF.imgs.length) return { ids:ids };
+  return null;
+}
+function proofPanel(){
+  var ov=$('proof-ov'); if(ov) return ov;
+  ov=document.createElement('div'); ov.id='proof-ov';
+  ov.style.cssText='position:fixed;inset:0;z-index:99998;background:rgba(8,12,20,.6);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML='<div style="background:#fff;border-radius:18px;max-width:560px;width:100%;max-height:92vh;overflow:auto;padding:20px 22px;box-shadow:0 40px 100px rgba(0,0,0,.4);">'+
+      '<div style="font:800 17px Sora,Inter,sans-serif;">Attach proof</div>'+
+      '<div id="proof-what" style="font-size:12.5px;color:#64748b;margin-top:3px;"></div>'+
+      '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">'+
+        '<button id="proof-cap" style="background:#0f766e;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:800;cursor:pointer;">📷 Capture window</button>'+
+        '<button id="proof-pick" style="background:#475569;color:#fff;border:none;border-radius:10px;padding:10px 14px;font-weight:800;cursor:pointer;">📎 Attach file</button>'+
+        '<span style="font-size:12px;color:#64748b;align-self:center;">or paste with Ctrl+V · up to 5</span></div>'+
+      '<input type="file" id="proof-file" accept="image/*" multiple style="display:none;">'+
+      '<div id="proof-thumbs" style="display:flex;flex-wrap:wrap;margin-top:12px;"></div>'+
+      '<div id="pup-stat" style="margin-top:7px;font-size:11.5px;font-weight:700;min-height:15px;"></div>'+
+      '<input id="proof-note" placeholder="Optional note" style="width:100%;margin-top:12px;padding:9px 11px;border:1px solid #e2e8f0;border-radius:10px;font-size:13px;">'+
+      '<div style="display:flex;justify-content:flex-end;margin-top:14px;gap:9px;">'+
+        '<button id="proof-cancel" style="padding:9px 16px;border-radius:10px;border:1px solid #e2e8f0;background:#fff;font-weight:700;cursor:pointer;">Cancel</button>'+
+        '<button id="proof-save" style="padding:9px 20px;border-radius:10px;border:none;background:#0f766e;color:#fff;font-weight:800;cursor:pointer;">Save proof &amp; count it</button></div></div>';
+  document.body.appendChild(ov);
+  $('proof-pick').onclick=function(){ $('proof-file').click(); };
+  $('proof-file').onchange=function(){ proofAdd(this.files); this.value=''; };
+  $('proof-cap').onclick=async function(){
+    if(PROOF.imgs.length>=SHOT.max){ toast('5 screenshots is the maximum.'); return; }
+    if(!shotLive()){ var ok=await shotStart(); if(!ok) return; }
+    var img=shotGrab(); if(!img){ toast('Could not read the window — pick it again.'); shotStop(); return; }
+    PROOF.imgs.push(img); proofThumb(img); pupStart(img, PROOF.ctx);
+  };
+  $('proof-cancel').onclick=function(){ proofClose(true); };
+  $('proof-save').onclick=proofSubmit;
+  document.addEventListener('paste', function(ev){
+    var o=$('proof-ov'); if(!o||o.style.display==='none') return;
+    var items=(ev.clipboardData&&ev.clipboardData.items)||[], files=[];
+    for(var i=0;i<items.length;i++){ if(items[i].type.indexOf('image')===0){ var f=items[i].getAsFile(); if(f) files.push(f); } }
+    if(files.length){ ev.preventDefault(); proofAdd(files); }
+  });
+  return ov;
+}
+function proofThumb(d){
+  var host=$('proof-thumbs'); if(!host) return;
+  var w=document.createElement('div');
+  w.style.cssText='position:relative;width:74px;height:74px;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;margin:0 8px 8px 0;';
+  w.innerHTML='<img src="'+d+'" style="width:100%;height:100%;object-fit:cover;"><button style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;font-size:12px;cursor:pointer;line-height:1;">×</button>';
+  w.querySelector('button').onclick=function(){ var ix=PROOF.imgs.indexOf(d); if(ix>=0) PROOF.imgs.splice(ix,1); try{ delete PUP.q[pupKey(d)]; pupPaint(); }catch(_q){} w.remove(); };
+  host.appendChild(w);
+}
+async function proofAdd(files){
+  for(var i=0;i<files.length;i++){
+    if(PROOF.imgs.length>=SHOT.max){ toast('5 screenshots is the maximum.'); break; }
+    try{ var d=await proofCompress(files[i]); PROOF.imgs.push(d); proofThumb(d); pupStart(d, PROOF.ctx); }catch(e){}
+  }
+}
+function proofClose(cancelled){
+  var ov=$('proof-ov'); if(ov) ov.style.display='none';
+  var rej=PROOF.reject; PROOF.imgs=[]; PUP.q={}; PROOF.resolve=null; PROOF.reject=null;
+  if(cancelled && rej){ var e=new Error('proof cancelled'); e.proofCancelled=true; rej(e); }
+}
+async function proofSubmit(){
+  if(!PROOF.imgs.length){ toast('Attach at least one screenshot.'); return; }
+  var btn=$('proof-save'); btn.disabled=true; btn.textContent='Saving…';
+  var c=PROOF.ctx||{};
+  var body={ action:'proof_save', employee_id:myId(), full_name:(USER&&USER.name)||myId(), project:c.project||'', task:c.task||'', account:c.account||'',
+    date:today(), outputs:c.n||1, note:($('proof-note').value||'') };
+  try{ var ref=await pupRefs(c); if(ref && ref.urls) body.urls=ref.urls; else if(ref && ref.ids) body.ids=ref.ids; else body.images=PROOF.imgs; }catch(e){ body.images=PROOF.imgs; }
+  var res=PROOF.resolve, cnt=PROOF.imgs.length;
+  PROOF.imgs=[]; PUP.q={}; PROOF.resolve=null; PROOF.reject=null;
+  var ov=$('proof-ov'); if(ov) ov.style.display='none';
+  btn.disabled=false; btn.textContent='Save proof & count it';
+  toast(cnt+' screenshot'+(cnt>1?'s':'')+' saved · counting…');
+  (function record(tries){
+    fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(body) })
+      .then(function(r){ return r.json(); })
+      .then(function(d){ if(d && d.ok){ toast((d.count||cnt)+' screenshot'+((d.count||cnt)>1?'s':'')+' saved as proof.'); if(res){ try{ res(true); }catch(_e){} res=null; } }
+        else if(tries>0) setTimeout(function(){ record(tries-1); }, 2500);
+        else { toast('Saved — the count may take a moment to show.'); if(res){ try{ res(true); }catch(_e){} res=null; } } })
+      .catch(function(){ if(tries>0) setTimeout(function(){ record(tries-1); }, 2500); else { toast('Saved — the count may take a moment to show.'); if(res){ try{ res(true); }catch(_e){} res=null; } } });
+  })(5);
+}
+/* THE GATE: every counted output in every client tab goes through here. */
+function bump(project, task, n){
+  return new Promise(function(resolve,reject){
+    PROOF.imgs=[]; PROOF.ctx={ project:project, task:task, n:(n||1) }; PROOF.resolve=null; PROOF.reject=reject;
+    var ov=proofPanel(); ov.style.display='flex';
+    $('proof-what').textContent=project+' · '+task+' · counts as '+(n||1);
+    $('proof-note').value=''; $('proof-thumbs').innerHTML=''; pupPaint();
+    PROOF.resolve=function(){
+      fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(myId())+'&project='+encodeURIComponent(project)+'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now())
+        .then(function(){ resolve(true); }).catch(function(){ resolve(true); });
+    };
+  });
+}
+window.addEventListener('unhandledrejection', function(ev){ if(ev.reason && ev.reason.proofCancelled) ev.preventDefault(); });
+
+/* ═══════════ CLIENT: DESIGN & SHOPIFY (Torchlight) — moved in from design-shopify.html, same data ═══════════
+   Each card is one design/product moving through the SOP: Waiting for Files → Editing (Photoshop) → Drive →
+   Shopify listing → Final QC → Published. Publishing (all QC checks ticked + proof) counts +1 Shopify Product
+   Upload. Anything missing or wrong → pause the card (Issue / On hold), don't push through.
+   Module shape every client follows: { id, rows, load(), render(host), onShow() }. */
+var DS=(function(){
+  var CL=function(){ return clientById('design-shopify'); };
+  var PROJECT='Design & Shopify';
+  var QC_LIST=['Titles and descriptions added','Correct design / high-quality image','Correct type, vendor, collections and tags'];
+  var AVC=['#059669','#0ea5e9','#6366f1','#f59e0b','#ec4899','#8b5cf6','#14b8a6','#f97316'];
+  var S={ rows:[], loaded:false, err:'', filter:'mine', q:'', qc:null, busy:false };
+  try{ S.filter=sessionStorage.getItem('dc_va_'+PROJECT)||'mine'; }catch(e){}
+  function ownerOf(r){ return String(r.assigned_to||r.created_by||'').toLowerCase(); }
+  function cacheRows(){ try{ sessionStorage.setItem('dc_rows_'+PROJECT, JSON.stringify({ t:Date.now(), rows:S.rows })); }catch(e){} }
+  function paintCached(){ try{ var c=JSON.parse(sessionStorage.getItem('dc_rows_'+PROJECT)||'null'); if(c && c.rows && c.rows.length && (Date.now()-c.t)<10*60*1000){ S.rows=c.rows; S.loaded=true; return true; } }catch(e){} return false; }
+  async function load(){
+    try{
+      var d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
+      if(!d||!d.ok) throw new Error((d&&d.error)||'load');
+      S.rows=d.rows||[]; S.loaded=true; S.err=''; cacheRows();
+    }catch(e){ S.err='Could not load — check your connection, then refresh.'; }
+    HUB.onData('design-shopify');
+  }
+  /* who works this client, from the board itself (anyone who owns a card) */
+  function owners(){ var m={}; S.rows.forEach(function(r){ var k=ownerOf(r); if(k) m[k]=1; }); return Object.keys(m); }
+  function count(st){ return S.rows.filter(function(r){ return r.status===st; }).length; }
+  function pubToday(){ return S.rows.filter(function(r){ return markOk(r.meta&&r.meta.pub, ownerOf(r)); }).length; }
+  function filterRows(){ if(isOwner() && S.filter==='mine') S.filter='all'; if(S.filter==='all') return S.rows; var t=(S.filter==='mine')?String((USER&&USER.id)||'').toLowerCase():S.filter; return S.rows.filter(function(r){ return ownerOf(r)===t; }); }
+  function setFilter(f){ S.filter=f; try{ sessionStorage.setItem('dc_va_'+PROJECT,f); }catch(e){} paint(); }
+  function setQ(v){ S.q=v; paintBoard(); }
+  function kmenu(items){
+    return '<details class="kmenu" onclick="event.stopPropagation()"><summary>⋯</summary><div class="dd">'+items.map(function(it){
+      if(it==='---') return '<div class="sep"></div>';
+      return '<button class="'+(it[2]||'')+'" onclick="this.closest(\'details\').removeAttribute(\'open\');'+it[1]+'">'+it[0]+'</button>';
+    }).join('')+'</div></details>';
+  }
+  var _snapKey='';
+  function maybeSnap(done, tot){
+    try{
+      if(!USER||!tot||isOwner()) return;
+      var k='snap_'+PROJECT+'_'+vaKeyOf(USER.id), v=done+'/'+tot; if(sessionStorage.getItem(k)===v) return; sessionStorage.setItem(k, v);
+      fetch(API+'?action=po_snap&employee_id='+encodeURIComponent(USER.id)+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent('📋 Board Completion')+'&done='+done+'&total='+tot+'&date='+encodeURIComponent(today())+'&_='+Date.now()).catch(function(){});
+    }catch(e){}
+  }
+  function byVA(){
+    var by={}; S.rows.forEach(function(r){ var k=ownerOf(r)||'—'; (by[k]=by[k]||[]).push(r); });
+    var keys=Object.keys(by); if(!keys.length) return '';
+    var mine=String((USER&&USER.id)||'').toLowerCase();
+    var list=keys.map(function(k,i){ var rows=by[k];
+      var pub=rows.filter(function(r){ return markOk(r.meta&&r.meta.pub, k); }).length;
+      var pipe=rows.filter(function(r){ return ['waiting','editing','drive','shopify'].indexOf(r.status)>=0; }).length, tot=pub+pipe;
+      return { k:k, i:i, done:pub, tot:tot, pct:tot?Math.round(pub/tot*100):0, n:rows.length };
+    }).sort(function(a,b){ return b.done-a.done || b.pct-a.pct; });
+    try{ var me=list.filter(function(o){ return o.k===mine; })[0]; if(me) maybeSnap(me.done, me.tot); }catch(_m){}
+    return '<div class="pvwrap"><div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;flex-wrap:wrap"><span style="font:800 15px Sora,sans-serif;">Today — published per VA</span><span style="font-size:11px;color:var(--ink3);font-weight:700;">this shift · resets per shift · morning 8 AM / night 8 PM</span></div>'+
+      list.map(function(o,ix){
+        var name=vaName(o.k), me=(o.k===mine), pc=o.pct>=100?'#059669':(o.pct>=50?'#f59e0b':'#64748b');
+        return '<div class="pvrow'+(ix===0?' first':'')+'"'+(me?' style="background:rgba(16,185,129,.05);border-radius:12px;padding-left:10px;padding-right:10px;"':'')+'>'+
+          (PHOTOOF[o.k]?'<img src="'+esc(PHOTOOF[o.k])+'" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex:none;box-shadow:0 2px 8px rgba(15,23,42,.18);">':'<div class="pvav" style="background:'+AVC[o.i%AVC.length]+'">'+esc(initials(name))+'</div>')+
+          '<div style="flex:1;min-width:0;"><div style="display:flex;align-items:baseline;gap:8px;"><b style="font-size:13.5px;">'+esc(name)+'</b>'+(me?'<span style="font-size:10px;color:#065f46;font-weight:800;">you</span>':'')+'<span style="font-size:11px;color:var(--ink3);font-weight:700;">'+(SHIFTOF[o.k]==='night'?'night':'morning')+' · '+o.n+' on board</span></div>'+
+          '<div class="pvbar" style="margin-top:7px;"><i style="width:'+Math.min(100,o.pct)+'%;"></i></div></div>'+
+          '<div class="pvpct" style="color:'+pc+'"><span style="font-size:17px;">'+o.done+'</span> <span style="font-size:12px;color:var(--ink3);">published</span><br><span style="font-size:12.5px;">'+o.tot+' in play · '+o.pct+'%</span></div></div>';
+      }).join('')+'</div>';
+  }
+  function tabs(){
+    if(isOwner() && S.filter==='mine') S.filter='all';
+    var mine=String((USER&&USER.id)||'').toLowerCase(), by={};
+    S.rows.forEach(function(r){ var k=ownerOf(r)||'—'; by[k]=(by[k]||0)+1; });
+    function pill(val,label,n){ return '<button class="vpill'+(S.filter===val?' on':'')+'" onclick="DS.setFilter(\''+jsq(val)+'\')">'+label+(n!=null?' · '+n:'')+'</button>'; }
+    var h=isOwner()?[pill('all','All', S.rows.length)]:[pill('mine','My tasks', by[mine]||0), pill('all','All', S.rows.length)];
+    Object.keys(by).sort(function(a,b){ return by[b]-by[a]; }).forEach(function(k){ if((k===mine && !isOwner())||k==='—') return; h.push(pill(k, esc(vaName(k)), by[k])); });
+    return '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'+h.join('')+'</div>';
+  }
+  function stats(){
+    return '<div class="stat waiting"><b>'+count('waiting')+'</b><span>Waiting for files</span></div>'+
+      '<div class="stat editing"><b>'+count('editing')+'</b><span>Editing</span></div>'+
+      '<div class="stat drive"><b>'+count('drive')+'</b><span>Drive</span></div>'+
+      '<div class="stat shopify"><b>'+count('shopify')+'</b><span>Shopify</span></div>'+
+      '<div class="stat website"><b>'+count('website')+'</b><span>Published</span></div>'+
+      '<div class="stat issue"><b>'+(count('hold')+count('issue'))+'</b><span>Paused / issue</span></div>'+
+      '<div class="stat website"><b>'+pubToday()+'</b><span>Published today</span></div>';
+  }
+  function board(){
+    if(!S.loaded) return '<div class="muted" style="padding:8px">'+(S.err?esc(S.err):'Loading the board…')+'</div>';
+    var base=filterRows(), q=String(S.q||'').trim().toLowerCase();
+    if(q) base=base.filter(function(r){ return String(r.handle||'').toLowerCase().indexOf(q)>=0 || String(r.model||'').toLowerCase().indexOf(q)>=0 || String(vaName(ownerOf(r))).toLowerCase().indexOf(q)>=0; });
+    var defs=[['waiting','Waiting for Files'],['editing','Editing — Photoshop'],['drive','Drive Uploaded'],['shopify','Shopify Listing'],['website','Published — Website'],['hold','On Hold'],['issue','Issue Found']];
+    return '<div class="cols">'+defs.map(function(df){
+      var st=df[0], items=base.filter(function(r){ return r.status===st; });
+      if((st==='hold'||st==='issue') && !items.length) return '';
+      var cards=items.map(function(r){
+        var id=jsq(r.id), btns='', menu=[];
+        if(st==='waiting'){ btns='<button class="go" onclick="DS.move(\''+id+'\',\'editing\')">Files verified → Start editing</button>'; menu.push(['Issue found — pause',"DS.pause('"+id+"','issue')"]); menu.push(['Put on hold',"DS.pause('"+id+"','hold')"]); }
+        else if(st==='editing'){ btns='<button class="go" onclick="DS.move(\''+id+'\',\'drive\')">Exported → Drive upload</button>'; menu.push(['Back to Waiting for Files',"DS.move('"+id+"','waiting')"]); menu.push(['Issue found — pause',"DS.pause('"+id+"','issue')"]); menu.push(['Put on hold',"DS.pause('"+id+"','hold')"]); }
+        else if(st==='drive'){ btns='<button class="go" onclick="DS.move(\''+id+'\',\'shopify\')">Uploads verified → Shopify</button>'; menu.push(['Back to Editing',"DS.move('"+id+"','editing')"]); menu.push(['Issue found — pause',"DS.pause('"+id+"','issue')"]); menu.push(['Put on hold',"DS.pause('"+id+"','hold')"]); }
+        else if(st==='shopify'){ btns='<button class="go" onclick="DS.qcOpen(\''+id+'\')">Final QC → Publish</button>'; menu.push(['Back to Drive',"DS.move('"+id+"','drive')"]); menu.push(['Issue found — pause',"DS.pause('"+id+"','issue')"]); menu.push(['Put on hold',"DS.pause('"+id+"','hold')"]); }
+        else if(st==='website'){ btns='<button disabled style="opacity:.55">Published'+(markOk(r.meta&&r.meta.pub, ownerOf(r))?' this shift':'')+'</button>'; menu.push(['Reopen on Shopify (edit listing)',"DS.move('"+id+"','shopify')"]); }
+        else if(st==='hold'||st==='issue'){ btns='<button class="warn" onclick="DS.resume(\''+id+'\')">'+(st==='issue'?'Issue resolved → resume':'Resume')+'</button>'; }
+        if(menu.length) menu.push('---');
+        menu.push(['Delete (wrong entry)',"DS.del('"+id+"')",'danger']);
+        return '<div class="acct"><div style="display:flex;align-items:center;gap:6px;"><b style="flex:1;min-width:0">'+esc(r.handle)+'</b>'+kmenu(menu)+'</div>'+
+          '<div class="who">'+(r.model?esc(r.model)+' · ':'')+esc(vaName(ownerOf(r)))+((st==='hold'||st==='issue')&&r.meta&&r.meta.prev?(' · was: '+esc(r.meta.prev)):'')+'</div><div class="btns">'+btns+'</div></div>';
+      }).join('');
+      return '<div class="col '+st+'"><h3><i></i>'+df[1]+' · '+items.length+'</h3>'+(cards||'<div class="muted">None.</div>')+'</div>';
+    }).join('')+'</div>';
+  }
+  function render(host){
+    host.innerHTML='<div class="c-ds">'+
+      '<div class="sub">Each card is one design/product moving through the SOP. Publishing on Shopify (all QC checks passed) counts <b>+1 Shopify Product Upload</b>. If anything is missing or wrong — pause the card, don\'t push through.</div>'+
+      '<details class="sopbox"><summary>SOP — Shopify &amp; Photoshop workflow</summary><div class="sopgrid">'+
+        '<div class="sopph"><b>🛒 Shopify · Step 1 — Get the files</b>Find the Shopify task/design to upload. Use designs that are already edited. If Kristina sends the files, use those. If the files are in Google Drive, locate and use the required files.</div>'+
+        '<div class="sopph"><b>🛒 Shopify · Step 2 — Upload &amp; edit in Shopify</b>Open Shopify · upload the correct design · add the product title &amp; description · upload the correct images · add the correct type, vendor, collections &amp; tags · save the product.</div>'+
+        '<div class="sopph"><b>🎨 Photoshop · Step 1 — Get the design</b>Receive the design to edit from Kristina. If it\'s already in Google Drive, locate and download the correct file.</div>'+
+        '<div class="sopph"><b>🎨 Photoshop · Step 2 — Edit the design</b>Open the design in Photoshop · edit according to the task · create mock-ups when required · add the correct color · save the edited design.</div>'+
+        '<div class="sopph"><b>🎨 Photoshop · Step 3 — Export the files</b>Export the completed design as JPG or PNG. Make sure the final export is correct.</div></div>'+
+        '<div class="sopph" style="margin-top:10px;background:rgba(16,185,129,.09)"><b>✅ QA checklist — Shopify</b>☐ Titles and descriptions added &nbsp; ☐ Correct design / high-quality image &nbsp; ☐ Correct type, vendor, collections &amp; tags</div></details>'+
+      '<div class="top" id="ds-stats">'+stats()+'</div>'+
+      '<div class="addbox"><input id="ds-name" placeholder="Design / product name"><input id="ds-store" placeholder="Store / brand (optional)" style="max-width:220px">'+
+        '<select id="ds-status"><option value="waiting">Waiting for Files</option><option value="editing">Editing (Photoshop)</option><option value="drive">Drive Uploaded</option><option value="shopify">Shopify Listing</option></select>'+
+        '<button onclick="DS.add()">＋ Add design task</button></div>'+
+      '<div id="ds-byva">'+byVA()+'</div>'+
+      '<div id="ds-tabs">'+tabs()+'</div>'+
+      '<input class="q" id="ds-q" placeholder="Search design, store or VA…" value="'+esc(S.q)+'" oninput="DS.setQ(this.value)">'+
+      '<div id="ds-board">'+board()+'</div></div>';
+    var n=$('ds-name'); if(n) n.addEventListener('keydown', function(e){ if(e.key==='Enter') add(); });
+  }
+  /* repaint without touching the add form (so typing is never lost to a poll) */
+  function paint(){
+    if(!$('ds-board')) return HUB.repaint();
+    $('ds-stats').innerHTML=stats(); $('ds-byva').innerHTML=byVA(); $('ds-tabs').innerHTML=tabs(); paintBoard();
+  }
+  function paintBoard(){ var b=$('ds-board'); if(b) b.innerHTML=board(); }
+  function rowById(id){ return S.rows.filter(function(x){ return x.id===id; })[0]; }
+  async function upd(id, q, okMsg){
+    try{
+      var d=await jFetch(API+'?action=pa_update&id='+encodeURIComponent(id)+Object.keys(q).map(function(k){ return '&'+k+'='+encodeURIComponent(q[k]); }).join('')+'&_='+Date.now(), 1);
+      if(d&&d.ok){ toast(okMsg); load(); return true; }
+      toast('Could not update — '+((d&&d.error)||'try again')+'.'); return false;
+    }catch(e){ toast('Connection error.'); return false; }
+  }
+  async function add(){
+    var u=($('ds-name').value||'').trim(), m=($('ds-store').value||'').trim(), st=($('ds-status')||{}).value||'waiting';
+    if(!u){ toast('Type the design / product name.'); return; }
+    if(!(await linkGate(CL(), 'Adding a design task'))) return;
+    try{
+      var d=await jFetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(u)+'&model='+encodeURIComponent(m)+'&status='+encodeURIComponent(st)+'&meta='+encodeURIComponent('{}')+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now(), 0);
+      if(d&&d.ok){ $('ds-name').value=''; $('ds-store').value=''; toast('Added → '+st); load(); }
+      else if(d&&d.error==='DUPLICATE') toast('That design is already on the board — search first!');
+      else toast('Could not add.');
+    }catch(e){ toast('Connection error.'); }
+  }
+  async function move(id, st){ if(!(await linkGate(CL(), 'Moving a card'))) return; upd(id, { status:st }, 'Updated → '+st); }
+  async function pause(id, kind){
+    var r0=rowById(id); if(!r0) return;
+    if(!(await linkGate(CL(), 'Pausing a card'))) return;
+    upd(id, { status:kind, meta:JSON.stringify(Object.assign({}, r0.meta||{}, { prev:r0.status })) }, kind==='issue'?'Paused — fix the issue before continuing.':'On hold.');
+  }
+  function resume(id){ var r0=rowById(id); if(!r0) return; move(id, (r0.meta&&r0.meta.prev)||'waiting'); }
+  async function del(id){
+    var r0=rowById(id);
+    if(!confirm('DELETE '+((r0&&r0.handle)||'this task')+' from the board?\n\nUse this only for wrong entries. Outputs already counted are not affected.')) return;
+    try{
+      var d=await jFetch(API+'?action=pa_delete&id='+encodeURIComponent(id)+'&employee_id='+encodeURIComponent(isOwner()?'admin':USER.id)+'&_='+Date.now(), 0);
+      if(d&&d.ok){ toast('Deleted.'); load(); }
+      else if(d&&d.error==='NOT_YOURS') toast('Only the VA who owns this entry (or the admin) can delete it.');
+      else toast('Could not delete: '+((d&&d.error)||'error'));
+    }catch(e){ toast('Connection error.'); }
+  }
+  /* Final QC gate: every check ticked before Publish */
+  async function qcOpen(id){
+    if(!(await linkGate(CL(), 'Publishing'))) return;
+    S.qc=id; var r0=rowById(id);
+    $('qc-name').textContent=(r0?r0.handle:'')+' — tick every check from the SOP QC checklist to unlock Publish.';
+    $('qc-items').innerHTML=QC_LIST.map(function(t,i){ return '<label class="qcitem" id="qci'+i+'"><input type="checkbox" onchange="DS.qcTick('+i+')"> '+esc(t)+'</label>'; }).join('');
+    $('qc-pub').disabled=true; $('qcmask').classList.add('on');
+  }
+  function qcTick(i){
+    var el=$('qci'+i); if(el) el.classList.toggle('ok', el.querySelector('input').checked);
+    $('qc-pub').disabled=!QC_LIST.every(function(_,j){ var e=$('qci'+j); return e && e.querySelector('input').checked; });
+  }
+  function qcClose(){ $('qcmask').classList.remove('on'); S.qc=null; }
+  async function qcPublish(){
+    var id=S.qc; if(!id) return; var r0=rowById(id); if(!r0) return;
+    $('qc-pub').disabled=true;
+    try{ await bump(PROJECT, 'Shopify Product Upload', 1); }catch(e){ $('qc-pub').disabled=false; return; }   // proof BEFORE it's marked published
+    var ok=await upd(id, { status:'website', meta:JSON.stringify(Object.assign({}, r0.meta||{}, { qc:true, pub:vaKeyOf(USER.id), last:vaKeyOf(USER.id) })) }, 'Published! +1 Shopify Product Upload');
+    if(ok) qcClose(); else $('qc-pub').disabled=false;
+  }
+  return { id:'design-shopify', S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners,
+           setFilter:setFilter, setQ:setQ, add:add, move:move, pause:pause, resume:resume, del:del,
+           qcOpen:qcOpen, qcTick:qcTick, qcClose:qcClose, qcPublish:qcPublish };
+})();
+document.addEventListener('click', function(e){ document.querySelectorAll('details.kmenu[open]').forEach(function(d){ if(!d.contains(e.target)) d.removeAttribute('open'); }); });
+
+/* ═══════════ THE HUB — tabs, who sees what, Team ═══════════ */
+var HUB=(function(){
+  var MODS={ 'design-shopify':DS };
+  var S={ view:'', ready:false, cfg:{ members:{} }, cfgId:'', cfgLoaded:false, saving:false };
+  function norm(id){ return String(id||'').trim().toUpperCase(); }
+  function cfgList(cid){ var L=(S.cfg.members||{})[cid]; return Array.isArray(L)?L.map(norm).filter(Boolean):[]; }
+  function autoList(cid){ var m=MODS[cid]; return (m && m.owners)?m.owners().map(norm):[]; }
+  function membersOf(cid){ var o={}; cfgList(cid).concat(autoList(cid)).forEach(function(x){ o[x]=1; }); return Object.keys(o); }
+  /* a VA is on a client when Jeth added them (Team), they own cards on its board, or their timer runs on it now */
+  function myClients(){
+    if(isOwner()) return CLIENTS.slice();
+    var me=myId(), t=LINK.me && String(LINK.me.status||'')==='working' ? clientOfTask(LINK.me.task) : null;
+    return CLIENTS.filter(function(c){ return membersOf(c.id).indexOf(me)>=0 || (t && t.id===c.id); });
+  }
+  function cur(){ return clientById(S.view); }
+  function canSee(id){ if(id==='team') return isOwner(); return myClients().some(function(c){ return c.id===id; }); }
+  function pick(id, quiet){
+    if(!canSee(id)) return;
+    S.view=id;
+    try{ localStorage.setItem('hub_last_'+myId(), id); var u=new URL(location.href); u.searchParams.set('c', id); history.replaceState(null,'',u.toString()); }catch(e){}
+    renderTabs(); renderMain();
+    if(!quiet) try{ window.scrollTo({ top:0, behavior:'smooth' }); }catch(e){}
+    try{ tbSend(true); linkAfter(); }catch(e){}
+  }
+  function initialView(){
+    var want=''; try{ want=new URL(location.href).searchParams.get('c')||''; }catch(e){}
+    if(want && canSee(want)) return want;
+    var last=''; try{ last=localStorage.getItem('hub_last_'+myId())||''; }catch(e){}
+    if(last && canSee(last)) return last;
+    var mine=myClients();
+    var t=LINK.me && clientOfTask(LINK.me.task); if(t && canSee(t.id)) return t.id;
+    var live=mine.filter(function(c){ return c.live; });
+    return (live[0]||mine[0]||{}).id||(isOwner()?'team':'');
+  }
+  function renderMe(){
+    var el=$('me'); if(!el || !USER) return;
+    el.innerHTML=avatar(USER.id,'av')+'<span>'+esc(USER.name||USER.id)+'</span>'+(isOwner()?'<em>Owner</em>':'')+'<button onclick="signOut()">Sign out</button>';
+  }
+  function renderTabs(){
+    var nav=$('ctabs'); if(!nav) return;
+    var list=myClients();
+    var h=list.map(function(c){
+      var n=membersOf(c.id).length;
+      return '<button class="ct'+(S.view===c.id?' on':'')+'" style="--g:'+c.g+';--c:'+c.c+'" onclick="HUB.pick(\''+c.id+'\')">'+
+        '<span class="ic">'+IC[c.icon]+'</span><span class="tx"><b>'+esc(c.name)+'</b><small>'+esc(c.kind)+(isOwner()&&n?' · '+n+' VA'+(n===1?'':'s'):'')+'</small></span>'+(c.live?'':'<span class="soon">Soon</span>')+'</button>';
+    }).join('');
+    if(isOwner()) h+='<button class="ct gear'+(S.view==='team'?' on':'')+'" style="--g:linear-gradient(135deg,#64748b,#334155);--c:#475569" onclick="HUB.pick(\'team\')"><span class="ic">'+IC.gear+'</span><span class="tx"><b>Team</b><small>who is on which client</small></span></button>';
+    nav.innerHTML=h;
+  }
+  function memberChips(cid){
+    var M=membersOf(cid); if(!M.length) return '<span class="chip">No VAs yet</span>';
+    return '<span class="chip"><span style="display:inline-flex">'+M.slice(0,5).map(function(id,i){ var k=id.toLowerCase(), p=PHOTOOF[k];
+      return '<span style="width:18px;height:18px;border-radius:50%;display:inline-grid;place-items:center;overflow:hidden;background:var(--g);color:#fff;font:800 7.5px Sora,sans-serif;border:1.5px solid #fff;margin-left:'+(i?'-5px':'0')+'">'+(p?'<img src="'+esc(p)+'" alt="" style="width:100%;height:100%;object-fit:cover">':esc(initials(vaName(id))))+'</span>'; }).join('')+
+      '</span>'+M.length+' VA'+(M.length===1?'':'s')+'</span>';
+  }
+  function renderMain(){
+    var main=$('main'); if(!main) return;
+    if(!S.ready){ main.innerHTML='<div class="card empty"><div class="big" style="--g:var(--grad)">'+IC.hub+'</div><h3>Opening your client…</h3><p>Loading the boards and your access.</p></div>'; return; }
+    if(S.view==='team') return renderTeam(main);
+    var c=cur();
+    if(!c){
+      main.innerHTML='<div class="card empty"><div class="big" style="--g:var(--grad)">'+IC.hub+'</div><h3>You\'re not on a client here yet</h3>'+
+        '<p>The Client Hub holds the tools for our smaller clients — '+CLIENTS.map(function(x){ return '<b>'+esc(x.name)+'</b>'; }).join(', ')+'. '+
+        'You get your client\'s tab once the admin adds you, or as soon as your portal timer runs on that client\'s project.</p>'+
+        '<p style="margin-top:14px"><button class="btn sec" onclick="linkLoad(true).then(function(){ HUB.boot(true); })">Check again</button></p></div>';
+      return;
+    }
+    var h='<div class="pane" style="--g:'+c.g+';--c:'+c.c+'">'+
+      '<div class="phead"><div><h2><em>'+esc(c.name)+'</em></h2><div class="chips"><span class="chip"><i></i>'+esc(c.client)+'</span><span class="chip">'+esc(c.kind)+'</span>'+(isOwner()?memberChips(c.id):'')+(c.live?'':'<span class="chip" style="color:#a16207">Waiting for the SOP</span>')+'</div></div></div>'+
+      '<div id="linkbox">'+linkBanner(c)+'</div><div id="cbody"></div></div>';
+    main.innerHTML=h;
+    var body=$('cbody');
+    if(c.live && MODS[c.id]) MODS[c.id].render(body);
+    else body.innerHTML='<div class="card empty"><div class="big">'+IC.wait+'</div><h3>'+esc(c.name)+' — '+esc(c.kind)+'</h3>'+
+      (isOwner()
+        ?'<p>This tab is ready and VAs can already be put on it in <b>Team</b>. The tool itself gets built from the '+esc(c.name)+' SOP — send it over and it goes live right here, same link.</p><p style="margin-top:14px"><button class="btn sec" onclick="HUB.pick(\'team\')">Open Team</button></p>'
+        :'<p>Your '+esc(c.name)+' tool is being built from the SOP and will open right here, same link. Until then, keep following your current process.</p>')+'</div>';
+  }
+  function repaint(){ renderTabs(); var c=cur(); if(c && c.live && MODS[c.id] && $('cbody') && $('cbody').firstChild && MODS[c.id].paint) MODS[c.id].paint(); else renderMain(); renderMe(); }
+  function repaintLink(){ var b=$('linkbox'), c=cur(); if(b && c) b.innerHTML=linkBanner(c); }
+  function onData(cid){
+    if(!S.ready) return;
+    if(S.view===cid && $('cbody') && $('cbody').firstChild){ MODS[cid].paint(); renderTabs(); }
+    else if(!cur() && !isOwner()){ var v=initialView(); if(v) pick(v, true); else renderTabs(); }
+    else renderTabs();
+  }
+  /* ── hub settings (Team) live in the generic board store: project "Client Hub", one row "members" ── */
+  async function loadCfg(){
+    try{
+      var d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(HUB_PROJECT)+'&_='+Date.now(), 1);
+      var row=((d&&d.rows)||[]).filter(function(r){ return String(r.handle||'').toLowerCase()===HUB_CFG_HANDLE; })[0];
+      if(row){ S.cfgId=row.id; S.cfg=Object.assign({ members:{} }, row.meta||{}); }
+      S.cfgLoaded=true;
+    }catch(e){}
+  }
+  async function saveCfg(){
+    if(S.saving) return false; S.saving=true;
+    var meta=JSON.stringify({ members:S.cfg.members||{}, by:myId(), at:new Date().toISOString() });
+    try{
+      var d;
+      if(S.cfgId) d=await jFetch(API+'?action=pa_update&id='+encodeURIComponent(S.cfgId)+'&meta='+encodeURIComponent(meta)+'&_='+Date.now(), 1);
+      else { d=await jFetch(API+'?action=pa_add&project='+encodeURIComponent(HUB_PROJECT)+'&handle='+HUB_CFG_HANDLE+'&status=config&meta='+encodeURIComponent(meta)+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now(), 0);
+        if(d && d.ok && d.id) S.cfgId=d.id;
+        if(d && d.error==='DUPLICATE'){ await loadCfg(); S.saving=false; return saveCfg(); } }
+      S.saving=false;
+      if(d && d.ok){ toast('Saved.'); return true; }
+      toast('Could not save — '+((d&&d.error)||'try again')+'.'); return false;
+    }catch(e){ S.saving=false; toast('Connection error — not saved.'); return false; }
+  }
+  function renderTeam(main){
+    var ids=Object.keys(NAMES).map(function(k){ return k.toUpperCase(); }).sort();
+    var dl='<datalist id="tm-dl">'+ids.map(function(id){ return '<option value="'+esc(id)+'">'+esc(vaName(id))+'</option>'; }).join('')+'</datalist>';
+    var link='https://internals.jmbvirtuals.com/clients.html';
+    main.innerHTML='<div class="pane" style="--g:linear-gradient(135deg,#64748b,#334155);--c:#475569">'+
+      '<div class="phead"><div><h2><em>Team</em></h2><div class="chips"><span class="chip">who is on which client</span><span class="chip">VAs only see their own client\'s tab</span></div></div></div>'+
+      '<div class="card" style="padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div style="flex:1;min-width:240px"><b style="font-size:13.5px">One link for every small-client VA</b><div class="muted" style="margin-top:3px">'+esc(link)+' — each VA lands on their own client. Anyone with cards on a board is on that client automatically; add the rest here.</div></div>'+
+        '<button class="btn sm sec" onclick="HUB.copyLink()">Copy link</button></div>'+
+      '<div class="tm-grid">'+CLIENTS.map(function(c){
+        var cfg=cfgList(c.id), auto=autoList(c.id);
+        var chips=membersOf(c.id).map(function(id){
+          var manual=cfg.indexOf(id)>=0, onBoard=auto.indexOf(id)>=0;
+          return '<span class="mc" title="'+esc(id)+'">'+avatar(id,'a')+esc(vaName(id))+(onBoard?' <small>on board</small>':'')+(manual?'<button title="Remove" onclick="HUB.rm(\''+c.id+'\',\''+jsq(id)+'\')">×</button>':'')+'</span>';
+        }).join('');
+        return '<div class="card tm-c" style="--g:'+c.g+'"><div class="tm-h"><span class="ic">'+IC[c.icon]+'</span><div style="flex:1"><b>'+esc(c.name)+'</b><small>'+esc(c.kind)+' · '+(c.live?'live':'waiting for the SOP')+'</small></div>'+
+          '<button class="btn sm sec" onclick="HUB.pick(\''+c.id+'\')">Open</button></div>'+
+          '<div class="mem">'+(chips||'<span class="muted">No VAs yet.</span>')+'</div>'+
+          '<div class="tm-add"><input id="tm-in-'+c.id+'" list="tm-dl" placeholder="Employee ID, e.g. JMB021" onkeydown="if(event.key===\'Enter\')HUB.addMember(\''+c.id+'\')"><button class="btn sm" onclick="HUB.addMember(\''+c.id+'\')">Add</button></div></div>';
+      }).join('')+'</div>'+dl+
+      (S.cfgLoaded?'':'<p class="muted" style="margin-top:10px">Couldn\'t read the saved team yet — showing who is on the boards. Adding still works.</p>')+'</div>';
+  }
+  async function addMember(cid){
+    var inp=$('tm-in-'+cid), id=norm(inp&&inp.value); if(!id) return;
+    if(Object.keys(NAMES).length && !NAMES[id.toLowerCase()] && !confirm(id+' isn\'t in the employee list. Add anyway?')) return;
+    var L=cfgList(cid); if(L.indexOf(id)>=0){ toast(vaName(id)+' is already on '+clientById(cid).name+'.'); return; }
+    S.cfg.members=S.cfg.members||{}; S.cfg.members[cid]=L.concat([id]);
+    renderTeam($('main')); renderTabs();
+    await saveCfg();
+  }
+  async function rm(cid, id){
+    S.cfg.members[cid]=cfgList(cid).filter(function(x){ return x!==norm(id); });
+    renderTeam($('main')); renderTabs();
+    await saveCfg();
+  }
+  function copyLink(){ var t='https://internals.jmbvirtuals.com/clients.html'; try{ navigator.clipboard.writeText(t).then(function(){ toast('Link copied.'); }, function(){ prompt('Copy the link:', t); }); }catch(e){ prompt('Copy the link:', t); } }
+  /* first load: boards + team + the portal link together, then land on the right tab */
+  async function boot(again){
+    if(!again){ Object.keys(MODS).forEach(function(k){ try{ MODS[k].paintCached(); }catch(e){} }); renderTabs(); renderMain(); }
+    var tasks=[loadCfg(), linkLoad(true)].concat(Object.keys(MODS).map(function(k){ return MODS[k].load(); }));
+    await Promise.race([Promise.all(tasks.map(function(p){ return p.catch?p.catch(function(){}):p; })), new Promise(function(r){ setTimeout(r, 15000); })]);
+    S.ready=true;
+    var v=(again||!S.view)?initialView():S.view; S.view=v||'';
+    renderTabs(); renderMain();
+    try{ linkAfter(); }catch(e){}
+  }
+  return { S:S, pick:pick, cur:cur, myClients:myClients, membersOf:membersOf, repaint:repaint, repaintLink:repaintLink, onData:onData, boot:boot,
+           addMember:addMember, rm:rm, copyLink:copyLink, renderMe:renderMe, loadCfg:loadCfg };
+})();
+
+/* ── sign in ── */
+async function signIn(){
+  var id=$('si-id').value.trim(), pin=$('si-pin').value.trim(), err=$('si-err'); err.style.display='none';
+  if(!id||!pin){ err.style.display='block'; err.textContent='Enter your Employee ID and PIN.'; return; }
+  var b=$('si-go'); b.disabled=true; b.textContent='Signing in…';
+  try{
+    var d=await jFetch(API+'?id='+encodeURIComponent(id)+'&pin='+encodeURIComponent(pin)+'&_='+Date.now(), 1);
+    if(!d||d.error){ err.style.display='block'; err.textContent=(d&&d.error==='WRONG_PIN')?'Incorrect PIN.':'Employee not found.'; b.disabled=false; b.textContent='Sign in'; return; }
+    USER={ id:d.employee_id, name:d.full_name||d.employee_id };
+    try{ sessionStorage.setItem('clienthub_user', JSON.stringify(USER)); }catch(e){}
+    start();
+  }catch(e){ err.style.display='block'; err.textContent='Network error — try again.'; }
+  b.disabled=false; b.textContent='Sign in';
+}
+function signOut(){ try{ sessionStorage.removeItem('clienthub_user'); sessionStorage.removeItem('designshopify_user'); }catch(e){} location.href=location.pathname; }
+function start(){
+  ROLE=OWNER_IDS.indexOf(myId())>=0?'owner':'va';
+  try{ fetch(API+'?action=tool_used&employee_id='+encodeURIComponent(USER.id)+'&tool=clients&_='+Date.now()); }catch(_tu){}
+  $('signin').classList.add('hide'); $('app').classList.remove('hide');
+  HUB.renderMe(); loadNames(); HUB.boot(false);
+  setTimeout(function(){ tbSend(true); }, 2500);
+  /* keep the boards fresh: every minute while visible, and on focus */
+  setInterval(function(){ if(!document.hidden) DS.load(); }, 60000);
+  setInterval(function(){ if(!document.hidden && isOwner()) HUB.loadCfg(); }, 5*60000);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) DS.load(); });
+  window.addEventListener('focus', function(){ DS.load(); });
+}
+
+/* SELF-REFRESH — the page watches its own ETag and reloads itself within ~2 minutes of a new version going live
+   (waits while a box is open or a field has focus). */
+var _pageTag=null;
+async function pageWatch(){
+  try{
+    var r=await fetch(location.pathname+'?w='+Date.now(), { method:'HEAD', cache:'no-store' });
+    var tag=r.headers.get('etag')||r.headers.get('last-modified')||''; if(!tag) return;
+    if(_pageTag===null){ _pageTag=tag; return; }
+    if(tag===_pageTag) return;
+    var ae=document.activeElement, typing=ae && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.type!=='checkbox';
+    var busy=(($('qcmask')||{}).classList||{ contains:function(){ return false; } }).contains('on') || ($('proof-ov') && $('proof-ov').style.display==='flex') || $('pfx-ov') || typing;
+    if(busy) return;
+    _pageTag=tag; toast('The Client Hub was updated — refreshing…');
+    setTimeout(function(){ try{ var u=new URL(location.href); u.searchParams.set('v', String(Date.now())); location.replace(u.toString()); }catch(e){ location.reload(); } }, 3000);
+  }catch(e){}
+}
+setTimeout(pageWatch, 15000); setInterval(pageWatch, 120000);
+
+/* ── boot: an existing hub session (or one from the old Design & Shopify page) skips the sign-in ── */
+setTimeout(function(){
+  var u=null; try{ u=JSON.parse(sessionStorage.getItem('clienthub_user')||'null')||JSON.parse(sessionStorage.getItem('designshopify_user')||'null'); }catch(e){}
+  if(u && u.id){ USER=u; start(); }
+  else { try{ $('si-id').focus(); $('si-pin').addEventListener('keydown', function(e){ if(e.key==='Enter') signIn(); }); $('si-id').addEventListener('keydown', function(e){ if(e.key==='Enter') $('si-pin').focus(); }); }catch(e){} }
+}, 0);
+</script>
+</body>
+</html>
