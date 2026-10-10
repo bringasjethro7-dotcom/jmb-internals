@@ -2605,9 +2605,18 @@ var HUB=(function(){
   function autoList(cid){ var m=MODS[cid]; return (m && m.owners)?m.owners().map(norm):[]; }
   function membersOf(cid){ var o={}; wlList(cid).concat(autoList(cid)).forEach(function(x){ o[x]=1; }); return Object.keys(o); }
   /* a VA is on a client when Jeth added them (Team), they own cards on its board, or their timer runs on it now */
+  /* Oct 10 (JMB040, first night on Skyvern): a brand-new VA has no worklog and no cards yet, so the hub only knew
+     him from a RUNNING timer — and it checked once, before the portal had started it. Now any portal timer on the
+     client's project (running, paused or idle, seen in the last 12 h) puts the client in his tabs, and a VA with no
+     tab is re-checked every few seconds (see the watcher below), so the tab opens by itself. */
+  function timerClient(){
+    var p=LINK.me; if(!p || !p.task) return null;
+    var age=Date.now()-(Date.parse(p.last_seen||'')||0); if(!(age<12*3600e3)) return null;
+    return clientOfTask(p.task);
+  }
   function myClients(){
     if(isOwner()) return CLIENTS.slice();
-    var me=myId(), t=LINK.me && String(LINK.me.status||'')==='working' ? clientOfTask(LINK.me.task) : null;
+    var me=myId(), t=timerClient();
     return CLIENTS.filter(function(c){ return membersOf(c.id).indexOf(me)>=0 || (t && t.id===c.id); });
   }
   function cur(){ return clientById(S.view); }
@@ -2626,7 +2635,7 @@ var HUB=(function(){
     var last=''; try{ last=localStorage.getItem('hub_last_'+myId())||''; }catch(e){}
     if(last && canSee(last)) return last;
     var mine=myClients();
-    var t=LINK.me && clientOfTask(LINK.me.task); if(t && canSee(t.id)) return t.id;
+    var t=timerClient(); if(t && canSee(t.id)) return t.id;
     var live=mine.filter(function(c){ return c.live; });
     return (live[0]||mine[0]||{}).id||(isOwner()?'team':'');
   }
@@ -2659,8 +2668,9 @@ var HUB=(function(){
     if(!c){
       main.innerHTML='<div class="card empty"><div class="big" style="--g:var(--grad)">'+IC.hub+'</div><h3>You\'re not on a client here yet</h3>'+
         '<p>The Client Hub holds the tools for our smaller clients — '+CLIENTS.map(function(x){ return '<b>'+esc(x.name)+'</b>'; }).join(', ')+'. '+
-        'Your client\'s tab appears once you\'ve tracked time on that client\'s project in the portal — or right away while your portal timer runs on it.</p>'+
-        '<p style="margin-top:14px"><button class="btn sec" onclick="linkLoad(true).then(function(){ HUB.boot(true); })">Check again</button></p></div>';
+        'New here? <b>Start a timer on your client\'s project in the portal</b> (for example <b>Skyvern</b>) — this page opens your client\'s tab by itself within a few seconds. After that it stays, from your work log.</p>'+
+        '<p style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><a class="btn" href="https://portal.jmbvirtuals.com/" target="_blank" rel="noopener">Open the portal ↗</a><button class="btn sec" onclick="linkLoad(true).then(function(){ HUB.boot(true); })">Check again</button></p>'+
+        '<p class="muted" style="margin-top:10px;font-size:12px" id="hub-wait">Watching for your portal timer…</p></div>';
       return;
     }
     var h='<div class="pane" style="--g:'+c.g+';--c:'+c.c+'">'+
@@ -2739,6 +2749,19 @@ var HUB=(function(){
     renderTabs(); renderMain();
     try{ linkAfter(); }catch(e){}
   }
+  /* no tab yet → keep looking for the portal timer (every 5 s while the page is open), then open the client by itself */
+  var _wt=0;
+  setInterval(function(){
+    try{
+      if(!USER || isOwner() || !S.ready || cur() || document.hidden || _wt) return;
+      _wt=1;
+      linkLoad(true).then(function(){
+        _wt=0; var v=initialView();
+        if(v && v!=='team'){ pick(v, true); try{ linkAfter(); }catch(_l){} toast('Your '+(clientById(v)||{}).name+' tab is ready.'); }
+        else { var w=$('hub-wait'); if(w) w.textContent='Watching for your portal timer… last checked '+new Date().toLocaleTimeString([], { hour:'numeric', minute:'2-digit', second:'2-digit' }); }
+      }, function(){ _wt=0; });
+    }catch(e){ _wt=0; }
+  }, 5000);
   return { S:S, loadAll:loadAll, pick:pick, cur:cur, myClients:myClients, membersOf:membersOf, repaint:repaint, repaintLink:repaintLink, onData:onData, boot:boot,
            refreshTeams:refreshTeams, copyLink:copyLink, renderMe:renderMe, loadTeams:loadTeams };
 })();
