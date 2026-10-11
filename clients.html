@@ -1060,24 +1060,50 @@ function linkBanner(cl){
   if(st.k==='ok'){
     var t=Date.parse(st.since||'')||0, tracked=st.trackedProj||st.tracked;
     return '<div style="margin-bottom:14px">'+PFX.html({ size:'sm', theme:'light', tool:'clients', state:'linked', rev:true, lockAt:LINK.lockAt, pName:'Portal timer', pSince:t||null, pSub:esc(String(st.task||'').split(' · ')[0]), tName:cl.name, tSub:'you · '+esc(id),
-      foot:'<span>Tracked on '+esc(cl.project)+' today <b>'+hm(tracked)+'</b> · active in the hub <b>'+hm(actToday())+'</b></span><span style="opacity:.7;flex-basis:100%">Keep this tab open while you work — the portal stops your timer after 10 minutes with no activity here.</span>' })+'</div>';
+      foot:'<span>Tracked on '+esc(cl.project)+' today <b>'+hm(tracked)+'</b> · working in the hub <b>'+hm(actToday())+'</b></span><span style="opacity:.7;flex-basis:100%">Your portal timer only keeps running while you work here — press a task button at least every 10 minutes (log, comment, scroll, karma, move a card…), or it stops.</span>' })+'</div>';
   }
   return '<div style="margin-bottom:14px">'+PFX.html({ size:'sm', theme:'light', tool:'clients', state:'broken', rev:true, pName:'Portal timer', pSub:'<span class="bad">'+esc(linkShort(st))+'</span>', tName:cl.name, tSub:'you · '+esc(id),
     foot:'<span><b>Your portal timer is not running on '+esc(cl.project)+'</b> — '+esc(st.why)+'. Work in this tab counts once it is.</span><span class="pfx-act"><a class="p" href="https://portal.jmbvirtuals.com/" target="_blank" rel="noopener">Open the portal ↗</a><button class="s" onclick="linkLoad(true).then(HUB.repaintLink)">Check again</button></span>' })+'</div>';
 }
 
 /* ═══════════ HEARTBEAT → PORTAL (tool "clients") ═══════════
-   last_active = real work in the hub (click / type / scroll in the last 90 s, tab visible) — the portal's 10-minute rule.
    open_at     = the hub is open and signed in as you (the portal's pairing step before Start), every ~30 s.
-   Missing table / columns → it goes quiet and retries later. Owners don't send (they're never paired). */
+   last_active = WORK in the hub — the portal's 10-minute rule. Oct 11 (Jeth): clicking, scrolling or just having the
+                 tab open no longer counts. Only a task button does: anything that logs, moves, adds or counts work
+                 (+ Comment, Start 5:00, Update karma, Verified running, log a reel / scroll / photo, pre-flight, move a
+                 card, add an account, a proof screenshot saved…) — or a tool timer that is running (Skyvern's 5-minute
+                 scroll). A portal timer on a hub client with no task pressed for 10 minutes stops, from the Start too.
+   Missing table / columns → it goes quiet and retries later (and falls back to plain activity, so pairing still
+   works). Owners don't send (they're never paired). */
 var ACT={ last:Date.now() };
+var WORK={ at:0, what:'' };
+function hubWork(what){ WORK.at=Date.now(); WORK.what=String(what||''); try{ tbSend(true); }catch(e){} }
+/* every work write in every client tab goes through fetch — mark it there, so no module can forget */
+(function(){
+  if(typeof window==='undefined' || !window.fetch || window.__hubWorkWrap) return; window.__hubWorkWrap=1;
+  var f0=window.fetch, RX=/[?&]action=(pa_update|pa_add|po_bump|proof_save|proof_img)\b/;
+  window.fetch=function(u, o){
+    try{
+      var url=String((u&&u.url)||u||'');
+      if(url.indexOf(API)===0){
+        var hit=RX.test(url);
+        if(!hit && o && typeof o.body==='string' && /"action"\s*:\s*"(proof_save|proof_img)"/.test(o.body)) hit=true;
+        if(hit && USER && !isOwner()) hubWork((url.match(/action=(\w+)/)||[])[1]||'proof');
+      }
+    }catch(e){}
+    return f0.apply(this, arguments);
+  };
+})();
+function toolTimerRunning(){ try{ return typeof SKY!=='undefined' && SKY.S && SKY.S.run && SKY.S.run.ends>Date.now(); }catch(e){ return false; } }
+function hubWorking(){ return (Date.now()-WORK.at)<90000 || toolTimerRunning(); }
 function actKey(){ return 'hub_act_'+myId()+'_'+phtToday(); }
 function actToday(){ try{ return parseInt(localStorage.getItem(actKey())||'0',10)||0; }catch(e){ return 0; } }
 function actBump(){ var was=ACT.last; ACT.last=Date.now(); if(Date.now()-was>60000){ try{ tbSend(false); }catch(e){} } }
 ['click','keydown','pointerdown','touchstart','scroll','wheel'].forEach(function(ev){ try{ document.addEventListener(ev, actBump, { passive:true, capture:true }); }catch(e){} });
-setInterval(function(){ try{ if(!USER || isOwner()) return; if(document.hidden || (Date.now()-ACT.last)>90000) return; localStorage.setItem(actKey(), String(actToday()+15)); }catch(e){} }, 15000);
+setInterval(function(){ try{ if(!USER || isOwner()) return; if(!hubWorking()) return; localStorage.setItem(actKey(), String(actToday()+15)); }catch(e){} }, 15000);
 var TB={ sent:0, off:0, ext:true, openSent:0 };
-function tbActive(){ return !document.hidden && (Date.now()-ACT.last)<90000; }
+/* work → last_active. Without the pairing columns (old table) plain activity still counts, or nobody could pair. */
+function tbActive(){ if(hubWorking()) return true; return !TB.ext && !document.hidden && (Date.now()-ACT.last)<90000; }
 function tbPost(body){
   return fetch(SB_URL+'/rest/v1/tool_beat?on_conflict=employee_id,tool', { method:'POST', keepalive:true,
     headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json', Prefer:'resolution=merge-duplicates,return=minimal' },
@@ -1091,7 +1117,7 @@ function tbSend(force){
     if(!dueAct && !dueOpen) return;
     var body={ employee_id:me, tool:'clients' };
     if(dueAct){ body.last_active=new Date().toISOString(); TB.sent=now; }
-    if(TB.ext){ var cl=HUB.cur(); body.open_at=new Date().toISOString(); body.run_since=null; body.run_label=act&&cl?('Working in '+cl.name):null; body.today_secs=actToday(); TB.openSent=now; }
+    if(TB.ext){ var cl=HUB.cur(), tt=toolTimerRunning(); body.open_at=new Date().toISOString(); body.run_since=(tt&&SKY.S.run.start)?new Date(SKY.S.run.start).toISOString():null; body.run_label=tt?('5-min scroll · '+(cl?cl.name:'Client Hub')):(act&&cl?('Working in '+cl.name):(cl?'Open · no task pressed yet':null)); body.today_secs=actToday(); TB.openSent=now; }
     if(!body.last_active && !body.open_at) return;
     tbPost(body).then(function(r){
       if(r.status===404){ TB.off=Date.now()+10*60000; return; }
@@ -1666,8 +1692,9 @@ var IMA=(function(){
   async function trialUnlocked(aid){
     var a=rowById(aid); if(!a) return;
     if(dayN(a)<=12){ toast('Trial reels come after the feed-photo days.'); return; }
+    if(!confirm('Flag '+a.handle+' for trial reels?\n\nOnly when Instagram has actually unlocked trial reels on THIS account. The managers are then asked how many it runs a day.\n\nPicked the wrong account? You can undo it from the ⋯ menu until the managers set a number.')) return;
     if(!(await linkGate(CL(), 'Reporting trial reels'))) return;
-    await guarded(aid, function(){ return patchMeta(aid, function(m){ if(m.trial) return false; m.trial={ at:new Date().toISOString(), by:me(), allowed:null }; }, null, 'Flagged — the managers decide how many trial reels '+a.handle+' runs. Don\'t start them yet.'); });
+    await guarded(aid, function(){ return patchMeta(aid, function(m){ if(m.trial) return false; m.hist=(m.hist||[]).slice(-19); m.hist.push({ at:new Date().toISOString(), by:me(), to:'trial flagged' }); m.trial={ at:new Date().toISOString(), by:me(), allowed:null }; }, null, 'Flagged — the managers decide how many trial reels '+a.handle+' runs. Don\'t start them yet.'); });
   }
   async function trialSet(aid){
     if(!isOwner()) return; var a=rowById(aid); if(!a) return;
@@ -1675,6 +1702,27 @@ var IMA=(function(){
     var v=prompt('How many trial reels a day should '+a.handle+' run? (0 = none for now)', cur); if(v===null) return;
     var n=Math.max(0, Math.min(10, parseInt(v,10)||0));
     await guarded(aid, function(){ return patchMeta(aid, function(m){ m.trial=m.trial||{ at:new Date().toISOString(), by:'owner' }; m.trial.allowed=n; m.trial.set_at=new Date().toISOString(); }, null, a.handle+': '+n+' trial reel'+(n===1?'':'s')+' a day.'); });
+  }
+  /* Oct 11 (Jeth): three accounts were flagged for trial reels by mistake. A VA can take the flag back while the
+     managers haven't set a number yet; once they have, only the owner can remove it. Trial reels already logged stay
+     counted. Every flag / undo / status change is kept in the account's history (⋯ → History). */
+  async function trialUndo(aid){
+    var a=rowById(aid); if(!a || !a.meta.trial) return;
+    var tr=a.meta.trial, set=(tr.allowed!=null && tr.allowed!=='');
+    if(set && !isOwner()){ toast('The managers already set trial reels for '+a.handle+' — ask the admin to remove it.'); return; }
+    if(!confirm('Remove the trial-reels flag from '+a.handle+'?\n\n'+(set?'It runs '+tr.allowed+' trial reel'+(+tr.allowed===1?'':'s')+' a day now — that stops.':'Use this when the account was flagged by mistake — the managers won\'t be asked about it.')+'\nTrial reels already logged stay counted.')) return;
+    if(!(await linkGate(CL(), 'Changing an account'))) return;
+    await guarded(aid, function(){ return patchMeta(aid, function(m){
+      if(!m.trial) return false;
+      m.hist=(m.hist||[]).slice(-19); m.hist.push({ at:new Date().toISOString(), by:me(), to:'trial flag removed', was:(m.trial.allowed==null||m.trial.allowed===''?'waiting for the managers':m.trial.allowed+'/day') });
+      delete m.trial;
+    }, null, 'Trial-reels flag removed from '+a.handle+'.'); });
+  }
+  function history(aid){
+    var a=rowById(aid); if(!a) return;
+    var H=(a.meta.hist||[]).slice(-12).reverse();
+    var L={ active:'Active', restricted:'Restricted', banned:'Banned', hold:'On hold' };
+    alert(a.handle+' — recent changes\n\n'+(H.length?H.map(function(h){ var t=String(h.at||'').replace('T',' ').slice(0,16); return '• '+t+' · '+(vaName(h.by)||h.by||'?')+' · '+(L[h.to]||h.to)+(h.was?' (was: '+h.was+')':''); }).join('\n'):'No changes recorded yet.'));
   }
   async function reassign(id){
     if(!isOwner()) return; var r=rowById(id); if(!r) return;
@@ -1876,11 +1924,12 @@ var IMA=(function(){
     var menu=[];
     if(!tr && ph.n>12 && !DEAD[a.status]) menu.push(['Trial reels unlocked → tell the managers',"IMA.trialUnlocked('"+id+"')"]);
     if(isOwner() && tr) menu.push(['Set trial reels a day…',"IMA.trialSet('"+id+"')"]);
+    if(tr && (tr.allowed==null || isOwner())) menu.push(['Undo trial reels flag (wrong account)',"IMA.trialUndo('"+id+"')"]);
     if(a.status!=='active') menu.push(['Back to active',"IMA.setStatus('"+id+"','active')"]);
     if(a.status!=='restricted') menu.push(['Restricted',"IMA.setStatus('"+id+"','restricted')"]);
     if(a.status!=='hold') menu.push(['On hold',"IMA.setStatus('"+id+"','hold')"]);
     if(a.status!=='banned') menu.push(['Banned',"IMA.setStatus('"+id+"','banned')",'danger']);
-    menu.push('---'); menu.push(['Delete (wrong entry)',"IMA.del('"+id+"')",'danger']);
+    menu.push('---'); menu.push(['History of changes',"IMA.history('"+id+"')"]); menu.push(['Delete (wrong entry)',"IMA.del('"+id+"')",'danger']);
     var lastBy=(function(){ var L=(a.meta.log||{})[today()]; return L&&L.by?vaName(L.by):''; })();
     return '<div class="iacct ph-'+ph.k+'">'+
       '<div class="ia-h"><b>'+esc(a.handle)+'</b>'+chip('ph-'+ph.k, esc(ph.t))+trialChip+'<span class="sp"></span>'+(lastBy?'<span class="muted" style="font-size:11px">today · '+esc(lastBy)+'</span>':'')+kmenu(menu)+'</div>'+
@@ -1969,7 +2018,7 @@ var IMA=(function(){
     if(!isOwner()) return '';
     var date=S.qaDate||today(), rows=qaRows(date), saved={}; try{ saved=JSON.parse(sessionStorage.getItem('ima_qa_saved')||'{}'); }catch(e){}
     var trials=accts().filter(function(a){ return a.meta.trial && a.meta.trial.allowed==null; });
-    var trialBox=trials.length?'<div class="card iqtrial"><b>Trial reels waiting for a number</b><div>'+trials.map(function(a){ return '<span class="mc">'+esc(a.handle)+' · since '+esc(String(a.meta.trial.at).slice(0,10))+' <button class="btn sm" onclick="IMA.trialSet(\''+jsq(a.id)+'\')">Set</button></span>'; }).join('')+'</div></div>':'';
+    var trialBox=trials.length?'<div class="card iqtrial"><b>Trial reels waiting for a number</b><div>'+trials.map(function(a){ return '<span class="mc">'+esc(a.handle)+' · since '+esc(String(a.meta.trial.at).slice(0,10))+' <button class="btn sm" onclick="IMA.trialSet(\''+jsq(a.id)+'\')">Set</button> <button class="btn sm sec" title="Flagged by mistake — remove the flag" onclick="IMA.trialUndo(\''+jsq(a.id)+'\')">Not trial</button></span>'; }).join('')+'</div></div>':'';
     return trialBox+'<div class="card iqa"><div class="iq-h"><b>QA · '+esc(date)+'</b><span class="muted">one line per VA · suggested score from the record · adjust, then save to the portal\'s daily QA</span><span class="sp"></span>'+
       '<button class="btn sm sec" onclick="IMA.qaShift(-1)">‹</button><input type="date" value="'+esc(date)+'" onchange="IMA.qaDate(this.value)"><button class="btn sm sec" onclick="IMA.qaShift(1)">›</button></div>'+
       (rows.length?rows.map(function(r){
@@ -2012,7 +2061,7 @@ var IMA=(function(){
   if(!S.who) S.who='all';
   return { id:CID, S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners,
     setView:setView, setWho:setWho, toggleAddPhone:toggleAddPhone, addPhone:addPhone, setupTick:setupTick, phoneNote:phoneNote,
-    addAcct:addAcct, log:logTask, setStatus:setStatus, trialUnlocked:trialUnlocked, trialSet:trialSet, reassign:reassign, del:del,
+    addAcct:addAcct, log:logTask, setStatus:setStatus, trialUnlocked:trialUnlocked, trialSet:trialSet, trialUndo:trialUndo, history:history, reassign:reassign, del:del,
     preflight:preflightOpen, pfClose:pfClose, pfPick:pfPick, pfClear:pfClear, pfAttach:pfAttach, pfCap:pfCap, pfRule:pfRule, pfSave:pfSave, pfReview:pfReview,
     qaSave:qaSave, qaDate:qaDateSet, qaShift:qaShift,
     _t:{ dayN:dayN, plan:plan, phase:phase, reelTarget:reelTarget, pfOk:pfOk, qaRows:qaRows, phoneOpen:phoneOpen, setupDone:setupDone } };
@@ -2534,6 +2583,7 @@ var SKY=(function(){
     if(S.run){ var o=rowById(S.run.id); toast('Finish the scroll on '+(o?handle(o):'the other account')+' first — one at a time.'); return; }
     if(!(await linkGate(CL(), 'Starting a scroll'))) return;
     S.run={ id:id, start:Date.now(), ends:Date.now()+SCROLL_MS }; runSave(); runTick();
+    try{ hubWork('scroll'); }catch(_w){}   // a running scroll is work — the portal timer keeps going
     toast('Scroll started on '+handle(r)+' — 5 minutes.'); paint();
   }
   function scrollStop(){
