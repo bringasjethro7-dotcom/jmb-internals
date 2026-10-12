@@ -1968,6 +1968,24 @@ function cxSiPlay(){ try { var a = document.querySelectorAll('.cx-si-logo animat
   };
 })();
 
+/* Model groups (Jeth, Oct 12: "we only have 4 group models, not 6"). The same pair is typed different ways in the
+   sheet — "Capri/Stella" and "Stella & Capri", "Arya/Kaia" and "Arya & Kaia". Group by the names in the pair, in any
+   order and with any separator, and show one label per group: the spelling from the model settings if there is one,
+   otherwise the spelling used most. Applied once per load, so Accounts, filters, Insights and the CSV all agree. */
+function cxModelKey(v){
+  var parts = String(v || '').split(/\s*(?:\/|&|\+|,|\band\b)\s*/i).map(function(x){ return x.trim().toLowerCase(); }).filter(Boolean);
+  return parts.sort().join('|');
+}
+function cxNormModels(rows){
+  if (!rows || !rows.length) return;
+  var label = {}, count = {};
+  var cfgL = []; try { var cm = CFG.models || {}; Object.keys(cm).forEach(function(b){ (cm[b] || []).forEach(function(m){ cfgL.push(m); }); }); } catch(e){}
+  cfgL.forEach(function(m){ var k = cxModelKey(m); if (k && !label[k]) label[k] = String(m).trim(); });
+  rows.forEach(function(r){ var raw = String(r.model || '').trim(); if (!raw) return; var k = cxModelKey(raw); (count[k] = count[k] || {})[raw] = (count[k][raw] || 0) + 1; });
+  Object.keys(count).forEach(function(k){ if (label[k]) return; var best = '', n = -1; Object.keys(count[k]).forEach(function(raw){ if (count[k][raw] > n){ n = count[k][raw]; best = raw; } }); label[k] = best; });
+  rows.forEach(function(r){ var raw = String(r.model || '').trim(); if (!raw) return; r.model = label[cxModelKey(raw)] || raw; });
+}
+
 
 /* ═══════════════════════════════════════════════════════════════════════════════════════════════════
    JMB CLIENT PORTAL — Reddit operations, read-only                                   (Jeth, Oct 12 2026)
@@ -2062,6 +2080,7 @@ async function load(force){
       INSD.ev=(d.ev||[]).map(function(e){ return { at:e[0], account_id:e[1], kind:e[2], from:statusKey(e[3]), to:statusKey(e[4]) }; });
       INSD.asg=null; INSD.arch=(d.arch||[]).length; INSD.serverAt=d.at||''; INSD.lastFixed=0; INSD.err=''; INSD.at=Date.now(); LOAD_ERR='';
       if(d.cfg){ CFG.methods=d.cfg.methods||CFG.methods; CFG.process_start=d.cfg.process_start||CFG.process_start; CFG.models=d.cfg.models||{}; CFG.sop_changes=d.cfg.sop_changes; }
+      try{ cxNormModels(INSD.rows); }catch(_e){}
       if(d.bases && d.bases.length) BASES=d.bases.map(function(b,i){ return { id:b.id, n:b.n, c:['#ff6b1a','#0ea5e9','#a855f7'][i%3] }; });
     } else if(d && d.error==='SIGNED_OUT'){ LOADING=false; toast('Your session ended — please sign in again.'); signOut(); return false; }
     else { INSD.err=LOAD_ERR=(d&&d.error)==='SNAPSHOT_REJECTED'?'the data is being checked — try again shortly':'server busy'; INSD.errAt=Date.now(); }
