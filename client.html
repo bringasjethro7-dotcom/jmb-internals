@@ -9,7 +9,7 @@
 <title>JMB Virtuals · Client portal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Inter+Tight:wght@500..700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Inter+Tight:wght@500..700&display=swap" rel="stylesheet">
 <style>
 /* ═══════════ REDDIT CENTRAL v3 — Aura light ═══════════ */
 :root{
@@ -498,7 +498,7 @@ svg text{font-family:'Inter',sans-serif}
 
 /* ════════ JMB CLIENT PORTAL v2 — client-facing design layer (Oct 12 2026) ════════
    Sits on top of the shared Reddit Central styles (Accounts / Pipeline / Insights reuse them) and re-tones them:
-   warm paper background, white cards with hairlines, Inter for data, Instrument Serif for the moments that greet. */
+   warm paper background, white cards with hairlines, Inter for data, Inter Tight for headlines (the serif was dropped — Jeth, Oct 12). */
 :root{
   --bg:#f6f4f0; --s1:#ffffff; --s2:#fbfaf7; --s3:#f3f0ea;
   --ink:#10131c; --ink2:#464c5c; --ink3:#7d8394; --ink4:#a9adba;
@@ -508,7 +508,7 @@ svg text{font-family:'Inter',sans-serif}
   --sh1:0 1px 2px rgba(16,19,28,.04);
   --sh2:0 1px 2px rgba(16,19,28,.04),0 12px 32px -18px rgba(16,19,28,.22);
   --r:18px;
-  --serif:'Instrument Serif',Georgia,'Times New Roman',serif;
+  --serif:'Inter Tight','Inter',system-ui,-apple-system,sans-serif;
 }
 html,body{background:var(--bg)}
 body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--ink);font-feature-settings:'cv11','ss01'}
@@ -561,7 +561,7 @@ body::before{display:none !important}
 .cx-si-kicker i{width:7px;height:7px;border-radius:50%;background:#bbf7d0;box-shadow:0 0 0 0 rgba(187,247,208,.7);animation:cxPulseW 2.2s ease-out infinite}
 @keyframes cxPulseW{0%{box-shadow:0 0 0 0 rgba(187,247,208,.65)}80%,100%{box-shadow:0 0 0 8px rgba(187,247,208,0)}}
 #signin .cx-si-copy h1{margin-top:20px;font-family:'Inter Tight','Inter',system-ui,sans-serif;font-weight:650;font-size:clamp(40px,4.3vw,62px);line-height:1;letter-spacing:-.04em}
-#signin .cx-si-copy h1 em{display:block;font-family:var(--serif);font-style:italic;font-weight:400;font-size:1.12em;letter-spacing:-.01em;line-height:1.02;color:#fff4e8;
+#signin .cx-si-copy h1 em{display:block;font-family:var(--serif);font-style:normal;font-weight:650;font-size:1em;letter-spacing:-.04em;line-height:1.04;color:#ffe2c7;
   text-shadow:0 10px 40px rgba(120,30,0,.35)}
 #signin .cx-si-copy p{margin-top:18px;font-size:16px;line-height:1.6;color:rgba(255,255,255,.88);max-width:460px}
 /* the product preview (decorative — shapes only, no numbers) */
@@ -732,7 +732,7 @@ body::before{display:none !important}
 .cx-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;padding:8px 2px 4px}
 .cx-eb{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3)}
 .cx-eb i{width:7px;height:7px;border-radius:2px;background:var(--grad)}
-.cx-h1{font-family:var(--serif);font-weight:400;font-size:clamp(36px,4.2vw,54px);line-height:1.02;letter-spacing:-.012em;margin-top:10px}
+.cx-h1{font-family:var(--serif);font-weight:650;font-size:clamp(32px,3.6vw,46px);line-height:1.08;letter-spacing:-.035em;margin-top:10px}
 .cx-lead{color:var(--ink3);font-size:14.5px;margin-top:10px}
 .cx-hr{display:flex;align-items:center;gap:12px}
 .cx-clock{display:flex;flex-direction:column;align-items:flex-end;line-height:1.15;padding-right:12px;border-right:1px solid var(--line2)}
@@ -1811,12 +1811,16 @@ function cxModel(){
   var big = meths.filter(function(x){ return x.n >= 5; }), bestRate = null, bestPost = null;
   big.forEach(function(x){ if (x.s.rate30 != null && (!bestRate || x.s.rate30 < bestRate.s.rate30)) bestRate = x; if (x.s.post != null && (!bestPost || x.s.post > bestPost.s.post)) bestPost = x; });
   if (big.length < 2){ bestRate = null; bestPost = null; }
+  var mods = modelList(rows).map(function(m){ var l = rows.filter(function(r){ return String(r.model || '').trim() === m; }); return { m: m, c: modelColor(m), s: plSummary(l), n: l.length }; });
+  var bigM = mods.filter(function(x){ return x.n >= 5; }), bestRateM = null, bestPostM = null;
+  bigM.forEach(function(x){ if (x.s.rate30 != null && (!bestRateM || x.s.rate30 < bestRateM.s.rate30)) bestRateM = x; if (x.s.post != null && (!bestPostM || x.s.post > bestPostM.s.post)) bestPostM = x; });
+  if (bigM.length < 2){ bestRateM = null; bestPostM = null; }
   var feed = ev.filter(function(x){ return /^(create|stage|ban|reinstate)$/.test(x.kind); })
     .sort(function(a, b){ return String(b.at).localeCompare(String(a.at)); }).slice(0, 9)
     .map(function(x){ return { r: ids[x.account_id], x: x, t: parseTs(x.at) }; });
   return { rows: rows, days: days, created: created, bans: bans, live: live, alive: alive.length, posting: posting, P1: P1,
     c7: c7, c7p: c7p, b7: b7, b7p: b7p, live7: live[22], elig: elig.length, surv: surv, up7: up7, toPost7: toPost7,
-    groups: groups, side: side, meths: meths, bestRate: bestRate, bestPost: bestPost, feed: feed };
+    groups: groups, side: side, meths: meths, bestRate: bestRate, bestPost: bestPost, mods: mods, bestRateM: bestRateM, bestPostM: bestPostM, feed: feed };
 }
 function cxDelta(cur, prev, goodUp, unit){
   var d = cur - prev; if (!isFinite(d)) return '';
@@ -1886,17 +1890,18 @@ function cxFlow(M){
   }).join('');
   return bar + '<div class="cx-fg">' + cols + '</div>' + (M.side ? '<div class="cx-fs"><i></i>' + M.side + ' account' + (M.side === 1 ? ' is' : 's are') + ' in recovery (spam filter or a temporary ban) — being worked back into the ladder.</div>' : '');
 }
-function cxMethods(M){
-  if (!M.meths.length) return '<div class="cx-empty">No methods tagged yet.</div>';
-  var mxA = Math.max.apply(null, M.meths.map(function(x){ return x.s.alive; }).concat([1]));
-  return '<div class="cx-mt"><div class="cx-mr h"><span>Method</span><span>Live</span><span>Reached posting</span><span>Ban rate · 30d</span><span>Last 7 days</span></div>' + M.meths.map(function(x){
-    var s = x.s, tags = (M.bestRate === x ? '<em class="g">Lowest ban rate</em>' : '') + (M.bestPost === x ? '<em class="v">Most reach posting</em>' : '');
+function cxMethods(M, kind){
+  var models = kind === 'model', L = models ? M.mods : M.meths, bR = models ? M.bestRateM : M.bestRate, bP = models ? M.bestPostM : M.bestPost;
+  if (!L.length) return '<div class="cx-empty">' + (models ? 'No models recorded yet.' : 'No methods tagged yet.') + '</div>';
+  var mxA = Math.max.apply(null, L.map(function(x){ return x.s.alive; }).concat([1]));
+  return '<div class="cx-mt"><div class="cx-mr h"><span>' + (models ? 'Model' : 'Method') + '</span><span>Live</span><span>Reached posting</span><span>Ban rate · 30d</span><span>Last 7 days</span></div>' + L.map(function(x){
+    var s = x.s, tags = (bR === x ? '<em class="g">Lowest ban rate</em>' : '') + (bP === x ? '<em class="v">Most reach posting</em>' : '');
     return '<div class="cx-mr"><span class="cx-mm"><i style="background:' + x.c + '"></i><b>' + esc(x.m) + '</b>' + tags + '</span>' +
       '<span class="cx-mb"><b>' + s.alive + '</b><u><s style="width:' + Math.round(s.alive / mxA * 100) + '%;background:' + x.c + '"></s></u></span>' +
       '<span><b>' + (s.post == null ? '—' : Math.round(s.post * 100) + '%') + '</b></span>' +
       '<span><b>' + (s.rate30 == null ? '—' : Math.round(s.rate30 * 100) + '%') + '</b></span>' +
       '<span class="cx-m7"><span class="g">+' + s.c7 + '</span><span class="b">−' + s.b7 + '</span></span></div>';
-  }).join('') + '</div><div class="cx-note">Reached posting = share of the method\'s accounts that got to Day 1 Posting or beyond · Ban rate = accounts banned in the last 30 days ÷ accounts that were live in that window.</div>';
+  }).join('') + '</div>' + (models ? '' : '<div class="cx-note">Reached posting = share of the method\'s accounts that got to Day 1 Posting or beyond · Ban rate = accounts banned in the last 30 days ÷ accounts that were live in that window.</div>');
 }
 function cxWeek(M){
   var L = [];
@@ -1938,6 +1943,7 @@ function vOverview(){
     '<div class="cx-card s4 cx-wkc"><div class="cx-ch"><div><b>This week</b><span>The last 7 days at a glance</span></div></div>' + cxWeek(M) +
     '<button class="cx-link no-print" onclick="go(\'insights\')">Open full insights →</button></div></section>';
   h += '<section class="cx-card"><div class="cx-ch"><div><b>The ladder at a glance</b><span>Where your ' + cxN(M.alive) + ' live accounts are right now</span></div><button class="cx-link no-print" onclick="go(\'pipeline\')">Open pipeline →</button></div>' + cxFlow(M) + '</section>';
+  h += '<section class="cx-card"><div class="cx-ch"><div><b>Models</b><span>How each model\'s accounts are performing</span></div><button class="cx-link no-print" onclick="go(\'insights\')">Full model comparison →</button></div>' + cxMethods(M, 'model') + '</section>';
   h += '<section class="cx-g2"><div class="cx-card s7"><div class="cx-ch"><div><b>Methods</b><span>How each approach is performing</span></div><button class="cx-link no-print" onclick="go(\'insights\')">Compare in Insights →</button></div>' + cxMethods(M) + '</div>' +
     '<div class="cx-card s5"><div class="cx-ch"><div><b>Latest movement</b><span>Most recent changes across your accounts</span></div><button class="cx-link no-print" onclick="go(\'accounts\')">All accounts →</button></div>' + cxFeed(M) + '</div></section>';
   return '<div class="cx-ov">' + h + '</div>';
@@ -2268,7 +2274,7 @@ function vInsights(){
   var D=insData(), A=detect(D), V=insVerdict();
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Insights</h2><p>Which method keeps accounts alive and posting, where in the ladder accounts are lost, and whether bans are platform-wide waves or something specific — live from every account.</p></div>'+
     '<div class="seg no-print" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(INS.range===x[0]?'on':'')+'" onclick="INS.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div></div>';
-  h+=insDataCheck(D);
+  /* (Jeth, Oct 12) the data-check panel — counts, untagged accounts, unknown ban phases — is for our team only; never shown to clients */
   h+=insBottomLine(V);
   var sD=parseTs(D.start), now=new Date(), adR=insAD(D.rows,sD,now), bR=insBans(D.rows,sD,now);
   var alive=D.rows.filter(function(r){ return !isDead(r); }).length, created=D.rows.filter(function(r){ var c=createdAt(r); return c && phtDate(c)>=D.start; }).length;
@@ -2277,7 +2283,7 @@ function vInsights(){
   var rl=INS.range?('last '+INS.range+' days'):'all time';
   h+='<div class="kpis" style="margin-top:12px">'+kpi('Alive now',alive,D.rows.length+' with a method','#a855f7')+kpi('Created',created,rl,'#ff6b1a')+kpi('Banned',D.bans.length,rl,'#ef4444')+
     kpi('Banned a week',fmtWk(perWk(bR,adR)),'bans ÷ account-weeks alive · '+rl,'#f43f5e')+kpi('Median life',med==null?'—':med+'d','created → banned · '+rl,'#0ea5e9')+kpi('Alive at day 14',elig.length?pct(surv14,elig.length)+'%':'—',elig.length+' accounts old enough','#10b981')+'</div>';
-  h+=methodCompare(D);
+  h+=compareCard(D);
   h+='<div class="ig" style="margin-top:12px">';
   h+='<div class="card pad"><div class="ch-h"><b>Where bans come from — by phase and method</b><span>of the accounts that reached each phase, how many were banned there</span><div style="flex:1"></div>'+
     '<div class="seg no-print" style="width:auto">'+[['all','All time'],['range','Created '+(INS.range?'in the last '+INS.range+' days':'— all')]].map(function(x){ return '<button class="'+(INS.cohort===x[0]?'on':'')+'" onclick="INS.cohort=\''+x[0]+'\';renderView()">'+x[1]+'</button>'; }).join('')+'</div></div>'+phaseMethod(D)+'</div>';
@@ -2294,7 +2300,6 @@ function vInsights(){
   h+='<div class="card pad"><div class="ch-h"><b>Old process vs iPhone process</b><span>accounts created before / from '+esc(fmtD(parseTs(CFG.process_start||SOP_START)))+' — all-time</span></div>'+cohorts(D)+'</div>';
   h+='</div>';
   var approx=D.bans.filter(function(b){ return !b.exact; }).length;
-  if(approx) h+='<p class="muted" style="font-size:11.5px;margin-top:10px">'+approx+' ban date'+(approx===1?' is':'s are')+' approximate (recorded before the detailed history began). Newer bans are dated exactly.</p>';
   return h;
 }
 function insCopy(){
@@ -2311,6 +2316,92 @@ function insCopy(){
   try{ var d=await capi({ action:'me', t:TOKEN }, 20000); if(d && d.ok){ CLIENT=d.client; enter(); return; } }catch(e){}
   tokSet(''); TOKEN=''; showSignIn();
 })();
+
+
+/* ═══ MODEL COMPARISON (Jeth, Oct 12) — the same yardsticks as the method table, one row per model, plus which method
+   works best for that model. Click a row to open its accounts. ═══ */
+var MODEL_C=['#ec4899','#0ea5e9','#a855f7','#f59e0b','#14b8a6','#6366f1','#f43f5e','#84cc16'];
+function modelColor(m){ var L=modelList(allRows()); var i=L.indexOf(m); return i<0?'#94a3b8':MODEL_C[i%MODEL_C.length]; }
+function modelList(rows){ var c={}; rows.forEach(function(r){ var m=String(r.model||'').trim(); if(m) c[m]=(c[m]||0)+1; }); return Object.keys(c).sort(function(a,b){ return c[b]-c[a] || a.localeCompare(b); }); }
+function modelPill(m){ var c=modelColor(m); return '<span class="pill" style="background:'+c+'16;color:'+c+'"><i style="width:7px;height:7px;border-radius:50%;background:'+c+';display:inline-block"></i>'+esc(m)+'</span>'; }
+function modelCompare(D){
+  var fp=insFirstPost(), now=new Date(), sD=parseTs(D.start), models=modelList(D.rows), ml=methodsList();
+  if(!models.length) return '';
+  var stats=models.map(function(m){
+    var rows=D.rows.filter(function(r){ return String(r.model||'').trim()===m; }), dead=rows.filter(isDead), n=rows.length;
+    var lives=dead.map(ageDays).filter(function(x){ return x!=null; });
+    var el7=rows.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)>=7; }), s7=el7.filter(function(r){ var a=ageDays(r); return !isDead(r)||(a!=null&&a>7); }).length;
+    var ttp=rows.map(function(r){ var t=fp[r.id], c=createdAt(r); return (t&&c)?Math.max(0,dayDiff(c,t)):null; }).filter(function(x){ return x!=null; });
+    var adR=insAD(rows,sD,now), bR=insBans(rows,sD,now);
+    /* which method keeps this model alive best: lowest banned % among methods with 3+ of its accounts */
+    var bm=null; ml.forEach(function(me){ var l=rows.filter(function(r){ return methodOf(r)===me; }); if(l.length<3) return; var rt=l.filter(isDead).length/l.length; if(!bm || rt<bm.rate) bm={ m:me, rate:rt, n:l.length }; });
+    var mix=ml.map(function(me){ var l=rows.filter(function(r){ return methodOf(r)===me; }); return { m:me, n:l.length, rate:l.length?l.filter(isDead).length/l.length:null }; }).filter(function(x){ return x.n; });
+    return { m:m, n:n, alive:n-dead.length, dead:dead.length, rate:n?dead.length/n:null, wk:adR>=INS_MIN_AD/2?perWk(bR,adR):null, med:median(lives), s7:el7.length?s7/el7.length:null, el7:el7.length,
+             post:n?rows.filter(function(r){ return reachedPost(r,fp); }).length/n:null, ttp:median(ttp), ttpN:ttp.length, inR:bR, bm:bm, mix:mix };
+  });
+  function best(key, low){ var v=stats.filter(function(s){ return s.n>=3 && s[key]!=null; }).map(function(s){ return s[key]; }); if(v.length<2) return null; return low?Math.min.apply(null,v):Math.max.apply(null,v); }
+  var B={ rate:best('rate',true), wk:best('wk',true), med:best('med'), s7:best('s7'), post:best('post'), ttp:best('ttp',true) };
+  function cell(s,key,txt){ var hi=(B[key]!=null && s[key]===B[key] && s.n>=3); return '<td class="num" style="'+(hi?'font-weight:800;color:#047857;background:#ecfdf5':'')+'">'+txt+'</td>'; }
+  var rl=INS.range?INS.range+'d':'all';
+  return '<div class="card pad" style="margin-top:12px"><div class="ch-h"><b>Model comparison</b><span>'+esc(models.join(' vs '))+' — how each model\'s accounts hold up · best in each column is green (needs 3+ accounts)</span></div>'+
+    '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Model</th><th>Best method for this model</th><th>Accounts</th><th>Alive</th><th>Banned (all-time)</th><th>Banned %</th><th>Banned a week · '+rl+'</th><th>Median life</th><th>Alive at day 7</th><th>Reached posting</th><th>Days to posting</th><th>Bans · '+rl+'</th></tr></thead><tbody>'+
+    stats.map(function(s){
+      var mixH=s.mix.map(function(x){ var c=methodColor(x.m); return '<span title="'+esc(x.m)+': '+x.n+' accounts · '+(x.rate==null?'—':Math.round(x.rate*100)+'% banned')+'" style="display:inline-flex;align-items:center;gap:4px;margin-right:8px;font-size:11px;color:var(--ink3)"><i style="width:6px;height:6px;border-radius:50%;background:'+c+';display:inline-block"></i>'+(x.rate==null?'—':Math.round(x.rate*100)+'%')+'</span>'; }).join('');
+      return '<tr class="r" onclick="DB.model=\''+jsq(s.m)+'\';DB.meth=\'all\';DB.life=\'all\';DB.q=\'\';DB.grp=\'\';go(\'accounts\')"><td class="c1">'+modelPill(s.m)+'</td><td style="min-width:190px">'+(s.bm?methodPill(s.bm.m,true)+' <span class="muted" style="font-size:11px">'+Math.round(s.bm.rate*100)+'% banned</span>':'<span class="muted">not enough yet</span>')+(mixH?'<div style="margin-top:4px">'+mixH+'</div>':'')+'</td><td class="num">'+s.n+'</td><td class="num">'+s.alive+'</td><td class="num">'+s.dead+'</td>'+
+        cell(s,'rate',s.rate==null?'—':(Math.round(s.rate*1000)/10)+'%')+cell(s,'wk',s.wk==null?'<span class="muted">too few</span>':fmtWk(s.wk))+cell(s,'med',s.med==null?'—':s.med+'d')+
+        cell(s,'s7',s.s7==null?'too new':Math.round(s.s7*100)+'% of '+s.el7)+cell(s,'post',s.post==null?'—':Math.round(s.post*100)+'%')+
+        cell(s,'ttp',s.ttp==null?'—':s.ttp+'d <span class="muted">('+s.ttpN+')</span>')+'<td class="num">'+(s.inR||'·')+'</td>'+
+        '</tr>';
+    }).join('')+'</tbody></table></div>'+
+    '<p class="muted" style="font-size:11.5px;margin-top:4px">Same measures as the method comparison. "Best method for this model" = the method with the lowest banned % among that model\'s accounts (3+ accounts needed); the dots underneath show banned % for each method on this model.</p></div>';
+}
+
+
+/* ═══ ONE COMPARISON TABLE (Jeth, Oct 12): compare METHODS or MODELS with the same yardsticks, and narrow it —
+   models using one method only, or methods on one model only. One table, two switches, no repeated tables. ═══ */
+var CMP={ by:'method', within:'all' };
+function cmpKeyOf(r, by){ return by==='model' ? String(r.model||'').trim() : methodOf(r); }
+function compareCard(D){
+  var by=CMP.by, other=by==='model'?'method':'model', fp=insFirstPost(), now=new Date(), sD=parseTs(D.start);
+  var otherList=other==='method'?methodsList().filter(function(m){ return D.rows.some(function(r){ return methodOf(r)===m; }); }):modelList(D.rows);
+  if(CMP.within!=='all' && otherList.indexOf(CMP.within)<0) CMP.within='all';
+  var rowsAll=D.rows.filter(function(r){ return CMP.within==='all' || cmpKeyOf(r,other)===CMP.within; });
+  var keys=by==='model'?modelList(rowsAll):methodsList().filter(function(m){ return rowsAll.some(function(r){ return methodOf(r)===m; }); });
+  var stats=keys.map(function(k){
+    var rows=rowsAll.filter(function(r){ return cmpKeyOf(r,by)===k; }), dead=rows.filter(isDead), n=rows.length;
+    var lives=dead.map(ageDays).filter(function(x){ return x!=null; });
+    var el7=rows.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)>=7; }), s7=el7.filter(function(r){ var a=ageDays(r); return !isDead(r)||(a!=null&&a>7); }).length;
+    var ttp=rows.map(function(r){ var t=fp[r.id], c=createdAt(r); return (t&&c)?Math.max(0,dayDiff(c,t)):null; }).filter(function(x){ return x!=null; });
+    var adR=insAD(rows,sD,now), bR=insBans(rows,sD,now);
+    var bo=null; if(CMP.within==='all') otherList.forEach(function(o){ var l=rows.filter(function(r){ return cmpKeyOf(r,other)===o; }); if(l.length<3) return; var rt=l.filter(isDead).length/l.length; if(!bo || rt<bo.rate) bo={ k:o, rate:rt }; });
+    return { k:k, n:n, alive:n-dead.length, dead:dead.length, rate:n?dead.length/n:null, wk:adR>=INS_MIN_AD/2?perWk(bR,adR):null, med:median(lives), s7:el7.length?s7/el7.length:null, el7:el7.length,
+             post:n?rows.filter(function(r){ return reachedPost(r,fp); }).length/n:null, ttp:median(ttp), ttpN:ttp.length, inR:bR, bo:bo };
+  });
+  function best(key, low){ var v=stats.filter(function(s){ return s.n>=3 && s[key]!=null; }).map(function(s){ return s[key]; }); if(v.length<2) return null; return low?Math.min.apply(null,v):Math.max.apply(null,v); }
+  var B={ rate:best('rate',true), wk:best('wk',true), med:best('med'), s7:best('s7'), post:best('post'), ttp:best('ttp',true) };
+  function cell(s,key,txt){ var hi=(B[key]!=null && s[key]===B[key] && s.n>=3); return '<td class="num" style="'+(hi?'font-weight:800;color:#047857;background:#ecfdf5':'')+'">'+txt+'</td>'; }
+  function pillOf(kind,k){ return kind==='model'?modelPill(k):methodPill(k,true); }
+  var rl=INS.range?INS.range+'d':'all', Name=by==='model'?'Model':'Method', Other=other==='model'?'model':'method';
+  var sub=(keys.length?esc(keys.join(' vs ')):'Nothing to compare')+(CMP.within==='all'?' — every '+Other:' — <b>'+esc(CMP.within)+'</b> '+(other==='method'?'accounts':'accounts')+' only')+' · best in each column is green (needs 3+ accounts)';
+  var head='<div class="ch-h" style="flex-wrap:wrap;row-gap:8px"><b>Comparison</b><span>'+sub+'</span><div style="flex:1"></div>'+
+    '<div class="seg no-print" style="width:auto">'+[['method','Methods'],['model','Models']].map(function(x){ return '<button class="'+(by===x[0]?'on':'')+'" onclick="CMP.by=\''+x[0]+'\';CMP.within=\'all\';renderView()">'+x[1]+'</button>'; }).join('')+'</div>'+
+    '<select class="sel no-print" onchange="CMP.within=this.value;renderView()" title="Narrow the comparison"><option value="all">'+(other==='method'?'Using every method':'On every model')+'</option>'+
+      otherList.map(function(o){ return '<option value="'+esc(o)+'"'+(CMP.within===o?' selected':'')+'>'+(other==='method'?'Using '+esc(o)+' only':'On '+esc(o)+' only')+'</option>'; }).join('')+'</select></div>';
+  if(!stats.length) return '<div class="card pad" style="margin-top:12px">'+head+'<div class="muted" style="padding:18px 0">No accounts match.</div></div>';
+  var showBest=CMP.within==='all' && otherList.length>1;
+  var th='<tr><th class="c1">'+Name+'</th>'+(showBest?'<th>Best '+Other+' for it</th>':'')+'<th>Accounts</th><th>Alive</th><th>Banned (all-time)</th><th>Banned %</th><th>Banned a week · '+rl+'</th><th>Median life</th><th>Alive at day 7</th><th>Reached posting</th><th>Days to posting</th><th>Bans · '+rl+'</th></tr>';
+  var body=stats.map(function(s){
+    var click=by==='model'?"DB.model='"+jsq(s.k)+"';DB.meth="+(CMP.within==='all'?"'all'":"'"+jsq(CMP.within)+"'"):"DB.meth='"+jsq(s.k)+"';DB.model="+(CMP.within==='all'?"''":"'"+jsq(CMP.within)+"'");
+    return '<tr class="r" onclick="'+click+';DB.life=\'all\';DB.q=\'\';DB.grp=\'\';go(\'accounts\')"><td class="c1">'+pillOf(by,s.k)+'</td>'+
+      (showBest?'<td style="min-width:170px">'+(s.bo?pillOf(other,s.bo.k)+' <span class="muted" style="font-size:11px">'+Math.round(s.bo.rate*100)+'% banned</span>':'<span class="muted">not enough yet</span>')+'</td>':'')+
+      '<td class="num">'+s.n+'</td><td class="num">'+s.alive+'</td><td class="num">'+s.dead+'</td>'+
+      cell(s,'rate',s.rate==null?'—':(Math.round(s.rate*1000)/10)+'%')+cell(s,'wk',s.wk==null?'<span class="muted">too few</span>':fmtWk(s.wk))+cell(s,'med',s.med==null?'—':s.med+'d')+
+      cell(s,'s7',s.s7==null?'too new':Math.round(s.s7*100)+'% of '+s.el7)+cell(s,'post',s.post==null?'—':Math.round(s.post*100)+'%')+
+      cell(s,'ttp',s.ttp==null?'—':s.ttp+'d <span class="muted">('+s.ttpN+')</span>')+'<td class="num">'+(s.inR||'·')+'</td></tr>';
+  }).join('');
+  return '<div class="card pad" style="margin-top:12px">'+head+'<div class="tbl-w" style="max-height:none"><table class="db"><thead>'+th+'</thead><tbody>'+body+'</tbody></table></div>'+
+    '<p class="muted" style="font-size:11.5px;margin-top:4px">Switch between <b>Methods</b> and <b>Models</b>, and narrow it with the menu — e.g. Models using Vysor only. "Banned %" = banned ÷ every account made. "Banned a week" = bans ÷ the weeks the accounts were alive in the range — the fair comparison. '+(showBest?'"Best '+Other+' for it" = the '+Other+' with the lowest banned % for that '+by+' (3+ accounts). ':'')+'Click a row to open those accounts.</p></div>';
+}
 
 </script>
 </body>
