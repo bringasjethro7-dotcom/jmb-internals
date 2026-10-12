@@ -1983,6 +1983,8 @@ function cxNormModels(rows){
   cfgL.forEach(function(m){ var k = cxModelKey(m); if (k && !label[k]) label[k] = String(m).trim(); });
   rows.forEach(function(r){ var raw = String(r.model || '').trim(); if (!raw) return; var k = cxModelKey(raw); (count[k] = count[k] || {})[raw] = (count[k][raw] || 0) + 1; });
   Object.keys(count).forEach(function(k){ if (label[k]) return; var best = '', n = -1; Object.keys(count[k]).forEach(function(raw){ if (count[k][raw] > n){ n = count[k][raw]; best = raw; } }); label[k] = best; });
+  /* pairs read "Izzy & Layla" (Jeth, Oct 12) — same order as the chosen spelling, joined with " & " */
+  Object.keys(label).forEach(function(k){ var parts = String(label[k]).split(/\s*(?:\/|&|\+|,|\band\b)\s*/i).map(function(x){ return x.trim(); }).filter(Boolean); if (parts.length > 1) label[k] = parts.join(' & '); });
   rows.forEach(function(r){ var raw = String(r.model || '').trim(); if (!raw) return; r.model = label[cxModelKey(raw)] || raw; });
 }
 
