@@ -1,0 +1,1704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>JMB Virtuals · Client portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ═══════════ REDDIT CENTRAL v3 — Aura light ═══════════ */
+:root{
+  --bg:#f4f5f9; --s1:#ffffff; --s2:#fafbfd; --s3:#f1f2f7;
+  --ink:#14161f; --ink2:#4b5164; --ink3:#7f859c; --ink4:#a9aec0;
+  --line:rgba(17,19,34,.08); --line2:rgba(17,19,34,.14);
+  --o:#FF6B1A; --o2:#FF9440; --od:#E8452A; --ot:#C2410C; --pk:#f43f5e; --p:#8B5CF6; --pd:#6D28D9;
+  --t:#14B8A6; --tl:#0F766E; --ok:#10b981; --warn:#f59e0b; --bad:#ef4444; --info:#0ea5e9;
+  --grad:linear-gradient(120deg,#ff7a2f 0%,#f43f5e 48%,#a855f7 100%);
+  --sh1:0 1px 2px rgba(17,19,34,.05),0 1px 1px rgba(17,19,34,.03);
+  --sh2:0 10px 30px -12px rgba(17,19,34,.18),0 2px 6px rgba(17,19,34,.05);
+  --r:16px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg)}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;color:var(--ink);min-height:100vh;font-size:13.5px;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:-20% -10% auto -10%;height:520px;z-index:0;pointer-events:none;
+  background:radial-gradient(600px 260px at 12% 30%,rgba(255,122,47,.13),transparent 70%),
+             radial-gradient(520px 240px at 55% 10%,rgba(244,63,94,.09),transparent 70%),
+             radial-gradient(620px 280px at 92% 25%,rgba(168,85,247,.12),transparent 70%)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.h-d{font-family:'Sora','Inter',sans-serif;letter-spacing:-.01em}
+.muted{color:var(--ink3)}
+.gtxt{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* ── sign in ── */
+#signin{position:relative;z-index:1;max-width:380px;margin:13vh auto 0;background:var(--s1);border:1px solid var(--line);border-radius:22px;padding:30px 28px;box-shadow:var(--sh2);text-align:center}
+#signin .orb{width:54px;height:54px;border-radius:50%;margin:0 auto 14px;background:var(--grad);box-shadow:0 10px 30px -6px rgba(244,63,94,.55);position:relative}
+#signin .orb::after{content:'';position:absolute;inset:14px;border-radius:50%;background:#fff;opacity:.92}
+#signin h1{font-size:21px}
+#signin p{color:var(--ink2);font-size:12.5px;margin-top:5px}
+#signin input{width:100%;padding:11px 13px;border:1px solid var(--line2);border-radius:12px;font-size:14px;margin-top:10px;background:var(--s2);outline:none}
+#signin input:focus{border-color:var(--o);box-shadow:0 0 0 3px rgba(255,107,26,.15)}
+#signin .go{width:100%;margin-top:14px;border:none;border-radius:12px;padding:12px;font-weight:800;color:#fff;background:var(--grad);font-size:14px;box-shadow:0 10px 24px -10px rgba(244,63,94,.7)}
+#si-err{display:none;color:#b91c1c;font-size:12.5px;margin-top:10px}
+
+/* ── shell ── */
+#app{position:relative;z-index:1;display:none}
+.tb{position:sticky;top:0;z-index:40;background:rgba(244,245,249,.82);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line)}
+.tb-in{max-width:1320px;margin:0 auto;padding:10px 18px;display:flex;align-items:center;gap:16px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand{flex:0 0 auto}
+.brand .dot{width:34px;height:34px;border-radius:11px;background:var(--grad);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px -6px rgba(244,63,94,.6)}
+.brand .dot svg{color:#fff}
+.brand b{font-family:'Sora',sans-serif;font-size:16px;letter-spacing:-.01em;white-space:nowrap}
+.brand small{display:block;font-size:10.5px;color:var(--ink3);font-weight:700;letter-spacing:.04em;text-transform:uppercase;margin-top:1px}
+/* base switcher — the active base wears its own colour */
+.bases{display:flex;gap:3px;background:rgba(255,255,255,.72);border:1px solid var(--line);border-radius:12px;padding:3px;box-shadow:var(--sh1)}
+.bases button{border:none;background:none;border-radius:9px;padding:6px 11px;font-weight:700;font-size:12.5px;color:var(--ink2);display:flex;align-items:center;gap:6px;white-space:nowrap;transition:background .15s,color .15s}
+.bases button:hover{background:var(--s3);color:var(--ink)}
+.bases button i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.bases button em{font-style:normal;font-size:10.5px;font-weight:800;color:var(--ink3);background:var(--s3);border-radius:100px;padding:1px 7px}
+.bases button.on{background:color-mix(in srgb,var(--bc,#ff6b1a) 11%,#fff);color:var(--ink);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--bc,#ff6b1a) 55%,transparent)}
+.bases button.on em{background:var(--bc,#ff6b1a);color:#fff}
+.tb-r{display:flex;align-items:center;gap:10px;margin-left:auto;flex:0 0 auto}
+.sp{flex:1}
+.me{display:flex;align-items:center;gap:9px;font-weight:700;font-size:12.5px;background:rgba(255,255,255,.72);border:1px solid var(--line);border-radius:100px;padding:3px 12px 3px 3px;box-shadow:var(--sh1);white-space:nowrap}
+.me .av{width:30px;height:30px;border-radius:50%;object-fit:cover;background:var(--s3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff}
+.me .role{font-size:10px;font-weight:800;color:var(--pd);background:rgba(139,92,246,.1);border-radius:100px;padding:2px 8px}
+.ghost{border:1px solid var(--line2);background:var(--s1);border-radius:10px;padding:7px 12px;font-weight:700;font-size:12px;color:var(--ink2)}
+.ghost:hover{border-color:var(--ink4)}
+.so{width:36px;height:36px;padding:0;border-radius:11px;display:flex;align-items:center;justify-content:center;color:var(--ink3)}
+.so:hover{color:#b91c1c;border-color:#fecaca;background:#fff5f5}
+/* main nav — a pill bar with icons; the open tab is a dark pill (owner, Oct 5) */
+.tabs{display:flex;gap:2px;background:rgba(255,255,255,.72);border:1px solid var(--line);border-radius:14px;padding:4px;box-shadow:var(--sh1);overflow-x:auto;scrollbar-width:none;min-width:0;margin:0 auto}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{border:none;background:none;border-radius:10px;padding:8px 12px;font-weight:700;font-size:13px;color:var(--ink2);white-space:nowrap;display:flex;align-items:center;gap:7px;transition:background .15s,color .15s,box-shadow .15s}
+.tabs button svg{opacity:.7;flex:0 0 auto}
+.tabs button:hover{background:var(--s3);color:var(--ink)}
+.tabs button:hover svg{opacity:1}
+.tabs button.on{background:var(--ink);color:#fff;box-shadow:0 8px 18px -10px rgba(20,22,31,.75)}
+.tabs button.on svg{opacity:1;color:#ffb184}
+.tabs .badge{background:var(--bad);color:#fff;font-size:10px;font-weight:800;border-radius:100px;padding:1px 6px;min-width:18px;text-align:center;line-height:15px}
+.tabs button.on .badge{background:#ff4d4d;box-shadow:0 0 0 2px var(--ink)}
+@media(max-width:1340px){ .tb-in{flex-wrap:wrap;row-gap:10px} .tb .tabs{order:3;flex:1 0 100%;margin:0} }
+main{max-width:1320px;margin:0 auto;padding:20px 18px 80px}
+.view.vin{animation:vIn .25s ease}
+@keyframes vIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ── building blocks ── */
+.card{background:var(--s1);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh1)}
+.pad{padding:16px 18px}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.btn{border:none;border-radius:11px;padding:9px 15px;font-weight:800;font-size:12.5px;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.btn.pri{background:var(--grad);color:#fff;box-shadow:0 8px 20px -10px rgba(244,63,94,.75)}
+.btn.pri:hover{filter:brightness(1.05)}
+.btn.sec{background:var(--s1);border:1px solid var(--line2);color:var(--ink)}
+.btn.sec:hover{border-color:var(--ink4)}
+.btn.dark{background:var(--ink);color:#fff}
+.btn.sm{padding:6px 11px;font-size:11.5px;border-radius:9px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:100px;padding:3px 9px;font-size:11px;font-weight:700;background:var(--s3);color:var(--ink2);white-space:nowrap;border:1px solid transparent}
+.chip i{width:7px;height:7px;border-radius:50%;display:inline-block}
+.chip.sel{background:var(--ink);color:#fff}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button.chip{cursor:pointer;border:1px solid var(--line);background:var(--s1)}
+.chips button.chip.sel{background:var(--ink);color:#fff;border-color:var(--ink)}
+.inp,.sel{border:1px solid var(--line2);background:var(--s1);border-radius:10px;padding:8px 11px;font-size:13px;outline:none;min-width:0}
+.inp:focus,.sel:focus{border-color:var(--o);box-shadow:0 0 0 3px rgba(255,107,26,.13)}
+/* search — a highlighted field, never a quiet grey pill (owner, Oct 5) */
+.search{position:relative;display:flex;align-items:center}
+.search input{height:42px;width:340px;max-width:100%;padding:0 74px 0 40px;border-radius:12px;border:1.5px solid #ffc29e;background:#fff;font-size:14px;font-weight:600;color:var(--ink);
+  box-shadow:0 0 0 4px rgba(255,107,26,.08),0 3px 10px rgba(255,107,26,.10);transition:border-color .15s,box-shadow .15s,background .15s}
+.search input::placeholder{color:#a0918a;font-weight:500}
+.search input:hover{border-color:#ff9a5c}
+.search input:focus{outline:none;border-color:var(--o);box-shadow:0 0 0 5px rgba(255,107,26,.18),0 4px 16px rgba(255,107,26,.18)}
+.search>svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--o);width:17px;height:17px;pointer-events:none}
+.search .kb{position:absolute;right:10px;top:50%;transform:translateY(-50%);font:800 11px ui-monospace,Menlo,monospace;color:var(--ink3);border:1px solid var(--line2);border-bottom-width:2px;border-radius:6px;padding:1px 7px;background:#f8f9fc;pointer-events:none}
+.search.has input{border-color:var(--o);background:#fffaf5}
+.search .hits{position:absolute;right:40px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:800;color:#c2410c;background:#ffedd5;border-radius:100px;padding:2px 8px;pointer-events:none;white-space:nowrap}
+.search .clr{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:26px;height:26px;border:none;border-radius:8px;background:#ffe4d1;color:#c2410c;font-size:15px;font-weight:800;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.search .clr:hover{background:#ffd2b3}
+.sec-h{display:flex;align-items:center;gap:10px;margin:22px 0 10px}
+.sec-h b{font-family:'Sora',sans-serif;font-size:14px}
+.sec-h span{font-size:11.5px;color:var(--ink3);font-weight:700}
+.sec-h hr{flex:1;border:none;height:1px;background:linear-gradient(90deg,var(--line2),transparent)}
+.lbl{font-size:10.5px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em}
+.empty{padding:40px 20px;text-align:center;color:var(--ink3);font-weight:600}
+.skel{height:120px;border-radius:var(--r);background:linear-gradient(90deg,#eceef4 0%,#f6f7fa 50%,#eceef4 100%);background-size:200% 100%;animation:sk 1.2s linear infinite}
+@keyframes sk{from{background-position:200% 0}to{background-position:-200% 0}}
+
+/* ── hero / KPIs ── */
+.hero{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.hero h2{font-family:'Sora',sans-serif;font-size:24px;line-height:1.15}
+.hero p{color:var(--ink2);font-size:13px;margin-top:4px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:6px}
+.kpi{padding:14px 16px;position:relative;overflow:hidden}
+.kpi .k-l{font-size:11px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em}
+.kpi .k-v{font-family:'Sora',sans-serif;font-size:26px;font-weight:800;margin-top:6px;line-height:1}
+.kpi .k-s{font-size:11.5px;color:var(--ink3);margin-top:5px;font-weight:600}
+.kpi .k-bar{position:absolute;left:0;top:0;bottom:0;width:4px}
+.ringw{display:flex;align-items:center;gap:14px}
+.ring{--v:0;width:58px;height:58px;border-radius:50%;flex:none;background:conic-gradient(from -90deg,#ff7a2f 0,#f43f5e calc(var(--v)*.5%),#a855f7 calc(var(--v)*1%),var(--s3) 0);display:flex;align-items:center;justify-content:center}
+.ring::after{content:attr(data-t);width:44px;height:44px;border-radius:50%;background:var(--s1);display:flex;align-items:center;justify-content:center;font:800 12px 'Sora',sans-serif}
+.banner{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:14px;margin-bottom:14px;border:1px solid;font-weight:600}
+.banner.warn{background:#fff8eb;border-color:#fcd9a0;color:#7c4a03}
+.banner.bad{background:#fff1f2;border-color:#fecdd3;color:#9f1239}
+.banner.info{background:#f0f9ff;border-color:#bae6fd;color:#075985}
+.banner b{font-weight:800}
+
+/* ── account cards (Today) ── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
+.acct{position:relative;padding:14px 16px 13px 19px;transition:box-shadow .15s,transform .15s}
+.acct:hover{box-shadow:var(--sh2)}
+.acct::before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:4px;border-radius:0 4px 4px 0;background:var(--sc,#cbd5e1)}
+.acct.dim{opacity:.6}
+.acct .hd{display:flex;align-items:center;gap:8px}
+.acct .hn{font-weight:800;font-size:14.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.acct .hn:hover{text-decoration:underline;text-decoration-color:var(--ink4)}
+.acct .hn small{color:var(--ink4);font-weight:700}
+.stg{appearance:none;-webkit-appearance:none;border-radius:100px;padding:4px 22px 4px 10px;font-weight:800;font-size:11px;cursor:pointer;border:1px solid;outline:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%237f859c' stroke-width='3'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center}
+.stg:disabled{cursor:default;background-image:none;padding-right:10px}
+.meta{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.meta .chip{font-size:10.5px;padding:2px 8px}
+.gate{font-size:11.5px;color:var(--ink2);margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.gate b{font-weight:800}
+.prog{flex:1;min-width:90px;height:6px;border-radius:6px;background:var(--s3);overflow:hidden}
+.prog i{display:block;height:100%;border-radius:6px;background:var(--grad)}
+.plan{margin-top:8px}
+.plan summary{list-style:none;cursor:pointer;font-size:11.5px;font-weight:700;color:var(--ink3);display:inline-flex;gap:5px;align-items:center}
+.plan summary::-webkit-details-marker{display:none}
+.plan[open] summary{color:var(--ink)}
+.plan>div{font-size:12px;color:var(--ink2);background:var(--s2);border:1px solid var(--line);border-radius:10px;padding:8px 11px;margin-top:6px;line-height:1.55}
+.acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px}
+.ses{border:1px solid var(--line2);background:var(--s1);border-radius:10px;padding:7px 11px;font-weight:800;font-size:11.5px;display:inline-flex;align-items:center;gap:6px;color:var(--ink)}
+.ses:hover:not(:disabled){border-color:var(--o);color:var(--ot)}
+.ses .bx{width:15px;height:15px;border-radius:5px;border:2px solid var(--ink4);display:inline-flex;align-items:center;justify-content:center}
+.ses.done{background:rgba(16,185,129,.08);border-color:rgba(16,185,129,.35);color:#047857;cursor:default}
+.ses.done .bx{background:#10b981;border-color:#10b981;color:#fff}
+.ses.done small{font-weight:700;color:#059669;opacity:.8}
+.ses:disabled:not(.done){opacity:.45;cursor:not-allowed}
+.ses.up{border-color:rgba(139,92,246,.35);color:var(--pd);background:rgba(139,92,246,.06)}
+.ses.up:hover{border-color:var(--p);color:var(--pd)}
+.ses.dm{border-color:rgba(14,165,233,.35);color:#0369a1;background:rgba(14,165,233,.06)}
+.ses.ok2{border-color:rgba(16,185,129,.4);color:#047857;background:rgba(16,185,129,.07)}
+/* task timers (Oct 5): ▶ start → ■ finish — the tool learns how long each task takes */
+.ses.go .pl{width:0;height:0;border-left:7px solid currentColor;border-top:4.5px solid transparent;border-bottom:4.5px solid transparent;margin:0 2px 0 3px}
+.ses.run{border-color:#0ea5e9;background:linear-gradient(180deg,#f0f9ff,#e0f2fe);color:#075985}
+.ses.run .sq{width:9px;height:9px;border-radius:2px;background:#0284c7;animation:tmPulse 1.2s ease-in-out infinite}
+.ses.run small,.tmv{font:800 11px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:#0369a1;letter-spacing:.02em}
+.ses.x{padding:5px 7px;color:var(--ink3);border-style:dashed}
+.ses.x:hover{color:#b91c1c;border-color:#fca5a5}
+@keyframes tmPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.8)}}
+.btn.run{background:linear-gradient(180deg,#f0f9ff,#e0f2fe);border:1px solid #7dd3fc;color:#075985}
+.btn.run .sq{width:10px;height:10px;border-radius:2px;background:#0284c7;animation:tmPulse 1.2s ease-in-out infinite}
+/* Productivity & QA */
+.pq-cell{min-width:150px}
+.pq-med{font:800 15px/1.1 Inter,system-ui,sans-serif;color:var(--ink)}
+.pq-sub{font-size:10.5px;color:var(--ink3);margin-top:2px;white-space:nowrap}
+.pq-t{display:flex;align-items:center;gap:5px;margin-top:6px}
+.pq-t input{width:62px;padding:4px 6px;border:1px solid var(--line2);border-radius:7px;font:700 11.5px ui-monospace,Menlo,monospace;text-align:center;background:var(--s1)}
+.pq-t input.set{border-color:#10b981;background:#ecfdf5;color:#065f46}
+.pq-sug{font-size:10.5px;font-weight:800;color:#7c3aed;cursor:pointer;border:none;background:none;padding:0}
+.pq-lrn{display:inline-block;font-size:10px;font-weight:800;color:#64748b;background:#f1f5f9;border-radius:6px;padding:2px 6px}
+.qa-sc{width:58px;padding:5px 6px;border:1px solid var(--line2);border-radius:8px;font:800 13px Inter,system-ui,sans-serif;text-align:center}
+.qa-sc.saved{border-color:#10b981;background:#ecfdf5;color:#065f46}
+.qa-nt{width:130px;padding:5px 8px;border:1px solid var(--line2);border-radius:8px;font-size:12px}
+.qf{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:800;border-radius:7px;padding:3px 7px;margin:1px 3px 1px 0;white-space:nowrap}
+.qf.r{background:#fff1f2;color:#9f1239}.qf.a{background:#fff7ed;color:#9a3412}.qf.g{background:#ecfdf5;color:#047857}
+.note{font-size:11.5px;font-weight:600;margin-top:8px;padding:7px 10px;border-radius:9px}
+.note.w{background:#fff8eb;color:#92400e}
+.note.i{background:#f0f9ff;color:#075985}
+.note.b{background:#fff1f2;color:#9f1239}
+.note.g{background:#f6f7fa;color:var(--ink2)}
+.km{position:relative}
+.km>summary{list-style:none;width:30px;height:30px;border-radius:9px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink3);background:var(--s1)}
+.km>summary::-webkit-details-marker{display:none}
+.km[open]>summary{background:var(--s3)}
+.km .dd{position:absolute;right:0;top:35px;z-index:30;background:var(--s1);border:1px solid var(--line);border-radius:13px;box-shadow:var(--sh2);padding:6px;min-width:215px;display:flex;flex-direction:column}
+.km .dd button{border:none;background:none;text-align:left;padding:8px 10px;border-radius:8px;font-weight:600;font-size:12.5px;color:var(--ink2);display:flex;gap:9px;align-items:center}
+.km .dd button:hover{background:var(--s3);color:var(--ink)}
+.km .dd button.danger{color:#b91c1c}
+.km .dd hr{border:none;height:1px;background:var(--line);margin:4px 6px}
+
+/* ── Today as an Airtable-style list: one account per row, grouped by stage ── */
+.lt{background:var(--s1);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh1)}
+.lh,.lr{display:grid;grid-template-columns:minmax(150px,1.3fr) 140px 100px minmax(80px,.7fr) 56px minmax(140px,1.2fr) minmax(230px,1.9fr) 34px;gap:10px;align-items:center;padding:9px 14px}
+.lr .msub{display:none}
+.lh{background:#f8f9fc;border-bottom:1px solid var(--line2);font-size:10.5px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;border-radius:var(--r) var(--r) 0 0}
+.lg{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--s3);border-bottom:1px solid var(--line);font-size:12.5px}
+.lg i{width:9px;height:9px;border-radius:50%;background:var(--gc);display:inline-block}
+.lg span{color:var(--ink3);font-weight:700;font-size:11.5px}
+.lr{position:relative;border-bottom:1px solid var(--line);background:var(--s1)}
+.lr:last-child{border-bottom:none;border-radius:0 0 var(--r) var(--r)}
+.lr:hover{background:#fcfaff}
+.lr::before{content:'';position:absolute;left:0;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;background:var(--sc,#cbd5e1)}
+.lr.dim{opacity:.6}
+.lr .cell{min-width:0;font-size:12px}
+.lr .an{font-weight:800;font-size:13.5px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lr .an:hover{text-decoration:underline;text-decoration-color:var(--ink4)}
+.lr .sub{font-size:11px;color:var(--ink3);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+.lr .acts{margin:0;gap:5px}
+.lr .ses{padding:5px 9px;font-size:11px}
+.lr .note{margin:0;padding:4px 8px;font-size:11px;display:inline-block}
+.lr .gate{margin:0}
+.lr .stg{max-width:100%}
+.lr.moved{animation:rowFlash 1.8s ease}
+@keyframes rowFlash{0%,25%{background:#f3e8ff;box-shadow:inset 0 0 0 2px #c4b5fd}100%{background:var(--s1);box-shadow:none}}
+/* column-header filters (Stage, VA) — read like the header until used, then turn into an orange pill */
+.hf{appearance:none;-webkit-appearance:none;border:1px solid transparent;background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%237f859c' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 6px center;
+  font:800 10.5px Inter,system-ui,sans-serif;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;padding:4px 20px 4px 6px;margin-left:-6px;border-radius:7px;cursor:pointer;max-width:100%;text-overflow:ellipsis}
+.hf:hover{background-color:#eef0f6;color:var(--ink)}
+.hf.on{background-color:#fff1e8;border-color:#ffc9a6;color:#c2410c;text-transform:none;letter-spacing:0;font-size:11.5px}
+.lh-m{display:none;align-items:center;gap:10px;padding:9px 14px;background:#f8f9fc;border-bottom:1px solid var(--line2);border-radius:var(--r) var(--r) 0 0;flex-wrap:wrap}
+.lh-m .hf{margin-left:0;border-color:var(--line2);background-color:var(--s1)}
+.lr-empty{padding:26px 14px;text-align:center;color:var(--ink3);font-size:13px;display:flex;align-items:center;justify-content:center;gap:12px}
+@media(max-width:1080px){
+  .lr .msub{display:inline}
+  .lh{display:none}
+  .lh-m{display:flex}
+  .lr{grid-template-columns:1fr auto 34px;grid-template-areas:"a s m" "p p p" "t t t";row-gap:7px}
+  .lr>.c-acc{grid-area:a}.lr>.c-stg{grid-area:s}.lr>.c-menu{grid-area:m}.lr>.c-prog{grid-area:p}.lr>.c-act{grid-area:t}
+  .lr>.c-meth,.lr>.c-va,.lr>.c-age{display:none}
+}
+
+/* ── team progress (admin) ── */
+.tp{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.tp .va{display:flex;align-items:center;gap:11px;padding:11px 13px}
+.va .ph{width:36px;height:36px;border-radius:50%;object-fit:cover;flex:none;background:var(--s3);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:12px}
+.va .nm{font-weight:800;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tp-g{display:flex;align-items:center;gap:10px;margin:14px 0 8px;font-size:12.5px}
+.tp-g:first-child{margin-top:0}
+.tp-g .ic{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.tp-g b{font-size:13.5px;white-space:nowrap}
+.tp-g .tot{margin-left:auto;font-weight:800;font-size:12.5px;white-space:nowrap}
+@media(max-width:700px){ .tp-g .bar{display:none} .tp-g .muted{font-size:11px} }
+.tp-g .bar{flex:0 0 120px;height:6px;border-radius:6px;background:var(--s3);overflow:hidden}
+.tp-g .bar i{display:block;height:100%;border-radius:6px}
+.va .sb{font-size:11px;color:var(--ink3);font-weight:600}
+.va .pc{margin-left:auto;text-align:right;font-family:'Sora',sans-serif;font-weight:800;font-size:15px}
+
+/* ── database grid ── */
+.tbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.tbl-w{overflow:auto;max-height:calc(100vh - 250px);border-radius:var(--r);border:1px solid var(--line);background:var(--s1);box-shadow:var(--sh1)}
+table.db{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
+table.db th{position:sticky;top:0;z-index:2;background:#f8f9fc;text-align:left;font-size:10.5px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;padding:10px 12px;border-bottom:1px solid var(--line2);white-space:nowrap;cursor:pointer;user-select:none}
+table.db th:hover{color:var(--ink)}
+table.db th .ar{opacity:.6;margin-left:3px}
+table.db td{padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis}
+table.db tr.r{cursor:pointer}
+table.db tr.r:hover td{background:#fbf7ff}
+table.db td.c1,table.db th.c1{position:sticky;left:0;background:inherit;z-index:1}
+table.db th.c1{z-index:3;background:#f8f9fc}
+table.db tr.r td.c1{background:var(--s1);font-weight:800}
+table.db tr.r:hover td.c1{background:#fbf7ff}
+table.db tr.grp td{background:var(--s3);font-weight:800;font-size:12px;position:sticky;left:0}
+table.db tr.dead td{color:var(--ink3)}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:100px;padding:2px 9px;font-size:11px;font-weight:800;white-space:nowrap}
+.num{font-variant-numeric:tabular-nums}
+
+/* ── drawer + modal ── */
+.scrim{position:fixed;inset:0;background:rgba(17,19,34,.32);backdrop-filter:blur(3px);z-index:80;opacity:0;pointer-events:none;transition:opacity .2s}
+.scrim.on{opacity:1;pointer-events:auto}
+#drawer{position:fixed;top:0;right:0;bottom:0;width:min(480px,100vw);background:var(--s1);z-index:90;box-shadow:-20px 0 60px -20px rgba(17,19,34,.35);transform:translateX(105%);transition:transform .28s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column}
+#drawer.on{transform:none}
+.dr-h{padding:18px 20px 14px;border-bottom:1px solid var(--line)}
+.dr-b{flex:1;overflow:auto;padding:16px 20px 30px}
+.facts{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin:6px 0 14px}
+.facts div{min-width:0}
+.facts .v{font-weight:700;font-size:13px;margin-top:2px;overflow-wrap:anywhere}
+.tl{position:relative;margin:10px 0 0 6px;padding-left:18px;border-left:2px solid var(--line)}
+.tl .ev{position:relative;padding:0 0 14px}
+.tl .ev::before{content:'';position:absolute;left:-25px;top:3px;width:10px;height:10px;border-radius:50%;background:var(--ec,#cbd5e1);box-shadow:0 0 0 3px var(--s1)}
+.tl .ev b{font-size:12.5px}
+.tl .ev small{display:block;color:var(--ink3);font-size:11px;font-weight:600;margin-top:2px}
+#modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-46%) scale(.98);width:min(520px,calc(100vw - 24px));max-height:calc(100vh - 40px);overflow:auto;background:var(--s1);border-radius:20px;box-shadow:0 30px 80px -20px rgba(17,19,34,.45);z-index:95;opacity:0;pointer-events:none;transition:all .2s}
+#modal.on{opacity:1;pointer-events:auto;transform:translate(-50%,-50%)}
+#modal.wide{width:min(900px,calc(100vw - 24px))}
+#modal.wide .seg button{white-space:nowrap;padding:7px 12px}
+.xf-step{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin:16px 0 7px;display:flex;align-items:center;gap:8px}
+.xf-step b{background:var(--ink);color:#fff;border-radius:100px;width:18px;height:18px;display:inline-grid;place-items:center;font-size:10.5px;letter-spacing:0}
+.xf-wrap{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:12px}
+.xf-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.xf-tbl td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.xf-tbl tr:last-child td{border-bottom:none}
+.xf-tbl tr.off td{opacity:.5}
+.xf-to{font-weight:800;color:var(--ot)}
+.xf-bar{display:flex;align-items:center;gap:10px;padding:4px 0}
+.xf-bar .tr{flex:1;height:8px;background:var(--s3);border-radius:8px;overflow:hidden;position:relative}
+.xf-bar .tr i{position:absolute;top:0;bottom:0;left:0;background:#cbd5e1}
+.xf-bar .tr em{position:absolute;top:0;bottom:0;background:var(--o)}
+.md-h{padding:20px 22px 6px}
+.md-h h3{font-family:'Sora',sans-serif;font-size:18px}
+.md-h p{color:var(--ink2);font-size:12.5px;margin-top:4px;line-height:1.5}
+.md-b{padding:10px 22px}
+.md-f{padding:12px 22px 20px;display:flex;gap:8px;justify-content:flex-end}
+.fld{margin-bottom:12px}
+.fld label{display:block;font-size:11.5px;font-weight:800;color:var(--ink2);margin-bottom:5px}
+.fld .inp,.fld .sel{width:100%}
+.fld .hint{font-size:11px;color:var(--ink3);margin-top:4px}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chk{display:flex;gap:9px;align-items:flex-start;padding:9px 11px;border:1px solid var(--line);border-radius:11px;margin-bottom:6px;cursor:pointer;font-size:12.5px;font-weight:600}
+.chk input{margin-top:2px;accent-color:var(--o)}
+.chk:hover{background:var(--s2)}
+.seg{display:flex;background:var(--s3);border-radius:11px;padding:3px;gap:3px}
+.seg button{flex:1;border:none;background:none;border-radius:8px;padding:7px 8px;font-weight:700;font-size:12px;color:var(--ink2)}
+.seg button.on{background:var(--s1);color:var(--ink);box-shadow:var(--sh1)}
+.toast{position:fixed;bottom:22px;left:50%;transform:translate(-50%,10px);background:var(--ink);color:#fff;border-radius:12px;padding:11px 18px;font-size:13px;font-weight:700;opacity:0;transition:.25s;pointer-events:none;z-index:120;box-shadow:var(--sh2);max-width:calc(100vw - 30px)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ── pipeline ── */
+.kb{display:flex;gap:10px;overflow-x:auto;padding-bottom:10px;align-items:flex-start}
+.kcol{flex:0 0 220px;background:var(--s3);border:1px solid var(--line);border-radius:14px;padding:8px;max-height:calc(100vh - 260px);display:flex;flex-direction:column}
+.kcol .kh{display:flex;align-items:center;gap:7px;padding:5px 6px 9px;font-weight:800;font-size:12.5px}
+.kcol .kh i{width:9px;height:9px;border-radius:50%}
+.kcol .kh em{margin-left:auto;font-style:normal;font-size:11px;background:var(--s1);border-radius:100px;padding:1px 8px;color:var(--ink2)}
+.kcol .kh small{display:block;font-size:10.5px;color:var(--ink3);font-weight:600}
+.kcol .kl{overflow:auto;display:flex;flex-direction:column;gap:6px}
+.kc{background:var(--s1);border:1px solid var(--line);border-radius:10px;padding:8px 10px;cursor:pointer;font-size:12px}
+.kc:hover{box-shadow:var(--sh2)}
+.kc b{display:block;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kc small{color:var(--ink3);font-weight:600;font-size:10.5px}
+/* method swimlanes — one shared grid so the stage columns line up across methods */
+.sl{overflow:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--s1);box-shadow:var(--sh1);max-height:calc(100vh - 180px)}
+.sl-g{display:grid;min-width:max-content}
+.sl-h{position:sticky;top:0;z-index:3;background:#f8f9fc;padding:10px 10px 9px;border-bottom:1px solid var(--line2);border-left:1px solid var(--line);font-weight:800;font-size:11.5px;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.sl-h i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.sl-h small{color:var(--ink3);font-weight:700}
+.sl-corner{left:0;z-index:5;border-left:none;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;font-size:10.5px}
+.sl-l{position:sticky;left:0;z-index:2;background:var(--s1);padding:12px 12px;border-bottom:1px solid var(--line2);display:flex;flex-direction:column;gap:3px}
+.sl-l b{font-size:14px}
+.sl-l small{font-size:11px;color:var(--ink3);font-weight:700}
+.sl-c{padding:8px;border-bottom:1px solid var(--line2);border-left:1px solid var(--line);max-height:300px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.sl-ct{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--ink3);padding:0 2px 2px}
+.sl-ct b{font-family:'Sora',sans-serif;font-size:16px;color:var(--ink)}
+.sl-c .kc{padding:7px 9px}
+.sl-g.pb{min-width:100%}
+.sl-g.pb .sl-h{border-top-left-radius:0}
+.sl-g.pb .sl-c{max-height:250px}
+.pb-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:6px}
+.pb-cards .kc{padding:6px 8px}
+.pb-cards .kc b{font-size:12px}
+
+/* ── insights ── */
+.ig{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
+.ig>.card{grid-column:span 12}
+@media(min-width:1000px){ .ig .s6{grid-column:span 6} .ig .s4{grid-column:span 4} .ig .s8{grid-column:span 8} }
+.ch-h{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.ch-h b{font-family:'Sora',sans-serif;font-size:14px}
+.ch-h span{font-size:11.5px;color:var(--ink3);font-weight:600}
+.alert{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;margin-bottom:8px;font-size:12.5px;line-height:1.45}
+.alert .ic{width:26px;height:26px;border-radius:8px;flex:none;display:flex;align-items:center;justify-content:center;font-size:13px}
+.alert.wave{background:#fff1f2}.alert.wave .ic{background:#fecdd3}
+.alert.conc{background:#fff8eb}.alert.conc .ic{background:#fde68a}
+.alert.ok{background:#ecfdf5}.alert.ok .ic{background:#a7f3d0}
+.alert small{display:block;color:var(--ink3);font-weight:600;margin-top:2px}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;font-weight:700;color:var(--ink2);margin-top:8px}
+.legend span{display:inline-flex;gap:5px;align-items:center}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.hb{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:12px}
+/* phase when banned — per method (Oct 9) */
+.pm{display:grid;gap:0;font-size:12px;overflow-x:auto}
+.pm>div{padding:7px 10px;border-top:1px solid var(--line);display:flex;align-items:center;gap:8px;min-width:0}
+.pm>.h{border-top:none;padding-bottom:9px;flex-direction:column;align-items:flex-start;gap:3px}
+.pm>.h small{font-size:10.5px;color:var(--ink3);font-weight:700}
+.pm .ph{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pm .ph i{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:7px;flex:none}
+.pm .cell{flex-direction:column;align-items:stretch;gap:3px}
+.pm .row1{display:flex;align-items:center;gap:8px}
+.pm .bar{flex:1;height:10px;border-radius:6px;background:rgba(17,19,34,.06);overflow:hidden;min-width:40px}
+.pm .bar i{display:block;height:100%;border-radius:6px}
+.pm .n{font:800 12.5px Sora,Inter,sans-serif;min-width:58px;text-align:right;white-space:nowrap}
+.pm .n small{font:700 10.5px Inter,sans-serif;color:var(--ink3);margin-left:3px}
+.pm .via{font-size:10.5px;color:var(--ink3)}
+.pm .top{background:rgba(244,63,94,.05)}
+.pm .tot{font-weight:800}
+.hb .l{width:120px;flex:none;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb .b{flex:1;height:14px;background:var(--s3);border-radius:5px;overflow:hidden}
+.hb .b i{display:block;height:100%;border-radius:5px}
+.hb .n{width:44px;text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+.flag{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:800;border-radius:100px;padding:2px 8px}
+.flag.r{background:#fee2e2;color:#b91c1c}.flag.a{background:#fef3c7;color:#92400e}.flag.g{background:#dcfce7;color:#166534}
+svg text{font-family:'Inter',sans-serif}
+/* insights · live + bottom line (Oct 8) */
+.ins-live{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12px;color:var(--ink2)}
+.ins-live b{color:var(--ink)}
+.ins-dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+.ins-dot.on{box-shadow:0 0 0 0 rgba(16,185,129,.45);animation:insPulse 2s infinite}
+@keyframes insPulse{0%{box-shadow:0 0 0 0 rgba(16,185,129,.45)}70%{box-shadow:0 0 0 7px rgba(16,185,129,0)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+.ins-dc{margin-bottom:12px;padding:12px 16px}
+.ins-dq{font-size:12px;line-height:1.55;color:var(--ink2);margin-top:8px}
+.ins-dq.warn{background:#fff8eb;border:1px solid #fcd9a0;color:#7c4a03;border-radius:10px;padding:7px 10px;margin-top:6px}
+.ins-dq a{color:var(--ot);font-weight:800}
+.ins-bl{border:1px solid rgba(109,40,217,.18);background:linear-gradient(180deg,#fff, #fbf9ff)}
+.vd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.vd{background:var(--s1);border:1px solid var(--line);border-radius:14px;padding:13px 15px}
+.vchip{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;border-radius:100px;padding:3px 9px}
+.vd-big{font-family:'Sora',sans-serif;font-size:26px;font-weight:800;margin-top:8px;font-variant-numeric:tabular-nums;line-height:1.1}
+.vd-big small{font-family:'Inter',sans-serif;font-size:12px;font-weight:700;color:var(--ink3)}
+.vd-tr{font-size:12px;font-weight:700;margin-top:3px}
+.vd-k{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;color:var(--ink2);margin-top:10px}
+.vd-n{font-size:11px;color:var(--ink3);font-weight:600;margin-top:6px}
+.alert.change{background:#fff1f2}.alert.change .ic{background:#fecdd3}
+.alert.pace{background:#fff8eb}.alert.pace .ic{background:#fde68a}
+.alert.info{background:#f0f9ff}.alert.info .ic{background:#bae6fd}
+@media print{
+  header.tb,.no-print,#toast,.scrim,#drawer,#modal{display:none!important}
+  body::before{display:none!important} html,body{background:#fff!important}
+  .card{box-shadow:none!important;break-inside:avoid} .tbl-w{max-height:none!important;overflow:visible!important}
+  .ins-dot.on{animation:none}
+}
+
+/* ── coverage ── */
+.offc{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.offc .top{display:flex;align-items:center;gap:11px}
+.alist{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:6px}
+.alist label{display:flex;gap:9px;align-items:center;padding:6px 8px;border-radius:8px;font-size:12.5px;cursor:pointer}
+.alist label:hover{background:var(--s2)}
+.alist input{accent-color:var(--o)}
+
+@media(max-width:700px){
+  .tb-in{padding:10px 12px;gap:10px}
+  .bases button{padding:6px 8px}
+  .brand small{display:none}
+  .me .nmx{display:none}
+  main{padding:14px 12px 80px}
+  .grid{grid-template-columns:1fr}
+  .search input{width:100%}
+  .search{flex:1}
+  .hero h2{font-size:20px}
+  .f2{grid-template-columns:1fr}
+  .facts{grid-template-columns:1fr}
+}
+/* ── SOP quiz gate ── */
+.qz{max-width:760px;margin:0 auto}
+.qz-q{margin-bottom:12px}
+.qz-n{font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);margin-bottom:4px}
+.qz-t{font-family:'Sora',sans-serif;font-size:15px;line-height:1.35;margin-bottom:10px}
+.qz-o{display:grid;gap:7px}
+.qz-opt{display:flex;align-items:flex-start;gap:10px;border:1.5px solid var(--line2);border-radius:12px;padding:10px 12px;cursor:pointer;font-size:13.5px;line-height:1.4;transition:border-color .15s,background .15s}
+.qz-opt:hover{border-color:var(--ink4)}
+.qz-opt.on{border-color:var(--o);background:rgba(255,107,26,.07)}
+.qz-opt input{margin-top:3px;accent-color:var(--o);flex:none}
+.qz-res{border-radius:var(--r);padding:18px 20px;margin-bottom:14px;border:1.5px solid}
+.qz-res.ok{background:#ecfdf5;border-color:#6ee7b7;color:#065f46}
+.qz-res.no{background:#fff7ed;border-color:#fdba74;color:#7c2d12}
+.qz-res h3{font-family:'Sora',sans-serif;font-size:20px;margin-bottom:4px}
+.qz-miss{background:var(--s1);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px;color:var(--ink);font-size:13px;line-height:1.45}
+.qz-miss b{display:block;font-size:13px;margin-bottom:3px}
+.qz-miss .ok{color:#047857;font-weight:800}
+.qz-sticky{position:sticky;bottom:12px;display:flex;gap:10px;align-items:center;box-shadow:0 14px 30px -14px rgba(15,23,42,.5)}
+.qz-st{display:inline-flex;align-items:center;gap:5px;border-radius:100px;padding:3px 9px;font-size:11px;font-weight:800}
+.qz-st.p{background:#ecfdf5;color:#047857} .qz-st.t{background:#fff7ed;color:#c2410c} .qz-st.n{background:var(--s3);color:var(--ink3)}
+
+body.in #bgfx{opacity:.6}
+#signin{max-width:400px;padding:34px 30px 26px}
+#signin .mark{width:58px;height:58px;margin:0 auto 14px;filter:drop-shadow(0 10px 22px rgba(242,103,22,.35))}
+#signin .eyebrow{font-size:10.5px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--ink3);margin-bottom:6px}
+#signin label.keep{display:flex;align-items:center;gap:8px;justify-content:flex-start;margin-top:12px;font-size:12.5px;font-weight:600;color:var(--ink2);cursor:pointer;text-align:left}
+#signin label.keep input{width:auto;margin:0;accent-color:var(--o)}
+#signin .go:disabled{opacity:.6}
+#si-err{min-height:18px;margin-top:10px;font-size:12.5px;font-weight:700;color:#be123c}
+#signin .fine{margin-top:16px;font-size:11px;color:var(--ink4);line-height:1.5}
+.brand .lm{width:34px;height:34px;flex:none}
+.me .cl-base{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#c2410c;background:#fff1e6;border-radius:100px;padding:5px 9px;margin-right:2px}
+.me{padding:3px 12px 3px 3px}
+.cl-live{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--ink2);background:var(--s1);border:1px solid var(--line);border-radius:100px;padding:7px 12px;white-space:nowrap}
+.cl-live .muted{display:none}
+.cl-q{display:flex;align-items:center;gap:7px;background:var(--s1);border:1px solid var(--line2);border-radius:12px;padding:0 11px;height:36px;color:var(--ink3);min-width:230px}
+.cl-q input{border:none;outline:none;background:none;font:inherit;font-size:13px;color:var(--ink);width:100%}
+.cl-h{font-weight:800}
+.cl-spin{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid var(--line2);border-top-color:var(--o);animation:clsp .8s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes clsp{to{transform:rotate(360deg)}}
+.cl-foot{max-width:1320px;margin:26px auto 30px;padding:0 18px;font-size:11.5px;color:var(--ink4);display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap}
+@media (max-width:760px){ .brand small{display:none} .me b{display:none} .cl-q{min-width:0;flex:1} }
+</style>
+</head>
+<body>
+<div id="signin" style="display:none">
+  <div class="mark"><svg width="100%" height="100%" viewBox="76 82 360 360" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gMain" x1="0" y1="0.05" x2="0" y2="0.95">
+      <stop offset="0%"  stop-color="#FFE0BE"/>
+      <stop offset="16%" stop-color="#FFB16A"/>
+      <stop offset="46%" stop-color="#FF7A29"/>
+      <stop offset="78%" stop-color="#F1560F"/>
+      <stop offset="100%" stop-color="#C3380A"/>
+    </linearGradient>
+    <linearGradient id="gBack" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#FF8E45"/>
+      <stop offset="55%" stop-color="#E64C10"/>
+      <stop offset="100%" stop-color="#A52E08"/>
+    </linearGradient>
+  </defs>
+  <rect x="241" y="110" width="30" height="304" rx="15" fill="url(#gMain)"/>
+  <path d="M256 226 Q341 264 398 320 Q341 376 256 414 Q171 376 114 320 Q171 264 256 226 Z" fill="none" stroke="url(#gBack)" stroke-width="50" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M256 110 Q341 148 398 204 Q341 260 256 298 Q171 260 114 204 Q171 148 256 110 Z" fill="none" stroke="url(#gMain)" stroke-width="50" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>
+</div>
+  <div class="eyebrow">JMB Virtuals · Client portal</div>
+  <h1 class="h-d">Reddit <span class="gtxt">operations</span></h1>
+  <p>Your accounts, pipeline and insights — live.</p>
+  <input id="si-u" placeholder="Username" autocomplete="username" autocapitalize="off" spellcheck="false">
+  <input id="si-p" type="password" placeholder="Password" autocomplete="current-password">
+  <label class="keep"><input type="checkbox" id="si-keep"> Keep me signed in on this computer</label>
+  <button class="go" onclick="signIn()" id="si-btn">Sign in</button>
+  <div id="si-err"></div>
+  <div class="fine">Private to JMB Virtuals clients. Read-only — nothing here changes your accounts.</div>
+</div>
+
+<div id="app" style="display:none">
+  <header class="tb">
+    <div class="tb-in">
+      <div class="brand"><div class="lm"><svg width="100%" height="100%" viewBox="76 82 360 360" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sMain" x1="0" y1="0.05" x2="0" y2="0.95">
+      <stop offset="0%"  stop-color="#FFE0BE"/>
+      <stop offset="16%" stop-color="#FFB16A"/>
+      <stop offset="46%" stop-color="#FF7A29"/>
+      <stop offset="78%" stop-color="#F1560F"/>
+      <stop offset="100%" stop-color="#C3380A"/>
+    </linearGradient>
+    <linearGradient id="sBack" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"  stop-color="#FF8E45"/>
+      <stop offset="55%" stop-color="#E64C10"/>
+      <stop offset="100%" stop-color="#A52E08"/>
+    </linearGradient>
+  </defs>
+  <rect x="241" y="110" width="30" height="304" rx="15" fill="url(#sMain)"/>
+  <path d="M256 226 Q341 264 398 320 Q341 376 256 414 Q171 376 114 320 Q171 264 256 226 Z" fill="none" stroke="url(#sBack)" stroke-width="50" stroke-linejoin="round" stroke-linecap="round"/>
+  <path d="M256 110 Q341 148 398 204 Q341 260 256 298 Q171 260 114 204 Q171 148 256 110 Z" fill="none" stroke="url(#sMain)" stroke-width="50" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>
+</div>
+        <div><b>JMB Virtuals</b><small>Reddit operations · client portal</small></div></div>
+      <nav class="tabs" id="tabs"></nav>
+      <div class="tb-r">
+        <div class="me" id="me"></div>
+        <button class="ghost so" onclick="signOut()" title="Sign out" aria-label="Sign out"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+      </div>
+    </div>
+  </header>
+  <main id="view"></main>
+  <div class="cl-foot"><span>JMB Virtuals · read-only view · times in Philippine time (PHT)</span><span>Questions? Message your JMB account manager.</span></div>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeAll()"></div>
+<aside id="drawer"></aside>
+<div class="toast" id="toast"></div>
+<script>
+var SOP_START='2026-10-01';
+
+/* ── stages: the SOP ladder + lifecycle states ── */
+var PH=[
+ {k:'creation',   n:'Creation',      c:'#f59e0b', dur:4, plan:'Creation standby — no daily sessions. Ages 4 days, then waits as replacement stock for a banned account.', task:null},
+ {k:'warming',    n:'Warming',       c:'#fb923c', dur:1, plan:'8–12 min browsing · search 2–4 topics and read them · no upvotes · no joining — 1 day.', task:'Reddit Warmup'},
+ {k:'comment',    n:'Comment Farm',  c:'#f97316', maxDur:7, karma:50, plan:'5 min browsing · search 3–5 · no upvotes · join only where you comment · 1–2 SFW comments from the list in the sheet. Goal: 50 karma → NSFW. 7 days without 50 karma = stays here.', task:'Reddit Warmup'},
+ {k:'nsfw',       n:'NSFW Comments', c:'#ef4444', client:true, plan:'5 min browsing · search 5 · upvote 1–3 · 1–2 NSFW comments/replies. The subreddit list is no longer in the SOP — some accounts get a list from the client; follow it when yours has one. The CLIENT updates this status.', task:'Reddit Warmup'},
+ {k:'day1',       n:'Day 1 Posting', c:'#f43f5e', dur:1, plan:'3 min browsing · set name/bio/avatar · upvote 2 · 2–3 comments · 1 post/session · rotate subs, captions & photos — 1 day.', task:'Reddit Posting'},
+ {k:'early',      n:'Early Posting', c:'#ec4899', plan:'2–5 min browsing · upvote 1–3 · 1–3 comments · 2 posts/session.', task:'Reddit Posting'},
+ {k:'earlydm',    n:'Early + DMs',   c:'#d946ef', plan:'2–5 min browsing · upvote 1–3 · 1–3 comments · 2 posts/session · DMs: 2–5 in the AM session, 4–6 in the PM (only if users are available).', task:'Reddit Posting'},
+ {k:'medium',     n:'Medium + DMs',  c:'#a855f7', plan:'3 min browsing · 2–3 comments · 3 posts/session · up to 4 DMs per session (only if users are available).', task:'Reddit Posting'},
+ {k:'strong',     n:'Strong',        c:'#8b5cf6', plan:'3 min browsing · 2–3 comments · 5 posts/session · 6–8 DMs per shift.', task:'Reddit Posting', dms:8},
+ {k:'superstrong',n:'Super Strong',  c:'#6d28d9', plan:'3 min browsing · 2–3 comments · 7 posts/session · 8 DMs per shift · upvote 2.', task:'Reddit Posting', dms:8}
+];
+var EXTRA=[
+ {k:'new',             n:'Newly created',    c:'#ff6b1a'},
+ {k:'creationstandby', n:'Creation standby', c:'#f59e0b'},
+ {k:'recovery',        n:'Spam recovery',    c:'#0ea5e9'},
+ {k:'tempban',         n:'Temp banned',      c:'#d97706'},
+ {k:'onhold',          n:'On hold',          c:'#0891b2'},   // owner/client decision — kept, not worked, not counted (Oct 5)
+ {k:'archived',        n:'Archived',         c:'#475569'},   // retired — off the board, kept in the data (Oct 5)
+ {k:'banned',          n:'Banned',           c:'#64748b'}
+];
+var ORDER=['new','creation','creationstandby','warming','comment','nsfw','day1','early','earlydm','medium','strong','superstrong','recovery','tempban','onhold','archived','banned'];
+var GROUPS=[
+ {k:'new',  n:'New',       c:'#ff6b1a', st:['new']},
+ {k:'cre',  n:'Creation',  c:'#f59e0b', st:['creation','creationstandby']},
+ {k:'warm', n:'Warm-up',   c:'#f97316', st:['warming','comment','nsfw']},
+ {k:'post', n:'Posting',   c:'#ec4899', st:['day1','early','earlydm','medium']},
+ {k:'str',  n:'Strong',    c:'#8b5cf6', st:['strong','superstrong']},
+ {k:'rec',  n:'Recovery',  c:'#0ea5e9', st:['recovery']},
+ {k:'tb',   n:'Temp ban',  c:'#d97706', st:['tempban']},
+ {k:'hold', n:'On hold',   c:'#0891b2', st:['onhold']},
+ {k:'arc',  n:'Archived',  c:'#475569', st:['archived']},
+ {k:'ban',  n:'Banned',    c:'#64748b', st:['banned']}
+];
+var END_REASONS=['Permanently suspended','Shadowbanned','Locked — could not recover','Other'];
+/* Stage typed into the sheet as its display name ("Medium + DMs", "Spam Recovery")? Map it to the key
+   so the card gets its colour, plan and session buttons. The backend does the same from rc-2026-10-04e. */
+var ST_ALIAS={ newlycreated:'new', newcreated:'new', creationstage:'creation', standby:'creationstandby', warmup:'warming', warmingup:'warming',
+  commentfarm:'comment', commentfarming:'comment', comments:'comment', nsfwcomment:'nsfw', nsfwcomments:'nsfw', day1posting:'day1', dayone:'day1', dayoneposting:'day1',
+  earlyposting:'early', earlydms:'earlydm', earlyplusdms:'earlydm', earlywithdms:'earlydm', mediumdm:'medium', mediumdms:'medium', mediumplusdms:'medium',
+  spamrecovery:'recovery', spamfilter:'recovery', spamfilterrecovery:'recovery', spam:'recovery', tempbanned:'tempban', temporaryban:'tempban', temporarybanned:'tempban',
+  temporarilybanned:'tempban', hold:'onhold', onhold:'onhold', paused:'onhold', archive:'archived', archived:'archived', retired:'archived', ban:'banned', permanentlybanned:'banned', permaban:'banned', suspended:'banned', dead:'banned' };
+function statusKey(v){ var raw=String(v==null?'':v).trim(), k=raw.toLowerCase().replace(/[^a-z0-9]/g,''); if(!k) return ''; if(ORDER.indexOf(k)>=0) return k; return ST_ALIAS[k]||raw.toLowerCase(); }
+function normRows(rows){ (rows||[]).forEach(function(r){ r.status=statusKey(r.status); }); return rows; }
+function phase(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return PH[i]; return null; }
+function phaseIx(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return i; return -1; }
+function stageMeta(k){
+  var p=phase(k); if(p) return {k:k,n:p.n,c:p.c};
+  for(var i=0;i<EXTRA.length;i++) if(EXTRA[i].k===k) return EXTRA[i];
+  return {k:k,n:String(k||'—'),c:'#94a3b8'};
+}
+function stageOrd(k){ var i=ORDER.indexOf(k); return i<0?50:i; }
+function groupOf(k){ for(var i=0;i<GROUPS.length;i++) if(GROUPS[i].st.indexOf(k)>=0) return GROUPS[i]; return {k:'other',n:'Other',c:'#94a3b8',st:[]}; }
+function isDead(r){ return r.status==='banned'; }
+function isWorkable(r){ var s=r.status; return s!=='banned'&&s!=='tempban'&&s!=='new'&&s!=='creation'&&s!=='creationstandby'&&s!=='onhold'&&s!=='archived'; }
+function isArchived(r){ return r.status==='archived'; }
+function isParked(r){ return r.status==='onhold'||r.status==='archived'; }
+
+/* ── tiny helpers ── */
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function jsq(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+var SI=function(p,w){ return '<svg width="'+(w||15)+'" height="'+(w||15)+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;flex:none">'+p+'</svg>'; };
+var IC={
+ plus:SI('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'),
+ check:SI('<polyline points="20 6 9 17 4 12"/>',11),
+ up:SI('<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>',13),
+ dots:SI('<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',16),
+ star:SI('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',14),
+ buoy:SI('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/>',14),
+ hour:SI('<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>',14),
+ ban:SI('<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>',14),
+ trash:SI('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',14),
+ edit:SI('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',14),
+ doc:SI('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',13),
+ mail:SI('<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/>',13),
+ phone:SI('<rect x="6" y="2" width="12" height="20" rx="3"/><line x1="11" y1="18" x2="13" y2="18"/>',12),
+ user:SI('<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-6 8-6s6.5 2 8 6"/>',12),
+ tag:SI('<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/>',12),
+ cal:SI('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',12),
+ search:SI('<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',14),
+ hist:SI('<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><polyline points="12 7 12 12 15 15"/>',14),
+ swap:SI('<polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',14),
+ pause:SI('<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',14),
+ dl:SI('<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',14),
+ x:SI('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',16)
+};
+
+/* ── time: JMB business day resets 8:00 AM PHT; night VAs' window is keyed by its start date ── */
+function phtDate(d){ try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(d||new Date()); }catch(e){ return new Date((d||new Date()).getTime()+8*3600000).toISOString().slice(0,10); } }
+function today(){ return phtDate(new Date(Date.now()-8*3600*1000)); }
+function parseTs(s){
+  if(!s) return null; s=String(s).trim();
+  var m=s.match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2})(?::(\d{2}))?)?/);
+  if(m && !/Z$|[+-]\d{2}:?\d{2}$/.test(s)) return new Date(m[1]+'T'+(m[2]||'00:00')+':'+(m[3]||'00')+'+08:00');
+  var d=new Date(s); return isNaN(d.getTime())?null:d;
+}
+function phtStamp(d){ d=d||new Date(); var x=new Date(d.getTime()+8*3600000).toISOString(); return x.slice(0,10)+' '+x.slice(11,19); }
+function fmtD(d){ if(!d) return '—'; try{ return d.toLocaleDateString('en-US',{timeZone:'Asia/Manila',month:'short',day:'numeric',year:(phtDate(d).slice(0,4)!==phtDate().slice(0,4))?'numeric':undefined}); }catch(e){ return phtDate(d); } }
+function fmtT(d){ if(!d) return ''; try{ return d.toLocaleTimeString('en-US',{timeZone:'Asia/Manila',hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; } }
+function fmtDT(d){ return d?(fmtD(d)+' · '+fmtT(d)):'—'; }
+function dayDiff(a,b){ return Math.floor(((b||new Date()).getTime()-a.getTime())/86400000); }
+function addDays(ymd,n){ var d=new Date(ymd+'T12:00:00+08:00'); d.setTime(d.getTime()+n*86400000); return phtDate(d); }
+
+function baseOf(id){ for(var i=0;i<BASES.length;i++) if(BASES[i].id===id) return BASES[i]; return {id:id,n:id,c:'#94a3b8'}; }
+/* ── account facts ── */
+function M(r){ return r.meta||{}; }
+function cdateOf(r){ return M(r).cdate||String(r.created_at||'').slice(0,10)||''; }
+function pstartOf(r){ return M(r).pstart||cdateOf(r)||''; }
+function daysIn(r){ var p=pstartOf(r); if(!p) return 0; return Math.max(0,Math.floor((Date.now()-new Date(p+'T00:00:00+08:00').getTime())/86400000)); }
+function karmaOf(r){ return M(r).karma!=null?(parseInt(M(r).karma,10)||0):null; }
+function createdAt(r){
+  var m=M(r), cd=m.cdate||'';
+  if(cd && m.ctime) return parseTs(cd+' '+m.ctime);
+  var ca=parseTs(r.created_at);
+  if(cd && (!ca || phtDate(ca)!==cd)) return parseTs(cd);
+  return ca || (cd?parseTs(cd):null);
+}
+function createdExact(r){ var m=M(r); if(m.ctime) return true; var ca=parseTs(r.created_at); return !!(ca && (!m.cdate || phtDate(ca)===m.cdate)); }
+function stageSince(r){ return parseTs(r.stage_at) || (pstartOf(r)?parseTs(pstartOf(r)):null); }
+function endedAt(r){ if(!isDead(r)) return null; return parseTs(r.ended_at) || parseTs(r.stage_at) || parseTs(r.updated_at); }
+function endedExact(r){ return !!r.ended_at; }
+function ageDays(r){ var c=createdAt(r); if(!c) return null; return Math.max(0, dayDiff(c, endedAt(r)||new Date())); }
+function lastWorked(r){
+  var m=M(r), best='';
+  [m.s2,m.s1,m.last].forEach(function(v){ v=String(v||'').slice(0,10); if(/^\d{4}-\d{2}-\d{2}$/.test(v) && v>best) best=v; });
+  return best;
+}
+function processOf(r){ var c=createdAt(r); var ps=(CFG.process_start||SOP_START); return (c && phtDate(c)>=ps)?'iphone':'legacy'; }
+/* METHODS — three ways of running an account (Oct 4 2026): same ladder, different approach. This is
+   the research question — which approach keeps accounts alive and moves them up fastest — so every
+   account carries one, and the board, the database and Insights all group and compare by it. */
+var METHOD_C={ 'vysor':'#0ea5e9', 'jailbroken':'#a855f7', 'blaze+':'#ff6b1a' };
+function methodsList(){ return ((CFG.methods&&CFG.methods.length)?CFG.methods:['Vysor','Jailbroken','Blaze+']).slice(); }
+/* Typed straight into the Google Sheet as "vysor", "BLAZE+ " etc.? Snap it to the canonical name so it
+   lands in the right lane instead of starting a fourth method. */
+function methodOf(r){
+  var v=String((r&&r.method)||'').trim(); if(!v) return '';
+  var lv=v.toLowerCase().replace(/\s+/g,''), ml=methodsList();
+  for(var i=0;i<ml.length;i++){ if(ml[i].toLowerCase().replace(/\s+/g,'')===lv) return ml[i]; }
+  if(lv==='blaze'||lv==='blazeplus') { for(var j=0;j<ml.length;j++) if(/^blaze/i.test(ml[j])) return ml[j]; }
+  if(lv==='jailbreak'||lv==='jb') { for(var k=0;k<ml.length;k++) if(/^jail/i.test(ml[k])) return ml[k]; }
+  return v;
+}
+function methodColor(m){ m=String(m||'').toLowerCase(); if(METHOD_C[m]) return METHOD_C[m]; if(!m) return '#94a3b8'; var h=0; for(var i=0;i<m.length;i++) h=(h*31+m.charCodeAt(i))>>>0; return ['#14b8a6','#f59e0b','#ec4899','#6366f1'][h%4]; }
+function methodPill(m, small){ var c=methodColor(m); return '<span class="pill" style="background:'+c+'16;color:'+c+';'+(small?'font-size:10.5px;padding:2px 8px':'')+'"><i style="width:7px;height:7px;border-radius:50%;background:'+c+';display:inline-block"></i>'+esc(m||'No method')+'</span>'; }
+function kpi(l,v,s,c){ return '<div class="card kpi"><span class="k-bar" style="background:'+c+'"></span><div class="k-l">'+esc(l)+'</div><div class="k-v">'+v+'</div><div class="k-s">'+esc(s)+'</div></div>'; }
+/* ═══════════ CLIENT HOLD · ARCHIVE · RELEASE (owner, Oct 6) ═══════════
+   Clients ask for "massive" holds — every account on the jailbroken phones, or a list of usernames.
+   One modal does it: take the accounts in the current Accounts filter, or paste the client's list
+   (profile links, u/ names, commas, one per line — all fine), see exactly who matched, name the client
+   and the reason, and park them in one go (chunks of 80 → pa_bulk, one call each).
+   Parked = On hold or Archived = OUT OF EVERY NUMBER: no sessions due, no creation credit, not on
+   anyone's Today board, not in the cross-check or the API health run, not in Insights, Pipeline,
+   survival / ban rate / progress / karma, not in coverage. They stay in Accounts (On hold / Archived)
+   with their history; Release puts each one back at the stage it had when the client says go.
+   Only JMBEAST / ADMIN can park or release (the backend enforces it). Ctrl+Z undoes a whole batch. */
+function parkOf(r){ var m=M(r); return (m&&m.park)||{}; }
+function distinct(rows, f){ var s={}; rows.forEach(function(r){ var v=String(f(r)||''); if(v) s[v]=1; }); return Object.keys(s).sort(); }
+/* ═══════════ RECORD DRAWER — facts + full history ═══════════ */
+var KIND={ create:['Logged','#ff6b1a'], stage:['Moved','#a855f7'], ban:['Banned','#ef4444'], reinstate:['Reinstated','#10b981'], assign:['Owner changed','#0ea5e9'], edit:['Edited','#94a3b8'], delete:['Deleted','#64748b'], delreq:['Deletion requested','#f59e0b'], deldecline:['Deletion declined','#10b981'] };
+var PL_PROGRESS=['warming','comment','nsfw','day1','early','earlydm','medium','recovery','tempban'];   // shorter = better
+function plStageRows(rows, k){
+  var list=rows.filter(function(r){ return r.status===k || (k==='creation'&&r.status==='creationstandby'); });
+  if(k==='banned') list=list.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<30; });
+  return list;
+}
+function plAvg(list){ if(!list.length) return null; return Math.round(list.reduce(function(s,r){ var x=stageSince(r); return s+(x?dayDiff(x):0); },0)/list.length*10)/10; }
+function plSummary(rows){
+  var alive=rows.filter(function(r){ return !isDead(r); }).length;
+  var c7=rows.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)<7; }).length;
+  var b7=rows.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<7; }).length;
+  var s30=addDays(today(),-29), b30=rows.filter(function(r){ var e=endedAt(r); return e && phtDate(e)>=s30; }).length;
+  var ex=rows.filter(function(r){ var e=endedAt(r); return !e || phtDate(e)>=s30; }).length;
+  var P1=phaseIx('day1'), post=rows.filter(function(r){ return phaseIx(r.status)>=P1 || phaseIx(M(r).prev)>=P1; }).length;
+  return { n:rows.length, alive:alive, c7:c7, b7:b7, net:c7-b7, rate30:ex?b30/ex:null, post:rows.length?post/rows.length:null };
+}
+/* ═══════════ INSIGHTS — owner only · rebuilt Oct 8 (live, reconciled, client-ready) ═══════════
+   Jeth (Oct 8): "I want the insights to be more real-time and accurate … there are a few bans on Blaze+ and it
+   still shows 0% on where bans come from … this will be the view of the client — whether they continue these
+   methods, or at what pace they should change the SOP."
+   The page answers three questions from ONE live snapshot:
+     1. Which method keeps accounts alive and gets them posting?  Fair across methods of different size and age:
+        "banned a week" = bans ÷ account-weeks the accounts were alive (not dead ÷ ever created).
+     2. Where in the ladder does each method lose accounts?  The phase is read from each account's history — the
+        last ladder phase before the ban, looking through Temp ban / Spam recovery / On hold. (Before: a ban that
+        came after a temp ban, or a history log that timed out, had no phase and silently vanished → 0%.)
+     3. Is a bad day the platform (a ban wave = 90%+ of an operation's live accounts banned together — Jeth, Oct 9) or our process (one group)?
+   DATA: rc_insights (backend rc-2026-10-08a) returns every live account, the bans the 30-day clean-up archived,
+   the status history, and logs stage changes typed straight into the sheet — refreshed every minute while this
+   page is open. A failed refresh keeps the last snapshot on screen and says so. On an older backend it falls back
+   to the board lists + history log and says what is missing. Nothing is dropped silently: untagged, parked and
+   phase-unknown accounts are counted in the data check at the top. */
+var INS={ base:'all', range:30, dim:'method', client:false, cohort:'all' };
+var INSD={ rows:null, ev:null, asg:null, at:0, serverAt:'', mode:'', err:'', errAt:0, loading:false, lastFixed:0, legacyUntil:0, sig:'', dirty:false, arch:0, ms:0 };
+var DIMS=[['method','Method'],['model','Model'],['va','VA'],['device','Phone'],['base','Base'],['niche','Niche'],['process','Process']];
+var PAL=['#ff6b1a','#f43f5e','#a855f7','#0ea5e9','#14b8a6','#f59e0b','#94a3b8'];
+var INS_W=14;          // the verdict compares the last 14 days with the 14 before
+var INS_MIN_AD=70;     // ≈ 5 accounts × 14 days alive — less exposure than this is "too early to call"
+var INS_KINDS={ create:1, stage:1, ban:1, reinstate:1, park:1, release:1 };
+
+/* ── live data ── */
+function insAllRows(){ return INSD.rows || allRows(); }
+function insEv(){ return INSD.ev || EVENTS || []; }
+function insHash(s){ var h=5381; for(var i=0;i<s.length;i++) h=(((h<<5)+h)+s.charCodeAt(i))>>>0; return h.toString(36); }
+function insSig(){
+  var rows=insAllRows(), ev=insEv(), parts=[];
+  rows.forEach(function(r){ parts.push([r.id,r.status,r.method,r.ended_at,r.stage_at,r.model,r.device,r.assigned_to,r.project,r.niche].join('|')); });
+  var le=ev.length?ev[ev.length-1]:null;
+  return rows.length+':'+ev.length+':'+(le?(le.at+le.account_id+le.kind):'')+':'+insHash(parts.join(';'));
+}
+function insT(t){ if(!t) return '—'; try{ return new Date(t).toLocaleTimeString('en-US',{ timeZone:'Asia/Manila', hour:'numeric', minute:'2-digit', second:'2-digit' }); }catch(e){ return fmtT(new Date(t)); } }
+function insAgo(ms){ var s=Math.max(0,Math.round(ms/1000)); if(s<60) return s+'s ago'; var m=Math.round(s/60); if(m<60) return m+' min ago'; return Math.round(m/60)+' h ago'; }
+/* ── where in the ladder ── */
+var _ih={ key:'', map:{} };
+function insHist(){
+  var ev=insEv(), key=(INSD.mode||'x')+'|'+ev.length+'|'+(INSD.ev?INSD.at:EVENTS_AT);
+  if(_ih.key===key) return _ih.map;
+  var m={};
+  ev.forEach(function(e,i){ if(!e || !e.account_id || !INS_KINDS[e.kind]) return; (m[e.account_id]=m[e.account_id]||[]).push({ t:parseTs(e.at), i:i, kind:e.kind, from:statusKey(e.from), to:statusKey(e.to) }); });
+  for(var id in m) m[id].sort(function(a,b){ return ((a.t?a.t.getTime():0)-(b.t?b.t.getTime():0)) || (a.i-b.i); });
+  _ih={ key:key, map:m }; _fp={ key:'', map:{} };
+  return m;
+}
+function ladK(k){ k=statusKey(k); if(k==='new'||k==='creationstandby') return 'creation'; return phaseIx(k)>=0?k:''; }
+/* walk a status trail backwards: the last ladder phase, and the off-ladder state (temp ban, recovery, hold) just before the end */
+function trailBack(trail){
+  var via='';
+  for(var i=trail.length-1;i>=0;i--){ var s=trail[i]; if(!s || s==='banned') continue; var k=ladK(s); if(k) return { k:k, via:via }; if(!via) via=s; }
+  return { k:'', via:via };
+}
+/* The ladder phase an account was banned in (banned) or sits in (alive). History first; then what the row remembers. */
+function insPhase(r){
+  var map=insHist(), hk=_ih.key;
+  if(r._ip && r._ip.key===hk) return r._ip;
+  var h=map[r.id]||[], out;
+  if(isDead(r)){
+    var ban=-1; for(var i=h.length-1;i>=0;i--) if(h[i].kind==='ban'){ ban=i; break; }
+    var trail=[]; for(var j=0;j<(ban>=0?ban:h.length);j++){ trail.push(h[j].from); trail.push(h[j].to); }
+    if(ban>=0) trail.push(h[ban].from);
+    out=trailBack(trail); out.src=out.k?'history':'';
+    if(!out.k){ var mk=ladK(M(r).bphase)||ladK(M(r).prev); if(mk){ out.k=mk; out.src='record'; } }
+  } else {
+    var k=ladK(r.status);
+    if(k) out={ k:k, via:'', src:'status' };
+    else {
+      var tr=[]; h.forEach(function(e){ tr.push(e.from); tr.push(e.to); });
+      out=trailBack(tr); out.via=r.status; out.src=out.k?'history':'';
+      if(!out.k){ var mk2=ladK(M(r).prev); if(mk2){ out.k=mk2; out.src='record'; } }
+    }
+  }
+  out.key=hk; r._ip=out; return out;
+}
+/* first time each account was at Day 1 Posting or beyond (history) */
+var _fp={ key:'', map:{} };
+function insFirstPost(){
+  insHist(); if(_fp.key===_ih.key) return _fp.map;
+  var P1=phaseIx('day1'), m={};
+  insEv().forEach(function(e){ if(!e || !e.account_id) return; if(phaseIx(statusKey(e.to))>=P1){ var t=parseTs(e.at); if(t && (!m[e.account_id] || t<m[e.account_id])) m[e.account_id]=t; } else if(phaseIx(statusKey(e.from))>=P1 && !m[e.account_id]) m[e.account_id]=parseTs(e.at)||new Date(); });
+  _fp={ key:_ih.key, map:m }; return m;
+}
+function reachedPost(r, fp){ var P1=phaseIx('day1'); return !!(fp||insFirstPost())[r.id] || phaseIx(r.status)>=P1 || phaseIx(insPhase(r).k)>=P1; }
+
+/* ═══ RESPONSIBILITY FOLLOWS THE TRANSFER (Jeth, Oct 9) ═══
+   "When a VA created accounts, it counts on their name that day. When the account is transferred, from the transfer date the
+   VA who received it continues handling it — a ban after the transfer is the receiver's responsibility."
+   ownerAt(r, t): who held the account at moment t, from the transfer lines (rc_insights asg, or the history log).
+   respOwner(r): banned → whoever held it on the ban date (a ban with no time of day = the end of that day, so a ban on the
+   transfer date is the receiver's); alive → today's owner. Creation credit always stays with created_by (progOf). */
+var _asg={ key:'', map:{} };
+function asgMap(){
+  var src=(INSD && INSD.asg)||null, key=src?('i'+INSD.at+':'+src.length):('e'+EVENTS_AT+':'+((EVENTS||[]).length));
+  if(_asg.key===key) return _asg.map;
+  var m={}, put=function(id, at, fr, to){ if(!id) return; (m[id]=m[id]||[]).push({ t:((parseTs(at)||new Date(0)).getTime()), from:String(fr||'').toLowerCase(), to:String(to||'').toLowerCase() }); };
+  if(src) src.forEach(function(a){ if(a) put(a[1], a[0], a[2], a[3]); });
+  else (EVENTS||[]).forEach(function(e){ if(e && e.kind==='assign') put(e.account_id, e.at, e.from, e.to); });
+  for(var k in m) m[k].sort(function(a,b){ return a.t-b.t; });
+  _asg={ key:key, map:m }; return m;
+}
+function ownerAt(r, when){
+  var L=r?asgMap()[r.id]:null; if(!L || !L.length || !when) return owner(r);
+  var t=(when instanceof Date)?when.getTime():+when, cur=L[0].from||String(r.created_by||'').toLowerCase()||owner(r);
+  for(var i=0;i<L.length;i++){ if(L[i].t<=t) cur=L[i].to||cur; else break; }
+  return cur||owner(r);
+}
+function banMoment(r){ var e=endedAt(r); if(!e) return null; var s=String(r.ended_at||'').trim(); return (s.length<=10 || /[ T]00:00(:00)?$/.test(s))?new Date(e.getTime()+86399000):e; }
+function respOwner(r){ return (r && isDead(r))?ownerAt(r, banMoment(r)):owner(r); }
+function dimVal(r, dim){
+  if(dim==='method') return methodOf(r)||'(not tagged)';
+  if(dim==='model') return r.model||'(no model)';
+  if(dim==='va') return vaName(respOwner(r));   // a ban sits with whoever held the account on the ban date (Oct 9)
+  if(dim==='device') return r.device||'(phone not recorded)';
+  if(dim==='base') return baseOf(r.project).n;
+  if(dim==='niche') return r.niche||'(no niche)';
+  if(dim==='process') return processOf(r)==='iphone'?'iPhone process':'Before Oct 1';
+  return '—';
+}
+function dimMissing(r, dim){ if(dim==='model') return !r.model; if(dim==='device') return !r.device; if(dim==='niche') return !r.niche; return false; }
+function dimLabel(d){ for(var i=0;i<DIMS.length;i++) if(DIMS[i][0]===d) return DIMS[i][1]; return d; }
+function insDims(){ return DIMS.filter(function(d){ return !INS.client || (d[0]!=='va' && d[0]!=='device'); }); }
+function median(a){ if(!a.length) return null; a=a.slice().sort(function(x,y){ return x-y; }); var m=Math.floor(a.length/2); return a.length%2?a[m]:Math.round((a[m-1]+a[m])/2); }
+function pct(n,d){ return d?Math.round(n/d*1000)/10:0; }
+/* Exposure = accounts alive at the start of the window + accounts created inside it (share-of-accounts view). */
+function exposure(rows, startD){ var s=parseTs(startD); return rows.filter(function(r){ var e=endedAt(r); return !e || e>=s; }).length; }
+/* Account-days alive inside [a, b) — the fair denominator: a method with old accounts and one with new ones compare honestly. */
+/* created: the row's own date, else its first history line (rows typed into the sheet may have none) */
+function insCreated(r){ var c=createdAt(r); if(c) return c; var h=insHist()[r.id]; return (h&&h.length&&h[0].t)?h[0].t:null; }
+function insAD(rows, a, b){ var A=a.getTime(), B=b.getTime(), s=0; rows.forEach(function(r){ var c=insCreated(r); if(!c) return; var e=endedAt(r); if(isDead(r) && !e) return; var x=Math.max(A,c.getTime()), y=Math.min(B,(e||new Date()).getTime()); if(y>x) s+=(y-x)/864e5; }); return s; }
+function insBans(rows, a, b){ var A=a.getTime(), B=b.getTime(); return rows.filter(function(r){ if(!isDead(r) || !insCreated(r)) return false; var e=endedAt(r); return !!e && e.getTime()>=A && e.getTime()<B; }).length; }
+function perWk(b, ad){ return ad>0 ? b/ad*7 : null; }
+function fmtWk(x){ if(x==null) return '—'; if(x>=1) return '100%+'; var p=x*100; return (p>=10?Math.round(p):Math.round(p*10)/10)+'%'; }
+function untag(h){ return String(h||'').replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/\s+/g,' ').trim(); }
+
+/* Every number on the page comes from here. Accounts with no method say nothing about which method works, and
+   parked accounts are out of every report — both are counted in the data check instead of vanishing. */
+function insData(range){
+  if(range===undefined) range=INS.range;
+  insHist();
+  var seen={}, all=[], okBase={}; BASES.forEach(function(b){ okBase[b.id]=1; });
+  insAllRows().forEach(function(r){ if(!r || !r.id || seen[r.id] || !okBase[r.project]) return; seen[r.id]=1; if(INS.base!=='all' && r.project!==INS.base) return; all.push(r); });
+  var rows=all.filter(function(r){ return !!methodOf(r) && !isParked(r); });
+  var end=phtDate(new Date()), start=range?addDays(end,-(range-1)):null;          // calendar day, so a 2 AM ban counts today
+  if(!start){ var mn=end; rows.forEach(function(r){ var c=createdAt(r); if(c){ var d=phtDate(c); if(d<mn) mn=d; } }); start=mn; }
+  var days=[]; for(var d=start; d<=end; d=addDays(d,1)){ days.push(d); if(days.length>400) break; }
+  var mk=function(r){ var e=endedAt(r), p=insPhase(r); return { r:r, at:e, day:e?phtDate(e):'', from:p.k, via:p.via, exact:endedExact(r) && !/Google Sheet/i.test(r.end_reason||'') }; };
+  var banAll=rows.filter(isDead).map(mk);
+  return { all:all, rows:rows, start:start, end:end, days:days, banAll:banAll, range:range,
+           bans:banAll.filter(function(b){ return b.day && b.day>=start && b.day<=end; }) };
+}
+/* BAN WAVE (Jeth, Oct 9): a wave is when ~90% of an operation's live accounts get banned together — NOT "several
+   bans on one day". Per base (each operation) and day d: the accounts live at the start of d (made before d, not banned
+   before d, not parked). If 90%+ of them (and at least 5) are banned on d or the next day — an overnight wave splits
+   across two dates — those days are wave days for that base. */
+var INS_WAVE_PCT=0.9, INS_WAVE_MIN=5;
+function insWaves(D){
+  var by={}, out={};
+  (D.all||[]).forEach(function(r){ if(isParked(r)) return; (by[r.project]=by[r.project]||[]).push(r); });
+  Object.keys(by).forEach(function(pj){
+    var R=by[pj].map(function(r){ var c=createdAt(r), e=endedAt(r); return { c:c?phtDate(c):'', e:e?phtDate(e):'' }; });
+    var days={}; R.forEach(function(x){ if(x.e) days[x.e]=1; });
+    Object.keys(days).sort().forEach(function(d){
+      var live=R.filter(function(x){ return x.c && x.c<d && (!x.e || x.e>=d); }); if(live.length<INS_WAVE_MIN) return;
+      var d2=addDays(d,1), hit=live.filter(function(x){ return x.e===d || x.e===d2; }).length;
+      if(hit<INS_WAVE_PCT*live.length) return;
+      var w={ base:pj, d:d, live:live.length, hit:hit, pct:hit/live.length };
+      [d,d2].forEach(function(k){ if(live.some(function(x){ return x.e===k; })){ var L=out[k]=out[k]||[]; if(!L.some(function(y){ return y.base===pj; })) L.push(w); } });
+    });
+  });
+  return out;
+}
+function detect(D){
+  var out=[], byDay={};
+  D.bans.forEach(function(b){ (byDay[b.day]=byDay[b.day]||[]).push(b); });
+  var avg=D.bans.length/Math.max(1,D.days.length), marks={}, WV=insWaves(D);
+  Object.keys(WV).filter(function(d){ return d>=D.start && d<=D.end; }).sort().reverse().forEach(function(day){
+    marks[day]='wave';
+    out.push({ t:'wave', day:day, h:'<b>'+fmtD(parseTs(day))+' — ban wave.</b> '+WV[day].map(function(w){ return '<b>'+esc(baseOf(w.base).n)+'</b>: '+w.hit+' of '+w.live+' live accounts banned ('+Math.round(w.pct*100)+'%)'+(w.d!==day?' — started '+fmtD(parseTs(w.d)):''); }).join(' · ')+'.',
+      s:'90% or more of an operation\'s live accounts went down together — that\'s the platform, not one model or setup.' });
+  });
+  Object.keys(byDay).sort().reverse().forEach(function(day){
+    var B=byDay[day], n=B.length; if(n<3 || marks[day]) return;
+    function top(dim){ var g={}; B.forEach(function(b){ var k=dimVal(b.r,dim); g[k]=(g[k]||0)+1; }); var ks=Object.keys(g).sort(function(a,b){ return g[b]-g[a]; }); return { k:ks[0], n:g[ks[0]], distinct:ks.length, share:g[ks[0]]/n }; }
+    var tm=top('model'), tv=top('va'), td=top('device'), tb=top('base');
+    var conc=[], dims=[];
+    if(tm.share>=0.7&&tm.n>=3){ conc.push('model <b>'+esc(tm.k)+'</b>'); dims.push('model'); }
+    if(tv.share>=0.7&&tv.n>=3){ conc.push('VA <b>'+esc(tv.k)+'</b>'); dims.push('va'); }
+    if(td.share>=0.7&&td.n>=3&&td.k.indexOf('(')!==0){ conc.push('phone <b>'+esc(td.k)+'</b>'); dims.push('device'); }
+    var spread=(tm.distinct>=3 && tm.share<0.6 && tv.distinct>=3), when=fmtD(parseTs(day));
+    if(conc.length){ marks[day]='conc';
+      out.push({ t:'conc', day:day, dims:dims, h:'<b>'+when+' — bans concentrated:</b> '+Math.max(tm.n,tv.n)+' of '+n+' on '+conc.join(' and ')+'.', s:'When one model, VA or phone takes most of the day\'s bans while the rest are fine, that model\'s routine is being checked on our side.' });
+    } else if(n>=Math.max(3,avg*3)){ marks[day]='conc';
+      out.push({ t:'conc', day:day, h:'<b>'+when+' — ban spike:</b> '+n+' bans (normal day: '+avg.toFixed(1)+')'+(spread?', spread across '+tm.distinct+' models':'')+'.', s:'Not a ban wave (that needs 90%+ of the live accounts banned together) and not clearly one group — open the day in Accounts to compare.' });
+    }
+  });
+  var s7=addDays(D.end,-6), recent=D.bans.filter(function(b){ return b.day>=s7; });
+  ['va','model','device'].forEach(function(dim){
+    var groups={}; D.rows.forEach(function(r){ var k=dimVal(r,dim); (groups[k]=groups[k]||[]).push(r); });
+    Object.keys(groups).forEach(function(k){
+      if(k.indexOf('(')===0) return;
+      var nb=recent.filter(function(b){ return dimVal(b.r,dim)===k; }).length; if(nb<3) return;
+      var ex=exposure(groups[k], s7), rest=D.rows.filter(function(r){ return dimVal(r,dim)!==k; });
+      var nbR=recent.length-nb, exR=exposure(rest, s7), rate=nb/Math.max(1,ex), rateR=nbR/Math.max(1,exR);
+      if(rate>=0.1 && rate>=2*Math.max(rateR,0.01))
+        out.push({ t:'conc', dim:dim, k:k, h:'<b>'+dimLabel(dim)+' '+esc(k)+':</b> '+nb+' bans in 7 days — '+Math.round(rate*100)+'% of its accounts vs '+Math.round(rateR*100)+'% for everyone else.', s:'Same week, same platform — a rate this far above the rest is worth a look at this '+dimLabel(dim).toLowerCase()+'\'s routine.' });
+    });
+  });
+  return { alerts:out, marks:marks };
+}
+function insAlerts(A){
+  if(!INS.client) return A.alerts;
+  var hid=0, list=A.alerts.filter(function(a){ var p=(a.dim==='va'||a.dim==='device') || (a.dims||[]).some(function(x){ return x==='va'||x==='device'; }); if(p) hid++; return !p; });
+  if(hid) list.push({ t:'conc', h:'<b>'+hid+' signal'+(hid===1?' points':'s point')+' at one VA or one phone</b> — handled internally.', s:'Those are process checks on our side, not a method or SOP question.' });
+  return list;
+}
+/* Phase × method: of the accounts that REACHED each phase, how many were banned WHILE in it. Every ban is placed —
+   one whose phase can't be read from its history lands in "Phase unknown", so each column adds up. */
+function phaseStats(rows){
+  var ms=methodsList().filter(function(m){ return rows.some(function(r){ return methodOf(r)===m; }); });
+  rows.forEach(function(r){ var m=methodOf(r); if(m && ms.indexOf(m)<0) ms.push(m); });
+  var C={};
+  ms.forEach(function(m){ C[m]={ reach:PH.map(function(){ return 0; }), died:PH.map(function(){ return 0; }), unkDead:0, unkAlive:0, dead:0, n:0, via:{} }; });
+  rows.forEach(function(r){
+    var c=C[methodOf(r)]; if(!c) return; c.n++;
+    var p=insPhase(r), ix=phaseIx(p.k), dead=isDead(r); if(dead) c.dead++;
+    if(ix<0){ if(dead) c.unkDead++; else c.unkAlive++; return; }
+    for(var i=0;i<=ix;i++) c.reach[i]++;
+    if(dead){ c.died[ix]++; if(p.via) c.via[p.via]=(c.via[p.via]||0)+1; }
+  });
+  var worst={};
+  ms.forEach(function(m){ var w=null; PH.forEach(function(p,i){ var n=C[m].reach[i], d=C[m].died[i]; if(n>=3 && d>0){ var rt=d/n; if(!w || rt>w.rate) w={ i:i, k:p.k, rate:rt, d:d, n:n }; } }); worst[m]=w; });
+  return { ms:ms, C:C, worst:worst };
+}
+function sopList(){
+  var a=(CFG && Array.isArray(CFG.sop_changes)) ? CFG.sop_changes
+        : [{ d:(CFG.process_start||SOP_START), n:'iPhone process' }, { d:'2026-10-05', n:'Client SOP changes (phase plans, DMs, recovery, profile check)' }];
+  return a.filter(function(x){ return x && /^\d{4}-\d{2}-\d{2}$/.test(String(x.d||'')); }).map(function(x){ return { d:String(x.d), n:String(x.n||'SOP change') }; })
+          .sort(function(x,y){ return x.d<y.d?-1:(x.d>y.d?1:0); });
+}
+
+/* ═══ THE BOTTOM LINE — per method: Keep / Watch / Change / Too early, and what to do with the SOP ═══
+   Last 14 days vs the 14 before. "Change" = losing accounts at least twice as fast as the best method (3+ bans),
+   or one phase taking 40%+ of the accounts that reach it (5+ reached, 3+ banned). "Watch" = 1.5× the best,
+   1.5× its own previous 14 days, or one phase at 25%+. Under ~5 accounts × 14 days alive = too early to call. */
+var VERD={ keep:{ t:'Keep', c:'#047857', bg:'#dcfce7', s:'keep running it' }, watch:{ t:'Watch', c:'#b45309', bg:'#fef3c7', s:'watch it closely' },
+           change:{ t:'Change', c:'#b91c1c', bg:'#fee2e2', s:'change the SOP or move away' }, early:{ t:'Too early', c:'#475569', bg:'#e2e8f0', s:'not enough accounts yet' } };
+function insVerdict(){
+  var D=insData(28), now=new Date(), W=INS_W*864e5, a=new Date(now.getTime()-W), a0=new Date(now.getTime()-2*W);
+  /* phases for the verdict come from the same 14 days: accounts alive at some point in them, bans inside them */
+  var PS=phaseStats(D.rows.filter(function(r){ if(!isDead(r)) return true; var e=endedAt(r); return !!e && e>=a; })), fp=insFirstPost(), A=detect(D);
+  var st=PS.ms.map(function(m){
+    var rows=D.rows.filter(function(r){ return methodOf(r)===m; }), dead=rows.filter(isDead);
+    var ad=insAD(rows,a,now), b=insBans(rows,a,now), ad0=insAD(rows,a0,a), b0=insBans(rows,a0,a);
+    return { m:m, n:rows.length, alive:rows.length-dead.length, ad:ad, b:b, w:perWk(b,ad), ad0:ad0, b0:b0, w0:perWk(b0,ad0),
+             made:rows.filter(function(r){ var c=createdAt(r); return c && c>=a; }).length,
+             post:rows.length?rows.filter(function(r){ return reachedPost(r,fp); }).length/rows.length:null,
+             med:median(dead.map(ageDays).filter(function(x){ return x!=null; })), worst:PS.worst[m] };
+  });
+  var ok=st.filter(function(s){ return s.ad>=INS_MIN_AD && s.w!=null; }), best=null, bestM='';
+  ok.forEach(function(s){ if(best==null || s.w<best){ best=s.w; bestM=s.m; } });
+  st.forEach(function(s){
+    s.vs=(best!=null && ok.length>1 && s.m!==bestM && s.w!=null && s.ad>=INS_MIN_AD)?(best>0?s.w/best:(s.w>0?99:1)):null;
+    s.tr=(s.w0!=null && s.ad0>=INS_MIN_AD && s.w!=null)?(s.w0>0?s.w/s.w0:(s.w>0?99:1)):null;
+    var wp=s.worst;
+    if(s.ad<INS_MIN_AD) s.v='early';
+    else if((s.b>=3 && s.vs!=null && s.vs>=2 && s.w-best>=0.03) || (wp && wp.n>=5 && wp.d>=3 && wp.rate>=0.4)) s.v='change';
+    else if((s.b>=2 && s.vs!=null && s.vs>=1.5) || (s.b>=3 && s.tr!=null && s.tr>=1.5) || (wp && wp.n>=4 && wp.d>=2 && wp.rate>=0.25)) s.v='watch';
+    else s.v='keep';
+  });
+  var recs=[];
+  /* 1 · a method losing accounts much faster than the best one */
+  st.forEach(function(s){ if(s.v==='change' && s.vs!=null && s.vs>=2)
+    recs.push({ t:'change', ic:'⛔', h:'<b>'+esc(s.m)+'</b> is losing accounts '+(s.vs>=10?'10+':(Math.round(s.vs*10)/10))+'× faster than <b>'+esc(bestM)+'</b> — '+fmtWk(s.w)+' of its live accounts banned a week vs '+fmtWk(best)+'.',
+                s:'Make new accounts on '+bestM+' until the way '+s.m+' is run changes, then compare the next 15–20 accounts.' }); });
+  /* 2 · the pace into one phase */
+  st.forEach(function(s){ var wp=s.worst; if(s.v==='early' || !wp || !(wp.rate>=0.25 && wp.n>=4 && wp.d>=2)) return;
+    var prev=wp.i>0?PH[wp.i-1]:null, others=st.filter(function(o){ return o.m!==s.m; }).map(function(o){ var c=PS.C[o.m]; var n=c.reach[wp.i], d=c.died[wp.i]; return n>=3?(esc(o.m)+' '+Math.round(d/n*100)+'% ('+d+' of '+n+')'):''; }).filter(Boolean);
+    recs.push({ t:'pace', ic:'🐢', h:'<b>'+esc(s.m)+': slow the pace into '+esc(PH[wp.i].n)+'</b> — '+wp.d+' of '+wp.n+' accounts that reached it were banned there ('+Math.round(wp.rate*100)+'%).'+(others.length?' Same phase: '+others.join(', ')+'.':''),
+                s:(prev?'Keep accounts longer in '+prev.n+', or lighten the '+PH[wp.i].n+' plan — then':'Lighten this phase — then')+' judge it on the next 15–20 accounts that reach it.' }); });
+  /* 3 · platform waves — not an SOP question */
+  var a14=phtDate(a), waves=Object.keys(A.marks).filter(function(d){ return A.marks[d]==='wave' && d>=a14; }).sort();
+  if(waves.length) recs.push({ t:'wave', ic:'🌊', h:'<b>'+waves.map(function(d){ return fmtD(parseTs(d)); }).join(', ')+'</b> '+(waves.length===1?'looks':'look')+' like a platform-wide ban wave — bans spread across many models and methods on the same day.',
+                              s:'A wave comes from Reddit, not from the SOP. Don\'t change the SOP because of those days alone.' });
+  /* 4 · bans piling on one VA / phone / model — process, not method */
+  var s7=addDays(D.end,-6), proc=A.alerts.filter(function(x){ return x.t==='conc' && (x.dim || (x.dims && x.dims.length)) && (!x.day || x.day>=s7); });
+  if(proc.length){
+    var names=proc.map(function(x){ return x.dim?(dimLabel(x.dim)+' '+x.k):untag(x.h).replace(/^.*?concentrated:\s*/,''); }).slice(0,3);
+    recs.push({ t:'pace', ic:'🔧', h:INS.client?'<b>Some recent bans are concentrated on one model</b> — being checked on our side, not a method problem.':('<b>Recent bans concentrated</b> — '+esc(names.join(' · '))+'.'),
+                s:'Fix that first — it is not a reason to change the SOP for everyone.' });
+  }
+  /* 5 · did the latest SOP change help? */
+  var L=sopList().filter(function(x){ var t=parseTs(x.d); return t && t<=new Date(now.getTime()-3*864e5); });
+  if(L.length){
+    var c=L[L.length-1], ct=parseTs(c.d), bA=new Date(ct.getTime()-W), adB=insAD(D.rows,bA,ct), bB=insBans(D.rows,bA,ct), adA=insAD(D.rows,ct,now), bAft=insBans(D.rows,ct,now);
+    var wB=perWk(bB,adB), wA=perWk(bAft,adA), lab='<b>'+esc(c.n)+'</b> ('+fmtD(ct)+')';
+    if(adB>=INS_MIN_AD && adA>=INS_MIN_AD && wB!=null && wA!=null){
+      if(wA<=wB*0.75) recs.push({ t:'ok', ic:'✅', h:'Since '+lab+': banned a week fell from '+fmtWk(wB)+' to '+fmtWk(wA)+'.', s:'The change is working — keep it, and change only one more thing at a time.' });
+      else if(wA>=wB*1.25 && bAft>=3) recs.push({ t:'change', ic:'⚠️', h:'Since '+lab+': banned a week rose from '+fmtWk(wB)+' to '+fmtWk(wA)+'.', s:'Review that change first — check the wave note above before blaming it.' });
+      else recs.push({ t:'info', ic:'≈', h:'Since '+lab+': about the same — '+fmtWk(wB)+' before, '+fmtWk(wA)+' after.', s:'No clear effect yet. Give it more days before the next change.' });
+    } else recs.push({ t:'info', ic:'⏳', h:'Too early to judge '+lab+'.', s:'Needs about 5 accounts × 14 days alive on each side of the change.' });
+  }
+  if(!recs.some(function(x){ return x.t==='change' || x.t==='pace' || x.t==='wave'; }))
+    recs.unshift({ t:'ok', ic:'✅', h:'<b>No method is clearly worse right now.</b>', s:'Keep the current SOP and pace; check again next week.' });
+  /* 6 · how fast can a change be judged */
+  var pace=st.filter(function(s){ return s.made>0; }).map(function(s){ var wk=s.made/(INS_W/7); return { m:s.m, wk:wk, wks:Math.max(1, Math.ceil(15/Math.max(0.5,wk))) }; });
+  if(pace.length){
+    recs.push({ t:'info', ic:'⏱', h:'<b>Pace for SOP changes:</b> '+pace.map(function(p){ return esc(p.m)+' makes '+(Math.round(p.wk*10)/10)+' new a week → a fair read in ~'+p.wks+' week'+(p.wks===1?'':'s'); }).join(' · ')+'.',
+                s:'A change can be judged once 15–20 accounts have run under it. Change one thing at a time, and wait that long before the next.' });
+  }
+  return { st:st, recs:recs, best:best, bestM:bestM, A:A, D:D, PS:PS };
+}
+function insBottomLine(V){
+  var tiles=V.st.map(function(s){
+    var c=methodColor(s.m), vd=VERD[s.v], tr='';
+    if(s.v!=='early' && s.w0!=null && s.ad0>=INS_MIN_AD){ var up=s.w>s.w0*1.15, dn=s.w<s.w0*0.85; tr='<div class="vd-tr" style="color:'+(up?'#b91c1c':(dn?'#047857':'var(--ink3)'))+'">'+(up?'↑':(dn?'↓':'→'))+' from '+fmtWk(s.w0)+' the 14 days before</div>'; }
+    else if(s.v!=='early') tr='<div class="vd-tr muted">no earlier 14 days to compare</div>';
+    return '<div class="vd" style="border-top:3px solid '+c+'"><div class="row" style="justify-content:space-between"><b style="color:'+c+';font-size:14.5px">'+esc(s.m)+'</b><span class="vchip" style="background:'+vd.bg+';color:'+vd.c+'">'+vd.t+'</span></div>'+
+      (s.v==='early'?'<div class="vd-big" style="color:var(--ink3)">'+s.n+'<small> account'+(s.n===1?'':'s')+' so far</small></div><div class="vd-tr muted">needs ~5 accounts alive for 14 days</div>'
+                    :'<div class="vd-big">'+fmtWk(s.w)+'<small> banned a week</small></div>'+tr)+
+      '<div class="vd-k"><span>Reached posting <b>'+(s.post==null?'—':Math.round(s.post*100)+'%')+'</b></span><span>Median life <b>'+(s.med==null?'—':s.med+'d')+'</b></span>'+
+        (s.worst?'<span title="'+s.worst.d+' of '+s.worst.n+' accounts that reached it in the last 14 days were banned there">Riskiest now <b>'+esc(PH[s.worst.i].n)+' '+Math.round(s.worst.rate*100)+'%</b></span>':'')+'</div>'+
+      '<div class="vd-n">'+s.n+' accounts · '+s.alive+' alive · '+s.b+' ban'+(s.b===1?'':'s')+' in 14 days · '+s.made+' new</div></div>';
+  }).join('');
+  return '<div class="card pad ins-bl"><div class="ch-h"><b>The bottom line</b><span>per method · last 14 days vs the 14 before</span><div style="flex:1"></div>'+
+      '<button class="btn sm sec no-print" onclick="insCopy()">'+IC.doc+' Copy summary</button><button class="btn sm sec no-print" onclick="window.print()">'+IC.dl+' Print / PDF</button></div>'+
+    (tiles?'<div class="vd-grid">'+tiles+'</div><p class="muted" style="font-size:11.5px;margin-top:8px">"Banned a week" = bans ÷ the weeks its accounts were alive — big and small, old and new methods compare fairly.</p>':'<div class="muted">No accounts with a method yet.</div>')+
+    '</div>';   /* "What to do with the SOP" removed (Oct 9, Jeth: not accurate) */
+}
+function insSummaryText(){
+  var keep=INS.client; INS.client=true;
+  try{
+    var V=insVerdict(), D=V.D, L=[], baseTxt=INS.base==='all'?BASES.map(function(b){ return b.n; }).join(' + '):baseOf(INS.base).n;
+    L.push('Reddit accounts — '+baseTxt+' · insights as of '+fmtDT(new Date(INSD.at||Date.now())));
+    L.push(''); L.push('Bottom line (last 14 days vs the 14 before):');
+    V.st.forEach(function(s){ L.push('• '+s.m+' — '+VERD[s.v].t.toUpperCase()+' ('+VERD[s.v].s+'): '+(s.v==='early'?(s.n+' accounts so far'):(fmtWk(s.w)+' of live accounts banned a week'+((s.w0!=null&&s.ad0>=INS_MIN_AD)?' (before: '+fmtWk(s.w0)+')':'')))+
+      (s.post!=null?' · '+Math.round(s.post*100)+'% reached posting':'')+(s.worst?' · riskiest phase: '+PH[s.worst.i].n+' ('+s.worst.d+' of '+s.worst.n+' banned there)':'')); });
+    L.push(''); L.push('Counted: '+D.rows.length+' accounts with a method · '+D.banAll.length+' bans all-time. "Banned a week" = bans ÷ the weeks the accounts were alive.');
+    return L.join('\n');
+  } finally { INS.client=keep; }
+}
+/* ═══ THE PAGE ═══ */
+function insDataCheck(D){
+  var dead=D.banAll, known=dead.filter(function(b){ return b.from; }).length, arch=D.rows.filter(function(r){ return r.arch; }).length;
+  var per=BASES.filter(function(b){ return INS.base==='all' || b.id===INS.base; }).map(function(b){ return esc(b.n)+' '+D.rows.filter(function(r){ return r.project===b.id; }).length; }).join(' · ');
+  var un=D.all.filter(function(r){ return !methodOf(r) && !isParked(r); }), unB=un.filter(isDead).length, parked=D.all.filter(isParked).length;
+  var warn=[], note=[];
+  if(INSD.err) warn.push('Last refresh failed ('+esc(INSD.err)+') at '+insT(INSD.errAt)+(INSD.at?' — showing the snapshot from '+insT(INSD.at):'')+'. Retrying every minute.');
+  if(INSD.mode==='legacy') warn.push(Date.now()<INSD.legacyUntil?'<b>Older Reddit script</b> — bans archived after 30 days and stage changes typed straight into the Google Sheet are not counted yet. Paste <b>rc-2026-10-08a</b> (Apps Script → Deploy → New version).':'The live snapshot did not load — showing the board lists meanwhile.');
+  if(un.length) warn.push('<b>'+un.length+'</b> account'+(un.length===1?'':'s')+' with no method'+(unB?' — including <b>'+unB+' ban'+(unB===1?'':'s')+'</b> —':'')+' '+(un.length===1?'is':'are')+' not in these numbers. <a href="#" onclick="DB.meth=\'\';DB.all=true;DB.life=\'all\';DB.va=\'all\';DB.model=\'\';DB.phone=\'\';go(\'accounts\');return false">Tag '+(un.length===1?'it':'them')+' →</a>');
+  if(dead.length>known) warn.push('<b>'+(dead.length-known)+'</b> ban'+(dead.length-known===1?' has':'s have')+' no known phase (banned before the history log began, or before the detailed history began) — shown as "Phase unknown", still counted everywhere else.');
+  if(INSD.lastFixed) note.push(INSD.lastFixed+' stage change'+(INSD.lastFixed===1?'':'s')+' typed straight into the Google Sheet '+(INSD.lastFixed===1?'was':'were')+' just logged (dated when found).');
+  if(parked) note.push(parked+' on hold / archived — left out by design.');
+  return '<div class="card pad ins-dc"><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><div class="ins-live" id="ins-live">'+insLiveHtml()+'</div><div style="flex:1"></div>'+
+      '<button class="btn sm sec no-print" onclick="insRefresh()"'+(INSD.loading?' disabled':'')+'>'+IC.swap+' Refresh now</button></div>'+
+    '<div class="ins-dq">✓ Counting <b>'+D.rows.length+'</b> accounts with a method'+(per?' ('+per+')':'')+' · <b>'+dead.length+'</b> bans all-time'+(arch?' — '+arch+' archived by the 30-day clean-up, still counted':'')+
+      ' · ban phase known for <b>'+known+'</b> of '+dead.length+' · '+insEv().length.toLocaleString()+' history lines'+(note.length?' · '+note.join(' · '):'')+'</div>'+
+    warn.map(function(w){ return '<div class="ins-dq warn">⚠ '+w+'</div>'; }).join('')+'</div>';
+}
+/* ── METHOD COMPARISON — the research view ── */
+function methodCompare(D){
+  var fp=insFirstPost(), now=new Date(), sD=parseTs(D.start);
+  var keys=phaseStats(D.rows).ms, ms=methodsList();
+  ms.forEach(function(m){ if(keys.indexOf(m)<0) keys.push(m); });
+  var stats=keys.map(function(m){
+    var rows=D.rows.filter(function(r){ return methodOf(r)===m; }), dead=rows.filter(isDead), n=rows.length;
+    var lives=dead.map(ageDays).filter(function(x){ return x!=null; });
+    var el7=rows.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)>=7; }), s7=el7.filter(function(r){ var a=ageDays(r); return !isDead(r)||(a!=null&&a>7); }).length;
+    var ttp=rows.map(function(r){ var t=fp[r.id], c=createdAt(r); return (t&&c)?Math.max(0,dayDiff(c,t)):null; }).filter(function(x){ return x!=null; });
+    var adR=insAD(rows,sD,now), bR=insBans(rows,sD,now);
+    return { m:m, n:n, alive:n-dead.length, dead:dead.length, rate:n?dead.length/n:null, wk:adR>=INS_MIN_AD/2?perWk(bR,adR):null, med:median(lives), s7:el7.length?s7/el7.length:null, el7:el7.length,
+             post:n?rows.filter(function(r){ return reachedPost(r,fp); }).length/n:null, ttp:median(ttp), ttpN:ttp.length, inR:bR };
+  });
+  function best(key, low){ var v=stats.filter(function(s){ return s.n>=3 && s[key]!=null; }).map(function(s){ return s[key]; }); if(v.length<2) return null; return low?Math.min.apply(null,v):Math.max.apply(null,v); }
+  var B={ rate:best('rate',true), wk:best('wk',true), med:best('med'), s7:best('s7'), post:best('post'), ttp:best('ttp',true) };
+  function cell(s,key,txt){ var hi=(B[key]!=null && s[key]===B[key] && s.n>=3); return '<td class="num" style="'+(hi?'font-weight:800;color:#047857;background:#ecfdf5':'')+'">'+txt+'</td>'; }
+  var rl=INS.range?INS.range+'d':'all';
+  return '<div class="card pad" style="margin-top:12px"><div class="ch-h"><b>Method comparison</b><span>Vysor vs Jailbroken vs Blaze+ — same ladder, different approach · best in each column is green (needs 3+ accounts)</span></div>'+
+    '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Method</th><th>Accounts</th><th>Alive</th><th>Banned (all-time)</th><th>Banned %</th><th>Banned a week · '+rl+'</th><th>Median life</th><th>Alive at day 7</th><th>Reached posting</th><th>Days to posting</th><th>Bans · '+rl+'</th></tr></thead><tbody>'+
+    stats.map(function(s){
+      return '<tr class="r" onclick="DB.meth=\''+jsq(s.m)+'\';DB.all=true;DB.life=\'all\';DB.va=\'all\';DB.model=\'\';DB.phone=\'\';go(\'accounts\')"><td class="c1">'+methodPill(s.m,true)+'</td><td class="num">'+s.n+'</td><td class="num">'+s.alive+'</td><td class="num" style="font-weight:800">'+s.dead+'</td>'+
+        cell(s,'rate',s.rate==null?'—':(Math.round(s.rate*1000)/10)+'%')+cell(s,'wk',s.wk==null?'<span class="muted">too few</span>':fmtWk(s.wk))+cell(s,'med',s.med==null?'—':s.med+'d')+
+        cell(s,'s7',s.s7==null?'too new':Math.round(s.s7*100)+'% of '+s.el7)+cell(s,'post',s.post==null?'—':Math.round(s.post*100)+'%')+
+        cell(s,'ttp',s.ttp==null?'—':s.ttp+'d <span class="muted">('+s.ttpN+')</span>')+'<td class="num">'+(s.inR||'·')+'</td></tr>';
+    }).join('')+'</tbody></table></div>'+
+    '<p class="muted" style="font-size:11.5px;margin-top:4px">"Banned %" = banned ÷ every account ever made (favours newer methods). "Banned a week" = bans ÷ the weeks the accounts were alive in the range — the fair comparison. Small groups swing a lot; compare once each method has 15–20 accounts.</p></div>';
+}
+function banChart(D, marks){
+  var dim=INS.dim, tot={}, bans=D.bans.filter(function(b){ return !dimMissing(b.r,dim); });
+  bans.forEach(function(b){ var k=dimVal(b.r,dim); tot[k]=(tot[k]||0)+1; });
+  var keys=Object.keys(tot).sort(function(a,b){ return tot[b]-tot[a]; }), top=keys.slice(0,6), col={};
+  top.forEach(function(k,i){ col[k]=(dim==='method')?methodColor(k):PAL[i]; });
+  var per={}, cr={}, mx=1, mxc=1;
+  bans.forEach(function(b){ var k=top.indexOf(dimVal(b.r,dim))>=0?dimVal(b.r,dim):'Other'; var p=(per[b.day]=per[b.day]||{}); p[k]=(p[k]||0)+1; });
+  D.rows.forEach(function(r){ var c=createdAt(r); if(!c) return; var d=phtDate(c); if(d>=D.start&&d<=D.end) cr[d]=(cr[d]||0)+1; });
+  D.days.forEach(function(d){ var s=0, p=per[d]||{}; for(var k in p) s+=p[k]; mx=Math.max(mx,s); mxc=Math.max(mxc,cr[d]||0); });
+  var n=D.days.length, W=Math.max(640, n*16), H=230, L=30, B=26, T=18, bw=Math.max(3,(W-L-10)/n*0.66), step=(W-L-10)/n;
+  var top4=Math.max(4, Math.ceil(Math.max(mx,mxc)/4)*4), sc=(H-B-T)/top4;
+  var g='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;'+(n>45?'min-width:'+(n*12)+'px;':'')+'height:auto;display:block">';
+  for(var i=0;i<=4;i++){ var y=H-B-(H-B-T)*i/4, v=top4*i/4; g+='<line x1="'+L+'" x2="'+(W-6)+'" y1="'+y+'" y2="'+y+'" stroke="rgba(17,19,34,.07)"/><text x="'+(L-6)+'" y="'+(y+3)+'" font-size="9.5" fill="#7f859c" text-anchor="end">'+v+'</text>'; }
+  sopList().forEach(function(c){ var ix=D.days.indexOf(c.d); if(ix<0) return; var x=(L+ix*step).toFixed(1);
+    g+='<line x1="'+x+'" x2="'+x+'" y1="'+(T-8)+'" y2="'+(H-B)+'" stroke="#6d28d9" stroke-opacity=".55" stroke-dasharray="3 3"><title>'+esc(fmtD(parseTs(c.d))+' · '+c.n)+'</title></line>'+
+       '<text x="'+(+x+3)+'" y="'+(T-1)+'" font-size="9" font-weight="700" fill="#6d28d9">'+esc(c.n.length>22?c.n.slice(0,21)+'…':c.n)+'</text>'; });
+  var path='';
+  D.days.forEach(function(d,ix){
+    var x=L+ix*step+(step-bw)/2, y=H-B, p=per[d]||{};
+    top.concat(['Other']).forEach(function(k){ var v=p[k]||0; if(!v) return; var hh=v*sc; y-=hh;
+      g+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+hh.toFixed(1)+'" rx="2" fill="'+(col[k]||PAL[6])+'"><title>'+esc(fmtD(parseTs(d))+' · '+k+': '+v)+'</title></rect>'; });
+    var cy=H-B-(cr[d]||0)*sc; path+=(ix?'L':'M')+(L+ix*step+step/2).toFixed(1)+' '+cy.toFixed(1);
+    if(marks[d]) g+=(marks[d]==='wave'?'<path d="M'+(x+bw/2-5)+' '+(y-5)+' l5 -8 l5 8z" fill="#e11d48"/>':'<circle cx="'+(x+bw/2)+'" cy="'+(y-6)+'" r="3.5" fill="#f59e0b"/>');
+    var every=Math.ceil(n/12); if(ix%every===0 || ix===n-1) g+='<text x="'+(L+ix*step+step/2)+'" y="'+(H-8)+'" font-size="9.5" fill="#7f859c" text-anchor="middle">'+esc(fmtD(parseTs(d)))+'</text>';
+  });
+  g+='<path d="'+path+'" fill="none" stroke="#14161f" stroke-opacity=".28" stroke-width="1.5" stroke-dasharray="3 3"/></svg>';
+  var left=D.bans.length-bans.length, crLeg='<span><i style="background:none;border-top:2px dashed rgba(17,19,34,.35);height:0;width:14px;border-radius:0"></i>created per day</span>'+(left?'<span class="muted">+ '+left+' ban'+(left===1?'':'s')+' with no '+esc(dimLabel(dim).toLowerCase())+' recorded (not stacked)</span>':'');
+  var leg=bans.length?'<div class="legend">'+top.map(function(k){ return '<span><i style="background:'+col[k]+'"></i>'+esc(k)+' · '+tot[k]+'</span>'; }).join('')+(keys.length>6?'<span><i style="background:'+PAL[6]+'"></i>Other</span>':'')+crLeg+'</div>'
+                     :'<div class="legend"><span>No bans in this range.</span>'+crLeg+'</div>';
+  return '<div style="overflow-x:auto">'+g+'</div>'+leg;
+}
+function breakdown(D, dim){
+  var groups={}; D.rows.forEach(function(r){ var k=dimVal(r,dim); (groups[k]=groups[k]||[]).push(r); });
+  var exAll=exposure(D.rows, D.start), rAll=D.bans.length/Math.max(1,exAll), s7=addDays(D.end,-6);
+  var list=Object.keys(groups).map(function(k){
+    var rows=groups[k], b=D.bans.filter(function(x){ return dimVal(x.r,dim)===k; });
+    var ex=exposure(rows, D.start), rate=b.length/Math.max(1,ex), lives=rows.filter(isDead).map(ageDays).filter(function(x){ return x!=null; });
+    var st={}; b.forEach(function(x){ var s=x.from?stageMeta(x.from).n:'phase unknown'; st[s]=(st[s]||0)+1; });
+    return { k:k, n:rows.length, alive:rows.filter(function(r){ return !isDead(r); }).length, b:b.length, rate:rate, med:median(lives),
+             b7:b.filter(function(x){ return x.day>=s7; }).length, st:Object.keys(st).sort(function(a,c){ return st[c]-st[a]; })[0]||'' };
+  }).sort(function(a,b){ return b.b-a.b || b.n-a.n; });
+  var maxRate=Math.max.apply(null, list.map(function(o){ return o.rate; }).concat([0.0001]));
+  return '<div class="tbl-w" style="max-height:420px"><table class="db"><thead><tr><th class="c1">'+esc(dimLabel(dim))+'</th><th>Accounts</th><th>Alive</th><th>Banned</th><th>Ban rate</th><th></th><th>Median life</th><th>Bans · 7d</th><th>Died most in</th><th>Flag</th></tr></thead><tbody>'+
+    list.map(function(o){
+      var fl=(o.b>=3 && o.rate>=2*rAll)?'<span class="flag r">Check</span>':((o.b>=2 && o.rate>=1.5*rAll)?'<span class="flag a">Watch</span>':'<span class="flag g">OK</span>');
+      return '<tr class="r" onclick="drillDim(\''+jsq(dim)+'\',\''+jsq(o.k)+'\')"><td class="c1">'+esc(o.k)+'</td><td class="num">'+o.n+'</td><td class="num">'+o.alive+'</td><td class="num" style="font-weight:800">'+o.b+'</td><td class="num">'+(Math.round(o.rate*1000)/10)+'%</td>'+
+        '<td style="min-width:90px"><div class="prog"><i style="width:'+Math.max(2,Math.min(100,o.rate/maxRate*100))+'%;background:'+(o.rate>=2*rAll&&o.b>=3?'#ef4444':'var(--grad)')+'"></i></div></td>'+
+        '<td class="num">'+(o.med==null?'—':o.med+'d')+'</td><td class="num">'+(o.b7||'·')+'</td><td>'+esc(o.st||'—')+'</td><td>'+fl+'</td></tr>';
+    }).join('')+'<tr class="grp"><td colspan="10">Overall ban rate in range: '+Math.round(rAll*1000)/10+'%</td></tr></tbody></table></div>';
+}
+function deathStages(D){
+  if(!D.bans.length) return '<div class="muted">No bans in this range.</div>';
+  var st={}, via={}; D.bans.forEach(function(b){ var k=b.from||'?'; st[k]=(st[k]||0)+1; if(b.via){ (via[k]=via[k]||{}); via[k][b.via]=(via[k][b.via]||0)+1; } });
+  var ks=Object.keys(st).sort(function(a,b){ return (a==='?')-(b==='?') || phaseIx(a)-phaseIx(b); }), mx=0; ks.forEach(function(k){ mx=Math.max(mx,st[k]); });
+  return ks.map(function(k){ var sm=k==='?'?{n:'Phase unknown',c:'#cbd5e1'}:stageMeta(k), v=via[k]?Object.keys(via[k]).map(function(x){ return via[k][x]+' via '+stageMeta(x).n; }).join(', '):'';
+    return '<div class="hb"><div class="l" title="'+esc(sm.n)+'">'+esc(sm.n)+'</div><div class="b"><i style="width:'+(st[k]/mx*100)+'%;background:'+sm.c+'"></i></div><div class="n">'+st[k]+'</div></div>'+(v?'<div class="muted" style="font-size:10.5px;margin:-3px 0 4px 128px">'+esc(v)+'</div>':''); }).join('');
+}
+function phaseMethod(D){
+  var rows=D.rows; if(INS.cohort==='range' && INS.range) rows=rows.filter(function(r){ var c=createdAt(r); return c && phtDate(c)>=D.start; });
+  var PS=phaseStats(rows), ms=PS.ms, C=PS.C;
+  if(!ms.length) return '<div class="muted">'+(INS.cohort==='range'?'No accounts with a method were created in this range.':'No accounts with a method yet.')+'</div>';
+  var body=PH.map(function(p,i){
+    if(!ms.some(function(m){ return C[m].reach[i]>0; })) return '';
+    return '<tr><td class="c1"><span class="pill" style="background:'+p.c+'16;color:'+p.c+'">'+esc(p.n)+'</span></td>'+ms.map(function(m){
+      var n=C[m].reach[i], d=C[m].died[i]; if(!n) return '<td class="num muted">·</td>';
+      var rt=d/n, hot=PS.worst[m] && PS.worst[m].i===i;
+      return '<td class="num" style="'+(hot?'background:#fff1f2;':'')+'"><b style="color:'+(d?(rt>=0.25?'#b91c1c':(rt>=0.1?'#b45309':'var(--ink)')):'#047857')+'">'+(d?Math.round(rt*100)+'%':'0%')+'</b> <span class="muted" style="font-size:11px">'+d+' of '+n+'</span>'+(hot?' <span style="font-size:10px;font-weight:800;color:#b91c1c">worst</span>':'')+'</td>';
+    }).join('')+'</tr>';
+  }).join('');
+  if(ms.some(function(m){ return C[m].unkDead; }))
+    body+='<tr><td class="c1"><span class="pill" style="background:#e2e8f0;color:#475569">Phase unknown</span></td>'+ms.map(function(m){ var u=C[m].unkDead; return '<td class="num">'+(u?'<b>'+u+'</b> <span class="muted" style="font-size:11px">banned</span>':'<span class="muted">·</span>')+'</td>'; }).join('')+'</tr>';
+  body+='<tr class="grp"><td class="c1">All phases</td>'+ms.map(function(m){ var c=C[m]; return '<td class="num"><b>'+c.dead+'</b> banned of '+c.n+' <span class="muted">('+(c.n?Math.round(c.dead/c.n*100):0)+'%)</span></td>'; }).join('')+'</tr>';
+  var vias=[]; ms.forEach(function(m){ var v=C[m].via; Object.keys(v).forEach(function(k){ vias.push(esc(m)+': '+v[k]+' after '+esc(stageMeta(k).n)); }); });
+  return '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Phase</th>'+ms.map(function(m){ return '<th>'+methodPill(m,true)+'</th>'; }).join('')+'</tr></thead><tbody>'+body+'</tbody></table></div>'+
+    '<p class="muted" style="font-size:11.5px;margin-top:8px">Read across a row to compare methods at the same phase; read down a column to see where one method loses accounts. "<b>worst</b>" marks each method\'s riskiest phase (needs 3+ accounts). '+
+    'A ban is placed in the last ladder phase the account was in — a Temp ban, Spam recovery or hold before it is looked through'+(vias.length?' ('+vias.join(' · ')+')':'')+'. Every ban is counted: the bottom row matches the method comparison.</p>';
+}
+function sopPeriods(D){
+  var L=sopList(), now=new Date(), first=null;
+  D.rows.forEach(function(r){ var c=createdAt(r); if(c && (!first || c<first)) first=c; });
+  if(!first) return '<div class="muted">No accounts yet.</div>';
+  var cuts=L.filter(function(x){ var t=parseTs(x.d); return t && t>first && t<now; });
+  if(!cuts.length) return '<div class="muted">No SOP change dates inside this range yet.</div>';
+  var P=[{ a:first, b:parseTs(cuts[0].d), n:'Before '+cuts[0].n, d:'' }];
+  cuts.forEach(function(c,i){ P.push({ a:parseTs(c.d), b:(i+1<cuts.length)?parseTs(cuts[i+1].d):now, n:c.n, d:c.d }); });
+  var ms=phaseStats(D.rows).ms;
+  P.forEach(function(p){ p.ad=insAD(D.rows,p.a,p.b); p.bn=insBans(D.rows,p.a,p.b); p.w=perWk(p.bn,p.ad); p.per={};
+    ms.forEach(function(m){ var rr=D.rows.filter(function(r){ return methodOf(r)===m; }), ad=insAD(rr,p.a,p.b), bn=insBans(rr,p.a,p.b); p.per[m]={ ad:ad, bn:bn, w:ad>=INS_MIN_AD/2?perWk(bn,ad):null }; }); });
+  var good=P.filter(function(p){ return p.ad>=INS_MIN_AD && p.w!=null; }), lo=null, hi=null;
+  good.forEach(function(p){ if(lo==null||p.w<lo) lo=p.w; if(hi==null||p.w>hi) hi=p.w; });
+  var col=function(w,ad){ if(w==null || ad<INS_MIN_AD || good.length<2 || lo===hi) return ''; return w===lo?'color:#047857;font-weight:800':(w===hi?'color:#b91c1c;font-weight:800':''); };
+  var t='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">SOP in force</th><th>From</th><th>Days</th><th>Account-weeks</th><th>Bans</th><th>Banned a week</th>'+ms.map(function(m){ return '<th>'+methodPill(m,true)+'</th>'; }).join('')+'</tr></thead><tbody>'+
+    P.map(function(p){ var days=Math.max(0,Math.round((p.b-p.a)/864e5));
+      return '<tr><td class="c1">'+esc(p.n)+'</td><td>'+(p.d?esc(fmtD(parseTs(p.d))):'<span class="muted">start</span>')+'</td><td class="num">'+days+'</td><td class="num">'+Math.round(p.ad/7)+'</td><td class="num" style="font-weight:800">'+p.bn+'</td>'+
+        '<td class="num" style="'+col(p.w,p.ad)+'">'+(p.ad>=INS_MIN_AD?fmtWk(p.w):'<span class="muted">too few</span>')+'</td>'+
+        ms.map(function(m){ var x=p.per[m]; return '<td class="num">'+(x.w==null?'<span class="muted">·</span>':fmtWk(x.w)+' <span class="muted" style="font-size:11px">('+x.bn+')</span>')+'</td>'; }).join('')+'</tr>'; }).join('')+
+    '</tbody></table></div>';
+  return t+'<p class="muted" style="font-size:11.5px;margin-top:8px">"Banned a week" = bans ÷ the weeks accounts were alive under that SOP, so a short period with a big fleet and a long one with a small fleet compare fairly. Green = best period, red = worst (needs ~5 accounts × 14 days alive).</p>';
+}
+/* PHASE WHEN BANNED — PER METHOD (Jeth, Oct 9): one column per method, so Vysor, Jailbroken and Blaze+ can be compared
+   phase by phase. Count = bans of that method in that phase (in range); % = share of that method's bans; the cell with
+   each method's most bans is tinted. "via" = the state just before the ban (Temp ban, Spam recovery, hold). */
+function deathByMethod(D){
+  if(!D.bans.length) return '<div class="muted">No bans in this range.</div>';
+  var ms=methodsList().filter(function(m){ return D.bans.some(function(b){ return methodOf(b.r)===m; }); });
+  D.bans.forEach(function(b){ var m=methodOf(b.r); if(m && ms.indexOf(m)<0) ms.push(m); });
+  var cnt={}, tot={}, via={}, phases={}, mx=0, top={};
+  D.bans.forEach(function(b){ var m=methodOf(b.r); if(!m) return; var k=b.from||'?', key=m+'|'+k; phases[k]=1;
+    cnt[key]=(cnt[key]||0)+1; tot[m]=(tot[m]||0)+1; if(b.via){ var v=via[key]=via[key]||{}; v[b.via]=(v[b.via]||0)+1; } });
+  Object.keys(cnt).forEach(function(k){ mx=Math.max(mx,cnt[k]); var m=k.split('|')[0]; if(!top[m] || cnt[k]>cnt[top[m]]) top[m]=k; });
+  var ks=Object.keys(phases).sort(function(a,b){ return (a==='?')-(b==='?') || phaseIx(a)-phaseIx(b); });
+  var cols='minmax(130px,170px) repeat('+ms.length+',minmax(150px,1fr))';
+  var h='<div class="pm" style="grid-template-columns:'+cols+'"><div class="h"><b style="font-size:11px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em">Phase</b></div>'+
+    ms.map(function(m){ return '<div class="h">'+methodPill(m,true)+'<small>'+(tot[m]||0)+' ban'+((tot[m]||0)===1?'':'s')+' in range</small></div>'; }).join('');
+  ks.forEach(function(k){
+    var sm=k==='?'?{ n:'Phase unknown', c:'#cbd5e1' }:stageMeta(k);
+    h+='<div class="ph" title="'+esc(sm.n)+'"><i style="background:'+sm.c+'"></i>'+esc(sm.n)+'</div>';
+    ms.forEach(function(m){
+      var key=m+'|'+k, n=cnt[key]||0, c=methodColor(m);
+      if(!n){ h+='<div class="cell"><div class="row1"><div class="bar"></div><span class="n muted">·</span></div></div>'; return; }
+      var v=via[key]?Object.keys(via[key]).map(function(x){ return via[key][x]+' via '+stageMeta(x).n; }).join(', '):'';
+      h+='<div class="cell'+(top[m]===key?' top':'')+'" title="'+esc(m)+' · '+esc(sm.n)+': '+n+' of '+tot[m]+' bans">'+
+        '<div class="row1"><div class="bar"><i style="width:'+(n/mx*100).toFixed(1)+'%;background:'+c+'"></i></div><span class="n">'+n+'<small>'+Math.round(n/tot[m]*100)+'%</small></span></div>'+
+        (v?'<div class="via">'+esc(v)+'</div>':'')+'</div>';
+    });
+  });
+  h+='<div class="ph tot">All phases</div>'+ms.map(function(m){ return '<div class="cell"><div class="row1 tot"><span style="flex:1">'+(tot[m]||0)+' banned</span>'+(top[m]?'<span class="muted" style="font-size:10.5px;font-weight:700">most: '+esc(top[m].split('|')[1]==='?'?'Phase unknown':stageMeta(top[m].split('|')[1]).n)+'</span>':'')+'</div></div>'; }).join('');
+  return h+'</div>';
+}
+/* SURVIVAL BY AGE — PER METHOD (Jeth, Oct 9): one line per method — of the accounts at least t days old, the share still
+   alive at day t. A line stops where fewer than 3 accounts are that old. */
+function survivalByMethod(D){
+  var maxT=30, W=1000, H=250, L=36, B=24, T=14;
+  var ms=methodsList().filter(function(m){ return D.rows.some(function(r){ return methodOf(r)===m; }); });
+  D.rows.forEach(function(r){ var m=methodOf(r); if(m && ms.indexOf(m)<0) ms.push(m); });
+  var series=ms.map(function(m){
+    var rows=D.rows.filter(function(r){ return methodOf(r)===m; }), pts=[];
+    for(var t=0;t<=maxT;t++){
+      var el=rows.filter(function(r){ var cc=createdAt(r); return cc && dayDiff(cc)>=t; }); if(el.length<3) break;
+      var al=el.filter(function(r){ var a=ageDays(r); return !isDead(r) || (a!=null && a>t); }).length;
+      pts.push([t, al/el.length, el.length]);
+    }
+    return { n:m, c:methodColor(m), pts:pts, size:rows.length, dead:rows.filter(isDead).length };
+  });
+  if(!series.length) return '<div class="muted">No accounts with a method yet.</div>';
+  var X=function(t){ return L+(W-L-8)*t/maxT; }, Y=function(v){ return T+(H-B-T)*(1-v); };
+  var g='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
+  for(var i=0;i<=4;i++){ var y=T+(H-B-T)*i/4; g+='<line x1="'+L+'" x2="'+(W-8)+'" y1="'+y+'" y2="'+y+'" stroke="rgba(17,19,34,.07)"/><text x="'+(L-6)+'" y="'+(y+3)+'" font-size="9.5" fill="#7f859c" text-anchor="end">'+(100-i*25)+'%</text>'; }
+  [0,7,14,21,30].forEach(function(t){ g+='<text x="'+X(t)+'" y="'+(H-6)+'" font-size="9.5" fill="#7f859c" text-anchor="'+(t===0?'start':(t===maxT?'end':'middle'))+'">day '+t+'</text>'; });
+  series.forEach(function(s){ if(s.pts.length<2) return;
+    var d=s.pts.map(function(p,ix){ return (ix?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1); }).join('');
+    g+='<path d="'+d+'" fill="none" stroke="'+s.c+'" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>';
+    s.pts.forEach(function(p){ g+='<circle cx="'+X(p[0]).toFixed(1)+'" cy="'+Y(p[1]).toFixed(1)+'" r="6" fill="transparent"><title>'+esc(s.n)+' · day '+p[0]+': '+Math.round(p[1]*100)+'% alive of '+p[2]+' accounts that old</title></circle>'; });
+    var lp=s.pts[s.pts.length-1];
+    var nearEnd=X(lp[0])>W-60;
+    g+='<circle cx="'+X(lp[0])+'" cy="'+Y(lp[1])+'" r="3.8" fill="'+s.c+'"/><text x="'+(X(lp[0])+(nearEnd?-7:7))+'" y="'+(Y(lp[1])-(nearEnd?7:-3.5))+'" font-size="10.5" font-weight="800" text-anchor="'+(nearEnd?'end':'start')+'" fill="'+s.c+'">'+Math.round(lp[1]*100)+'%</text>'; });
+  g+='</svg>';
+  return g+'<div class="legend">'+series.map(function(s){ var lp=s.pts[s.pts.length-1];
+    return '<span><i style="background:'+s.c+'"></i>'+esc(s.n)+' · '+s.size+' accounts · '+s.dead+' banned'+(s.pts.length<2?' (too new to plot)':(' · '+Math.round(lp[1]*100)+'% alive at day '+lp[0]))+'</span>'; }).join('')+'</div>'+
+    '<p class="muted" style="font-size:11.5px;margin-top:6px">Each point: of the accounts at least that many days old, how many were still alive at that age. A line stops where fewer than 3 accounts are that old yet.</p>';
+}
+function survival(D){
+  var maxT=30, W=520, H=200, L=34, B=24, T=12;
+  var series=[['legacy','Before Oct 1','#94a3b8'],['iphone','iPhone process','#f43f5e']].map(function(c){
+    var rows=D.rows.filter(function(r){ return processOf(r)===c[0]; }), pts=[];
+    for(var t=0;t<=maxT;t++){
+      var el=rows.filter(function(r){ var cc=createdAt(r); return cc && dayDiff(cc)>=t; }); if(el.length<3) break;
+      var al=el.filter(function(r){ var a=ageDays(r); return !isDead(r) || (a!=null && a>t); }).length;
+      pts.push([t, al/el.length, el.length]);
+    }
+    return { k:c[0], n:c[1], c:c[2], pts:pts, size:rows.length };
+  });
+  var g='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;display:block">';
+  for(var i=0;i<=4;i++){ var y=T+(H-B-T)*i/4; g+='<line x1="'+L+'" x2="'+(W-8)+'" y1="'+y+'" y2="'+y+'" stroke="rgba(17,19,34,.07)"/><text x="'+(L-6)+'" y="'+(y+3)+'" font-size="9.5" fill="#7f859c" text-anchor="end">'+(100-i*25)+'%</text>'; }
+  [0,7,14,21,30].forEach(function(t){ var x=L+(W-L-8)*t/maxT; g+='<text x="'+x+'" y="'+(H-6)+'" font-size="9.5" fill="#7f859c" text-anchor="'+(t===0?'start':(t===maxT?'end':'middle'))+'">day '+t+'</text>'; });
+  series.forEach(function(s){ if(s.pts.length<2) return; var d=s.pts.map(function(p,ix){ return (ix?'L':'M')+(L+(W-L-8)*p[0]/maxT).toFixed(1)+' '+(T+(H-B-T)*(1-p[1])).toFixed(1); }).join('');
+    g+='<path d="'+d+'" fill="none" stroke="'+s.c+'" stroke-width="2.5" stroke-linejoin="round"/>'; var lp=s.pts[s.pts.length-1];
+    g+='<circle cx="'+(L+(W-L-8)*lp[0]/maxT)+'" cy="'+(T+(H-B-T)*(1-lp[1]))+'" r="3.5" fill="'+s.c+'"><title>'+esc(s.n)+' · day '+lp[0]+': '+Math.round(lp[1]*100)+'% of '+lp[2]+'</title></circle>'; });
+  g+='</svg>';
+  return g+'<div class="legend">'+series.map(function(s){ return '<span><i style="background:'+s.c+'"></i>'+esc(s.n)+' · '+s.size+' accounts'+(s.pts.length<2?' (too new to plot)':'')+'</span>'; }).join('')+'</div>';
+}
+function cohorts(D){
+  var fp=insFirstPost();
+  var rowsC=[['legacy','Before Oct 1'],['iphone','iPhone process']].map(function(c){
+    var rows=D.rows.filter(function(r){ return processOf(r)===c[0]; }), dead=rows.filter(isDead);
+    var el7=rows.filter(function(r){ var cc=createdAt(r); return cc && dayDiff(cc)>=7; }), s7=el7.filter(function(r){ var a=ageDays(r); return !isDead(r)||(a!=null&&a>7); }).length;
+    var lives=dead.map(ageDays).filter(function(x){ return x!=null; });
+    return '<tr><td class="c1">'+c[1]+'</td><td class="num">'+rows.length+'</td><td class="num">'+(rows.length-dead.length)+'</td><td class="num">'+dead.length+'</td><td class="num">'+pct(dead.length,rows.length)+'%</td>'+
+      '<td class="num">'+(median(lives)==null?'—':median(lives)+'d')+'</td><td class="num">'+(el7.length?pct(s7,el7.length)+'% of '+el7.length:'too new')+'</td><td class="num">'+pct(rows.filter(function(r){ return reachedPost(r,fp); }).length,rows.length)+'%</td></tr>';
+  });
+  return '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Process</th><th>Accounts</th><th>Alive</th><th>Banned</th><th>Banned %</th><th>Median life</th><th>Alive at day 7</th><th>Reached posting</th></tr></thead><tbody>'+rowsC.join('')+'</tbody></table></div>'+
+    '<p class="muted" style="font-size:11.5px;margin-top:8px">The iPhone process started '+esc(fmtD(parseTs(CFG.process_start||SOP_START)))+' — give it two to three weeks before reading much into the comparison.</p>';
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════════
+   JMB CLIENT PORTAL — Reddit operations, read-only                                   (Jeth, Oct 12 2026)
+   Accounts · Pipeline · Insights for a client (first: Justin, Altz base). Talks ONLY to the JMB Client API
+   (its own Apps Script, own URL) — never to Reddit Central's backend. The data arrives already scrubbed on
+   the server: no VA names or ids, no notes, emails or phones. The Insights numbers come from the same engine
+   as Reddit Central (copied in above, client view always on), so Justin and JMB read the same figures.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════════ */
+var CLIENT_API='__CLIENT_API__';
+var BASES=[{ id:'Reddit', n:'Altz', c:'#ff6b1a' }];
+var CFG={ methods:['Vysor','Jailbroken','Blaze+'], process_start:'2026-10-01', models:{}, sop_changes:undefined };
+var VIEW='accounts', CLIENT=null, TOKEN='', EVENTS=null, EVENTS_AT=0, LOADING=false, LOAD_ERR='', DIRTY=false;
+var DB={ q:'', life:'alive', grp:'', meth:'all', model:'', phone:'', va:'all', all:true, sort:'created', dir:-1, groupBy:'stage' };
+var PL={ meth:'all' };
+INS.client=true; INS.base='all'; INS.dim='method';
+INSD.mode='live';
+
+/* ── no VA anywhere: these exist only so the shared Insights engine runs ── */
+function vaName(){ return ''; }
+function owner(){ return ''; }
+function ownerAt(){ return ''; }
+function respOwner(){ return ''; }
+function asgMap(){ return {}; }
+function isGone(){ return false; }
+function isAdmin(){ return true; }
+function dimVal(r, dim){
+  if(dim==='method') return methodOf(r)||'(not tagged)';
+  if(dim==='model') return r.model||'(no model)';
+  if(dim==='va') return '·'+r.id;                 // never groups anything (there is no VA data here)
+  if(dim==='device') return '(phone not recorded)';
+  if(dim==='base') return baseOf(r.project).n;
+  if(dim==='niche') return r.niche||'(no niche)';
+  if(dim==='process') return processOf(r)==='iphone'?'iPhone process':'Before '+fmtD(parseTs(CFG.process_start||SOP_START));
+  return '—';
+}
+function insDims(){ return DIMS.filter(function(d){ return d[0]!=='va' && d[0]!=='device' && (d[0]!=='base' || BASES.length>1); }); }
+function allRows(){ return INSD.rows||[]; }
+function rowById(id){ var L=allRows(); for(var i=0;i<L.length;i++) if(L[i].id===id) return L[i]; return null; }
+
+/* ── talking to the Client API ── */
+async function capi(body, ms){
+  var ctl=(typeof AbortController!=='undefined')?new AbortController():null, tm=ctl?setTimeout(function(){ try{ ctl.abort(); }catch(_){} }, ms||45000):null;
+  try{
+    var r=await fetch(CLIENT_API, { method:'POST', body:JSON.stringify(body), signal:ctl?ctl.signal:undefined });
+    var t=await r.text(); if(String(t).trim().charAt(0)==='<') throw new Error('busy');
+    return JSON.parse(t);
+  } finally { if(tm) clearTimeout(tm); }
+}
+function tokGet(){ try{ return localStorage.getItem('jmbc_t')||sessionStorage.getItem('jmbc_t')||''; }catch(e){ return ''; } }
+function tokSet(t, keep){ try{ localStorage.removeItem('jmbc_t'); sessionStorage.removeItem('jmbc_t'); if(t) (keep?localStorage:sessionStorage).setItem('jmbc_t', t); }catch(e){} }
+
+/* ── sign in ── */
+function configured(){ return CLIENT_API.indexOf('__')!==0; }
+async function signIn(){
+  var u=$('si-u').value.trim(), p=$('si-p').value, keep=$('si-keep').checked, b=$('si-btn'), er=$('si-err');
+  er.textContent=''; if(!u || !p){ er.textContent='Enter your username and password.'; return; }
+  if(!configured()){ er.textContent='This portal is still being set up — please try again later.'; return; }
+  b.disabled=true; b.textContent='Signing in…';
+  try{
+    var d=await capi({ action:'login', u:u, p:p, keep:keep }, 30000);
+    if(d && d.ok){ TOKEN=d.token; tokSet(TOKEN, keep); CLIENT=d.client; $('si-p').value=''; enter(); return; }
+    er.textContent=d&&d.error==='LOCKED'?'Too many attempts — please wait '+(d.minutes||15)+' minutes and try again.':
+      'That username and password don\'t match.'+(d&&d.left!=null&&d.left<=2?' '+d.left+' attempt'+(d.left===1?'':'s')+' left before a short lock.':'');
+  }catch(e){ er.textContent='Could not reach the server — check your connection and try again.'; }
+  b.disabled=false; b.textContent='Sign in';
+}
+async function signOut(){
+  var t=TOKEN; TOKEN=''; tokSet(''); CLIENT=null; INSD.rows=null; INSD.ev=null; INSD.at=0;
+  try{ if(t) await capi({ action:'logout', t:t }, 10000); }catch(e){}
+  showSignIn();
+}
+function showSignIn(){ document.body.classList.remove('in'); $('signin').style.display='block'; $('app').style.display='none'; setTimeout(function(){ try{ $('si-u').focus(); }catch(e){} }, 50); }
+function enter(){
+  try{ if(document.activeElement) document.activeElement.blur(); }catch(e){}
+  document.body.classList.add('in'); $('signin').style.display='none'; $('app').style.display='block';
+  BASES=(CLIENT&&CLIENT.bases&&CLIENT.bases.length)?CLIENT.bases.map(function(b,i){ return { id:b.id, n:b.n, c:['#ff6b1a','#0ea5e9','#a855f7'][i%3] }; }):BASES;
+  $('me').innerHTML='<span class="cl-base">'+BASES.map(function(b){ return esc(b.n); }).join(' · ')+'</span><b>'+esc((CLIENT&&CLIENT.name)||'')+'</b>';
+  paintTabs(); renderView(); load(true);
+}
+
+/* ── the data ── */
+async function load(force){
+  if(LOADING) return false; if(!force && INSD.at && Date.now()-INSD.at<25000) return false;
+  LOADING=true; insPaintLive(); var before=INSD.sig;
+  try{
+    var d=await capi({ action:'data', t:TOKEN });
+    if(d && d.ok){
+      var seen={}, rows=[];
+      (d.rows||[]).concat(d.arch||[]).forEach(function(r){ if(r && r.id && !seen[r.id]){ seen[r.id]=1; rows.push(r); } });
+      INSD.rows=normRows(rows);
+      INSD.ev=(d.ev||[]).map(function(e){ return { at:e[0], account_id:e[1], kind:e[2], from:statusKey(e[3]), to:statusKey(e[4]) }; });
+      INSD.asg=null; INSD.arch=(d.arch||[]).length; INSD.serverAt=d.at||''; INSD.lastFixed=0; INSD.err=''; INSD.at=Date.now(); LOAD_ERR='';
+      if(d.cfg){ CFG.methods=d.cfg.methods||CFG.methods; CFG.process_start=d.cfg.process_start||CFG.process_start; CFG.models=d.cfg.models||{}; CFG.sop_changes=d.cfg.sop_changes; }
+      if(d.bases && d.bases.length) BASES=d.bases.map(function(b,i){ return { id:b.id, n:b.n, c:['#ff6b1a','#0ea5e9','#a855f7'][i%3] }; });
+    } else if(d && d.error==='SIGNED_OUT'){ LOADING=false; toast('Your session ended — please sign in again.'); signOut(); return false; }
+    else { INSD.err=LOAD_ERR=(d&&d.error)==='SNAPSHOT_REJECTED'?'the data is being checked — try again shortly':'server busy'; INSD.errAt=Date.now(); }
+  }catch(e){ INSD.err=LOAD_ERR=((e&&e.name)==='AbortError')?'timed out':'could not reach the server'; INSD.errAt=Date.now(); }
+  finally{ LOADING=false; }
+  INSD.sig=insSig(); insPaintLive();
+  var changed=INSD.sig!==before;
+  if(changed || !allRows().length){ if(busy()) DIRTY=true; else renderView(); }
+  return changed;
+}
+function insRefresh(){ load(true).then(function(ch){ toast(INSD.err?('Refresh failed: '+INSD.err):(ch?'Updated — the numbers changed.':'Up to date.')); }); }
+function insLiveHtml(){
+  var at=INSD.at, err=!!INSD.err, dot=LOADING?'#0ea5e9':(err?'#f59e0b':'#10b981');
+  var txt=LOADING?(at?'Refreshing…':'Loading…'):(at?('Updated '+insT(at)+' · '+insAgo(Date.now()-at)):'Not loaded yet');
+  return '<span class="ins-dot'+(!err&&!LOADING&&at?' on':'')+'" style="background:'+dot+'"></span><b>Live</b><span>'+esc(txt)+'</span>'+(at?'<span class="muted">· refreshes every minute</span>':'');
+}
+function insPaintLive(){ var e=$('ins-live'); if(e) e.innerHTML=insLiveHtml(); var f=$('cl-live'); if(f) f.innerHTML=insLiveHtml(); }
+function busy(){ var a=document.activeElement, v=$('view'); if(a && /^(SELECT|INPUT|TEXTAREA)$/.test(a.tagName||'') && a.id!=='db-q' && v && v.contains(a)) return true; return $('drawer').classList.contains('on'); }
+setInterval(function(){ if(!TOKEN) return; insPaintLive(); if(DIRTY && !busy()){ DIRTY=false; renderView(); } }, 1000);
+setInterval(function(){ if(TOKEN && !document.hidden) load(false); }, 60000);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden && TOKEN && Date.now()-INSD.at>30000) load(true); });
+
+/* ── shell ── */
+var TABS=[['accounts','Accounts'],['pipeline','Pipeline'],['insights','Insights']];
+function paintTabs(){ $('tabs').innerHTML=TABS.map(function(t){ return '<button class="'+(VIEW===t[0]?'on':'')+'" onclick="go(\''+t[0]+'\')">'+t[1]+'</button>'; }).join(''); }
+function go(v){ VIEW=v; closeAll(); paintTabs(); renderView(); try{ window.scrollTo({ top:0, behavior:'smooth' }); }catch(e){ window.scrollTo(0,0); } }
+function renderView(){
+  var v=$('view'); if(!v) return;
+  var keepQ=(document.activeElement && document.activeElement.id==='db-q'), pos=keepQ?document.activeElement.selectionStart:0;
+  var h='';
+  try{
+    if(!allRows().length) h=INSD.at?'<div class="card empty">No accounts yet.</div>':'<div class="card empty">'+(LOAD_ERR?'Could not load ('+esc(LOAD_ERR)+') — retrying. <a href="#" onclick="insRefresh();return false" style="color:var(--ot);font-weight:800">Retry now</a>':'<span class="cl-spin"></span> Loading your accounts…')+'</div>';
+    else if(VIEW==='pipeline') h=vPipeline();
+    else if(VIEW==='insights') h=vInsights();
+    else h=vAccounts();
+  }catch(e){ h='<div class="card empty">Something went wrong drawing this page. Please refresh.</div>'; try{ console.error(e); }catch(_){} }
+  v.innerHTML=h;
+  if(keepQ){ var q=$('db-q'); if(q){ q.focus(); try{ q.setSelectionRange(pos,pos); }catch(e){} } }
+  insPaintLive();
+}
+function closeAll(){ var d=$('drawer'), s=$('scrim'); if(d) d.classList.remove('on'); if(s) s.classList.remove('on'); }
+var _tt=null;
+function toast(m){ var t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(_tt); _tt=setTimeout(function(){ t.classList.remove('on'); },2600); }
+document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeAll(); if(e.key==='Enter' && $('signin').style.display!=='none' && /si-/.test((document.activeElement||{}).id||'')) signIn(); });
+
+/* ═══ ACCOUNTS ═══ */
+function dbRowsC(){
+  var q=DB.q.trim().toLowerCase();
+  return allRows().filter(function(r){
+    if(DB.life==='alive' && (isDead(r) || isParked(r))) return false;
+    if(DB.life==='dead' && !isDead(r)) return false;
+    if(DB.life==='hold' && !isParked(r)) return false;
+    if(DB.grp && groupOf(r.status).k!==DB.grp) return false;
+    if(DB.meth!=='all' && methodOf(r)!==DB.meth) return false;
+    if(DB.model && String(r.model||'')!==DB.model) return false;
+    if(q && [r.handle,r.model,r.niche,methodOf(r),stageMeta(r.status).n].join(' ').toLowerCase().indexOf(q)<0) return false;
+    return true;
+  });
+}
+var COLS_C=[
+  {k:'handle',  n:'Account',     v:function(r){ return String(r.handle||'').toLowerCase(); }, h:function(r){ return '<span class="cl-h">'+esc(r.handle)+'</span>'; }, c1:true},
+  {k:'stage',   n:'Stage',       v:function(r){ return stageOrd(r.status); }, h:function(r){ var s=stageMeta(r.status); return '<span class="pill" style="background:'+s.c+'18;color:'+s.c+'"><i style="width:7px;height:7px;border-radius:50%;background:'+s.c+';display:inline-block"></i>'+esc(s.n)+'</span>'; }},
+  {k:'method',  n:'Method',      v:function(r){ var m=methodOf(r); var i=methodsList().indexOf(m); return m?(i<0?50:i):99; }, h:function(r){ return methodPill(methodOf(r),true); }},
+  {k:'model',   n:'Model',       v:function(r){ return String(r.model||'').toLowerCase(); }, h:function(r){ return esc(r.model||'—'); }},
+  {k:'niche',   n:'Niche',       v:function(r){ return String(r.niche||'').toLowerCase(); }, h:function(r){ return esc(r.niche||'—'); }},
+  {k:'created', n:'Created',     v:function(r){ var d=createdAt(r); return d?d.getTime():0; }, h:function(r){ var d=createdAt(r); return d?esc(fmtD(d)):'—'; }},
+  {k:'age',     n:'Age',         num:true, v:function(r){ var a=ageDays(r); return a==null?-1:a; }, h:function(r){ var a=ageDays(r); return a==null?'—':a+'d'; }},
+  {k:'insg',    n:'In stage',    num:true, v:function(r){ var s=stageSince(r); return s?dayDiff(s):-1; }, h:function(r){ var s=stageSince(r); return (s&&!isDead(r))?dayDiff(s)+'d':'—'; }},
+  {k:'karma',   n:'Karma',       num:true, v:function(r){ var k=karmaOf(r); return k==null?-1:k; }, h:function(r){ var k=karmaOf(r); return k==null?'—':k; }},
+  {k:'ended',   n:'Banned on',   v:function(r){ var e=endedAt(r); return e?e.getTime():0; }, h:function(r){ var e=endedAt(r); return e?esc(fmtD(e))+(endedExact(r)?'':' <span class="muted" title="Approximate date">≈</span>'):''; }},
+  {k:'reason',  n:'Ban reason',  v:function(r){ return String(r.end_reason||''); }, h:function(r){ return isDead(r)?esc(r.end_reason||'—'):''; }}
+];
+function vAccounts(){
+  var src=allRows(), rows=dbRowsC();
+  var col=COLS_C.filter(function(c){ return c.k===DB.sort; })[0]||COLS_C[5];
+  rows.sort(function(a,b){ var x=col.v(a), y=col.v(b); return (x<y?-1:x>y?1:0)*DB.dir || String(a.handle).localeCompare(String(b.handle)); });
+  var cols=COLS_C.filter(function(c){ return (c.k!=='ended' && c.k!=='reason') || DB.life==='dead' || DB.life==='all'; });
+  var live=src.filter(function(r){ return !isDead(r) && !isParked(r); }), P1=phaseIx('day1');
+  var posting=live.filter(function(r){ return phaseIx(r.status)>=P1; }).length, warm=live.filter(function(r){ return phaseIx(r.status)>=0 && phaseIx(r.status)<P1; }).length;
+  var b30=src.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<30; }).length, c30=src.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)<30; }).length;
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Accounts</h2><p>Every '+esc(BASES.map(function(b){ return b.n; }).join(' + '))+' account — its stage, method and model, from creation to ban. Click one for its full history.</p></div>'+
+    '<div class="cl-live no-print" id="cl-live"></div><button class="btn sec no-print" onclick="exportCsvC()">'+IC.dl+' Export CSV</button></div>';
+  h+='<div class="kpis">'+kpi('Live accounts',live.length,'working now, every stage','#a855f7')+kpi('Posting or beyond',posting,'Day 1 Posting → Super Strong','#ec4899')+
+     kpi('Warming up',warm,'Creation → NSFW comments','#f97316')+kpi('Created',c30,'last 30 days','#ff6b1a')+kpi('Banned',b30,'last 30 days','#ef4444')+'</div>';
+  var models=distinct(src,function(r){ return r.model; });
+  h+='<div class="tbar">'+
+    '<div class="seg" style="width:auto">'+[['alive','Live'],['hold','On hold'],['dead','Banned'],['all','All']].map(function(x){ return '<button class="'+(DB.life===x[0]?'on':'')+'" onclick="DB.life=\''+x[0]+'\';if(DB.life===\'dead\'){DB.sort=\'ended\';DB.dir=-1;}renderView()">'+x[1]+'</button>'; }).join('')+'</div>'+
+    '<select class="sel" onchange="DB.grp=this.value;renderView()"><option value="">All stages</option>'+GROUPS.filter(function(g){ return g.k!=='arc'; }).map(function(g){ return '<option value="'+g.k+'"'+(DB.grp===g.k?' selected':'')+'>'+g.n+'</option>'; }).join('')+'</select>'+
+    '<select class="sel" onchange="DB.meth=this.value;renderView()"><option value="all">All methods</option>'+methodsList().map(function(m){ return '<option'+(DB.meth===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select>'+
+    '<select class="sel" onchange="DB.model=this.value;renderView()"><option value="">All models</option>'+models.map(function(m){ return '<option'+(DB.model===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select>'+
+    '<select class="sel" onchange="DB.groupBy=this.value;renderView()" title="Group rows"><option value="">No grouping</option>'+[['stage','Group: Stage'],['method','Group: Method'],['model','Group: Model'],['niche','Group: Niche']].map(function(x){ return '<option value="'+x[0]+'"'+(DB.groupBy===x[0]?' selected':'')+'>'+x[1]+'</option>'; }).join('')+'</select>'+
+    '<div class="sp"></div><div class="cl-q">'+IC.search+'<input id="db-q" value="'+esc(DB.q)+'" placeholder="Search username, model, niche…" oninput="DB.q=this.value;renderView()"></div>'+
+    '<span class="muted" style="font-weight:700;font-size:12px">'+rows.length+' account'+(rows.length===1?'':'s')+'</span></div>';
+  if(!rows.length) return h+'<div class="card empty">No accounts match.</div>';
+  var th='<tr>'+cols.map(function(c){ return '<th class="'+(c.c1?'c1':'')+'" onclick="dbSortC(\''+c.k+'\')">'+esc(c.n)+(DB.sort===c.k?'<span class="ar">'+(DB.dir>0?'▲':'▼')+'</span>':'')+'</th>'; }).join('')+'</tr>';
+  function tr(r){ return '<tr class="r'+(isDead(r)?' dead':'')+'" onclick="openRecC(\''+jsq(r.id)+'\')">'+cols.map(function(c){ return '<td class="'+(c.c1?'c1':'')+(c.num?' num':'')+'">'+c.h(r)+'</td>'; }).join('')+'</tr>'; }
+  var body='';
+  if(DB.groupBy){
+    var gf={ method:function(r){ return methodOf(r)||'Not tagged'; }, stage:function(r){ return stageMeta(r.status).n; }, model:function(r){ return r.model||'(no model)'; }, niche:function(r){ return r.niche||'(no niche)'; } }[DB.groupBy];
+    var g={}, order=[]; rows.forEach(function(r){ var k=gf(r); if(!g[k]){ g[k]=[]; order.push(k); } g[k].push(r); });
+    if(DB.groupBy==='stage') order.sort(function(a,b){ return stageOrd(g[a][0].status)-stageOrd(g[b][0].status); });
+    else if(DB.groupBy==='method'){ var ml=methodsList(); order.sort(function(a,b){ var ia=ml.indexOf(a), ib=ml.indexOf(b); return (ia<0?99:ia)-(ib<0?99:ib); }); }
+    else order.sort();
+    order.forEach(function(k){ var list=g[k], dead=list.filter(isDead).length;
+      body+='<tr class="grp"><td colspan="'+cols.length+'">'+esc(k)+' <span class="muted" style="font-weight:700">· '+list.length+(dead?(' · '+dead+' banned ('+Math.round(dead/list.length*100)+'%)'):'')+'</span></td></tr>'+list.map(tr).join(''); });
+  } else body=rows.map(tr).join('');
+  return h+'<div class="tbl-w"><table class="db"><thead>'+th+'</thead><tbody>'+body+'</tbody></table></div>';
+}
+function dbSortC(k){ if(DB.sort===k) DB.dir=-DB.dir; else { DB.sort=k; DB.dir=(k==='handle'||k==='model'||k==='niche'||k==='method'||k==='stage')?1:-1; } renderView(); }
+function exportCsvC(){
+  var rows=dbRowsC(), cols=['base','username','stage','method','model','niche','created','age_days','in_stage_since','karma','banned_on','ban_reason'];
+  var lines=[cols.join(',')].concat(rows.map(function(r){ var c=createdAt(r), s=stageSince(r), e=endedAt(r);
+    return [baseOf(r.project).n, r.handle, stageMeta(r.status).n, methodOf(r), r.model, r.niche, c?phtDate(c):'', ageDays(r), s?phtDate(s):'', karmaOf(r), e?phtDate(e):'', isDead(r)?r.end_reason:'']
+      .map(function(v){ v=(v==null?'':String(v)); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(','); }));
+  var blob=new Blob([lines.join('\n')],{type:'text/csv'}), a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='reddit-accounts-'+phtDate()+'.csv'; document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
+}
+/* the record drawer — facts + the stage history (no "who") */
+function openRecC(id){
+  var r=rowById(id); if(!r) return;
+  var sm=stageMeta(r.status), c=createdAt(r), e=endedAt(r), s=stageSince(r);
+  var f=function(l,v){ return '<div><div class="lbl">'+l+'</div><div class="v">'+v+'</div></div>'; };
+  var evs=(INSD.ev||[]).filter(function(x){ return x.account_id===id; }).sort(function(a,b){ return String(a.at).localeCompare(String(b.at)); });
+  var K={ create:['Logged','#ff6b1a'], stage:['Moved','#a855f7'], ban:['Banned','#ef4444'], reinstate:['Reinstated','#10b981'], park:['On hold','#0891b2'], release:['Back in play','#10b981'] };
+  var tl=evs.map(function(x){ var k=K[x.kind]||[x.kind,'#94a3b8'], t;
+    if(x.kind==='create') t='Logged as '+stageMeta(x.to).n; else if(x.kind==='stage') t=stageMeta(x.from).n+' → '+stageMeta(x.to).n;
+    else if(x.kind==='ban') t='Banned'+(x.from?' (was '+stageMeta(x.from).n+')':''); else if(x.kind==='reinstate') t='Reinstated → '+stageMeta(x.to).n;
+    else if(x.kind==='park') t='Put on hold'; else if(x.kind==='release') t='Back in play → '+stageMeta(x.to).n; else t=k[0];
+    return { at:parseTs(x.at), c:k[1], t:t }; });
+  if(!tl.some(function(x){ return x.t.indexOf('Logged')===0; }) && c) tl.unshift({ at:c, c:'#ff6b1a', t:'Created', approx:!createdExact(r) });
+  if(isDead(r) && !evs.some(function(x){ return x.kind==='ban'; })) tl.push({ at:e, c:'#ef4444', t:'Banned'+(r.end_reason?' · '+r.end_reason:''), approx:!endedExact(r) });
+  var b=baseOf(r.project), dr=$('drawer');
+  dr.innerHTML='<div class="dr-h"><div class="row" style="align-items:flex-start"><div style="flex:1;min-width:0"><div class="lbl" style="color:'+b.c+'">'+esc(b.n)+'</div>'+
+      '<div class="h-d" style="font-size:20px;font-weight:800;margin-top:3px;overflow-wrap:anywhere">'+esc(r.handle)+'</div>'+
+      '<div class="row" style="margin-top:8px;gap:6px"><span class="pill" style="background:'+sm.c+'18;color:'+sm.c+'">'+esc(sm.n)+'</span>'+methodPill(methodOf(r),true)+'</div></div>'+
+      '<button class="ghost" onclick="closeAll()" title="Close">'+IC.x+'</button></div></div>'+
+    '<div class="dr-b"><div class="facts">'+
+      f('Model', esc(r.model||'—'))+f('Method', esc(methodOf(r)||'—'))+f('Niche', esc(r.niche||'—'))+f('Karma', karmaOf(r)!=null?karmaOf(r):'—')+
+      f('Created', c?esc(createdExact(r)?fmtDT(c):fmtD(c)):'—')+f('Age', ageDays(r)!=null?ageDays(r)+' days':'—')+
+      (isDead(r)?f('Banned on', e?esc(fmtD(e)):'—')+f('Reason', esc(r.end_reason||'—')):f('In stage since', s?esc(fmtD(s))+' · '+dayDiff(s)+'d':'—')+f('Stage', esc(sm.n)))+
+    '</div>'+
+    '<div class="row" style="margin:4px 0 14px"><a class="btn sm sec" href="https://www.reddit.com/user/'+encodeURIComponent(String(r.handle||'').replace(/^u\//i,''))+'" target="_blank" rel="noopener noreferrer">Open on Reddit ↗</a></div>'+
+    '<div class="sec-h" style="margin-top:4px"><b>History</b><span>'+tl.length+' event'+(tl.length===1?'':'s')+'</span><hr></div>'+
+    '<div class="tl">'+tl.map(function(x){ return '<div class="ev" style="--ec:'+x.c+'"><b>'+esc(x.t)+'</b><small>'+(x.at?esc(x.approx?fmtD(x.at)+' (approx.)':fmtDT(x.at)):'—')+'</small></div>'; }).join('')+'</div>'+
+    '</div>';
+  dr.classList.add('on'); $('scrim').classList.add('on');
+}
+function drillDim(dim,k){
+  DB.model=''; DB.meth='all';
+  if(dim==='model') DB.model=k.indexOf('(')===0?'':k;
+  else if(dim==='method') DB.meth=k.indexOf('(')===0?'all':k;
+  DB.life='all'; DB.q=''; DB.grp=''; DB.sort='ended'; DB.dir=-1; go('accounts');
+}
+
+/* ═══ PIPELINE — stages down, methods across ═══ */
+function vPipeline(){
+  var all=allRows().filter(function(r){ return !!methodOf(r) && !isParked(r); });
+  var ml=methodsList(), lanes=ml.slice();
+  all.forEach(function(r){ var m=methodOf(r); if(m && lanes.indexOf(m)<0) lanes.push(m); });
+  var byM={}; lanes.forEach(function(m){ byM[m]=all.filter(function(r){ return methodOf(r)===m; }); });
+  var cols=ORDER.filter(function(k){ return k!=='creationstandby' && k!=='onhold' && k!=='archived'; });
+  var S={}; lanes.forEach(function(m){ S[m]=plSummary(byM[m]); });
+  var mark={};
+  PL_PROGRESS.forEach(function(k){
+    var v=ml.map(function(m){ var l=plStageRows(byM[m]||[],k); return { m:m, a:l.length>=2?plAvg(l):null }; }).filter(function(x){ return x.a!=null; });
+    if(v.length<2) return; var lo=Math.min.apply(null,v.map(function(x){ return x.a; })), hi=Math.max.apply(null,v.map(function(x){ return x.a; })); if(hi-lo<1) return;
+    v.forEach(function(x){ if(x.a===lo) mark[k+'|'+x.m]='fast'; else if(x.a===hi) mark[k+'|'+x.m]='slow'; });
+  });
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Pipeline <span class="gtxt">by method</span></h2><p>The same ladder run three ways — stages down the side, methods across the top. Each cell shows how many accounts are there, their share of that method, and how long they have been in the stage.</p></div><div class="cl-live no-print" id="cl-live"></div></div>';
+  h+='<div class="row" style="gap:12px;align-items:stretch;margin-bottom:6px">'+lanes.map(function(m){
+    var s=S[m], c=methodColor(m), on=(PL.meth===m);
+    return '<div class="card" onclick="PL.meth=(PL.meth===\''+jsq(m)+'\'?\'all\':\''+jsq(m)+'\');renderView()" style="cursor:pointer;flex:1 1 210px;padding:13px 15px;border-top:3px solid '+c+';'+(on?'box-shadow:0 0 0 2px '+c+'55,var(--sh2)':'')+'">'+
+      '<div class="row" style="justify-content:space-between"><b style="color:'+c+';font-size:14.5px">'+esc(m)+'</b><span class="muted" style="font-size:11px;font-weight:700">'+(on?'showing only this ✓':'click to focus')+'</span></div>'+
+      '<div class="row" style="gap:16px;margin-top:8px">'+
+        '<div><div class="lbl">Alive</div><div class="h-d" style="font-size:21px;font-weight:800">'+s.alive+'</div></div>'+
+        '<div><div class="lbl">7 days</div><div style="font-weight:800;font-size:13px;margin-top:4px"><span style="color:#047857">+'+s.c7+'</span> / <span style="color:#b91c1c">−'+s.b7+'</span></div></div>'+
+        '<div><div class="lbl">Ban rate 30d</div><div class="h-d" style="font-size:21px;font-weight:800">'+(s.rate30==null?'—':Math.round(s.rate30*100)+'%')+'</div></div>'+
+        '<div><div class="lbl">Reached posting</div><div class="h-d" style="font-size:21px;font-weight:800">'+(s.post==null?'—':Math.round(s.post*100)+'%')+'</div></div>'+
+      '</div></div>';
+  }).join('')+'</div>';
+  var showLanes=PL.meth==='all'?lanes:lanes.filter(function(m){ return m===PL.meth; });
+  h+='<div class="sec-h"><b>The board</b><span>each cell: accounts · share of that method\'s live accounts · average days in the stage · green = fastest method through it, amber = slowest</span><hr>'+
+    '<select class="sel" onchange="PL.meth=this.value;renderView()"><option value="all">All methods</option>'+lanes.map(function(m){ return '<option value="'+esc(m)+'"'+(PL.meth===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select></div>';
+  h+='<div class="sl"><div class="sl-g pb" style="grid-template-columns:170px repeat('+showLanes.length+', minmax(240px,1fr))">'+
+    '<div class="sl-h sl-corner">Stage</div>'+showLanes.map(function(m){ var c=methodColor(m);
+      return '<div class="sl-h" style="border-top:3px solid '+c+'"><i style="background:'+c+'"></i><span style="color:'+c+'">'+esc(m)+'</span><small style="margin-left:auto">'+S[m].alive+' alive</small></div>'; }).join('');
+  cols.forEach(function(k){
+    var sm=stageMeta(k), tot=0; showLanes.forEach(function(m){ tot+=plStageRows(byM[m]||[],k).length; });
+    h+='<div class="sl-l" style="border-left:4px solid '+sm.c+'"><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+';align-self:flex-start">'+esc(sm.n)+'</span><small>'+tot+' account'+(tot===1?'':'s')+(k==='banned'?' · last 30 days':'')+'</small></div>';
+    showLanes.forEach(function(m){
+      var l=plStageRows(byM[m]||[],k).sort(function(a,b){ var x=stageSince(a), y=stageSince(b); return (x?x.getTime():0)-(y?y.getTime():0); });
+      var n=l.length, base=k==='banned'?Math.max(1,S[m].alive+n):Math.max(1,S[m].alive), a=plAvg(l), mk=mark[k+'|'+m], c=methodColor(m);
+      h+='<div class="sl-c" style="background:'+(mk==='fast'?'#f0fdf4':(mk==='slow'?'#fffbeb':c+'06'))+'">'+
+        (n?'<div class="sl-ct"><b>'+n+'</b><span>'+Math.round(n/base*100)+'%</span>'+(a!=null&&k!=='banned'?'<span>· avg '+a+'d</span>':'')+
+            (mk==='fast'?'<span class="flag g" title="Fastest method through this stage">fast</span>':(mk==='slow'?'<span class="flag a" title="Slowest method through this stage">slow</span>':''))+'</div>'+
+           '<div class="pb-cards">'+l.slice(0,40).map(function(r){ var st=stageSince(r);
+             return '<div class="kc" onclick="openRecC(\''+jsq(r.id)+'\')" title="'+esc(r.model||'—')+'"><b>'+esc(r.handle)+'</b><div style="display:flex;justify-content:space-between;gap:4px"><small>'+esc(r.model||'—')+'</small><small style="font-weight:800;color:var(--ink2)">'+(st?dayDiff(st)+'d':'')+'</small></div></div>'; }).join('')+
+           (n>40?'<div class="muted" style="font-size:11px;text-align:center;padding:4px">+'+(n-40)+' more</div>':'')+'</div>'
+         :'<div class="sl-ct" style="color:var(--ink4)">·</div>')+
+      '</div>';
+    });
+  });
+  h+='</div></div>';
+  return h;
+}
+
+/* ═══ INSIGHTS — the same engine as Reddit Central, client view always on ═══ */
+function vInsights(){
+  var D=insData(), A=detect(D), V=insVerdict();
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Insights</h2><p>Which method keeps accounts alive and posting, where in the ladder accounts are lost, and whether bans are platform-wide waves or something specific — live from every account.</p></div>'+
+    '<div class="seg no-print" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(INS.range===x[0]?'on':'')+'" onclick="INS.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div></div>';
+  h+=insDataCheck(D);
+  h+=insBottomLine(V);
+  var sD=parseTs(D.start), now=new Date(), adR=insAD(D.rows,sD,now), bR=insBans(D.rows,sD,now);
+  var alive=D.rows.filter(function(r){ return !isDead(r); }).length, created=D.rows.filter(function(r){ var c=createdAt(r); return c && phtDate(c)>=D.start; }).length;
+  var lives=D.bans.map(function(b){ return ageDays(b.r); }).filter(function(x){ return x!=null; }), med=median(lives);
+  var elig=D.rows.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)>=14; }), surv14=elig.filter(function(r){ var a=ageDays(r); return !isDead(r) || (a!=null && a>14); }).length;
+  var rl=INS.range?('last '+INS.range+' days'):'all time';
+  h+='<div class="kpis" style="margin-top:12px">'+kpi('Alive now',alive,D.rows.length+' with a method','#a855f7')+kpi('Created',created,rl,'#ff6b1a')+kpi('Banned',D.bans.length,rl,'#ef4444')+
+    kpi('Banned a week',fmtWk(perWk(bR,adR)),'bans ÷ account-weeks alive · '+rl,'#f43f5e')+kpi('Median life',med==null?'—':med+'d','created → banned · '+rl,'#0ea5e9')+kpi('Alive at day 14',elig.length?pct(surv14,elig.length)+'%':'—',elig.length+' accounts old enough','#10b981')+'</div>';
+  h+=methodCompare(D);
+  h+='<div class="ig" style="margin-top:12px">';
+  h+='<div class="card pad"><div class="ch-h"><b>Where bans come from — by phase and method</b><span>of the accounts that reached each phase, how many were banned there</span><div style="flex:1"></div>'+
+    '<div class="seg no-print" style="width:auto">'+[['all','All time'],['range','Created '+(INS.range?'in the last '+INS.range+' days':'— all')]].map(function(x){ return '<button class="'+(INS.cohort===x[0]?'on':'')+'" onclick="INS.cohort=\''+x[0]+'\';renderView()">'+x[1]+'</button>'; }).join('')+'</div></div>'+phaseMethod(D)+'</div>';
+  var alerts=insAlerts(A);
+  h+='<div class="card pad s8"><div class="ch-h"><b>Bans per day</b><span>stacked by '+dimLabel(INS.dim).toLowerCase()+' · ▲ wave · ● concentrated · ┆ SOP change</span><div class="sp" style="flex:1"></div>'+
+    '<select class="sel no-print" onchange="INS.dim=this.value;renderView()">'+insDims().map(function(d){ return '<option value="'+d[0]+'"'+(INS.dim===d[0]?' selected':'')+'>By '+d[1].toLowerCase()+'</option>'; }).join('')+'</select></div>'+banChart(D, A.marks)+'</div>'+
+    '<div class="card pad s4"><div class="ch-h"><b>What the pattern says</b><span>'+alerts.length+' signal'+(alerts.length===1?'':'s')+'</span></div>'+
+    (alerts.length?alerts.slice(0,8).map(function(a){ return '<div class="alert '+a.t+'"><div class="ic">'+(a.t==='wave'?'🌊':'⚠️')+'</div><div>'+a.h+'<small>'+a.s+'</small></div></div>'; }).join('')
+      :'<div class="alert ok"><div class="ic">✓</div><div><b>No ban waves and no concentrated bans</b> in this range.<small>A ban wave = 90% or more of an operation\'s live accounts banned together. Other signals need at least 3 bans on a day, or 3 in a week for one group.</small></div></div>')+'</div>';
+  h+='<div class="card pad"><div class="ch-h"><b>Since each SOP change</b><span>banned a week under each version of the SOP — a ban counts under the SOP in force that day</span></div>'+sopPeriods(D)+'</div>';
+  h+='<div class="card pad"><div class="ch-h"><b>By '+dimLabel(INS.dim).toLowerCase()+'</b><span>ban rate in range vs. everyone — "Check" means at least 3 bans and twice the overall rate</span></div>'+breakdown(D, INS.dim)+'</div>';
+  h+='<div class="card pad"><div class="ch-h"><b>Phase when banned — per method</b><span>bans in this range · one column per method · % = share of that method\'s bans · tinted = its most · via = the state just before the ban</span></div>'+deathByMethod(D)+'</div>';
+  h+='<div class="card pad"><div class="ch-h"><b>Survival by age — per method</b><span>% still alive at each day of age · one line per method</span></div>'+survivalByMethod(D)+'</div>';
+  h+='<div class="card pad"><div class="ch-h"><b>Old process vs iPhone process</b><span>accounts created before / from '+esc(fmtD(parseTs(CFG.process_start||SOP_START)))+' — all-time</span></div>'+cohorts(D)+'</div>';
+  h+='</div>';
+  var approx=D.bans.filter(function(b){ return !b.exact; }).length;
+  if(approx) h+='<p class="muted" style="font-size:11.5px;margin-top:10px">'+approx+' ban date'+(approx===1?' is':'s are')+' approximate (recorded before the detailed history began). Newer bans are dated exactly.</p>';
+  return h;
+}
+function insCopy(){
+  var t=insSummaryText();
+  try{ navigator.clipboard.writeText(t).then(function(){ toast('Summary copied.'); }, function(){ toast('Could not copy — select and copy manually.'); }); }
+  catch(e){ toast('Could not copy on this browser.'); }
+}
+
+/* ── start ── */
+(async function boot(){
+  if(!configured()){ showSignIn(); $('si-err').textContent='This portal is still being set up — please try again later.'; return; }
+  TOKEN=tokGet();
+  if(!TOKEN){ showSignIn(); return; }
+  try{ var d=await capi({ action:'me', t:TOKEN }, 20000); if(d && d.ok){ CLIENT=d.client; enter(); return; } }catch(e){}
+  tokSet(''); TOKEN=''; showSignIn();
+})();
+
+</script>
+</body>
+</html>
