@@ -2032,6 +2032,23 @@ function cxNormModels(rows){
   rows.forEach(function(r){ var raw = String(r.model || '').trim(); if (!raw) return; r.model = label[cxModelKey(raw)] || raw; });
 }
 
+/* Bans with no known stage (Jeth, Oct 12): banned accounts whose stage at the ban can't be identified — neither the
+   history log (started Oct 4) nor the account's own record says where it was — are from previous operations, so they
+   leave the client's data entirely: every count, list, chart and the feed. Nothing is removed from the sheet; this only
+   shapes what the client sees. Runs once per load, after the history is in, before anything is drawn. */
+function cxDropUnstaged(){
+  var rows = INSD.rows; if (!rows || !rows.length) return 0;
+  if (!INSD.ev || !INSD.ev.length) return 0;   /* history didn't arrive this load: never drop on missing data */
+  try { insHist(); } catch(e){ return 0; }
+  var drop = {}, n = 0;
+  rows.forEach(function(r){ if (!isDead(r)) return; var k = ''; try { k = (insPhase(r) || {}).k || ''; } catch(e){} if (!k){ drop[r.id] = 1; n++; } });
+  if (!n) return 0;
+  INSD.rows = rows.filter(function(r){ return !drop[r.id]; });
+  if (INSD.ev) INSD.ev = INSD.ev.filter(function(e){ return !e || !drop[e.account_id]; });
+  INSD.dropped = n;
+  return n;
+}
+
 /* ═══════════════ BAN REPORT — weekly (Jeth, Oct 12: "the client wants to analyse the number of bans and at which
    stage accounts are getting banned"). Weeks run Monday–Sunday, Philippine time. Every banned account counts
    (with or without a method); accounts on hold are left out like everywhere else. Stage at ban = the last ladder
@@ -2041,8 +2058,7 @@ var CX_BG = [
   { k: 'setup', n: 'Setup',   c: '#f59e0b', st: ['creation'] },
   { k: 'warm',  n: 'Warm-up', c: '#f97316', st: ['warming', 'comment', 'nsfw'] },
   { k: 'post',  n: 'Posting', c: '#ec4899', st: ['day1', 'early', 'earlydm', 'medium'] },
-  { k: 'str',   n: 'Strong',  c: '#8b5cf6', st: ['strong', 'superstrong'] },
-  { k: 'unk',   n: 'Stage not recorded', c: '#cbd5e1', st: [''] }
+  { k: 'str',   n: 'Strong',  c: '#8b5cf6', st: ['strong', 'superstrong'] }
 ];
 function cxMonday(ymd){ var d = new Date(ymd + 'T12:00:00+08:00'), dow = (d.getUTCDay() + 6) % 7; return addDays(ymd, -dow); }
 function cxRange(a, b){ try { var o = { timeZone: 'Asia/Manila', month: 'short', day: 'numeric' }, A = new Date(a + 'T12:00:00+08:00'), B = new Date(b + 'T12:00:00+08:00');
@@ -2065,7 +2081,7 @@ function cxBanData(){
 }
 function cxBanReport(){
   var B = cxBanData(), W = B.weeks, w = W[Math.min(CX.bw, W.length - 1)], prev = W[w.i + 1] || null, n = w.bans.length;
-  var groupOf = function(st){ for (var i = 0; i < CX_BG.length; i++) if (CX_BG[i].st.indexOf(st) >= 0) return CX_BG[i]; return CX_BG[4]; };
+  var groupOf = function(st){ for (var i = 0; i < CX_BG.length; i++) if (CX_BG[i].st.indexOf(st) >= 0) return CX_BG[i]; return null; };
   /* headline */
   var rate = w.live ? n / w.live : null, ages = w.bans.map(function(x){ return x.age; }).filter(function(x){ return x != null; });
   var med = ages.length ? median(ages) : null, cnt = {};
@@ -2077,10 +2093,10 @@ function cxBanReport(){
     stat('Bans', cxN(n), prev ? cxDelta(n, prev.bans.length, false) + ' vs the week before' : '&nbsp;') +
     stat('Ban rate', rate == null ? '—' : (Math.round(rate * 1000) / 10) + '%', 'of ' + cxN(w.live) + ' accounts live at the start of the week') +
     stat('Median age at ban', med == null ? '—' : med + ' days', 'from creation to ban') +
-    stat('Most-hit stage', top ? esc(stageMeta(top).n) : '—', top ? cnt[top] + ' of ' + n + ' bans (' + cxPct(cnt[top], n) + '%)' : (n ? 'stage not recorded' : 'no bans this week')) + '</div>';
+    stat('Most-hit stage', top ? esc(stageMeta(top).n) : '—', top ? cnt[top] + ' of ' + n + ' bans (' + cxPct(cnt[top], n) + '%)' : 'no bans this week') + '</div>';
   /* by stage at ban */
-  var stages = PH.map(function(p){ return p.k; }).concat(['']), mx = Math.max.apply(null, stages.map(function(k){ return cnt[k] || 0; }).concat([1]));
-  var byStage = '<div class="cx-bst">' + stages.map(function(k){ var v = cnt[k] || 0; if (!k && !v) return ''; var sm = k ? stageMeta(k) : { n: 'Stage not recorded', c: '#94a3b8' };
+  var stages = PH.map(function(p){ return p.k; }), mx = Math.max.apply(null, stages.map(function(k){ return cnt[k] || 0; }).concat([1]));
+  var byStage = '<div class="cx-bst">' + stages.map(function(k){ var v = cnt[k] || 0, sm = stageMeta(k);
     return '<div class="cx-bsl' + (v ? '' : ' z') + '"><span class="cx-bsn"><i style="background:' + sm.c + '"></i>' + esc(sm.n) + '</span><u><s style="width:' + (v / mx * 100).toFixed(1) + '%;background:' + sm.c + '"></s></u><b>' + v + '</b><em>' + (n ? cxPct(v, n) + '%' : '') + '</em></div>'; }).join('') + '</div>';
   /* 12-week trend, stacked by ladder group — click a week to open it */
   var mxw = Math.max.apply(null, W.map(function(x){ return x.bans.length; }).concat([1])), Wd = 360, Hd = 130, bw = Wd / W.length;
@@ -2102,7 +2118,7 @@ function cxBanReport(){
   var list = w.bans.slice().sort(function(a, b){ return b.at - a.at; }), showAll = CX.bwAll === w.i, vis = showAll ? list : list.slice(0, 8);
   var tbl = n ? '<div class="cx-btb"><div class="cx-btr h"><span>Account</span><span>Banned</span><span>Stage at ban</span><span>Method</span><span>Model</span><span>Age</span><span>Reason</span></div>' +
     vis.map(function(x){ var sm = x.st ? stageMeta(x.st) : null;
-      return '<div class="cx-btr" onclick="openRecC(\'' + jsq(x.r.id) + '\')"><span class="u">' + esc(x.r.handle) + '</span><span>' + esc(fmtD(x.at)) + '</span><span>' + (sm ? '<i style="background:' + sm.c + '"></i>' + esc(sm.n) : '<span class="muted">not recorded</span>') + '</span><span>' + esc(methodOf(x.r) || '—') + '</span><span>' + esc(String(x.r.model || '').trim() || '—') + '</span><span>' + (x.age == null ? '—' : x.age + 'd') + '</span><span>' + esc(x.r.end_reason || '—') + '</span></div>'; }).join('') +
+      return '<div class="cx-btr" onclick="openRecC(\'' + jsq(x.r.id) + '\')"><span class="u">' + esc(x.r.handle) + '</span><span>' + esc(fmtD(x.at)) + '</span><span>' + (sm ? '<i style="background:' + sm.c + '"></i>' + esc(sm.n) : '—') + '</span><span>' + esc(methodOf(x.r) || '—') + '</span><span>' + esc(String(x.r.model || '').trim() || '—') + '</span><span>' + (x.age == null ? '—' : x.age + 'd') + '</span><span>' + esc(x.r.end_reason || '—') + '</span></div>'; }).join('') +
     (list.length > 8 ? '<button class="cx-link" onclick="CX.bwAll=' + (showAll ? -1 : w.i) + ';renderView()">' + (showAll ? 'Show fewer' : 'Show all ' + list.length + ' banned accounts') + '</button>' : '') + '</div>'
     : '<div class="cx-empty">No bans in this week.</div>';
   var opts = W.map(function(x){ return '<option value="' + x.i + '"' + (x.i === w.i ? ' selected' : '') + '>' + (x.cur ? 'This week so far' : x.i === 1 ? 'Last week' : 'Week of ' + cxRange(x.a, x.b).split(' – ')[0]) + ' · ' + cxRange(x.a, x.end) + ' · ' + x.bans.length + ' ban' + (x.bans.length === 1 ? '' : 's') + '</option>'; }).join('');
@@ -2216,6 +2232,7 @@ async function load(force){
       INSD.asg=null; INSD.arch=(d.arch||[]).length; INSD.serverAt=d.at||''; INSD.lastFixed=0; INSD.err=''; INSD.at=Date.now(); LOAD_ERR='';
       if(d.cfg){ CFG.methods=d.cfg.methods||CFG.methods; CFG.process_start=d.cfg.process_start||CFG.process_start; CFG.models=d.cfg.models||{}; CFG.sop_changes=d.cfg.sop_changes; }
       try{ cxNormModels(INSD.rows); }catch(_e){}
+      try{ cxDropUnstaged(); }catch(_e){}
       if(d.bases && d.bases.length) BASES=d.bases.map(function(b,i){ return { id:b.id, n:b.n, c:['#ff6b1a','#0ea5e9','#a855f7'][i%3] }; });
     } else if(d && d.error==='SIGNED_OUT'){ LOADING=false; toast('Your session ended — please sign in again.'); signOut(); return false; }
     else { INSD.err=LOAD_ERR=(d&&d.error)==='SNAPSHOT_REJECTED'?'the data is being checked — try again shortly':'server busy'; INSD.errAt=Date.now(); }
