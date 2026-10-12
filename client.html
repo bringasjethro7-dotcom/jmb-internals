@@ -2147,9 +2147,14 @@ function cxSiPlay(){ try { var a = document.querySelectorAll('.cx-si-logo animat
    sheet — "Capri/Stella" and "Stella & Capri", "Arya/Kaia" and "Arya & Kaia". Group by the names in the pair, in any
    order and with any separator, and show one label per group: the spelling from the model settings if there is one,
    otherwise the spelling used most. Applied once per load, so Accounts, filters, Insights and the CSV all agree. */
+/* any way a pair gets typed: / ⁄ ∕ ／ \ | & ＆ + , ; "and" "x" — with invisible characters and odd spaces cleaned first (Oct 12:
+   live data still showed "Izzy/Layla" next to "Arya & Kaia" and "Arya/Kaia" as separate groups) */
+function cxModelParts(v){
+  var t = String(v || '').replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').replace(/[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g, ' ');
+  return t.split(/\s*(?:[\/\u2044\u2215\uFF0F\\|&\uFF06+,;\uFF0C]|\s(?:and|x)\s)\s*/i).map(function(x){ return x.replace(/\s+/g, ' ').trim(); }).filter(Boolean);
+}
 function cxModelKey(v){
-  var parts = String(v || '').split(/\s*(?:\/|&|\+|,|\band\b)\s*/i).map(function(x){ return x.trim().toLowerCase(); }).filter(Boolean);
-  return parts.sort().join('|');
+  return cxModelParts(v).map(function(x){ return x.toLowerCase(); }).sort().join('|');
 }
 function cxNormModels(rows){
   if (!rows || !rows.length) return;
@@ -2159,7 +2164,7 @@ function cxNormModels(rows){
   rows.forEach(function(r){ var raw = String(r.model || '').trim(); if (!raw) return; var k = cxModelKey(raw); (count[k] = count[k] || {})[raw] = (count[k][raw] || 0) + 1; });
   Object.keys(count).forEach(function(k){ if (label[k]) return; var best = '', n = -1; Object.keys(count[k]).forEach(function(raw){ if (count[k][raw] > n){ n = count[k][raw]; best = raw; } }); label[k] = best; });
   /* pairs read "Izzy & Layla" (Jeth, Oct 12) — same order as the chosen spelling, joined with " & " */
-  Object.keys(label).forEach(function(k){ var parts = String(label[k]).split(/\s*(?:\/|&|\+|,|\band\b)\s*/i).map(function(x){ return x.trim(); }).filter(Boolean); if (parts.length > 1) label[k] = parts.join(' & '); });
+  Object.keys(label).forEach(function(k){ var parts = cxModelParts(label[k]); if (parts.length > 1) label[k] = parts.join(' & '); });
   rows.forEach(function(r){ var raw = String(r.model || '').trim(); if (!raw) return; r.model = label[cxModelKey(raw)] || raw; });
 }
 
