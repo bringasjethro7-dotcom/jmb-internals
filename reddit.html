@@ -2022,7 +2022,10 @@ function linkState(p){
   if(p.task===undefined || p.tracked_secs===undefined) return { k:'unknown', why:'portal link not set up yet' };
   var age=Date.now()-(Date.parse(p.last_seen||'')||0);
   if(age>4*60000) return { k:'off', why:'the portal has been closed or asleep for '+Math.round(age/60000)+' min' };
-  if(String(p.status||'')!=='working') return { k:'off', why:(p.status==='paused'?'your portal timer is paused':(p.status==='idle'?'the portal shows you idle':'your portal timer is not running')) };
+  /* Oct 12: the portal's presence `status` carries the VA's manual chat status (Active/Away/Busy/Inactive) when they set one,
+     so a running timer could read as "busy" and the tool refused to link (JMB040 on Skyvern). `task` is only filled while the
+     portal timer is actually running (and not idle) — that is the real signal. */
+  if(!String(p.task||'').trim()) return { k:'off', why:(p.status==='paused'?'your portal timer is paused':(p.status==='idle'?'the portal shows you idle':'your portal timer is not running')) };
   if(!linkIsReddit(p.task)) return { k:'other', why:'your portal timer is on "'+String(p.task||'').split(' · ')[0]+'", not Reddit' };
   return { k:'ok', since:p.task_since||'', tracked:+p.tracked_secs||0, trackedProj:+p.tracked_proj_secs||0, task:p.task };
 }
