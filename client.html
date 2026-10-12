@@ -642,7 +642,10 @@ body::before{display:none !important}
 #signin .go.busy{background:#2b3040;transform:none}
 .cx-bspin{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;animation:cxSpin .8s linear infinite}
 @keyframes cxSpin{to{transform:rotate(360deg)}}
-#si-err{min-height:20px;margin-top:12px;font-size:13px;font-weight:600;color:#be123c;line-height:1.45}
+#si-err{display:block !important;min-height:20px;margin-top:12px;font-size:13px;font-weight:600;color:#be123c;line-height:1.45}
+#si-err:not(:empty){padding:11px 13px;border-radius:12px;background:#fff1f2;box-shadow:inset 0 0 0 1px rgba(225,29,72,.18)}
+#si-err.cx-shake{animation:cxShake .42s cubic-bezier(.36,.07,.19,.97) both}
+@keyframes cxShake{10%,90%{transform:translateX(-1px)}20%,80%{transform:translateX(2px)}30%,50%,70%{transform:translateX(-4px)}40%,60%{transform:translateX(4px)}}
 #si-err:empty{min-height:8px}
 .cx-si-note{display:none;margin-top:8px;padding:12px 14px;border-radius:12px;background:#fff7ed;box-shadow:inset 0 0 0 1px rgba(242,103,22,.18);font-size:12.5px;line-height:1.5;color:#9a3412}
 .cx-si-note.on{display:block;animation:cxIn .3s ease both}
@@ -1966,6 +1969,18 @@ function cxNeedHelp(){ var n = $('si-note'); if (n){ n.classList.add('on'); } }
 
 /* the sign-in logo: draw it in once each time the sign-in screen appears (after the intro has gone) */
 function cxSiPlay(){ try { var a = document.querySelectorAll('.cx-si-logo animate, .cx-si-logo animateTransform'); for (var i = 0; i < a.length; i++) a[i].beginElement(); } catch(e){} }
+
+/* every sign-in attempt that ends in a message gives visible feedback, even when the message is the same as before */
+(function(){
+  if (typeof signIn !== 'function') return;
+  var orig = signIn;
+  signIn = async function(){
+    var e = $('si-err'); if (e){ e.classList.remove('cx-shake'); }
+    var r = await orig.apply(this, arguments);
+    if (e && e.textContent){ void e.offsetWidth; e.classList.add('cx-shake'); }
+    return r;
+  };
+})();
 
 
 /* ═══════════════════════════════════════════════════════════════════════════════════════════════════
