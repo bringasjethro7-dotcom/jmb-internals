@@ -995,6 +995,9 @@ table.db thead th{background:#faf8f5}
 
 @media print{ .cx-card,.card{box-shadow:none} }
 .cx-bs span .cx-dl,.cx-bs .cx-dl{display:inline-block;margin-right:6px}
+/* Accounts: note when the tiles are filtered */
+.cx-kfn{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 10px;padding:9px 14px;border-radius:10px;background:#fff;border:1px solid var(--line);font-size:12.5px;color:var(--ink2)}
+.cx-kfn b{color:var(--ink);font-weight:650}
 </style>
 </head>
 <body>
@@ -2442,11 +2445,15 @@ function vAccounts(){
   var col=COLS_C.filter(function(c){ return c.k===DB.sort; })[0]||COLS_C[5];
   rows.sort(function(a,b){ var x=col.v(a), y=col.v(b); return (x<y?-1:x>y?1:0)*DB.dir || String(a.handle).localeCompare(String(b.handle)); });
   var cols=COLS_C.filter(function(c){ return (c.k!=='ended' && c.k!=='reason') || DB.life==='dead' || DB.life==='all'; });
-  var live=src.filter(function(r){ return !isDead(r) && !isParked(r); }), P1=phaseIx('day1');
+  /* the tiles follow the model and method filters (Jeth, Oct 12): pick a model group and every number above the table is for that group */
+  var kf=[DB.model, DB.meth!=='all'?DB.meth:''].filter(Boolean);
+  var ks=src.filter(function(r){ return (DB.meth==='all' || methodOf(r)===DB.meth) && (!DB.model || String(r.model||'')===DB.model); });
+  var live=ks.filter(function(r){ return !isDead(r) && !isParked(r); }), P1=phaseIx('day1');
   var posting=live.filter(function(r){ return phaseIx(r.status)>=P1; }).length, warm=live.filter(function(r){ return phaseIx(r.status)>=0 && phaseIx(r.status)<P1; }).length;
-  var b30=src.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<30; }).length, c30=src.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)<30; }).length;
+  var b30=ks.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<30; }).length, c30=ks.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)<30; }).length;
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Accounts</h2><p>Every '+esc(BASES.map(function(b){ return b.n; }).join(' + '))+' account — its stage, method and model, from creation to ban. Click one for its full history.</p></div>'+
     '<div class="cl-live no-print" id="cl-live"></div><button class="btn sec no-print" onclick="exportCsvC()">'+IC.dl+' Export CSV</button></div>';
+  if(kf.length) h+='<div class="cx-kfn"><span>Numbers below are for <b>'+kf.map(esc).join('</b> · <b>')+'</b></span><button class="cx-link no-print" onclick="DB.model=\'\';DB.meth=\'all\';renderView()">Show all accounts</button></div>';
   h+='<div class="kpis">'+kpi('Live accounts',live.length,'working now, every stage','#a855f7')+kpi('Posting or beyond',posting,'Day 1 Posting → Super Strong','#ec4899')+
      kpi('Warming up',warm,'Creation → NSFW comments','#f97316')+kpi('Created',c30,'last 30 days','#ff6b1a')+kpi('Banned',b30,'last 30 days','#ef4444')+'</div>';
   var models=distinct(src,function(r){ return r.model; });
