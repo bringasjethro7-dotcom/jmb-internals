@@ -2092,7 +2092,7 @@ setInterval(pingPresence, 60000);
    Leads and the owner. Reads altr_insights (backend 2026-10-13-ins): one row per day from the End-of-day records
    (active accounts in play, posted, phones out) + the live fleet. "Client report" opens a clean, printable page with
    no VA names (reasons are scrubbed of roster names) — print it or save it as PDF and send it. */
-var INS={ days:92, d:null, loading:false, err:'' };
+var INS={ days:92, d:null, loading:false, err:'', mode:'week' };
 async function insLoad(fresh){
   if(INS.loading) return; INS.loading=true; INS.err='';
   try{ var d=await apiGet({ action:'altr_insights', by_id:myId(), days:INS.days, fresh:(fresh?'1':'0') },0);
@@ -2123,45 +2123,74 @@ function insWeeks(S){
     if(!W[k]){ W[k]={ wk:k, n:0, a:0, p:0, out:0, stuck:0, end:x.d }; order.push(k); } var o=W[k]; o.n++; o.a+=x.active||0; o.p+=x.posted||0; o.out+=x.out||0; o.stuck+=x.stuck||0; o.end=x.d; });
   return order.map(function(k){ var o=W[k]; return { wk:k, end:o.end, days:o.n, active:o.a/o.n, posted:o.p/o.n, out:o.out/o.n, stuck:o.stuck/o.n, comp:o.a?o.p/o.a*100:null }; });
 }
-function insRoll(vals, n){ return vals.map(function(_,i){ var s=0,c=0; for(var j=Math.max(0,i-n+1);j<=i;j++){ if(vals[j]!=null){ s+=vals[j]; c++; } } return (vals[i]!=null||c>=3)&&c?s/c:null; }); }
+function insRoll(vals, n){ return vals.map(function(_,i){ var s=0,c=0; for(var j=Math.max(0,i-n+1);j<=i;j++){ if(vals[j]!=null){ s+=vals[j]; c++; } } return c?s/c:null; }); }
 function insNice(v){ if(v<=10) return 10; var p=Math.pow(10, Math.floor(Math.log10(v))), m=v/p; return (m<=1?1:(m<=2?2:(m<=2.5?2.5:(m<=5?5:10))))*p; }
-/* the chart — dark (Studio) or light (client report) */
-function insChart(series, light){
-  var P=light?{ act:'#334155', post:'#F1560F', gap:'rgba(241,86,15,.09)', bar:'rgba(225,29,72,.28)', grid:'#e5e7eb', txt:'#64748b', dot:'#fff' }
-             :{ act:'#22d3ee', post:'#c6ff4d', gap:'rgba(255,61,154,.13)', bar:'rgba(251,191,36,.42)', grid:'rgba(255,255,255,.07)', txt:'#7f79a6', dot:'#15132a' };
-  var W=1000, H=340, L=48, R=60, T=22, B=36, n=series.length; if(n<2) return '<div class="muted" style="padding:30px;text-align:center">Not enough recorded days yet.</div>';
-  var act=series.map(function(x){ return x.active!=null?x.active:null; }), pos=series.map(function(x){ return x.posted!=null&&x.active!=null?x.posted:(x.posted!=null&&x.src==='log'?x.posted:null); });
-  var mx=insNice(Math.max(10, Math.max.apply(null, act.concat(pos).map(function(v){ return v||0; }))*1.08));
-  var outMx=Math.max(4, Math.max.apply(null, series.map(function(x){ return x.out||0; })));
-  var X=function(i){ return L+i*(W-L-R)/(n-1); }, Y=function(v){ return T+(H-T-B)*(1-v/mx); }, band=(H-T-B)*0.26, YO=function(v){ return H-B-band*(v/outMx); };
-  var path=function(vals){ var d='', pen=false; vals.forEach(function(v,i){ if(v==null){ pen=false; return; } d+=(pen?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' '; pen=true; }); return d; };
-  var s='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block;font-family:inherit" role="img" aria-label="Active and posted accounts per day">';
-  for(var g=0;g<=4;g++){ var gv=mx*g/4, gy=Y(gv); s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+gy.toFixed(1)+'" y2="'+gy.toFixed(1)+'" stroke="'+P.grid+'"/><text x="'+(L-8)+'" y="'+(gy+4).toFixed(1)+'" text-anchor="end" font-size="11" fill="'+P.txt+'">'+Math.round(gv)+'</text>'; }
-  s+='<line x1="'+(W-R+4)+'" x2="'+(W-R+4)+'" y1="'+YO(outMx).toFixed(1)+'" y2="'+(H-B)+'" stroke="'+P.bar+'" stroke-width="2"/><text x="'+(W-R+9)+'" y="'+(H-B+4)+'" font-size="10" fill="'+P.txt+'">0</text><text x="'+(W-R+9)+'" y="'+(YO(outMx)+4).toFixed(1)+'" font-size="10" fill="'+P.txt+'">'+outMx+'</text><text x="'+(W-R+9)+'" y="'+(YO(outMx)-9).toFixed(1)+'" font-size="9.5" fill="'+P.txt+'">phones out</text>';
-  var bw=Math.max(2, (W-L-R)/n*0.62);
-  series.forEach(function(x,i){ if(x.out) s+='<rect x="'+(X(i)-bw/2).toFixed(1)+'" y="'+YO(x.out).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+(H-B-YO(x.out)).toFixed(1)+'" rx="1.5" fill="'+P.bar+'"/>'; });
-  // the gap between active and posted (accounts not posted)
-  var seg=[]; series.forEach(function(x,i){ if(act[i]!=null && pos[i]!=null) seg.push(i); else if(seg.length){ s+=insGap(seg, act, pos, X, Y, P.gap); seg=[]; } }); if(seg.length) s+=insGap(seg, act, pos, X, Y, P.gap);
-  var ra=insRoll(act,7), rp=insRoll(pos,7);
-  s+='<path d="'+path(act)+'" fill="none" stroke="'+P.act+'" stroke-opacity=".35" stroke-width="1.4"/><path d="'+path(pos)+'" fill="none" stroke="'+P.post+'" stroke-opacity=".4" stroke-width="1.4"/>';
-  s+='<path d="'+path(ra)+'" fill="none" stroke="'+P.act+'" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/><path d="'+path(rp)+'" fill="none" stroke="'+P.post+'" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round"/>';
-  // end labels on the 7-day lines
-  var fi=function(v){ for(var i=0;i<v.length;i++) if(v[i]!=null) return i; return -1; }, li=function(v){ for(var i=v.length-1;i>=0;i--) if(v[i]!=null) return i; return -1; };
-  [[ra,P.act,-10],[rp,P.post,20]].forEach(function(q){ var a=fi(q[0]), b=li(q[0]); if(a<0) return;   // active labels sit above its line, posted labels below — they never collide
-    s+='<circle cx="'+X(a).toFixed(1)+'" cy="'+Y(q[0][a]).toFixed(1)+'" r="4.5" fill="'+P.dot+'" stroke="'+q[1]+'" stroke-width="2.5"/><text x="'+(X(a)+6).toFixed(1)+'" y="'+(Y(q[0][a])+q[2]).toFixed(1)+'" font-size="13" font-weight="800" fill="'+q[1]+'">'+Math.round(q[0][a])+'</text>';
-    s+='<circle cx="'+X(b).toFixed(1)+'" cy="'+Y(q[0][b]).toFixed(1)+'" r="4.5" fill="'+P.dot+'" stroke="'+q[1]+'" stroke-width="2.5"/><text x="'+(X(b)-6).toFixed(1)+'" y="'+(Y(q[0][b])+q[2]).toFixed(1)+'" text-anchor="end" font-size="13" font-weight="800" fill="'+q[1]+'">'+Math.round(q[0][b])+'</text>'; });
-  // x labels every ~2 weeks
-  var step=Math.max(1, Math.round(n/7)); for(var i=0;i<n;i+=step){ s+='<text x="'+X(i).toFixed(1)+'" y="'+(H-12)+'" text-anchor="middle" font-size="11" fill="'+P.txt+'">'+insDate(series[i].d)+'</text>'; }
-  // hover: one column per day with a native tooltip
-  var cw=(W-L-R)/Math.max(1,n-1);
-  series.forEach(function(x,i){ var t=insDate(x.d,true)+(x.src==='eod'?'':(x.src==='log'?' (no End-of-day record)':' (no record)'))+(x.active!=null?'\nActive accounts: '+x.active:'')+(x.posted!=null?'\nPosted: '+x.posted+(x.active?' ('+Math.round(x.posted/x.active*100)+'%)':''):'')+(x.out?'\nPhones out: '+x.out+(x.phones&&x.phones.length?' (Phone '+x.phones.join(', ')+')':''):'')+(x.stuck?'\nActive accounts on them: '+(x.est?'about ':'')+x.stuck:'');
-    s+='<rect x="'+(X(i)-cw/2).toFixed(1)+'" y="'+T+'" width="'+cw.toFixed(1)+'" height="'+(H-T-B)+'" fill="transparent"><title>'+esc(t)+'</title></rect>'; });
+/* the chart (v2, Oct 13 — "it's messy"). Weekly by default: one point per week = the average of that week's recorded days,
+   so a missing End of day or a one-off bad day can't break or spike the lines. Daily = recorded days only, joined across
+   gaps, smoothed with a 7-day average (each day's own numbers are in the hover). Phones out = soft bars along the bottom.
+   The latest values sit in the right margin, pushed apart so they never overlap. */
+function insPoints(d, mode){
+  var S=((d&&d.series)||[]).filter(function(x){ return x.active!=null && x.posted!=null; });
+  if(mode==='day'){
+    var a=insRoll(S.map(function(x){ return x.active; }),7), p=insRoll(S.map(function(x){ return x.posted; }),7);
+    return S.map(function(x,i){ return { d:x.d, active:a[i], posted:p[i], rawA:x.active, rawP:x.posted, out:x.out||0, stuck:x.stuck||0, est:x.est, phones:x.phones||[], n:1 }; });
+  }
+  return insWeeks(S).map(function(w){ return { d:w.wk, end:w.end, active:w.active, posted:w.posted, out:w.out, stuck:w.stuck, n:w.days }; });
+}
+function insPath(pts){
+  var n=pts.length, f=function(v){ return v.toFixed(1); }; if(!n) return ''; if(n<3) return 'M'+pts.map(function(p){ return f(p[0])+' '+f(p[1]); }).join(' L');
+  var dx=[], m=[], t=[], i;
+  for(i=0;i<n-1;i++){ dx[i]=pts[i+1][0]-pts[i][0]; m[i]=dx[i]?(pts[i+1][1]-pts[i][1])/dx[i]:0; }
+  t[0]=m[0]; t[n-1]=m[n-2];
+  for(i=1;i<n-1;i++){ t[i]=(m[i-1]*m[i]<=0)?0:3*(dx[i-1]+dx[i])/((2*dx[i]+dx[i-1])/m[i-1]+(dx[i]+2*dx[i-1])/m[i]); }   // monotone — the curve never overshoots a point
+  var s='M'+f(pts[0][0])+' '+f(pts[0][1]);
+  for(i=0;i<n-1;i++){ var h=dx[i]/3; s+=' C'+f(pts[i][0]+h)+' '+f(pts[i][1]+t[i]*h)+' '+f(pts[i+1][0]-h)+' '+f(pts[i+1][1]-t[i+1]*h)+' '+f(pts[i+1][0])+' '+f(pts[i+1][1]); }
+  return s;
+}
+function insChart(pts, light, mode){
+  var P=light?{ act:'#1e293b', post:'#F1560F', gap:'rgba(241,86,15,.10)', bar:'rgba(225,29,72,.22)', grid:'#eef0f3', txt:'#64748b', dot:'#fff' }
+             :{ act:'#22d3ee', post:'#c6ff4d', gap:'rgba(255,61,154,.14)', bar:'rgba(251,191,36,.30)', grid:'rgba(255,255,255,.06)', txt:'#7f79a6', dot:'#15132a' };
+  var W=1000, H=330, L=46, R=70, T=30, B=40, n=pts.length, f=function(v){ return v.toFixed(1); };
+  if(n<2) return '<div class="muted" style="padding:30px;text-align:center">Not enough recorded days yet.</div>';
+  var mx=insNice(Math.max(10, Math.max.apply(null, pts.map(function(x){ return Math.max(x.active||0, x.posted||0); }))*1.12));
+  var t0=Date.parse(pts[0].d+'T00:00:00Z'), t1=Date.parse(pts[n-1].d+'T00:00:00Z'), byDate=(mode==='day' && t1>t0);
+  var X=function(i){ return byDate ? L+(Date.parse(pts[i].d+'T00:00:00Z')-t0)/(t1-t0)*(W-L-R) : L+i*(W-L-R)/(n-1); };
+  var Y=function(v){ return T+(H-T-B)*(1-v/mx); };
+  var outMx=Math.max(1, Math.max.apply(null, pts.map(function(x){ return x.out||0; }))), band=(H-T-B)*0.18, YO=function(v){ return H-B-band*(v/outMx); };
+  var s='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block;font-family:inherit;overflow:visible" role="img" aria-label="Active and posted accounts">';
+  for(var g=0;g<=4;g++){ var gv=mx*g/4, gy=Y(gv); s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+f(gy)+'" y2="'+f(gy)+'" stroke="'+P.grid+'"/><text x="'+(L-10)+'" y="'+f(gy+4)+'" text-anchor="end" font-size="11" fill="'+P.txt+'">'+Math.round(gv)+'</text>'; }
+  // phones out — soft bars along the bottom
+  var span=byDate?((t1-t0)/86400000+1):n, bw=Math.max(2, Math.min(26, (W-L-R)/span*(byDate?0.7:0.42)));
+  pts.forEach(function(x,i){ if(x.out>0) s+='<rect x="'+f(X(i)-bw/2)+'" y="'+f(YO(x.out))+'" width="'+f(bw)+'" height="'+f(H-B-YO(x.out))+'" rx="'+Math.min(4,bw/2)+'" fill="'+P.bar+'"/>'; });
+  // not posted = the band between the two lines
+  var A=pts.map(function(x,i){ return [X(i), Y(x.active)]; }), Q=pts.map(function(x,i){ return [X(i), Y(x.posted)]; });
+  s+='<path d="'+insPath(A)+' L'+insPath(Q.slice().reverse()).slice(1)+' Z" fill="'+P.gap+'"/>';
+  s+='<path d="'+insPath(A)+'" fill="none" stroke="'+P.act+'" stroke-width="3" stroke-linecap="round"/><path d="'+insPath(Q)+'" fill="none" stroke="'+P.post+'" stroke-width="3" stroke-linecap="round"/>';
+  if(mode!=='day') pts.forEach(function(x,i){ s+='<circle cx="'+f(X(i))+'" cy="'+f(Y(x.active))+'" r="3.2" fill="'+P.dot+'" stroke="'+P.act+'" stroke-width="2"/><circle cx="'+f(X(i))+'" cy="'+f(Y(x.posted))+'" r="3.2" fill="'+P.dot+'" stroke="'+P.post+'" stroke-width="2"/>'; });
+  // first values (inside, active above its line, posted below) and latest values (right margin, never overlapping)
+  var a0=Y(pts[0].active), p0=Y(pts[0].posted), a1=Y(pts[n-1].active), p1=Y(pts[n-1].posted);
+  s+='<circle cx="'+f(X(0))+'" cy="'+f(a0)+'" r="5" fill="'+P.dot+'" stroke="'+P.act+'" stroke-width="2.5"/><circle cx="'+f(X(0))+'" cy="'+f(p0)+'" r="5" fill="'+P.dot+'" stroke="'+P.post+'" stroke-width="2.5"/>';
+  s+='<text x="'+f(X(0)+10)+'" y="'+f(a0-11)+'" font-size="14" font-weight="800" fill="'+P.act+'">'+Math.round(pts[0].active)+'</text>';
+  s+='<text x="'+f(X(0)+10)+'" y="'+f(Math.max(p0+21, a0+21))+'" font-size="14" font-weight="800" fill="'+P.post+'">'+Math.round(pts[0].posted)+'</text>';
+  var ya=a1, yp=p1; if(yp-ya<20){ var mid=(ya+yp)/2; ya=mid-10; yp=mid+10; }
+  s+='<circle cx="'+f(X(n-1))+'" cy="'+f(a1)+'" r="5" fill="'+P.dot+'" stroke="'+P.act+'" stroke-width="2.5"/><circle cx="'+f(X(n-1))+'" cy="'+f(p1)+'" r="5" fill="'+P.dot+'" stroke="'+P.post+'" stroke-width="2.5"/>';
+  s+='<text x="'+f(X(n-1)+12)+'" y="'+f(ya+5)+'" font-size="14" font-weight="800" fill="'+P.act+'">'+Math.round(pts[n-1].active)+'</text><text x="'+f(X(n-1)+12)+'" y="'+f(yp+5)+'" font-size="14" font-weight="800" fill="'+P.post+'">'+Math.round(pts[n-1].posted)+'</text>';
+  // x labels
+  var every=mode==='day'?Math.max(1, Math.round(n/7)):(n>14?2:1);
+  for(var i=0;i<n;i+=every){ if(mode==='day' && i>0 && n-1-i<every/2) continue; s+='<text x="'+f(X(i))+'" y="'+(H-14)+'" text-anchor="middle" font-size="11" fill="'+P.txt+'">'+insDate(pts[i].d)+'</text>'; }
+  // hover: one column per point with a native tooltip
+  pts.forEach(function(x,i){ var x0=i?(X(i-1)+X(i))/2:X(0)-12, x1=i<n-1?(X(i)+X(i+1))/2:X(n-1)+12;
+    var t=mode==='day'
+      ? insDate(x.d,true)+'\nActive accounts: '+x.rawA+' (7-day average '+Math.round(x.active)+')\nPosted: '+x.rawP+(x.rawA?' ('+Math.round(x.rawP/x.rawA*100)+'%)':'')+' (7-day average '+Math.round(x.posted)+')'+(x.out?'\nPhones out: '+x.out+(x.phones.length?' (Phone '+x.phones.join(', ')+')':'')+(x.stuck?' · '+(x.est?'about ':'')+x.stuck+' active accounts on them':''):'')
+      : 'Week of '+insDate(x.d,true)+' ('+x.n+' recorded day'+(x.n===1?'':'s')+')\nActive accounts (average): '+Math.round(x.active)+'\nPosted per day (average): '+Math.round(x.posted)+(x.active?' ('+Math.round(x.posted/x.active*100)+'%)':'')+'\nPhones out (average): '+(x.out?x.out.toFixed(1):'0')+(x.stuck?' · '+Math.round(x.stuck)+' active accounts on them':'');
+    s+='<rect x="'+f(x0)+'" y="'+T+'" width="'+f(Math.max(1,x1-x0))+'" height="'+(H-T-B)+'" fill="transparent"><title>'+esc(t)+'</title></rect>'; });
   return s+'</svg>';
 }
-function insGap(idx, act, pos, X, Y, fill){ if(idx.length<2) return ''; var top=idx.map(function(i){ return X(i).toFixed(1)+' '+Y(act[i]).toFixed(1); }), bot=idx.slice().reverse().map(function(i){ return X(i).toFixed(1)+' '+Y(pos[i]).toFixed(1); }); return '<path d="M'+top.join(' L')+' L'+bot.join(' L')+' Z" fill="'+fill+'"/>'; }
-function insLegend(light){ var c=light?['#334155','#F1560F','rgba(241,86,15,.18)','rgba(225,29,72,.35)']:['#22d3ee','#c6ff4d','rgba(255,61,154,.3)','rgba(251,191,36,.6)'];
+function insLegend(light, mode, pts){ var c=light?['#1e293b','#F1560F','rgba(241,86,15,.22)','rgba(225,29,72,.32)']:['#22d3ee','#c6ff4d','rgba(255,61,154,.32)','rgba(251,191,36,.5)'];
+  var outMx=Math.max.apply(null, (pts||[]).map(function(x){ return x.out||0; }).concat([0]));
   var it=function(sw,t){ return '<span style="display:inline-flex;align-items:center;gap:6px;margin-right:16px">'+sw+t+'</span>'; };
-  return '<div style="font-size:12px;'+(light?'color:#475569':'color:var(--ink2)')+';margin-top:8px">'+it('<i style="width:18px;height:3px;border-radius:2px;background:'+c[0]+'"></i>','Active accounts')+it('<i style="width:18px;height:3px;border-radius:2px;background:'+c[1]+'"></i>','Posted')+it('<i style="width:14px;height:10px;border-radius:2px;background:'+c[2]+'"></i>','Not posted')+it('<i style="width:8px;height:12px;border-radius:2px;background:'+c[3]+'"></i>','Phones out of service')+'<span style="opacity:.75">Bold lines = 7-day average · thin lines = each day</span></div>'; }
+  return '<div style="font-size:12px;'+(light?'color:#475569':'color:var(--ink2)')+';margin-top:8px;line-height:1.9">'+it('<i style="width:18px;height:3px;border-radius:2px;background:'+c[0]+'"></i>','Active accounts')+it('<i style="width:18px;height:3px;border-radius:2px;background:'+c[1]+'"></i>','Posted')+it('<i style="width:14px;height:10px;border-radius:2px;background:'+c[2]+'"></i>','Not posted')+it('<i style="width:8px;height:12px;border-radius:2px;background:'+c[3]+'"></i>','Phones out of service'+(outMx?' (tallest bar = '+(mode==='day'?outMx:outMx.toFixed(1))+')':''))+
+    '<span style="opacity:.75">'+(mode==='day'?'Each day, smoothed over 7 recorded days · hover for the day\'s own numbers':'Each point = the average of that week\'s recorded days · hover for details')+'</span></div>'; }
 function insPct(v){ return v==null?'':((v>0?'+':'')+v+'%'); }
 var INS_ST={ disconnected:'Disconnected', issue:'Has an issue', hold:'On hold' };
 function vInsights(){
@@ -2181,8 +2210,9 @@ function vInsights(){
     kpi('Days with a phone out', st.outDays+'<small style="font-size:14px;opacity:.6">/'+st.S.length+'</small>', (st.anyEst?'about ':'')+st.lost.toLocaleString()+' account-days lost', 'var(--red)')+
     '</div>';
   h+='<div class="card pad" style="margin-bottom:12px"><div class="ch-h"><b>Active vs posted accounts</b><span>'+esc(insDate(st.S.length?st.S[0].d:d.from,true))+' → '+esc(insDate(st.S.length?st.S[st.S.length-1].d:d.to,true))+' · first '+st.w+' days vs last '+st.w+' days</span></div>'+
-    insChart(d.series, false)+insLegend(false)+
-    (st.noRec?'<div class="hint" style="margin-top:6px">'+st.noRec+' day'+(st.noRec===1?' has':'s have')+' no End-of-day record'+(d.first_eod && d.first_eod>d.from?' (records start '+esc(insDate(d.first_eod,true))+')':'')+' — they show as gaps. Run End of day every day so nothing is missing.</div>':'')+'</div>';
+    '<div class="seg" style="width:auto;display:inline-flex;margin:2px 0 6px">'+[['week','Week by week'],['day','Day by day']].map(function(x){ return '<button class="'+(INS.mode===x[0]?'on':'')+'" onclick="INS.mode=\''+x[0]+'\';renderView()">'+x[1]+'</button>'; }).join('')+'</div>'+
+    (function(){ var pts=insPoints(d, INS.mode); return insChart(pts, false, INS.mode)+insLegend(false, INS.mode, pts); })()+
+    (st.noRec?'<div class="hint" style="margin-top:6px">'+st.noRec+' day'+(st.noRec===1?' has':'s have')+' no End-of-day record'+(d.first_eod && d.first_eod>d.from?' (records start '+esc(insDate(d.first_eod,true))+')':'')+' — they are left out, never guessed. Run End of day every day so nothing is missing.</div>':'')+'</div>';
   var po=nw.phones_out||[];
   h+='<div class="ig"><div class="card pad s8"><div class="ch-h"><b>Phones out of service now</b><span>'+po.length+' phone'+(po.length===1?'':'s')+' · '+(nw.stuck||0)+' active accounts can\'t be posted</span></div>'+
     (po.length?'<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Phone</th><th>Status</th><th>Reason</th><th>Active accounts</th><th>Out for</th></tr></thead><tbody>'+po.map(function(x){ return '<tr><td class="c1"><b>Phone '+esc(x.phone)+'</b></td><td><span class="stl '+esc(x.status)+'">'+esc(INS_ST[x.status]||x.status)+'</span></td><td style="white-space:normal;max-width:320px">'+(x.reason?esc(x.reason):'<span class="muted">no reason given</span>')+'</td><td class="num"><b>'+x.accounts+'</b></td><td>'+(x.days?x.days+' recorded day'+(x.days===1?'':'s')+(x.since?' <span class="muted">since '+esc(insDate(x.since))+'</span>':''):'<span class="muted">today</span>')+'</td></tr>'; }).join('')+'</tbody></table></div>':'<div class="muted">Every phone is in service.</div>')+'</div>';
@@ -2237,7 +2267,7 @@ function insReportHtml(d){
       tile('Days with a phone out', st.outDays+'<span style="font-size:15px;color:#94a3b8">/'+st.S.length+'</span>', (st.anyEst?'about ':'')+st.lost.toLocaleString()+' account-days lost', '#0f172a')+
     '</div>'+
     '<p class="lead" contenteditable="true">'+sum+'</p><p class="lead" contenteditable="true">'+sum2+'</p>'+
-    '<h2>Active vs posted accounts, per day</h2><div class="chart">'+insChart(d.series, true)+insLegend(true)+'</div>'+
+    '<h2>Active vs posted accounts, week by week</h2><div class="chart">'+(function(){ var pts=insPoints(d,'week'); return insChart(pts, true, 'week')+insLegend(true, 'week', pts); })()+'</div>'+
     (po.length?'<h2>Phones out of service today</h2><table><thead><tr><th>Phone</th><th>Status</th><th>Reason</th><th class="n">Active accounts</th><th class="n">Out for</th></tr></thead><tbody>'+po.map(function(x){ return '<tr><td><b>Phone '+esc(x.phone)+'</b></td><td>'+esc(INS_ST[x.status]||x.status)+'</td><td contenteditable="true">'+(x.reason?esc(insScrub(x.reason)):'—')+'</td><td class="n"><b>'+x.accounts+'</b></td><td class="n">'+(x.days?x.days+' day'+(x.days===1?'':'s'):'today')+'</td></tr>'; }).join('')+'</tbody></table>':'')+
     '<h2>Week by week</h2><table><thead><tr><th>Week of</th><th class="n">Active accounts</th><th class="n">Posted per day</th><th class="n">Completion</th><th class="n">Phones out</th></tr></thead><tbody>'+
       wk.map(function(x){ return '<tr><td>'+esc(insDate(x.wk,true))+'</td><td class="n">'+R(x.active)+'</td><td class="n">'+R(x.posted)+'</td><td class="n">'+(x.comp!=null?Math.round(x.comp)+'%':'—')+'</td><td class="n">'+(x.out?x.out.toFixed(1):'0')+'</td></tr>'; }).join('')+'</tbody></table>'+
