@@ -1195,6 +1195,7 @@ function vToday(){
       :'<button class="btn sec" onclick="crStart()" title="Press when you START creating an account on the iPhone">▶ Start creating</button>'):'')+
     '<button class="btn pri" onclick="newAccount()">'+IC.plus+' Log new account</button></div>';
   h+=fixBanner();
+  h+=tmCapBanner()+gapBanner();
   if(tmOn() && !(function(){ try{ return localStorage.getItem('rc_tm_seen_'+myId()); }catch(e){ return 1; } })())
     h+='<div class="banner info">'+IC.hour+'<div style="flex:1"><b>New — task timers.</b> Press <b>Start</b> when you begin a session, DMs or a new account, and <b>Finish</b> when it\'s done. For the first days the tool is only <b>learning how long each task normally takes</b> on Vysor, Jailbroken and Blaze+. It is not a race — finishing in seconds gets flagged for review, never rewarded.</div><button class="btn sm sec" onclick="try{localStorage.setItem(\'rc_tm_seen_'+jsq(myId())+'\',\'1\')}catch(e){};renderView()">Got it</button></div>';
   if(tmOn() && tmCount()) tmEnsure();
@@ -1532,7 +1533,7 @@ function sesBtn(r, n){
   if(locked) return '<button class="ses" disabled title="Finish Session 1 first"><span class="bx"></span>Session '+n+'</button>';
   if(!tmOn()) return '<button class="ses" onclick="doSession(\''+jsq(r.id)+'\','+n+',this)"><span class="bx"></span>Session '+n+'</button>';
   var t=tmGet(r.id,'s'+n);
-  if(t) return '<button class="ses run" onclick="doSession(\''+jsq(r.id)+'\','+n+',this)" title="Press when the session is finished"><span class="sq"></span>Finish S'+n+' <small data-tm="'+t.t+'">'+tmFmt(Date.now()-t.t)+'</small></button>'+
+  if(t) return '<button class="ses run" onclick="doSession(\''+jsq(r.id)+'\','+n+',this)" title="Press when the session is finished — this timer stops by itself at '+Math.round(tmCapSecs('session',r.status,methodOf(r))/60)+' minutes"><span class="sq"></span>Finish S'+n+' <small data-tm="'+t.t+'">'+tmFmt(Date.now()-t.t)+'</small></button>'+
     '<button class="ses x" onclick="tmCancel(\''+jsq(r.id)+'\',\'s'+n+'\')" title="Cancel this timer (started by mistake)">'+IC.x+'</button>';
   return '<button class="ses go" onclick="sesStart(\''+jsq(r.id)+'\','+n+')" title="Press when you START this session — press again when it\'s done"><span class="pl"></span>Start S'+n+'</button>';
 }
@@ -1600,6 +1601,73 @@ function tmAll(){
 function tmPut(o){ try{ localStorage.setItem(tmKey(), JSON.stringify(o)); }catch(e){} try{ TB.act=Date.now(); setTimeout(function(){ tbSend(true); }, 50); }catch(_b){} }
 function tmGet(id,k){ return tmAll()[id+'|'+k]||null; }
 function tmCount(){ return Object.keys(tmAll()).length; }
+/* ══════════ TASK TIME LIMITS (Jeth, Oct 13) ══════════
+   "They start a timer and leave it running just to keep the portal timer going." Every tool timer now has a
+   maximum. Once a task's team time is learned the maximum is 2.5× it (at least team time + 5 min, between 10 and
+   60 minutes); before that a safe default (session 30 min · DMs 25 min · account creation 45 min). The owner's
+   page computes the maxima from the learned team times and saves them in Settings (cfg.task_caps, backend
+   rc-2026-10-13b) so every VA's page uses the same numbers.
+   At the maximum the timer stops by itself: only the time up to the limit is recorded (as an "overrun" row, so it
+   never skews the learned team times), the session is NOT ticked — the VA starts it again if really still working —
+   and Productivity & QA counts it (−0.5 each, max 2 a day). A stopped timer also stops keeping the portal's
+   10-minute tool rule alive, which is the point. */
+var TM_DEF_CAP={ session:30*60, dms:25*60, creation:45*60 };
+function tmCapFrom(T){ T=+T||0; return Math.round(Math.min(60*60, Math.max(10*60, T*2.5, T+5*60))); }
+function tmCapKey(kind, stage, meth){ return kind+'|'+((kind==='creation'||kind==='healthcheck')?'':(stage||''))+'|'+(meth||'(none)'); }
+function tmCapSecs(kind, stage, meth){
+  var caps=CFG.task_caps||{}, k=tmCapKey(kind,stage,meth);
+  if(caps[k]) return +caps[k];
+  if(kind==='creation'){ var mx=0; Object.keys(caps).forEach(function(x){ if(x.indexOf('creation|')===0) mx=Math.max(mx,+caps[x]||0); }); if(mx) return mx; }
+  var own=(CFG.targets||{})[k]; if(own) return tmCapFrom(own);
+  return TM_DEF_CAP[kind]||30*60;
+}
+function tmCapOf(key){
+  var p=String(key).split('|'), id=p[0], k=p[1]||'';
+  if(id==='__create') return { kind:'creation', secs:tmCapSecs('creation','',''), r:null, k:k };
+  var r=rowById(id), kind=/^s\d/.test(k)?'session':(k==='dm'?'dms':'session');
+  return { kind:kind, r:r, k:k, secs:tmCapSecs(kind, r?r.status:'', r?methodOf(r):'') };
+}
+function tmCapCheck(){
+  try{ if(!USER || !tmOn()) return; }catch(e){ return; }
+  var o=tmAll(), now=Date.now(), hit=[];
+  Object.keys(o).forEach(function(key){ var x=o[key]; if(!x || !x.t) return; var c=tmCapOf(key); if((now-x.t)/1000>=c.secs) hit.push({ key:key, x:x, c:c }); });
+  if(!hit.length) return;
+  hit.forEach(function(h){
+    var o2=tmAll(); delete o2[h.key]; tmPut(o2);
+    try{ tmLog(h.c.r, 'overrun', { secs:h.c.secs, start:h.x.t, parallel:h.x.p||0 }, { stage:h.c.r?h.c.r.status:'', source:'cap · '+h.c.kind }); }catch(e){}
+    var what=h.c.kind==='creation'?'The creation timer':(h.c.kind==='dms'?'The DM timer':'Session '+String(h.c.k||'').replace(/^s/,'')+' timer')+(h.c.r?' for '+h.c.r.handle:'');
+    tmCapNote(what+' stopped at its '+Math.round(h.c.secs/60)+'-minute limit. Time past the limit doesn\'t count. Still working on it? Start it again.');
+  });
+  try{ renderView(); }catch(e){}
+}
+var _tmCapNotes=[];
+function tmCapNote(msg){ _tmCapNotes.push({ m:msg, at:Date.now() }); if(_tmCapNotes.length>5) _tmCapNotes.shift(); try{ toast('⏱ '+msg); }catch(e){} }
+function tmCapBanner(){
+  var L=_tmCapNotes.filter(function(x){ return Date.now()-x.at<30*60000; }); if(!L.length) return '';
+  return '<div class="banner warn">'+IC.hour+'<div style="flex:1">'+L.map(function(x){ return esc(x.m); }).join('<br>')+'</div><button class="btn sm sec" onclick="_tmCapNotes=[];renderView()">OK</button></div>';
+}
+setInterval(tmCapCheck, 15000);
+/* the owner's page keeps cfg.task_caps in step with the learned / owner-set team times */
+async function tmCapsPublish(){
+  if(!isAdmin() || !(BE_BUILD && BE_BUILD>='rc-2026-10-13b') || !PQ.tgt) return;
+  var caps={}, auto=(PQ.tgt&&PQ.tgt.auto)||{}, own=CFG.targets||{};
+  Object.keys(auto).forEach(function(k){ if(auto[k] && auto[k].secs && !/^healthcheck/.test(k)) caps[k]=tmCapFrom(auto[k].secs); });
+  Object.keys(own).forEach(function(k){ var v=parseFloat(own[k]); if(!isNaN(v) && v>0 && !/^healthcheck/.test(k)) caps[k]=tmCapFrom(v); });
+  var cur=CFG.task_caps||{};
+  if(JSON.stringify(Object.keys(caps).sort().map(function(k){ return k+'='+caps[k]; }))===JSON.stringify(Object.keys(cur).sort().map(function(k){ return k+'='+cur[k]; }))) return;
+  var cfg=JSON.parse(JSON.stringify(CFG)); cfg.task_caps=caps;
+  try{ var r=await fetch(API, { method:'POST', body:JSON.stringify({ action:'rc_cfg_set', by:USER.id, cfg:cfg }) }); var d=await r.json(); if(d && d.ok && d.cfg) CFG=d.cfg; }catch(e){}
+}
+/* VA: how far the portal is ahead of this tool's timers today (the portal stops at 30 minutes) */
+function gapBanner(){
+  if(isAdmin()) return ''; var p=LINK.me; if(!p || p.tracked_secs===undefined) return '';
+  var tracked=(+p.tracked_proj_secs)||(+p.tracked_secs)||0, timed=timedToday(), gap=tracked-timed;
+  if(gap<15*60) return '';
+  var hard=gap>=30*60;
+  return '<div class="banner '+(hard?'bad':'warn')+'">'+IC.hour+'<div style="flex:1"><b>Your portal time is '+hm(gap)+' ahead of your task timers today</b> (portal '+hm(tracked)+' · timers '+hm(timed)+'). '+
+    'The portal can\'t run more than <b>30 minutes</b> ahead of your tool time — past that it stops unless a task timer is running. Time a task for everything you do here.</div></div>';
+}
+
 /* ═══ PAIRFX BEGIN (generated from pairfx.js — edit there, rebuild) ═══ */
 /* ═══ PAIRFX — the portal timer ⇄ tool timer link, drawn (Jeth, Oct 9 2026) ═══
    One look everywhere the two timers meet — the portal, Reddit Central and ALTR Studio:
@@ -4556,7 +4624,8 @@ var QA_RULES=[
   { k:'tagging',    n:'Accounts not tagged right — method or model missing, or a new account without its phone', d:0.5, u:'each · max 2' },
   { k:'quick',      n:'Session or DMs finished within 20 seconds of starting', d:0.5, u:'each · max 2' },
   { k:'fast',       n:'Under 35% of the team time for that task (once it is learned)', d:0.5, u:'each · max 2' },
-  { k:'cover',      n:'Tool time under half of the portal time (2+ hours tracked) — timers tapped, not worked', d:0, u:'flag only for now' },
+  { k:'cover',      n:'Portal time more than 30 minutes ahead of the tool timers', d:1, u:'' },
+  { k:'overrun',    n:'Task timer left running past its time limit', d:0.5, u:'each · max 2' },
   { k:'typo',       n:'Username typo — the health check could not find the account until the owner corrected the name', d:0.5, u:'each · max 2' },
   { k:'fix_open',   n:'A username sent back for fixing is still not corrected (or marked banned)', d:1, u:'each, per day it stays open · max 3' }
 ];
@@ -4589,6 +4658,7 @@ async function pqLoad(force){
     PQ.key=key;
   }catch(e){ PQ.st={ error:'connection', groups:[], vas:[], rows:[] }; PQ.dd=[]; }
   PQ.loading=false; if(VIEW==='prod') renderView();
+  try{ tmCapsPublish(); }catch(_cp){}   // task time limits follow the team times (Oct 13)
 }
 async function pqLoadSc(force){
   if(PQ.scLoading || !isAdmin()) return;
@@ -4781,7 +4851,9 @@ function pqFlags(va, day, dr, L){
   if(q) F.push({ k:'quick', t:q+' finished within 20 s', d:Math.min(2,q*pqRule('quick').d), c:'r' });
   var fast=rows.filter(function(x){ if(x.secs==null || x.secs<20) return false; var tt=pqTeamTime(x.kind+'|'+x.stage+'|'+(x.method||'(none)')); return tt && x.secs<tt*0.35; }).length;
   if(fast) F.push({ k:'fast', t:fast+' far under the team time', d:Math.min(2,fast*pqRule('fast').d), c:'a' });
-  try{ var cv=pqCover(va, day, dr); if(cv && cv.tracked>=7200 && cv.pct!=null && cv.pct<50) F.push({ k:'cover', t:'Tool time '+hm(cv.timed)+' of '+hm(cv.tracked)+' tracked ('+cv.pct+'%)', d:pqRule('cover').d, c:'r', tip:'The portal tracked '+hm(cv.tracked)+' but this tool\'s timers only covered '+hm(cv.timed)+' of it.' }); }catch(_cv){}
+  var ovr=((PQ.st&&PQ.st.rows)||[]).filter(function(x){ return String(x.va).toLowerCase()===va && x.kind==='overrun'; }).length;
+  if(ovr) F.push({ k:'overrun', t:ovr+' timer'+(ovr===1?'':'s')+' ran past the limit', d:Math.min(2, ovr*pqRule('overrun').d), c:'r' });
+  try{ var cv=pqCover(va, day, dr); if(cv && cv.tracked-cv.timed>1800) F.push({ k:'cover', t:'Portal '+hm(cv.tracked-cv.timed)+' ahead of the tool ('+hm(cv.timed)+' of '+hm(cv.tracked)+')', d:pqRule('cover').d, c:'r', tip:'The portal tracked '+hm(cv.tracked)+' but this tool\'s timers only covered '+hm(cv.timed)+' of it.' }); }catch(_cv){}
   var ps=CFG.process_start||'2026-10-01', untag=allRows().filter(function(r){ return owner(r)===va && !isDead(r) && !isParked(r) && (!methodOf(r) || !r.model || (cdateOf(r)>=ps && !r.device && phoneList(false, r.project).length)); });
   var typos=allRows().filter(function(r){ return owner(r)===va && M(r).typo && M(r).typo.day===day; });
   if(typos.length) F.push({ k:'typo', t:typos.length+' username typo'+(typos.length===1?'':'s')+' corrected', d:Math.min(2,typos.length*pqRule('typo').d), c:'r', tip:typos.map(function(r){ var t=M(r).typo; return t.from+' → '+t.to; }).join(' · ') });
