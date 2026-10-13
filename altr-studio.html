@@ -2340,6 +2340,43 @@ function scDays(){
 function altrDAddC(d,n){ var x=new Date(d+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+n); return x.toISOString().slice(0,10); }
 async function scLoadDay(){ SC.loading=true; try{ var d=await apiGet({ action:'altr_sc_day', by_id:myId(), date:SC.day },0); SC.d=d&&d.ok?d:{ date:SC.day, error:(d&&d.error==='unknown action')?'The ALTR backend needs version 2026-10-05-aura2.':((d&&d.error)||'network'), rows:[] }; }catch(e){ SC.d={ date:SC.day, error:'network', rows:[] }; } SC.loading=false; if(VIEW==='score') renderView(); }
 async function scSetQa(va, name, v, note){ try{ var d=await apiPost({ action:'altr_qa_set', date:SC.day, va:va, name:name, qa:v, note:note }); if(d&&d.ok){ toast('QA saved'); var r=(SC.d&&SC.d.rows||[]).filter(function(x){ return x.va===va; })[0]; if(r){ r.qa=(v===''?null:parseFloat(v)); r.qa_note=note; } SC.m=null; } else toast((d&&d.error)||'Failed'); }catch(e){ toast('Save failed'); } }
+/* ══════════ DAILY QA FILLS ITSELF (Jeth, Oct 13) ══════════
+   "It should start on October 5 … backtrack that and give the score." Every VA-day from Oct 5 to yesterday that
+   has work (a target, posts or sources) and no score yet gets the suggested score (10 minus the rule hits) the next
+   time an owner or lead opens the Studio — once a day, right after the day-close ledger. The note says it was
+   automatic and lists the hits; a lead changes any number in Scorecard → that day. For the last 3 days an
+   automatic score is refreshed if the suggestion moved (e.g. a QA Checker run came in later); a score a person
+   typed is never touched. The VA sees it in the portal under My QA. */
+var QA_AUTO_FROM='2026-10-05';
+function scWorked(o){ return (o.post_target||0)>0 || (o.src_target||0)>0 || (o.posted||0)>0 || (o.sourced||0)>0; }
+/* the phones sheet keeps only each phone's latest check, so "phones not checked" can't be judged for a past day —
+   it's left out of the automatic score (a lead can still apply it by hand) */
+function scAutoHits(o){ return (o.hits||[]).filter(function(h){ return h.k!=='phones'; }); }
+function scAutoScore(o){ var ded=scAutoHits(o).reduce(function(s,h){ return s+(+h.d||0); },0); return Math.max(0, Math.round((10-ded)*10)/10); }
+function scAutoNote(o){ var H=scAutoHits(o); return 'Automatic (a lead can change it): '+(H.length?H.map(function(h){ return h.t+' −'+h.d; }).join(' · '):'no rule hits'); }
+async function scAutoFill(force){
+  if(!isLead()) return 0;
+  var td=phtToday(), rk='altr2_qa_auto_run_'+td;
+  try{ if(!force && localStorage.getItem(rk)) return 0; localStorage.setItem(rk,'1'); }catch(e){}
+  var y=altrDAddC(td,-1), recent=altrDAddC(td,-3), filled=0, fixed=0, failed=0, days=0;
+  for(var d=QA_AUTO_FROM; d<=y; d=altrDAddC(d,1)){
+    var mk='altr2_qa_auto_'+d;
+    try{ if(d<recent && localStorage.getItem(mk)) continue; }catch(e){}
+    var r=null; try{ r=await apiGet({ action:'altr_sc_day', by_id:myId(), date:d },0); }catch(e){ r=null; }
+    if(!r || !r.ok){ failed++; continue; }
+    var ok=true;
+    for(var i=0;i<(r.rows||[]).length;i++){ var o=r.rows[i]; if(!scWorked(o)) continue;
+      var auto=(o.qa===null), sg=scAutoScore(o), redo=(!auto && d>=recent && /^Automatic/.test(o.qa_note||'') && Math.abs((+o.qa)-sg)>0.001);
+      if(!auto && !redo) continue;
+      try{ var s=await apiPost({ action:'altr_qa_set', date:d, va:o.va, name:o.name, qa:String(sg), note:scAutoNote(o) }); if(s&&s.ok){ if(auto) filled++; else fixed++; } else { ok=false; failed++; } }catch(e){ ok=false; failed++; }
+    }
+    days++;
+    if(ok){ try{ localStorage.setItem(mk,'1'); }catch(e){} }
+  }
+  if(failed){ try{ localStorage.removeItem(rk); }catch(e){} }   // try again on the next open
+  if(filled||fixed){ toast('Daily QA filled automatically: '+filled+' VA-day'+(filled===1?'':'s')+(fixed?(' · '+fixed+' updated'):'')+' — Scorecard to change any.'); if(VIEW==='score'){ SC.d=null; renderView(); } }
+  return filled+fixed;
+}
 async function scFillAll(){ var rows=(SC.d&&SC.d.rows||[]).filter(function(o){ return o.qa===null; }); if(!rows.length){ toast('Every VA already has a score for this day.'); return; } if(!(await confirmBox('Use the suggested score for '+rows.length+' VA'+(rows.length===1?'':'s')+'?', 'Only the ones without a score yet. You can still change any of them after.', 'Fill in'))) return; for(var i=0;i<rows.length;i++){ await scSetQa(rows[i].va, rows[i].name, String(rows[i].suggested), rows[i].qa_note||''); } SC.d=null; renderView(); }
 function scHow(){
   return '<div class="ig"><div class="card pad s4"><div class="ch-h"><b class="lime">Productivity</b><span>20%</span></div><p style="font-size:12.5px;line-height:1.6;color:var(--ink2)">Target completion on the days you worked: <b style="color:var(--ink)">(posted + sourced) ÷ (posting target + sourcing target)</b>, capped at 100. Targets come from the rosters; a phone on hold or disconnected is not a target, so a dead phone never costs you. Each day is frozen at End of day / Record day.</p></div>'+
@@ -2420,7 +2457,7 @@ async function start(){
   renderView();
   loadState(!!STATE); pingPresence();
   if(VIEW==='history') loadHistory();
-  if(isLead()){ try{ var _dk='altr2_dc_'+phtToday(); if(!localStorage.getItem(_dk)){ localStorage.setItem(_dk,'1'); apiGet({ action:'altr_day_close', by_id:myId(), catchup:'1' },0).then(function(d){ if(d&&d.closed&&d.closed.length) toast('Scorecard ledger: closed '+d.closed.length+' day'+(d.closed.length===1?'':'s')+'.'); }).catch(function(){ try{ localStorage.removeItem(_dk); }catch(_r){} }); } }catch(_dc){} }   // Phase 2: freeze yesterday's numbers
+  if(isLead()){ try{ var _dk='altr2_dc_'+phtToday(), _qa=function(){ setTimeout(function(){ scAutoFill().catch(function(){}); }, 4000); }; if(!localStorage.getItem(_dk)){ localStorage.setItem(_dk,'1'); apiGet({ action:'altr_day_close', by_id:myId(), catchup:'1' },0).then(function(d){ if(d&&d.closed&&d.closed.length) toast('Scorecard ledger: closed '+d.closed.length+' day'+(d.closed.length===1?'':'s')+'.'); _qa(); }).catch(function(){ try{ localStorage.removeItem(_dk); }catch(_r){} _qa(); }); } else _qa(); }catch(_dc){} }   // Phase 2: freeze yesterday's numbers, then fill the daily QA (Oct 13)
 }
 (function(){ try{ var u=JSON.parse(sessionStorage.getItem('altr2_user')||'null'); if(u&&u.id){ USER=u; start(); } }catch(e){} })();
 </script>

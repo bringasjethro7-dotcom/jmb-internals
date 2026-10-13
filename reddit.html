@@ -2802,12 +2802,13 @@ function fixGateRefresh(){ var b=document.querySelector('#modal.on .fix-gate'); 
 
 /* ══════════ QA FILLS ITSELF (Jeth, Oct 13) ══════════
    Days the owner has not scored are filled with the suggested score (10 minus the rule hits) the next time
-   the owner opens Reddit Central — the last 3 business days, once each. The note says it was automatic and
-   lists the hits; the owner can change any number in Productivity & QA. */
+   the owner opens Reddit Central — every day from the process start (Oct 5) to yesterday, once each (Oct 13:
+   "it should start on October 5 … backtrack that"). The note says it was automatic and lists the hits; the
+   owner can change any number in Productivity & QA. */
 async function pqAutoFill(){
   if(!isAdmin() || !(BE_BUILD && BE_BUILD>='rc-2026-10-05d')) return;
   var days=[], ps=CFG.process_start||'2026-10-05';
-  for(var i=3;i>=1;i--){ var y=dAdd(today(),-i); if(y<ps) continue; try{ if(localStorage.getItem('rc_qa_auto2_'+y)) continue; }catch(e){} days.push(y); }
+  for(var y=(ps<'2026-10-05'?'2026-10-05':ps), yd=dAdd(today(),-1), g=0; y<=yd && g<120; y=dAdd(y,1), g++){ try{ if(localStorage.getItem('rc_qa_auto2_'+y)) continue; }catch(e){} days.push(y); }
   if(!days.length) return;
   var keep=PQ.day, total=0;
   for(var j=0;j<days.length;j++){
