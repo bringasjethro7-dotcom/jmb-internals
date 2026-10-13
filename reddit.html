@@ -491,6 +491,11 @@ svg text{font-family:'Inter',sans-serif}
 .qz-sticky{position:sticky;bottom:12px;display:flex;gap:10px;align-items:center;box-shadow:0 14px 30px -14px rgba(15,23,42,.5)}
 .qz-st{display:inline-flex;align-items:center;gap:5px;border-radius:100px;padding:3px 9px;font-size:11px;font-weight:800}
 .qz-st.p{background:#ecfdf5;color:#047857} .qz-st.t{background:#fff7ed;color:#c2410c} .qz-st.n{background:var(--s3);color:var(--ink3)}
+.posts-strip{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.pchip{border:1px solid var(--line);background:var(--s1);border-radius:100px;padding:3px 9px;font-size:11px;font-weight:700;color:var(--ink2);cursor:pointer;font-family:inherit}
+.pchip small{font-weight:600;color:var(--ink3)}
+.pchip:hover{border-color:#fca5a5;color:#9f1239}
+.pchip.rm{background:#fff1f2;border-color:#fecdd3;color:#9f1239}
 </style>
 </head>
 <body>
@@ -992,8 +997,8 @@ function paintTop(){
 }
 function tabsFor(){
   var t=[['today','Today'],['accounts','Accounts']];
-  if(isAdmin()) t=t.concat([['pipeline','Pipeline'],['insights','Insights'],['health','Health check'],['prod','Productivity & QA'],['settings','Settings']]);   // Coverage lives inside Settings (owner, Oct 5)
-  else t=t.concat([['health','Health check']]);   // every VA does the daily cross-check
+  if(isAdmin()) t=t.concat([['pipeline','Pipeline'],['insights','Insights'],['subs','Subreddits'],['health','Health check'],['prod','Productivity & QA'],['settings','Settings']]);   // Coverage lives inside Settings (owner, Oct 5)
+  else t=t.concat([['subs','Subreddits'],['health','Health check']]);   // every VA does the daily cross-check · Subreddits: where posts stay up (Oct 13)
   return t;
 }
 var SETSUB='lists';   // Settings sub-page: 'coverage' | 'lists'
@@ -1003,6 +1008,7 @@ var TAB_IC={
   pipeline:SI('<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/>',15),
   insights:SI('<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',15),
   health:SI('<path d="M3 12h4l3-8 4 16 3-8h4"/>',15),
+  subs:SI('<circle cx="12" cy="12" r="9"/><path d="M8 13.5c1 1.3 2.4 2 4 2s3-.7 4-2"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/>',15),
   prod:SI('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',15),
   settings:SI('<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2.2" fill="currentColor"/><circle cx="15" cy="12" r="2.2" fill="currentColor"/><circle cx="7" cy="18" r="2.2" fill="currentColor"/>',15)
 };
@@ -1023,7 +1029,7 @@ function go(v){
   VIEW=v; try{ sessionStorage.setItem('rc_view', v); }catch(e){}
   paintTabs(); renderView(); window.scrollTo({top:0,behavior:'smooth'});
   if(v==='insights'){ insLoad(false).then(function(){ if(VIEW===v) renderView(); }); }   // live snapshot, refreshed every minute while open (Oct 8)
-  else if(v==='pipeline'||(v==='accounts'&&DB.all)){ loadAll().then(function(){ if(VIEW===v) renderView(); }); }
+  else if(v==='pipeline'||v==='subs'||(v==='accounts'&&DB.all)){ loadAll().then(function(){ if(VIEW===v) renderView(); }); }
 }
 function setBase(id){
   if(id===PROJECT) return;
@@ -1065,6 +1071,7 @@ function renderView(){
     else if(VIEW==='insights') html=vInsights();
     else if(VIEW==='coverage') html=vCoverage();
     else if(VIEW==='health') html=vHealth();
+    else if(VIEW==='subs') html=vSubs();
     else if(VIEW==='prod') html=vProd();
     else if(VIEW==='settings') html=vSettings();
   }catch(e){ html='<div class="card empty">Something went wrong drawing this view: '+esc(e&&e.message)+'</div>'; console.error(e); }
@@ -1093,7 +1100,8 @@ function start(){
   paintTop(); paintCached();
   if(!ROWS.length) $('view').innerHTML='<div class="grid"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>';
   loadNames(); loadCfg().then(renderView); load(); loadAll(); smartPoll();
-  if(isAdmin()){ loadOff(); loadHealth(); }
+  if(isAdmin()){ loadOff(); loadHealth(); setTimeout(function(){ try{ pqAutoFill(); }catch(e){} }, 25000); }
+  chkLoad(true); setTimeout(chkTick, 4000); setTimeout(chkTick, 15000);   // health check v2: who is in today (Oct 13)
   if(isAdmin()){ try{ var _dk='rc_dc_'+today(); if(!localStorage.getItem(_dk)){ localStorage.setItem(_dk,'1');
     // Day close runs from the owner's page in the background (05i) — never inside a VA's request.
     api({ action:'rc_day_close', by:USER.id, catchup:'1' }).then(function(d){ if(d&&d.ok&&d.closed&&d.closed.length){ toast('Closed '+d.closed.length+' day'+(d.closed.length===1?'':'s')+' → scorecard updated.'); if(VIEW==='prod'){ PQ.st=null; PQ.sc=null; renderView(); } } }).catch(function(){ try{ localStorage.removeItem(_dk); }catch(_r){} }); } }catch(_dc){} }
@@ -1207,10 +1215,11 @@ function vToday(){
   if(admin){ var _pk=(ALL[PROJECT]||ROWS).filter(isParked), _ph=_pk.filter(function(r){ return r.status==='onhold'; }).length, _pa=_pk.length-_ph;
     if(_pk.length) h+='<div class="banner info">'+IC.pause+'<div style="flex:1"><b>'+_ph+' on hold'+(_pa?' · '+_pa+' archived':'')+'</b> for clients on '+esc(baseOf(PROJECT).n)+' — out of every board and every number until you release them.</div><button class="btn sm dark" onclick="DB.life=\'hold\';if(!DB.groupBy)DB.groupBy=\'client\';go(\'accounts\')">See them</button></div>'; }
   if(admin) h+=wrongBaseBanner(ALL[PROJECT]||ROWS);
-  if(admin) h+=hcBanner();
+  if(admin) h+=hcBanner()+hcMissBanner();
   if(admin){ var _dq=delReqs(); if(_dq.length) h+='<div class="banner bad">'+IC.trash+'<div style="flex:1"><b>'+_dq.length+' deletion request'+(_dq.length===1?'':'s')+'</b> waiting for you — VAs can\'t delete a recorded account without your approval.</div><button class="btn sm dark" onclick="delReview()">Review</button></div>'; }
   try{ if(!localStorage.getItem('sop_seen_2026-10-05')) h+='<div class="banner" style="background:#ecfeff;border-color:#a5f3fc">'+IC.doc+'<div style="flex:1"><b>SOP update · 5 Oct:</b> the phase plans changed — warming, comment farming, NSFW comments, early posting, DMs, Strong / Super Strong and spam-filter recovery. Each account card shows its new plan.</div><a class="btn sm dark" href="huddle-reddit-sop.html" target="_blank" rel="noopener">What changed</a><button class="btn sm" onclick="localStorage.setItem(\'sop_seen_2026-10-05\',\'1\');renderView()">Got it</button></div>'; }catch(_sb){}
-  try{ var _ml=ccMineLeft(); if(_ml.length) h+='<div class="banner warn">'+IC.search+'<div style="flex:1"><b>Daily health check:</b> '+_ml.length+' teammate account'+(_ml.length===1?'':'s')+' to check (about '+Math.max(1,Math.ceil(_ml.length*4/60))+' min). Do it now, before your first session.</div><button class="btn sm dark" onclick="go(\'health\')">Start check</button></div>'; }catch(_hc){}
+  try{ var _ml=ccMineLeft(); if(_ml.length) h+='<div class="banner warn">'+IC.search+'<div style="flex:1"><b>Daily health check:</b> '+_ml.length+' teammate account'+(_ml.length===1?'':'s')+' to check (about '+Math.max(1,Math.ceil(_ml.length*4/60))+' min). <b>Due by '+hcDueLbl(hcShiftOf(me))+'</b> — the end of your shift. Not finished: the owner is told and your QA drops by 1 (by 2 if you never start).</div><button class="btn sm dark" onclick="go(\'health\')">Start check</button></div>'; }catch(_hc){}
+  try{ if(!admin && ROWS.some(function(r){ return worksFor(r)===me && isPostingStage(r.status) && !isParked(r); })){ var _av=subAvoidAll(); if(_av.length) h+='<div class="banner bad">'+IC.ban+'<div style="flex:1"><b>Don\'t post in:</b> '+_av.slice(0,12).map(function(x){ return esc(x.name); }).join(', ')+(_av.length>12?' …':'')+' — they keep removing our posts. <a href="#" onclick="go(\'subs\');return false" style="color:inherit;font-weight:800">See the subreddit report</a></div></div>'; } }catch(_sb){}
   var covering=mineWork.filter(function(r){ return owner(r)!==me; });
   if(covering.length){
     var whose={}; covering.forEach(function(r){ var o=owner(r); whose[o]=(whose[o]||0)+1; });
@@ -1444,7 +1453,7 @@ function rowHtml(r){
     '<div class="cell c-va">'+(admin?esc(firstName(ow)):esc(r.model||'—'))+'</div>'+
     '<div class="cell c-age num" title="'+esc(createdAt(r)?'Created '+fmtDT(createdAt(r)):'')+'">'+(age!=null?age+'d':'—')+'</div>'+
     '<div class="cell c-prog">'+prog+'</div>'+
-    '<div class="cell c-act"><div class="acts">'+act+'</div></div>'+
+    '<div class="cell c-act"><div class="acts">'+act+'</div>'+(!held && isPostingStage(st)?postsStrip(r):'')+'</div>'+
     '<div class="cell c-menu">'+menuHtml(r)+'</div></div>';
 }
 function kpi(l,v,s,c){ return '<div class="card kpi"><span class="k-bar" style="background:'+c+'"></span><div class="k-l">'+esc(l)+'</div><div class="k-v">'+v+'</div><div class="k-s">'+esc(s)+'</div></div>'; }
@@ -1566,7 +1575,7 @@ function cardHtml(r){
         (p.dms?dmBtn(r):'')+
         (p.karma&&!can?'<button class="ses" onclick="setKarma(\''+jsq(r.id)+'\')">'+IC.star+' Karma</button>':'')+
         (next&&can?'<button class="ses up" onclick="promote(\''+jsq(r.id)+'\',\''+next.k+'\')">'+IC.up+' '+esc(upLbl)+'</button>':'')+
-      '</div>');
+      '</div>')+(!held && isPostingStage(st)?postsStrip(r):'');
   }
   if(held) body+='<div class="note i">'+IC.pause+' On hold today — owner is off and the client approved leaving it untouched.</div>';
   return '<div class="card acct'+(isDead(r)?' dim':'')+'" style="--sc:'+sm.c+'">'+head+chipsHtml(r, isAdmin())+body+'</div>';
@@ -2154,6 +2163,7 @@ function tmLog(r, kind, t, extra){
 }
 async function sesStart(id, n){
   var r=rowById(id); if(!r) return;
+  if(!(await fixGate())) return;              // username fixes come first (Oct 13)
   if(!(await linkGate('A session'))) return;  // the portal timer must be running on Reddit (Oct 6)
   if(!(await karmaGate(r))) return;          // today's karma first — then the clock starts
   tmStart(id,'s'+n); renderView();
@@ -2161,7 +2171,7 @@ async function sesStart(id, n){
 function tmCancel(id, k){ var o=tmAll(); delete o[id+'|'+k]; tmPut(o); renderView(); toast('Timer cancelled — nothing was recorded.'); }
 /* creation: ▶ Start creating (hero) → Log new account → counted */
 function crGet(){ return tmGet('__create','c'); }
-async function crStart(){ if(!(await linkGate('A creation'))) return; tmStart('__create','c'); renderView(); toast('Timer started — create the account on the iPhone, then press Log new account.'); }
+async function crStart(){ if(!(await fixGate())) return; if(!(await linkGate('A creation'))) return; tmStart('__create','c'); renderView(); toast('Timer started — create the account on the iPhone, then press Log new account.'); }
 function crCancel(){ var o=tmAll(); delete o['__create|c']; tmPut(o); renderView(); }
 function crTake(){ var o=tmAll(), x=o['__create|c']; if(!x) return null; delete o['__create|c']; tmPut(o); return x.t; }
 /* VA's own day line in RcDaily (backend rc-2026-10-05b+) — fire-and-forget, only when a number changes */
@@ -2381,13 +2391,388 @@ async function karmaGate(r){
   if(!(await saveMeta(r,{ mday:today(), karma:v }))){ toast('Could not save the number — try again.'); return false; }
   return true;
 }
+/* ═══════════ SUBREDDIT TRACKING (Jeth, Oct 13) ═══════════
+   Every posting session (Day 1 → Super Strong) asks which subreddit each post went to. A post the
+   moderators removed is tagged on the account — tap its chip on the Today board, or in the record's Posts
+   list. The Subreddits tab adds it all up: posts, how many stayed up, removal rate, accounts, and accounts
+   banned within 3 days of posting there — so subreddits that keep removing our content go on the avoid list.
+   Stored on the account itself (meta.posts — merged per key on the server, so it works on the current
+   backend). One post = { d: business day, n: session, r: 'r/Name' or 'u/Name', b: who, t: when, st: stage,
+   x: 1 once removed, xt/xb: when/who tagged it }. The newest 150 per account are kept. The client portal
+   never receives this key (its meta whitelist). */
+var PPS={ day1:1, early:2, earlydm:2, medium:3, strong:5, superstrong:7 };   // posts per session, from the SOP plans
+var SUBS={ range:30, base:'all', q:'', sort:'posts' };
+function subNorm(raw){
+  var s=String(raw==null?'':raw).trim().replace(/\s+/g,''); if(!s) return null;
+  s=s.replace(/^https?:\/\//i,'').replace(/^([a-z]+\.)?reddit\.com/i,'').replace(/^\/+/,'');
+  var m=s.match(/^(r|u|user)\/([A-Za-z0-9_-]{2,21})/i), kind='r', name='';
+  if(m){ kind=(m[1].toLowerCase()==='r')?'r':'u'; name=m[2]; }
+  else if(/^[A-Za-z0-9_]{2,21}$/.test(s)) name=s;
+  else return null;
+  if(kind==='r' && !/^[A-Za-z0-9][A-Za-z0-9_]{1,20}$/.test(name)) return null;
+  return kind+'/'+name;
+}
+function subKey(s){ return String(s||'').toLowerCase(); }
+function postsOf(r){ var p=M(r).posts; return Array.isArray(p)?p:[]; }
+function isPostingStage(st){ var p=phase(st); return !!(p && p.task==='Reddit Posting'); }
+function subAvoidList(){ return (Array.isArray(CFG.sub_avoid)?CFG.sub_avoid:[]).map(subKey).filter(Boolean); }
+function fmtDay(d){ var t=parseTs(String(d||'')); return t?fmtD(t):String(d||''); }
+function subDayDiff(a,b){ var x=Date.parse(a+'T00:00:00Z'), y=Date.parse(b+'T00:00:00Z'); return (isNaN(x)||isNaN(y))?999:Math.round((y-x)/86400000); }
+function subRows(base){ var out=[]; BASES.forEach(function(b){ if(base && base!=='all' && b.id!==base) return; (ALL[b.id]||[]).forEach(function(r){ out.push(r); }); }); if(!out.length) out=ROWS.slice(); return out; }
+function subStats(range, base){
+  var start=range?phtDate(new Date(Date.now()-8*3600000-(range-1)*86400000)):'';
+  var by={}, tot={ posts:0, removed:0, accts:{} }, removed=[];
+  subRows(base).forEach(function(r){
+    var be=isDead(r)?endedAt(r):null, bd=be?phtDate(be):'';
+    postsOf(r).forEach(function(p,i){
+      if(!p || !p.r) return; var d=String(p.d||''); if(start && d<start) return;
+      var k=subKey(p.r), s=by[k]||(by[k]={ k:k, name:p.r, posts:0, up:0, removed:0, accts:{}, upAccts:{}, banned3:{}, last:'', first:'' });
+      s.posts++; tot.posts++; tot.accts[r.id]=1; s.accts[r.id]=1;
+      if(p.x){ s.removed++; tot.removed++; removed.push({ r:r, p:p, i:i }); } else { s.up++; s.upAccts[r.id]=1; }
+      if(d>s.last){ s.last=d; s.name=p.r; } if(!s.first || d<s.first) s.first=d;
+      if(bd && d && bd>=d && subDayDiff(d,bd)<=3) s.banned3[r.id]=1;
+    });
+  });
+  var list=Object.keys(by).map(function(k){ var s=by[k]; s.nAcc=Object.keys(s.accts).length; s.nUp=Object.keys(s.upAccts).length; s.nBan=Object.keys(s.banned3).length; s.rate=s.posts?s.removed/s.posts:0; return s; });
+  removed.sort(function(a,b){ return String(b.p.xt||b.p.t||'')<String(a.p.xt||a.p.t||'')?-1:1; });
+  return { list:list, tot:{ posts:tot.posts, removed:tot.removed, accts:Object.keys(tot.accts).length }, removed:removed };
+}
+function subIndex(){ var o={}; subStats(90,'all').list.forEach(function(s){ o[s.k]=s; }); return o; }
+function subVerdict(s){
+  var rate=s.posts?s.removed/s.posts:0;
+  if(subAvoidList().indexOf(s.k)>=0) return { k:'avoid', t:'On the avoid list', c:'#9f1239', bg:'#fff1f2' };
+  if(s.posts>=3 && rate>=0.5) return { k:'bad', t:'Removes often', c:'#b91c1c', bg:'#fef2f2' };
+  if(s.posts>=3 && rate>=0.25) return { k:'watch', t:'Watch', c:'#b45309', bg:'#fffbeb' };
+  if(s.posts>=5 && rate<=0.1) return { k:'good', t:'Works well', c:'#047857', bg:'#ecfdf5' };
+  return { k:'few', t:s.posts<3?'Too few posts yet':'OK', c:'#475569', bg:'#f1f5f9' };
+}
+/* subreddits not to post in: the owner's avoid list + any subreddit that removed half or more of 3+ posts (90 days) */
+function subAvoidAll(){
+  var out=subAvoidList().map(function(k){ return { k:k, name:k, why:'avoid list' }; }), seen={};
+  out.forEach(function(x){ seen[x.k]=1; });
+  subStats(90,'all').list.forEach(function(s){ if(!seen[s.k] && s.posts>=3 && s.rate>=0.5){ out.push({ k:s.k, name:s.name, why:s.removed+' of '+s.posts+' removed' }); seen[s.k]=1; } });
+  return out;
+}
+function subAvoidNote(){
+  var A=subAvoidAll(); if(!A.length) return '';
+  return '<div class="note b" style="margin-top:10px">'+IC.ban+' <b>Don\'t post in:</b> '+A.slice(0,14).map(function(x){ return esc(x.name); }).join(', ')+(A.length>14?' …':'')+'</div>';
+}
+function subHint(inp){
+  var box=inp.parentNode.querySelector('.sub-h'), v=String(inp.value||'').trim(); if(!box) return;
+  if(!v){ box.innerHTML=''; return; }
+  var n=subNorm(v); if(!n){ box.innerHTML='<span style="color:#b91c1c;font-weight:700">Not a subreddit name — type it like r/AskReddit</span>'; return; }
+  var s=(window._SUBIX||{})[subKey(n)];
+  if(subAvoidList().indexOf(subKey(n))>=0){ box.innerHTML='<span style="color:#9f1239;font-weight:800">⚠ '+esc(n)+' is on the avoid list — log it, but don\'t post there again</span>'; return; }
+  if(!s){ box.innerHTML='<span class="muted">'+esc(n)+' · new for the team</span>'; return; }
+  var vd=subVerdict(s);
+  box.innerHTML='<span style="color:'+vd.c+';font-weight:700">'+esc(n)+' · '+s.up+' of '+s.posts+' stayed up'+(vd.k==='bad'||vd.k==='watch'?' — '+esc(vd.t.toLowerCase()):'')+'</span>';
+}
+function subField(i){ return '<div class="fld" style="margin-bottom:8px"><input class="inp sub-in" list="sub-dl" autocomplete="off" placeholder="r/subreddit — post '+(i+1)+'" oninput="subHint(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();subSubmit();}" style="width:100%"><div class="sub-h" style="font-size:11.5px;margin-top:3px;min-height:14px"></div></div>'; }
+function subAddField(){ var box=$('sub-fields'); if(!box) return; var n=box.querySelectorAll('.sub-in').length; if(n>=10){ toast('Ten posts at most per session.'); return; } box.insertAdjacentHTML('beforeend', subField(n)); var all=box.querySelectorAll('.sub-in'); try{ all[all.length-1].focus(); }catch(e){} }
+function subSubmit(){
+  var ins=[].slice.call(document.querySelectorAll('#sub-fields .sub-in')), out=[], bad='';
+  ins.forEach(function(x){ var v=String(x.value||'').trim(); if(!v) return; var n=subNorm(v); if(!n){ if(!bad) bad=v; return; } out.push(n); });
+  if(bad){ toast('“'+bad+'” isn\'t a subreddit name — type it like r/AskReddit.'); return; }
+  if(!out.length){ toast('Add the subreddit of at least one post.'); return; }
+  closeModal(out);
+}
+function askSubs(r, n){
+  var cnt=PPS[r.status]||1, idx=subIndex(); window._SUBIX=idx;
+  var known=Object.keys(idx).map(function(k){ return idx[k]; }).sort(function(a,b){ return b.up-a.up || b.posts-a.posts; }).slice(0,400);
+  var f=''; for(var i=0;i<cnt;i++) f+=subField(i);
+  return new Promise(function(res){
+    _mResolve=res;
+    openModal('<div class="md-h"><h3>Where did you post? · Session '+n+'</h3><p><b>'+esc(r.handle)+'</b> · '+esc(stageMeta(r.status).n)+' — '+cnt+' post'+(cnt===1?'':'s')+' a session. One subreddit per post, e.g. <b>r/AskReddit</b> (or <b>u/'+esc(r.handle)+'</b> for a post on the profile). This builds the subreddit report: which ones keep our posts and which remove them.</p></div>'+
+      '<div class="md-b"><div id="sub-fields">'+f+'</div><datalist id="sub-dl">'+known.map(function(s){ return '<option value="'+esc(s.name)+'">'; }).join('')+'</datalist>'+
+      '<button class="btn sm sec" type="button" onclick="subAddField()">'+IC.plus+' Another post</button>'+subAvoidNote()+'</div>'+
+      '<div class="md-f"><button class="btn sec" onclick="closeModal(null)">Cancel</button><button class="btn pri" onclick="subSubmit()">Save session</button></div>');
+  }).then(function(v){ return Array.isArray(v)&&v.length?v:null; });
+}
+function postsWith(r, subs, n){
+  var arr=postsOf(r).slice(), d=today(), b=myId(), t=phtStamp();
+  subs.forEach(function(s){ arr.push({ d:d, n:n, r:s, b:b, t:t, st:r.status }); });
+  return arr.slice(-150);
+}
+async function postToggle(id, i){
+  var r=rowById(id); if(!r) return; var arr=postsOf(r).map(function(p){ return Object.assign({}, p); }), p=arr[i]; if(!p) return;
+  var on=!p.x;
+  if(!(await confirmBox(on?'Removed by the moderators?':'Undo “removed”?', on?('<b>'+esc(p.r)+'</b> · posted '+esc(fmtDay(p.d))+' from <b>'+esc(r.handle)+'</b>. It counts against this subreddit in the report.'):('<b>'+esc(p.r)+'</b> goes back to “stayed up”.'), on?'Mark removed':'Undo', on))) return;
+  if(on){ p.x=1; p.xt=phtStamp(); p.xb=myId(); } else { delete p.x; delete p.xt; delete p.xb; }
+  if(await saveMeta(r,{ posts:arr })){ toast(on?(p.r+' — marked removed'):(p.r+' — back to stayed up')); renderView(); if($('drawer').classList.contains('on') && $('drawer').getAttribute('data-id')===id) openRec(id); }
+  else toast('Could not save — try again.');
+}
+/* the last two days' posts as chips under a posting account: tap one when the mods removed it */
+function postsStrip(r){
+  var ps=postsOf(r); if(!ps.length) return '';
+  var y=phtDate(new Date(Date.now()-8*3600000-86400000)), list=[];
+  ps.forEach(function(p,i){ if(p && p.r && String(p.d||'')>=y) list.push([p,i]); });
+  if(!list.length) return '';
+  return '<div class="posts-strip" title="Tap a post if the moderators removed it">'+list.slice(-8).map(function(x){ var p=x[0], rm=!!p.x;
+    return '<button class="pchip'+(rm?' rm':'')+'" onclick="event.stopPropagation();postToggle(\''+jsq(r.id)+'\','+x[1]+')">'+esc(p.r)+(p.d===today()?'':' <small>'+esc(fmtDay(p.d))+'</small>')+(rm?' · removed':'')+'</button>'; }).join('')+'</div>';
+}
+function postsSection(r){
+  var ps=postsOf(r); if(!ps.length && !isPostingStage(r.status)) return '';
+  var rows=ps.map(function(p,i){ return [p,i]; }).filter(function(x){ return x[0] && x[0].r; }).reverse();
+  var rm=rows.filter(function(x){ return x[0].x; }).length;
+  return '<div class="sec-h" style="margin-top:4px"><b>Posts</b><span>'+(rows.length?rows.length+' logged · '+rm+' removed':'none logged yet')+'</span><hr></div>'+
+    (rows.length?'<div class="tbl-w" style="max-height:260px;margin-bottom:14px"><table class="db"><tbody>'+rows.slice(0,60).map(function(x){ var p=x[0];
+      return '<tr><td class="c1">'+esc(p.r)+'</td><td class="muted">'+esc(fmtDay(p.d))+(p.n?' · S'+p.n:'')+'</td><td class="muted">'+esc(firstName(p.b||''))+'</td>'+
+        '<td>'+(p.x?'<span class="flag r" title="'+esc('Tagged '+(p.xt||'')+' by '+vaName(p.xb||''))+'">Removed</span>':'<span class="flag g">Stayed up</span>')+'</td>'+
+        '<td style="white-space:nowrap"><button class="btn sm sec" onclick="postToggle(\''+jsq(r.id)+'\','+x[1]+')">'+(p.x?'Undo':'Removed?')+'</button></td></tr>'; }).join('')+'</tbody></table></div>':
+      '<div class="muted" style="font-size:12px;margin-bottom:14px">Each posting session asks for the subreddits — they show up here.</div>');
+}
+async function subAvoidSet(k, on){
+  if(!isAdmin()) return; k=subKey(k); if(!k) return;
+  var cur=subAvoidList().filter(function(x){ return x!==k; }); if(on) cur.push(k);
+  var cfg=JSON.parse(JSON.stringify(CFG)); cfg.sub_avoid=cur;
+  try{
+    var r=await fetch(API, { method:'POST', body:JSON.stringify({ action:'rc_cfg_set', by:USER.id, cfg:cfg }) }); var d=await r.json();
+    if(!(d&&d.ok)) d=await api({ action:'rc_cfg_set', by:USER.id, cfg:JSON.stringify(cfg) });
+    if(d && d.ok && d.cfg){
+      var kept=Array.isArray(d.cfg.sub_avoid); CFG=d.cfg; if(!kept) CFG.sub_avoid=cur;
+      toast(kept?(k+(on?' added to':' removed from')+' the avoid list'):'Saved for now — the Reddit backend needs the rc-2026-10-13b update to keep the avoid list.');
+      renderView();
+    } else toast('Could not save: '+((d&&d.error)||'unknown'));
+  }catch(e){ toast('Connection error.'); }
+}
+function subAvoidAdd(){ var i=$('sub-av-in'); var n=subNorm(i&&i.value); if(!n){ toast('Type a subreddit like r/AskReddit.'); return; } subAvoidSet(n, true); }
+function vSubs(){
+  var admin=isAdmin(), S=subStats(SUBS.range, admin?SUBS.base:'all'), q=String(SUBS.q||'').trim().toLowerCase();
+  window._SUBIX=subIndex();
+  var rl=SUBS.range?('last '+SUBS.range+' days'):'all time';
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Sub<span class="gtxt">reddits</span></h2><p>Every post logged at the end of a posting session, and every post the moderators removed. Keep posting where our content stays up — drop the subreddits that keep removing it.</p></div>'+
+    (admin?'<select class="sel" onchange="SUBS.base=this.value;renderView()"><option value="all">All bases</option>'+BASES.map(function(b){ return '<option value="'+esc(b.id)+'"'+(SUBS.base===b.id?' selected':'')+'>'+esc(b.n)+'</option>'; }).join('')+'</select>':'')+
+    '<div class="seg" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(SUBS.range===x[0]?'on':'')+'" onclick="SUBS.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div></div>';
+  var rate=S.tot.posts?Math.round(S.tot.removed/S.tot.posts*100):0;
+  h+='<div class="kpis" style="margin-top:12px">'+kpi('Posts logged',S.tot.posts,rl,'#ec4899')+kpi('Subreddits',S.list.length,'used · '+rl,'#a855f7')+
+    kpi('Stayed up',S.tot.posts-S.tot.removed,S.tot.posts?(100-rate)+'% of posts':'—','#10b981')+kpi('Removed by mods',S.tot.removed,S.tot.posts?rate+'% removal rate':'—','#ef4444')+kpi('Accounts posting',S.tot.accts,'with at least one post','#0ea5e9')+'</div>';
+  var A=subAvoidAll();
+  h+='<div class="card pad" style="margin-top:12px"><div class="ch-h"><b>Don\'t post in</b><span>your avoid list + any subreddit that removed half or more of 3+ posts (90 days) · every VA sees this before posting</span></div>'+
+    (A.length?'<div class="chips" style="margin-top:8px">'+A.map(function(x){ var man=x.why==='avoid list';
+      return '<span class="chip" style="background:#fff1f2;color:#9f1239" title="'+esc(x.why)+'">'+esc(x.name)+(man?'':' <small style="font-weight:600">· '+esc(x.why)+'</small>')+(admin&&man?' <a href="#" style="color:#9f1239;margin-left:4px" onclick="subAvoidSet(\''+jsq(x.k)+'\',false);return false" title="Remove from the avoid list">×</a>':'')+'</span>'; }).join('')+'</div>':'<div class="muted" style="font-size:12.5px;margin-top:6px">Nothing to avoid yet.</div>')+
+    (admin?'<div class="row" style="gap:6px;margin-top:10px"><input class="inp" id="sub-av-in" placeholder="r/subreddit" style="width:220px" onkeydown="if(event.key===\'Enter\')subAvoidAdd()"><button class="btn sm dark" onclick="subAvoidAdd()">Add to avoid list</button></div>':'')+'</div>';
+  if(!S.tot.posts){ h+='<div class="card empty" style="margin-top:12px">No posts logged '+(SUBS.range?'in the '+rl:'yet')+'. From now on every posting session asks which subreddits the posts went to.</div>'; return h; }
+  var sorters={ posts:function(a,b){ return b.posts-a.posts || a.k.localeCompare(b.k); }, rate:function(a,b){ return b.rate-a.rate || b.posts-a.posts; }, up:function(a,b){ return b.up-a.up || b.posts-a.posts; }, last:function(a,b){ return a.last<b.last?1:(a.last>b.last?-1:0); }, ban:function(a,b){ return b.nBan-a.nBan || b.posts-a.posts; } };
+  var list=S.list.filter(function(s){ return !q || s.k.indexOf(q)>=0; }).sort(sorters[SUBS.sort]||sorters.posts);
+  var th=function(k,l,t){ return '<th style="cursor:pointer" title="'+esc(t||'Sort')+'" onclick="SUBS.sort=\''+k+'\';renderView()">'+l+(SUBS.sort===k?' <span class="ar">▼</span>':'')+'</th>'; };
+  h+='<div class="row" style="margin:16px 0 8px;gap:8px"><b style="font-size:14px">By subreddit</b><span class="muted" style="font-size:12px">'+list.length+' of '+S.list.length+'</span><div style="flex:1"></div><input class="inp" placeholder="Search a subreddit…" value="'+esc(SUBS.q)+'" oninput="SUBS.q=this.value;renderView()" style="width:220px" id="sub-q"></div>';
+  h+='<div class="tbl-w"><table class="db"><thead><tr><th class="c1">Subreddit</th><th>Verdict</th>'+th('posts','Posts')+th('up','Stayed up')+'<th>Removed</th>'+th('rate','Removal rate')+'<th>Accounts</th>'+th('ban','Banned ≤3 days','Accounts banned within 3 days after posting here — a hint, not proof')+th('last','Last post')+(admin?'<th></th>':'')+'</tr></thead><tbody>'+
+    list.map(function(s){ var vd=subVerdict(s), pc=Math.round(s.rate*100), av=subAvoidList().indexOf(s.k)>=0;
+      return '<tr><td class="c1"><a href="https://www.reddit.com/'+esc(s.name)+'/" target="_blank" rel="noopener" style="color:inherit;font-weight:700">'+esc(s.name)+' ↗</a></td>'+
+        '<td><span class="flag" style="background:'+vd.bg+';color:'+vd.c+'">'+esc(vd.t)+'</span></td>'+
+        '<td class="num">'+s.posts+'</td><td class="num" style="color:#047857;font-weight:700">'+s.up+'</td><td class="num" style="'+(s.removed?'color:#b91c1c;font-weight:800':'')+'">'+(s.removed||'·')+'</td>'+
+        '<td style="min-width:120px"><div class="row" style="gap:6px"><div style="flex:1;height:6px;border-radius:6px;background:#f1f5f9;overflow:hidden"><i style="display:block;height:100%;width:'+pc+'%;background:'+(pc>=50?'#ef4444':(pc>=25?'#f59e0b':'#10b981'))+'"></i></div><b style="font-size:11.5px;min-width:32px;text-align:right">'+pc+'%</b></div></td>'+
+        '<td class="num">'+s.nAcc+'</td><td class="num" style="'+(s.nBan?'color:#b91c1c;font-weight:700':'')+'">'+(s.nBan||'·')+'</td><td class="muted">'+esc(fmtDay(s.last))+'</td>'+
+        (admin?'<td style="white-space:nowrap"><button class="btn sm '+(av?'sec':'dark')+'" onclick="subAvoidSet(\''+jsq(s.k)+'\','+(av?'false':'true')+')">'+(av?'Allow again':'Avoid')+'</button></td>':'')+'</tr>'; }).join('')+'</tbody></table></div>';
+  if(S.removed.length){
+    h+='<div class="sec-h" style="margin-top:18px"><b>Latest removals</b><span>'+S.removed.length+' in the '+rl+'</span><hr></div><div class="tbl-w" style="max-height:340px"><table class="db"><thead><tr><th class="c1">Subreddit</th><th>Account</th><th>Stage</th><th>Posted</th><th>Tagged</th>'+(admin?'<th>By</th>':'')+'</tr></thead><tbody>'+
+      S.removed.slice(0,40).map(function(x){ var p=x.p, sm=stageMeta(p.st||x.r.status);
+        return '<tr><td class="c1">'+esc(p.r)+'</td><td><a href="#" onclick="openRec(\''+jsq(x.r.id)+'\');return false" style="color:inherit">'+esc(x.r.handle)+'</a></td><td><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+'">'+esc(sm.n)+'</span></td><td class="muted">'+esc(fmtDay(p.d))+'</td><td class="muted">'+esc(p.xt?fmtDT(parseTs(p.xt)):'—')+'</td>'+(admin?'<td>'+esc(firstName(p.xb||p.b||''))+'</td>':'')+'</tr>'; }).join('')+'</tbody></table></div>';
+  }
+  return h;
+}
+
+/* ══════════ DAILY CROSS-CHECK v2 — only the VAs who are working today (Jeth, Oct 13) ══════════
+   "We can't assign accounts to people who are not present." The list is now dealt among the VAs who have
+   OPENED Reddit Central today — the first time a VA opens the tool on a business day is recorded once in
+   Supabase rc_checkin (first write wins, never updated), and every screen reads the same list.
+   • Two pools: every live account belongs to the morning or the night pool (a fixed daily hash, split by how
+     many VAs each shift has), so the morning shift never gets the night shift's share just by arriving first.
+   • Inside a pool each account goes to the signed-in VA of that shift with the highest hash(day, account, VA)
+     — never the owner. When someone signs in late only the accounts that hash to them move; nobody's list is
+     reshuffled. A VA who never signs in never gets a list; their share sits with the people who are in.
+   • A pool with no signed-in VA yet waits (the night pool waits for the night shift). If the owner is the only
+     VA of that shift, the other shift takes the account.
+   • Deadline = end of the VA's shift (morning 5:00 PM · night 5:00 AM). Whatever the morning shift leaves
+     unchecked at 5:00 PM stays on that VA's list as MISSED and is also handed to the night shift, so the
+     account still gets checked tonight. The owner sees who missed (Today banner + Health check tab).
+   • QA: not finished by the end of the shift −1, never started −2 (Productivity & QA rules; days the owner
+     has not scored are filled automatically the next time the owner opens the tool).
+   If Supabase cannot be reached the old rule comes back (everyone who owns live accounts), so the check
+   never stops. */
+var HC_DAY_END='17:00:00', HC_NIGHT_END='05:00:00';
+var CHK={ day:'', map:{}, at:0, err:'' };
+function hcShiftOf(va){ return SHIFTOF[String(va||'').toLowerCase()]==='night'?'night':'day'; }
+function hcDue(shift, day){ day=day||today(); return shift==='night'?dAdd(day,1)+' '+HC_NIGHT_END:day+' '+HC_DAY_END; }
+function hcDueLbl(shift){ return shift==='night'?'5:00 AM':'5:00 PM'; }
+var _chkP=null;
+function chkLoad(force){
+  var d=today(); if(!force && CHK.day===d && Date.now()-CHK.at<90000) return Promise.resolve();
+  if(_chkP) return _chkP;
+  var first=(CHK.day!==d);
+  _chkP=(async function(){
+    try{
+      var rows=await sbGet('rc_checkin?day=eq.'+encodeURIComponent(d)+'&select=employee_id,shift,first_at');
+      var m={}; (rows||[]).forEach(function(x){ m[String(x.employee_id||'').toLowerCase()]={ shift:x.shift==='night'?'night':'day', at:x.first_at }; });
+      CHK={ day:d, map:m, at:Date.now(), err:'' };
+    }catch(e){ CHK.err=String((e&&e.message)||e||'failed'); CHK.at=Date.now(); }
+    _CC=null; _chkP=null;
+    if(first){ try{ if(VIEW==='health'||VIEW==='today') renderView(); else paintTabs(); }catch(_r){} }   // the first answer of the day replaces "Loading today's list…"
+  })();
+  return _chkP;
+}
+async function chkIn(){
+  if(!USER || isAdmin() || !DIR_READY) return;
+  var d=today(), me=myId(), k='rc_ci_'+me+'_'+d; if(!me) return;
+  var done=false; try{ done=!!localStorage.getItem(k); }catch(e){}
+  if(done && CHK.day===d && CHK.map[me]) return;
+  try{
+    var r=await fetch(SB_URL+'/rest/v1/rc_checkin?on_conflict=day,employee_id', { method:'POST',
+      headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json', Prefer:'resolution=ignore-duplicates,return=minimal' },
+      body:JSON.stringify({ day:d, employee_id:me, shift:hcShiftOf(me) }) });
+    if(r.ok || r.status===409){ try{ localStorage.setItem(k,'1'); }catch(e){} await chkLoad(true); if(VIEW==='health'||VIEW==='today') renderView(); else paintTabs(); }
+  }catch(e){}
+}
+function chkTick(){
+  try{ chkIn(); }catch(e){}
+  var was=(CHK.day||'')+'|'+Object.keys(CHK.map).sort().join(',');
+  chkLoad(false).then(function(){ var now=(CHK.day||'')+'|'+Object.keys(CHK.map).sort().join(','); if(now!==was){ _CC=null; if(VIEW==='health'||VIEW==='today') renderView(); else paintTabs(); } });
+}
+setInterval(function(){ try{ if(USER) chkTick(); }catch(e){} }, 120000);
+function ccPlan(){
+  var live=ccLive(), day=today(), now=phtStamp();
+  var own={}; live.forEach(function(r){ var o=owner(r); if(o && !isGone(o) && OWNERS.indexOf(o)<0) own[o]=1; });
+  var exp={ day:[], night:[] }; Object.keys(own).forEach(function(v){ exp[hcShiftOf(v)].push(v); });
+  var ended={ day:now>hcDue('day',day), night:now>hcDue('night',day) };
+  if(CHK.day!==day && !CHK.err){ chkLoad(false);
+    return { day:day, plan:{}, of:{}, missed:{}, checkers:[], ins:{}, exp:exp, present:{ day:[], night:[] }, unassigned:[], waiting:[], ended:ended, loading:true }; }
+  var key=day+'|'+live.length+'|'+DIR_READY+'|'+now.slice(0,16)+'|'+(CHK.day===day?Object.keys(CHK.map).sort().join(','):'fallback');
+  if(_CC && _CCK===key) return _CC;
+  var present={ day:[], night:[] }, ins={};
+  if(CHK.day===day && !CHK.err){ Object.keys(CHK.map).forEach(function(v){ if(!v || OWNERS.indexOf(v)>=0 || isGone(v)) return; ins[v]=CHK.map[v]; present[CHK.map[v].shift==='night'?'night':'day'].push(v); }); }
+  else { exp.day.forEach(function(v){ present.day.push(v); }); exp.night.forEach(function(v){ present.night.push(v); }); }   // Supabase down → everyone expected (the old rule)
+  var nD=exp.day.length, nN=exp.night.length, shareDay=(nD+nN)?nD/(nD+nN):1;
+  var plan={}, of={}, missed={}, un=[], wait=[];
+  var checkers=present.day.concat(present.night).sort();
+  checkers.forEach(function(c){ plan[c]=[]; missed[c]=[]; });
+  var rv=function(cands, r){ var o=owner(r), best=null, bh=-1; cands.forEach(function(c){ if(c===o) return; var h=hcH(day+'|'+r.id+'|'+c); if(h>bh){ bh=h; best=c; } }); return best; };
+  live.forEach(function(r){
+    var st=ccState(r), m=M(r);
+    if(st){ var who=String(st==='rep'?((m.hcrep||{}).by||''):(m.hcby||'')).toLowerCase(); if(plan[who]){ plan[who].push(r.id); of[r.id]=who; return; } }
+    var pool=((hcH(day+'#pool|'+r.id)%10000)/10000)<shareDay?'day':'night';
+    var c=rv(present[pool], r);
+    if(!c && !exp[pool].filter(function(v){ return v!==owner(r); }).length){ var ot=pool==='day'?'night':'day'; if(!ended[ot]) c=rv(present[ot], r); }   // nobody else on that shift could check it → the other shift
+    if(st){ if(c){ plan[c].push(r.id); of[r.id]=c; } return; }   // already checked by the owner/admin — counts as done in that list
+    if(pool==='day' && ended.day){
+      if(c){ plan[c].push(r.id); missed[c].push(r.id); }   // the morning checker missed it — it stays on their list as missed…
+      var n2=rv(present.night, r); if(n2 && !ended.night){ plan[n2].push(r.id); of[r.id]=n2; return; }   // …and the night shift takes it over
+      if(c){ of[r.id]=c; return; }
+      un.push(r.id); return;
+    }
+    if(c){ plan[c].push(r.id); of[r.id]=c; if(ended[pool]) missed[c].push(r.id); return; }
+    if(!ended[pool]) wait.push(r.id); else un.push(r.id);
+  });
+  _CC={ day:day, plan:plan, of:of, missed:missed, checkers:checkers, ins:ins, exp:exp, present:present, unassigned:un, waiting:wait, ended:ended, shareDay:shareDay };
+  _CCK=key; return _CC;
+}
+function hcVaBanner(n, left){
+  if(!n || !left) return '';
+  var sh=hcShiftOf(myId()), over=phtStamp()>hcDue(sh);
+  return '<div class="banner '+(over?'bad':'warn')+'">'+IC.hour+'<div style="flex:1"><b>'+(over?'Overdue — your shift has ended':'Due by '+hcDueLbl(sh)+' (the end of your shift)')+'</b> · '+left+' of '+n+' still to check. '+
+    'Not finished by the end of your shift: the owner is told and your QA for the day drops by <b>1</b> — by <b>2</b> if you never started.</div></div>';
+}
+function hcEmptyMsg(){
+  if(CHK.day!==today() && !CHK.err) return 'Loading today\'s list…';
+  if(!CHK.err && !(CHK.map||{})[myId()]) return 'Signing you in for today\'s check…';
+  return 'Nothing assigned to you right now. When a teammate is absent, or the morning shift leaves accounts unchecked, they show up here — keep this tab open.';
+}
+function hcMissBanner(){
+  if(!isAdmin()) return ''; var P=ccPlan(); if(P.loading) return '';
+  var now=phtStamp(), miss=[];
+  P.checkers.forEach(function(c){ if(now<=hcDue(hcShiftOf(c))) return; var list=(P.plan[c]||[]).map(rowById).filter(Boolean), left=list.filter(function(r){ return !ccState(r); }).length; if(left) miss.push({ c:c, left:left, n:list.length }); });
+  if(!miss.length && !P.unassigned.length) return '';
+  return '<div class="banner bad">'+IC.search+'<div style="flex:1"><b>Health check not finished</b> — '+miss.map(function(x){ return esc(firstName(x.c))+' '+(x.n-x.left)+'/'+x.n; }).join(' · ')+
+    (P.unassigned.length?(miss.length?' · ':'')+P.unassigned.length+' account'+(P.unassigned.length===1?'':'s')+' nobody could check today':'')+(miss.length?'. Their QA for the day drops automatically.':'.')+'</div><button class="btn sm dark" onclick="go(\'health\')">See who</button></div>';
+}
+function ccAdminRows(P){
+  var d=today(), now=phtStamp(), all={};
+  P.checkers.forEach(function(c){ all[c]=1; }); (P.exp.day.concat(P.exp.night)).forEach(function(c){ all[c]=1; });
+  var people=Object.keys(all).sort(function(a,b){ var sa=hcShiftOf(a), sb=hcShiftOf(b); return sa===sb?vaName(a).localeCompare(vaName(b)):(sa==='day'?-1:1); });
+  var loaded=CHK.day===d && !CHK.err;
+  return people.map(function(c){
+    var sh=hcShiftOf(c), inn=P.ins[c], list=(P.plan[c]||[]).map(rowById).filter(Boolean), ok=list.filter(function(r){ return ccState(r)==='ok'; }).length, rep=list.filter(function(r){ return ccState(r)==='rep'; }).length, n=list.length, dn=ok+rep;
+    var off=OFF&&(OFF.off||[]).filter(function(x){ return String(x.employee_id).toLowerCase()===c; })[0];
+    var started=now>(sh==='night'?d+' 19:30:00':d+' 07:30:00'), overdue=now>hcDue(sh,d), stx;
+    if(loaded && !inn) stx=off?'<span class="flag" style="background:#f1f2f7;color:var(--ink3)">'+esc(off.type)+'</span>':(started?'<span class="flag" style="background:#f1f2f7;color:var(--ink3)">Not in today — no list</span>':'<span class="muted">shift not started</span>');
+    else if(n && dn===n) stx='<span class="flag g">Done ✓</span>';
+    else if(overdue && n) stx='<span class="flag r">Missed '+(n-dn)+(dn?'':' · never started')+'</span>';
+    else if(dn) stx='<span class="flag a">In progress</span>';
+    else if(n) stx='<span class="flag r">Not started</span>';
+    else stx='<span class="muted">nothing to check yet</span>';
+    var t=''; try{ if(inn && inn.at) t=fmtT(new Date(inn.at)); }catch(e){}
+    return '<tr><td class="c1">'+esc(vaName(c))+(sh==='night'?' 🌙':'')+'</td><td>'+(t?esc(t):'<span class="muted">—</span>')+'</td><td class="num">'+n+'</td><td class="num">'+ok+'</td><td class="num" style="'+(rep?'color:#b91c1c;font-weight:800':'')+'">'+(rep||'·')+'</td><td>'+stx+'</td><td class="muted">'+hcDueLbl(sh)+'</td></tr>';
+  }).join('');
+}
+function ccAdminFoot(P){
+  var s=[];
+  if(P.loading) s.push('Loading who is signed in today…');
+  if(CHK.err) s.push('Could not read today\'s sign-ins ('+esc(CHK.err)+') — everyone who owns accounts gets a list until it comes back.');
+  if(P.waiting.length) s.push(P.waiting.length+' account'+(P.waiting.length===1?'':'s')+' waiting for '+(P.ended.day?'the night shift':'their shift')+' to sign in.');
+  if(P.unassigned.length) s.push(P.unassigned.length+' account'+(P.unassigned.length===1?'':'s')+' nobody could check today — check them in Quick review below.');
+  return s.length?'<p class="muted" style="font-size:11.5px;margin-top:6px">'+s.join(' ')+'</p>':'';
+}
+
+/* ══════════ USERNAME FIXES COME FIRST (Jeth, Oct 13) ══════════
+   A username sent back for fixing blocks every timer — session, DMs, new account — until it is corrected
+   or the account is marked banned. Looked up across every base (it used to show only on the base that was
+   open, so a fix on another base was never seen). QA: −1 per open fix, per day it stays open (max 3). */
+function fixRows(L){
+  return L.map(function(r){ return '<div class="row" style="gap:6px;flex-wrap:wrap;background:#fff;border:1px solid #fecaca;border-radius:10px;padding:6px 8px">'+
+      '<span style="font-weight:800;min-width:120px">'+esc(r.handle)+'</span>'+(r.project && r.project!==PROJECT?'<span class="chip" style="font-size:10.5px">'+esc(baseOf(r.project).n)+' base</span>':'')+'<span class="muted" style="font-size:11.5px">asked '+esc(fmtDT(parseTs((M(r).fix||{}).at)))+'</span>'+
+      '<input class="inp" id="fx-'+esc(r.id)+'" value="'+esc(r.handle)+'" placeholder="correct username" style="width:200px;padding:5px 8px" onkeydown="if(event.key===\'Enter\'){ fixSave(\''+jsq(r.id)+'\'); }">'+
+      '<button class="btn sm pri" onclick="fixSave(\''+jsq(r.id)+'\')">Save the correct name</button>'+
+      '<a class="btn sm sec" href="'+qrUrl(r)+'" target="rc-profile" rel="noopener">Open on Reddit ↗</a>'+
+      '<button class="btn sm sec" style="color:#b91c1c" onclick="fixGone(\''+jsq(r.id)+'\')">It\'s really gone — mark banned</button></div>'; }).join('');
+}
+async function fixGate(){
+  if(isAdmin()) return true; var L=fixMine(); if(!L.length) return true;
+  openModal('<div class="md-h"><h3>Fix '+(L.length===1?'this username':'these '+L.length+' usernames')+' first</h3><p>The health check could not find '+(L.length===1?'it':'them')+' on Reddit, so the owner sent '+(L.length===1?'it':'them')+' back to you. <b>This comes before any session, DMs or new account</b> — the timers stay locked until it is done. Every day one stays open costs <b>−1 on your QA</b> for each account.</p></div>'+
+    '<div class="md-b fix-gate" style="display:grid;gap:6px">'+fixRows(L)+'</div><div class="md-f"><button class="btn sec" onclick="closeModal(false)">Close</button></div>');
+  return false;
+}
+function fixGateRefresh(){ var b=document.querySelector('#modal.on .fix-gate'); if(!b) return; var L=fixMine(); if(!L.length){ closeModal(true); toast('All fixed — you can start now.'); } else b.innerHTML=fixRows(L); }
+
+/* ══════════ QA FILLS ITSELF (Jeth, Oct 13) ══════════
+   Days the owner has not scored are filled with the suggested score (10 minus the rule hits) the next time
+   the owner opens Reddit Central — the last 3 business days, once each. The note says it was automatic and
+   lists the hits; the owner can change any number in Productivity & QA. */
+async function pqAutoFill(){
+  if(!isAdmin() || !(BE_BUILD && BE_BUILD>='rc-2026-10-05d')) return;
+  var days=[], ps=CFG.process_start||'2026-10-05';
+  for(var i=3;i>=1;i--){ var y=dAdd(today(),-i); if(y<ps) continue; try{ if(localStorage.getItem('rc_qa_auto2_'+y)) continue; }catch(e){} days.push(y); }
+  if(!days.length) return;
+  var keep=PQ.day, total=0;
+  for(var j=0;j<days.length;j++){
+    var y2=days[j], tries=0;
+    while(PQ.loading && tries++<60) await new Promise(function(r){ setTimeout(r,500); });
+    PQ.day=y2; PQ.key=''; await pqLoad(true);
+    if(!PQ.dd || (PQ.st && PQ.st.error)) continue;
+    var list=pqVAs(y2).map(function(va){ var dr=pqRow(va,y2), L=pqLive(va,y2); if(L.nodata || (dr && dr.qa_score!=='' && dr.qa_score!=null)) return null; if(!(L.due>0||L.hcA>0||L.cre>0)) return null;
+      var F=pqFlags(va,y2,dr,L), ded=F.reduce(function(s,f){ return s+f.d; },0); return { va:va, F:F, ded:ded, sug:Math.max(0, Math.round((10-ded)*2)/2) }; }).filter(Boolean);
+    for(var k=0;k<list.length;k++){ var x=list[k];
+      try{ var d=await api({ action:'rc_qa_set', by:USER.id, va:x.va, date:y2, score:x.sug, note:'Automatic (the owner can change it): '+(x.F.length?x.F.map(function(f){ return f.t+' −'+f.d; }).join(' · '):'no rule hits') });
+        if(d && d.ok){ total++; api({ action:'rc_day_snap', by:USER.id, va:x.va, date:y2, auto_flags:JSON.stringify(x.F.filter(function(f){ return f.k!=='hidden_ban' && f.k!=='manual'; })), auto_deduct:x.ded }).catch(function(){}); }
+      }catch(e){}
+    }
+    try{ localStorage.setItem('rc_qa_auto2_'+y2,'1'); }catch(e){}
+  }
+  PQ.day=keep; PQ.key=''; PQ.st=null; if(VIEW==='prod') pqLoad(true);
+  if(total) toast('QA filled automatically for '+total+' VA-day'+(total===1?'':'s')+' — Productivity & QA to change any.');
+}
+
 async function doSession(id, n, btn){
   var r=rowById(id); if(!r) return;
+  if(!tmOn() && !(await fixGate())) return;   // username fixes first (Oct 13) — with timers on, Start is gated instead
   if(!(await karmaGate(r))) return;
   var t=tmOn()?tmStop(id,'s'+n):null;
   var p=phase(r.status), task=(r.status==='recovery')?'Reddit Warmup':(p&&p.task);
+  /* Oct 13: a posting session asks which subreddit each post went to (the subreddit report) */
+  var subs=null;
+  if(task==='Reddit Posting'){ subs=await askSubs(r, n);
+    if(!subs){ if(t){ var o0=tmAll(); o0[id+'|s'+n]={ t:t.start, p:t.parallel, d:today() }; tmPut(o0); } renderView(); toast('Session not saved — add the subreddits to finish it.'); return; } }
   if(btn){ btn.disabled=true; btn.innerHTML='<span class="bx"></span>Saving…'; }
   var patch=(n===2)?{ s2:vaKeyOf(USER.id), s2t:phtStamp(), last:vaKeyOf(USER.id) }:{ s1:vaKeyOf(USER.id), s1t:phtStamp() };
+  if(subs) patch.posts=postsWith(r, subs, n);
   var ok=await saveMeta(r, patch);
   if(!ok){ if(t){ var o=tmAll(); o[id+'|s'+n]={ t:t.start, p:t.parallel, d:today() }; tmPut(o); } toast('Could not save the session — try again.'); renderView(); return; }
   tmLog(r, 'session', t);
@@ -2399,7 +2784,7 @@ async function dmsDone(id){
   var r=rowById(id); if(!r) return;
   /* DM replies are part of the posting shift, not a separate deliverable — logged, never counted.
      Timed like a session: first press starts the clock, second press logs them. */
-  if(tmOn() && !tmGet(id,'dm') && !markOkAny(M(r).dm,worksFor(r),owner(r))){ if(!(await linkGate('A DM round'))) return; tmStart(id,'dm'); renderView(); return; }
+  if(tmOn() && !tmGet(id,'dm') && !markOkAny(M(r).dm,worksFor(r),owner(r))){ if(!(await fixGate())) return; if(!(await linkGate('A DM round'))) return; tmStart(id,'dm'); renderView(); return; }
   var t=tmOn()?tmStop(id,'dm'):null;
   if(await saveMeta(r,{ dm:vaKeyOf(USER.id) })){ if(t) tmLog(r,'dms',t); toast('DMs logged for today ✓'); renderView(); }
 }
@@ -2843,6 +3228,7 @@ function drawRec(r, evs){
         (!isDead(r)&&canEdit?'<button class="btn sm sec" onclick="banAcct(\''+jsq(r.id)+'\')">'+IC.ban+' Banned…</button>':'')+
         (isAdmin()?'<button class="btn sm sec" onclick="xferOpen(null,[\''+jsq(r.id)+'\'])">'+IC.swap+' Transfer…</button>':'')+
         (canEdit?'<button class="btn sm sec" style="color:#b91c1c" onclick="delAcct(\''+jsq(r.id)+'\')">'+IC.trash+' Delete</button>':'')+'</div>'+
+      postsSection(r)+
       '<div class="sec-h" style="margin-top:4px"><b>History</b><span>'+(evs===null?'loading…':tl.length+' event'+(tl.length===1?'':'s'))+'</span><hr></div>'+
       '<div class="tl">'+tl.map(function(x){
         return '<div class="ev" style="--ec:'+x.c+'"><b>'+esc(x.t)+'</b><small>'+(x.at?esc(x.approx?fmtD(x.at)+' (approx.)':fmtDT(x.at)):'—')+(x.by?' · '+esc(x.by==='auto'?'automatic':vaName(x.by)):'')+'</small></div>';
@@ -4011,22 +4397,7 @@ var CC_SEC=4, CC_MAX=10;   // ~4 seconds per account; hard limit 10 minutes
 function hcH(s){ var h=2166136261>>>0; s=String(s); for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } return h; }
 var _CC=null, _CCK='';
 function ccLive(){ var out=[]; BASES.forEach(function(b){ (ALL[b.id]||[]).forEach(function(r){ if(!isDead(r) && !isParked(r)) out.push(r); }); }); return out; }   // parked accounts (on hold / archived) are nobody's work — not checked (Oct 6)
-function ccPlan(){
-  var live=ccLive(), day=today(), key=day+'|'+live.length+'|'+DIR_READY;
-  if(_CC && _CCK===key) return _CC;
-  var own={}; live.forEach(function(r){ var o=owner(r); if(o && !isGone(o) && OWNERS.indexOf(o)<0) own[o]=1; });
-  var checkers=Object.keys(own).sort(function(a,b){ return hcH(day+'#'+a)-hcH(day+'#'+b) || (a<b?-1:1); });
-  var acc=live.slice().sort(function(a,b){ return hcH(day+'|'+a.id)-hcH(day+'|'+b.id) || (a.id<b.id?-1:1); });
-  var plan={}, of={}; checkers.forEach(function(c){ plan[c]=[]; });
-  var n=checkers.length, un=[];
-  acc.forEach(function(r,i){
-    if(n<2){ un.push(r.id); return; }
-    var o=owner(r), pick=null;
-    for(var j=0;j<n;j++){ var c=checkers[(i+j)%n]; if(c!==o){ pick=c; break; } }
-    if(pick){ plan[pick].push(r.id); of[r.id]=pick; } else un.push(r.id);
-  });
-  _CC={ day:day, plan:plan, of:of, checkers:checkers, unassigned:un }; _CCK=key; return _CC;
-}
+/* ccPlan() — see DAILY CROSS-CHECK v2 */
 function ccState(r){ var m=M(r), d=today(); if(m.hcrep && m.hcrep.day===d) return 'rep'; if(String(m.hcok||'')===d) return 'ok'; return ''; }
 function ccMine(){ if(isAdmin()) return []; var p=ccPlan(); return (p.plan[myId()]||[]).map(rowById).filter(Boolean); }
 function ccMineLeft(){ return ccMine().filter(function(r){ return !ccState(r); }); }
@@ -4038,7 +4409,7 @@ function ccPrioSort(list){
 function ccGuide(open){
   return '<details class="card pad"'+(open?' open':'')+' style="margin-bottom:14px"><summary style="cursor:pointer;font-weight:800;font-size:14px">How the daily health check works</summary>'+
     '<div class="f2" style="margin-top:12px;gap:16px">'+
-      '<div><div class="lbl" style="margin-bottom:5px">When</div><div style="font-size:13px;line-height:1.55">Every working day, <b>first thing in your shift — before your first session</b>.<br>☀ Morning shift: <b>8:00 – 8:10 AM</b> · 🌙 Night shift: <b>8:00 – 8:10 PM</b></div></div>'+
+      '<div><div class="lbl" style="margin-bottom:5px">When</div><div style="font-size:13px;line-height:1.55">Every working day — start <b>first thing in your shift</b>, and <b>finish before your shift ends</b>.<br>☀ Morning shift: due by <b>5:00 PM</b> · 🌙 Night shift: due by <b>5:00 AM</b></div></div>'+
       '<div><div class="lbl" style="margin-bottom:5px">How long</div><div style="font-size:13px;line-height:1.55">About <b>'+CC_SEC+' seconds per account</b> — most lists take 2–3 minutes.<br><b>Maximum '+CC_MAX+' minutes.</b> If it takes longer, tell the admin.</div></div>'+
     '</div>'+
     '<div class="lbl" style="margin:14px 0 6px">How</div><ol style="font-size:13px;line-height:1.7;padding-left:20px">'+
@@ -4051,14 +4422,15 @@ function ccGuide(open){
           '<span class="chip"><b>S</b>&nbsp;Skip — the page didn\'t load</span></div></li>'+
       '<li>The next profile opens by itself in the same tab. Pressed the wrong key? <b>U</b> goes back one.</li>'+
       '<li>At the end you see <b>all your answers on one screen</b> — change any of them, then press <b>Submit</b>. Nothing is saved before that.</li></ol>'+
-    '<div class="muted" style="font-size:12px;margin-top:8px">You never get your own accounts, and the list is shuffled every day. Your answers are saved with your name. B and N are reports — the admin confirms them before an account is marked banned.</div></details>';
+    '<div class="muted" style="font-size:12px;margin-top:8px">Only VAs who opened Reddit Central today get a list — opening the tool signs you in for the check. You never get your own accounts. When a teammate is absent their share goes to the people who are in, so your list can grow during the shift; whatever the morning shift leaves unchecked passes to the night shift. <b>Not finished by the end of your shift: the owner is told and your QA for the day drops by 1 — by 2 if you never started.</b> Your answers are saved with your name. B and N are reports — the admin confirms them before an account is marked banned.</div></details>';
 }
 function vHealthVA(){
   var mine=ccPrioSort(ccMine()), left=mine.filter(function(r){ return !ccState(r); }), done=mine.length-left.length, est=Math.max(1,Math.ceil(left.length*CC_SEC/60));
-  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Daily <span class="gtxt">health check</span></h2><p>Check that your teammates\' accounts are really alive on Reddit — before your first session.</p></div>'+
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Daily <span class="gtxt">health check</span></h2><p>Check that your teammates\' accounts are really alive on Reddit — start first thing, finish before your shift ends.</p></div>'+
     (left.length||qrDraft()?'<button class="btn pri" onclick="qrStart(ccPrioSort(ccMineLeft()).map(function(r){return r.id;}))">'+IC.search+(qrDraft()&&!QR.on?' Resume &amp; review':' Start check')+'</button>':'')+'</div>';
   h+=ccGuide(!done);
-  if(!mine.length) return h+'<div class="card empty">'+(allRows().length?'Nothing assigned to you today.':'Loading today\'s list…')+'</div>';
+  if(!mine.length) return h+'<div class="card empty">'+(allRows().length?hcEmptyMsg():'Loading today\'s list…')+'</div>';
+  h+=hcVaBanner(mine.length, left.length);
   h+='<div class="kpis">'+kpi('Your list today',mine.length,'teammates\' accounts','#a855f7')+kpi('Checked',done,left.length?left.length+' to go':'all done ✓',done===mine.length?'#10b981':'#f59e0b')+kpi('Time needed','~'+est+' min','max '+CC_MAX+' minutes','#0ea5e9')+'</div>';
   if(QR.on || qrDraft()) h+=qrPanel(mine);
   else if(!left.length) h+='<div class="banner info" style="background:#ecfdf5;border-color:#a7f3d0;color:#065f46">'+IC.check+'<div><b>All done for today ✓</b> Thank you — you can start your sessions.</div></div>';
@@ -4093,14 +4465,9 @@ async function ccMark(id,k){
 }
 function ccAdmin(){
   var P=ccPlan(), d=today();
-  var rowsH=P.checkers.map(function(c){
-    var list=(P.plan[c]||[]).map(rowById).filter(Boolean), ok=list.filter(function(r){ return ccState(r)==='ok'; }).length, rep=list.filter(function(r){ return ccState(r)==='rep'; }).length, n=list.length, dn=ok+rep;
-    var off=OFF&&(OFF.off||[]).filter(function(x){ return String(x.employee_id).toLowerCase()===c; })[0];
-    var stx=dn===n?'<span class="flag g">Done ✓</span>':(dn?'<span class="flag a">In progress</span>':(off?'<span class="flag" style="background:#f1f2f7;color:var(--ink3)">'+esc(off.type)+'</span>':'<span class="flag r">Not started</span>'));
-    return '<tr><td class="c1">'+esc(vaName(c))+(SHIFTOF[c]==='night'?' 🌙':'')+'</td><td class="num">'+n+'</td><td class="num">'+ok+'</td><td class="num" style="'+(rep?'color:#b91c1c;font-weight:800':'')+'">'+(rep||'·')+'</td><td>'+stx+'</td></tr>';
-  }).join('');
+  var rowsH=ccAdminRows(P);
   var reps=ccReports();
-  var h='<div class="sec-h"><b>Today\'s cross-check</b><span>'+esc(fmtD(parseTs(d)))+' · '+P.checkers.length+' checkers · shuffled daily · nobody checks their own</span><hr></div>';
+  var h='<div class="sec-h"><b>Today\'s cross-check</b><span>'+esc(fmtD(parseTs(d)))+' · '+P.checkers.length+' signed in · only VAs who opened the tool today get a list · nobody checks their own</span><hr></div>';
   if(reps.length){
     h+='<div class="card pad" style="margin-bottom:12px;border-color:#fecdd3"><div class="ch-h"><b style="color:#9f1239">Reported dead — confirm</b><span>open the profile, then confirm or clear</span></div>'+
       '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Account</th><th>Reported</th><th>By</th><th>Owner</th><th>Stage</th><th>Last session</th><th></th></tr></thead><tbody>'+
@@ -4117,8 +4484,7 @@ function ccAdmin(){
       fixes.map(function(r){ var x=M(r).fix||{}; return '<tr><td class="c1">'+esc(r.handle)+'</td><td>'+esc(vaName(owner(r)))+'</td><td>'+esc(fmtDT(parseTs(x.at)))+'</td><td class="muted">'+esc(x.src||'')+'</td>'+
         '<td style="white-space:nowrap"><button class="btn sm sec" onclick="fixCancel(\''+jsq(r.id)+'\')">Withdraw</button> <button class="btn sm sec" onclick="openRec(\''+jsq(r.id)+'\')">Record</button></td></tr>'; }).join('')+'</tbody></table></div></div>';
   }
-  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Checker</th><th>Accounts</th><th>Alive ✓</th><th>Reported</th><th>Status</th></tr></thead><tbody>'+(rowsH||'<tr><td colspan="5" class="muted">Needs at least two VAs with live accounts.</td></tr>')+'</tbody></table></div>'+
-    (P.unassigned.length?'<p class="muted" style="font-size:11.5px;margin-top:6px">'+P.unassigned.length+' account(s) couldn\'t be assigned — check them in Quick review below.</p>':'');
+  h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Checker</th><th>Signed in</th><th>Accounts</th><th>Alive ✓</th><th>Reported</th><th>Status</th><th>Due</th></tr></thead><tbody>'+(rowsH||'<tr><td colspan="7" class="muted">Nobody has signed in yet today.</td></tr>')+'</tbody></table></div>'+ccAdminFoot(P);
   return h;
 }
 /* ═══════════ NOT FOUND → FIX THE USERNAME (owner, Oct 7) ═══════════
@@ -4126,8 +4492,9 @@ function ccAdmin(){
    Marking it banned would throw a live account away. So the owner sends it back: meta.fix on the account,
    the VA sees it highlighted at the top of their board until they correct the username (meta.typo —
    a QA finding, −0.5 each, max 2 a day) or confirm the account is really gone (marked banned, no finding). */
-function fixPending(){ return (ALL[PROJECT]||ROWS).filter(function(r){ return !isDead(r) && M(r).fix; }); }
-function fixMine(){ var me=myId(); return (ALL[PROJECT]||ROWS).filter(function(r){ return !isDead(r) && M(r).fix && worksFor(r)===me; }); }
+function fixSrc(){ var a=allRows(); return a.length?a:(ALL[PROJECT]||ROWS); }   // every base (Oct 13) — a fix on another base used to stay invisible
+function fixPending(){ return fixSrc().filter(function(r){ return !isDead(r) && M(r).fix; }); }
+function fixMine(){ var me=myId(); return fixSrc().filter(function(r){ return !isDead(r) && M(r).fix && worksFor(r)===me; }); }
 async function fixAsk(id, src){
   var r=rowById(id); if(!r || !isAdmin()) return;
   if(await saveMeta(r,{ hcrep:null, fix:{ by:USER.id, at:phtStamp(), day:today(), src:src||'', handle:r.handle } })){ toast(r.handle+' — sent back to '+vaName(owner(r))+' to fix the username'); renderView(); }
@@ -4135,14 +4502,9 @@ async function fixAsk(id, src){
 async function fixCancel(id){ var r=rowById(id); if(!r || !isAdmin()) return; if(await saveMeta(r,{ fix:null })){ toast('Withdrawn'); renderView(); } }
 function fixBanner(){
   var L=fixMine(); if(!L.length) return '';
-  return '<div class="banner bad" style="flex-wrap:wrap;align-items:flex-start">'+IC.search+'<div style="flex:1;min-width:260px"><b>Fix the username on '+L.length+' account'+(L.length===1?'':'s')+'</b> — the daily health check could not find '+(L.length===1?'it':'them')+' on Reddit. '+
-    'If you typed it wrong when you logged it, correct it here (a typo is a QA finding). If the account is really gone, mark it banned.'+
-    '<div style="margin-top:8px;display:grid;gap:6px">'+L.map(function(r){ return '<div class="row" style="gap:6px;flex-wrap:wrap;background:#fff;border:1px solid #fecaca;border-radius:10px;padding:6px 8px">'+
-      '<span style="font-weight:800;min-width:120px">'+esc(r.handle)+'</span><span class="muted" style="font-size:11.5px">asked '+esc(fmtDT(parseTs((M(r).fix||{}).at)))+'</span>'+
-      '<input class="inp" id="fx-'+esc(r.id)+'" value="'+esc(r.handle)+'" placeholder="correct username" style="width:200px;padding:5px 8px" onkeydown="if(event.key===\'Enter\'){ fixSave(\''+jsq(r.id)+'\'); }">'+
-      '<button class="btn sm pri" onclick="fixSave(\''+jsq(r.id)+'\')">Save the correct name</button>'+
-      '<a class="btn sm sec" href="'+qrUrl(r)+'" target="rc-profile" rel="noopener">Open on Reddit ↗</a>'+
-      '<button class="btn sm sec" style="color:#b91c1c" onclick="fixGone(\''+jsq(r.id)+'\')">It\'s really gone — mark banned</button></div>'; }).join('')+'</div></div></div>';
+  return '<div class="banner bad" style="flex-wrap:wrap;align-items:flex-start">'+IC.search+'<div style="flex:1;min-width:260px"><b>Fix the username on '+L.length+' account'+(L.length===1?'':'s')+' — do this first</b>. The daily health check could not find '+(L.length===1?'it':'them')+' on Reddit. '+
+    'If you typed it wrong when you logged it, correct it here (a typo is a QA finding). If the account is really gone, mark it banned. <b>Your session, DMs and creation timers stay locked until it is done, and every day one stays open costs −1 on your QA per account.</b>'+
+    '<div style="margin-top:8px;display:grid;gap:6px">'+fixRows(L)+'</div></div></div>';
 }
 async function fixSave(id){
   var r=rowById(id); if(!r) return; var inp=$('fx-'+r.id); var v=String((inp&&inp.value)||'').trim().replace(/^https?:\/\/(www\.)?reddit\.com\/(u|user)\//i,'').replace(/^\/?u\//i,'').replace(/^@/,'').replace(/\/.*$/,'');
@@ -4150,7 +4512,7 @@ async function fixSave(id){
   if(v===r.handle){ toast('That is the same username. Open the profile on Reddit and check the exact spelling — or mark it banned if it is really gone.'); return; }
   var old=r.handle, fx=M(r).fix||{};
   var d=await upd(r.id, { handle:v, meta_patch:JSON.stringify({ fix:null, typo:{ day:today(), at:phtStamp(), from:old, to:v, asked:fx.at||'', by:USER.id } }) });
-  if(d && d.ok){ var m=Object.assign({}, M(r)); delete m.fix; m.typo={ day:today(), at:phtStamp(), from:old, to:v, asked:fx.at||'', by:USER.id }; patchLocal(r.id,{ handle:v, meta:m }); r.handle=v; r.meta=m; EVENTS_AT=0; toast('Username corrected: '+old+' → '+v); renderView(); }
+  if(d && d.ok){ var m=Object.assign({}, M(r)); delete m.fix; m.typo={ day:today(), at:phtStamp(), from:old, to:v, asked:fx.at||'', by:USER.id }; patchLocal(r.id,{ handle:v, meta:m }); r.handle=v; r.meta=m; EVENTS_AT=0; toast('Username corrected: '+old+' → '+v); renderView(); fixGateRefresh(); }
   else toast('Could not save — '+((d&&d.error)||'try again'));
 }
 async function fixGone(id){ var r=rowById(id); if(!r) return; if(await saveMeta(r,{ fix:null, fixgone:{ at:phtStamp(), by:USER.id } })) banAcct(id); }
@@ -4187,7 +4549,8 @@ var PQ={ tab:'score', range:'7', day:'', month:'', st:null, dd:null, tgt:null, s
 var PQ_MIN=10;    // runs before a task's team time is learned
 var QA_RULES=[
   { k:'hidden_ban', n:'Hidden ban — a health check found one of their accounts banned that they never tagged', d:2, u:'each' },
-  { k:'hc_missing', n:'Daily health check not finished', d:1, u:'' },
+  { k:'hc_missing', n:'Daily health check not finished by the end of the shift', d:1, u:'' },
+  { k:'hc_none',    n:'Daily health check never started', d:2, u:'instead of the −1' },
   { k:'hc_late',    n:'Health check started after 8:15 (AM or PM shift)', d:0.5, u:'' },
   { k:'skip',       n:'Stage skipped, or promoted before the stage\'s days were up', d:1, u:'each' },
   { k:'tagging',    n:'Accounts not tagged right — method or model missing, or a new account without its phone', d:0.5, u:'each · max 2' },
@@ -4195,7 +4558,7 @@ var QA_RULES=[
   { k:'fast',       n:'Under 35% of the team time for that task (once it is learned)', d:0.5, u:'each · max 2' },
   { k:'cover',      n:'Tool time under half of the portal time (2+ hours tracked) — timers tapped, not worked', d:0, u:'flag only for now' },
   { k:'typo',       n:'Username typo — the health check could not find the account until the owner corrected the name', d:0.5, u:'each · max 2' },
-  { k:'fix_open',   n:'A username sent back for fixing is still not corrected (or marked banned)', d:0.5, u:'per day it stays open' }
+  { k:'fix_open',   n:'A username sent back for fixing is still not corrected (or marked banned)', d:1, u:'each, per day it stays open · max 3' }
 ];
 function pqRule(k){ for(var i=0;i<QA_RULES.length;i++) if(QA_RULES[i].k===k) return QA_RULES[i]; return { d:0 }; }
 function dAdd(d,n){ var x=new Date(d+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+n); return x.toISOString().slice(0,10); }
@@ -4409,8 +4772,8 @@ function pqFlags(va, day, dr, L){
   var F=[], mf=[];
   try{ mf=JSON.parse((dr&&dr.manual_flags)||'[]')||[]; }catch(e){ mf=[]; }
   mf.forEach(function(f){ if(f.type==='hidden_ban') F.push({ k:'hidden_ban', t:'Hidden ban · '+(f.account||''), d:pqRule('hidden_ban').d, c:'r' }); else F.push({ k:'manual', t:f.label||'Flag', d:+f.deduct||0, c:'a' }); });
-  var night=SHIFTOF[va]==='night', started=!L.live || phtStamp()>day+(night?' 20:30:00':' 08:30:00');
-  if(!L.off && started && L.hcA>0 && L.hcD<L.hcA) F.push({ k:'hc_missing', t:'Health check '+L.hcD+'/'+L.hcA, d:pqRule('hc_missing').d, c:'r' });
+  var night=SHIFTOF[va]==='night', hcDueNow=!L.live || phtStamp()>hcDue(night?'night':'day', day);   // Oct 13: due at the end of the shift
+  if(!L.off && hcDueNow && L.hcA>0 && L.hcD<L.hcA) F.push(L.hcD===0?{ k:'hc_none', t:'Health check never started (0/'+L.hcA+')', d:pqRule('hc_none').d, c:'r' }:{ k:'hc_missing', t:'Health check '+L.hcD+'/'+L.hcA, d:pqRule('hc_missing').d, c:'r' });
   if(!L.off && dr && dr.hc_first_at && String(dr.hc_first_at).slice(0,10)>=day && String(dr.hc_first_at)>day+(night?' 20:15:00':' 08:15:00'))
     F.push({ k:'hc_late', t:'Health check started '+fmtT(parseTs(dr.hc_first_at)), d:pqRule('hc_late').d, c:'a' });
   var rows=((PQ.st&&PQ.st.rows)||[]).filter(function(x){ return String(x.va).toLowerCase()===va && (x.kind==='session'||x.kind==='dms'); });
@@ -4423,7 +4786,7 @@ function pqFlags(va, day, dr, L){
   var typos=allRows().filter(function(r){ return owner(r)===va && M(r).typo && M(r).typo.day===day; });
   if(typos.length) F.push({ k:'typo', t:typos.length+' username typo'+(typos.length===1?'':'s')+' corrected', d:Math.min(2,typos.length*pqRule('typo').d), c:'r', tip:typos.map(function(r){ var t=M(r).typo; return t.from+' → '+t.to; }).join(' · ') });
   var openFix=allRows().filter(function(r){ var f=M(r).fix; return owner(r)===va && !isDead(r) && f && String(f.day||'')<=day && (day===today() || String(f.day||'')<day); });
-  if(openFix.length && (day<today() || phtStamp()>day+(SHIFTOF[va]==='night'?' 23:00:00':' 12:00:00'))) F.push({ k:'fix_open', t:openFix.length+' username fix'+(openFix.length===1?'':'es')+' still open', d:pqRule('fix_open').d, c:'a', tip:openFix.map(function(r){ return r.handle+' (asked '+String((M(r).fix||{}).day||'')+')'; }).join(' · ') });
+  if(openFix.length && (day<today() || phtStamp()>day+(SHIFTOF[va]==='night'?' 23:00:00':' 12:00:00'))) F.push({ k:'fix_open', t:openFix.length+' username fix'+(openFix.length===1?'':'es')+' still open', d:Math.min(3, openFix.length*pqRule('fix_open').d), c:'a', tip:openFix.map(function(r){ return r.handle+' (asked '+String((M(r).fix||{}).day||'')+')'; }).join(' · ') });
   if(untag.length) F.push({ k:'tagging', t:untag.length+' account'+(untag.length===1?'':'s')+' missing tags', d:Math.min(2,untag.length*pqRule('tagging').d), c:'a', tip:untag.slice(0,12).map(function(r){ return r.handle+': '+[!methodOf(r)?'method':'',!r.model?'model':'',(cdateOf(r)>=ps&&!r.device&&phoneList(false,r.project).length)?'phone':''].filter(String).join(', '); }).join('\n') });
   (EVENTS||[]).forEach(function(e){
     if(e.kind!=='stage' || String(e.by||'').toLowerCase()!==va || bizDayOf(e.at)!==day) return;
