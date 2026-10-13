@@ -479,6 +479,23 @@ main{color:var(--pg-ink)}
    ═══════════════════════════════════════════════════════════════════════════════════════════ */
 var PORTAL_URL = "https://script.google.com/macros/s/AKfycbwK8rVJlkv5YLgNLe7cGIz73KJc0hedmZcutoiRviDEowiZPglzBnznswBaZ0TVIV8t/exec";   // employee ID + PIN login (portal backend)
 var ALTR_URL   = "https://script.google.com/macros/s/AKfycbxp7wcIf48urxm2DcPoNgdmQreYUGia-YNnXwIXfyMqOLkyWpaqI3hoMZa4VPmjZa9_Mg/exec";   // altr-apps-script.gs /exec
+/* SESSION TOKEN (Oct 13): the backend signs a token at sign-in; every call to our Apps Script backends carries it
+   (USER.sess) so owner/lead actions and personal data are only served to the signed-in person. */
+(function(){
+  if(window.__toolSessWrap) return; window.__toolSessWrap=1;
+  var f0=window.fetch.bind(window);
+  window.fetch=function(u, o){
+    try{
+      var t=(typeof USER!=='undefined' && USER && USER.sess) ? USER.sess : '';
+      if(t && typeof u==='string' && u.indexOf('script.google.com/macros')>=0){
+        var get=!o || !o.method || String(o.method).toUpperCase()==='GET';
+        if(get){ if(!/[?&]sess=/.test(u)) u=u+(u.indexOf('?')>=0?'&':'?')+'sess='+encodeURIComponent(t); }
+        else if(o && typeof o.body==='string' && o.body.charAt(0)==='{'){ var b=JSON.parse(o.body); if(b && typeof b==='object' && !b.sess){ b.sess=t; o=Object.assign({}, o, { body:JSON.stringify(b) }); } }
+      }
+    }catch(e){}
+    return f0(u, o);
+  };
+})();
 var OWNERS=['jmbeast','admin'], LEADS_DEFAULT=['jmb006','jmb013','jmb034'];
 var ACCT_TAGS=['Incorrect bio','Incorrect username','Duplicate','Fix highlights'];
 var ACCT_ST=[['active','Active','#047857','#ecfdf5'],['suspended','Suspended','#b45309','#fffbeb'],['logged_out','Logged out','#be123c','#fff1f2'],['restricted','Restricted','#7c2d12','#fff7ed'],['action_blocked','Action blocked','#9f1239','#fff1f2'],['under_review','Under review','#4338ca','#eef2ff']];
@@ -636,7 +653,7 @@ async function signIn(){
       var r=await fetch(PORTAL_URL+'?id='+encodeURIComponent(id)+'&pin='+encodeURIComponent(pin)+'&_='+Date.now()); var d=await r.json();
       if(d&&d.error){ err.textContent=({DEACTIVATED:'This account has been deactivated. Contact your admin.',WRONG_PIN:'Wrong PIN for that ID.',NOT_FOUND:'Employee ID not found.'})[d.error]||('Could not sign in ('+d.error+').'); err.style.display='block'; return; }
       if(!d||!d.employee_id) throw new Error('bad');
-      USER={ id:d.employee_id, name:d.full_name||d.employee_id, photo:d.photo||'' };
+      USER={ id:d.employee_id, name:d.full_name||d.employee_id, photo:d.photo||'', sess:d.sess||'' };
     }
     try{ sessionStorage.setItem('altr2_user', JSON.stringify(USER)); }catch(e){}
     try{ introPlay(); }catch(_i){}   // intro over the console while it loads
