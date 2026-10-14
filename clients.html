@@ -438,6 +438,24 @@ body::before{content:'';position:fixed;inset:-20% -10% auto;height:520px;z-index
 .c-p2 .iq-s input{padding:7px 8px;border:1px solid var(--line2);border-radius:9px;font:inherit;font-size:12.5px}
 .c-p2 .iq-s input[type=number]{width:64px;font-weight:800} .c-p2 .iq-s input:not([type]){flex:1;min-width:140px}
 @media (max-width:900px){ .c-p2 .iq-r{grid-template-columns:1fr} .c-p2 .p2-sub{margin-left:0} .c-p2 .p2-team{grid-template-columns:1fr} .c-p2 .p2-act{justify-content:flex-start} }
+/* ═══ hub work timer + the owner's "timers right now" (Oct 14, evening) ═══ */
+.htb{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--s1);border:1px dashed var(--line2);border-radius:16px;padding:11px 15px;margin:0 0 14px}
+.htb.on{background:linear-gradient(135deg,#0f766e,#0e7490);border:1px solid transparent;color:#ecfeff;box-shadow:0 18px 40px -22px rgba(14,116,144,.8)}
+.htb .dot{width:12px;height:12px;border-radius:50%;background:#5eead4;animation:imPulse 1.6s infinite;flex:none;margin:0 4px}
+.htb .tx{flex:1;min-width:220px} .htb .tx small{display:block;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;opacity:.8}
+.htb .tx b{display:block;font:800 14.5px Sora,sans-serif} .htb .tx span{font-size:12.5px;font-variant-numeric:tabular-nums;opacity:.9}
+.htb.on .btn.sec{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.3)}
+@media (prefers-reduced-motion:reduce){ .htb .dot{animation:none} }
+.olv{background:var(--s1);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:14px;box-shadow:var(--sh1)}
+.olv-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px} .olv-h b{font:800 13.5px Sora,sans-serif} .olv-h span{font-size:11.5px;color:var(--ink3);font-weight:600}
+.olv-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}
+.olv-i{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:var(--s2)}
+.olv-i.run{border-color:rgba(16,185,129,.45);background:rgba(16,185,129,.06)} .olv-i.open{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.06)}
+.olv-i .a{width:30px;height:30px;border-radius:50%;background:var(--grad);color:#fff;display:grid;place-items:center;font:800 11px Sora,sans-serif;overflow:hidden;flex:none} .olv-i .a img{width:100%;height:100%;object-fit:cover}
+.olv-t{min-width:0;display:flex;flex-direction:column;gap:1px} .olv-t b{font-size:12.5px} .olv-t small{font-size:11px;color:var(--ink3)}
+.olv-on{font-size:12px;font-weight:800;color:#047857} .olv-warn{font-size:12px;font-weight:800;color:#b45309} .olv-mute{font-size:12px;color:var(--ink3);font-weight:600}
+.olv-clk{font:800 12px Inter,sans-serif;font-variant-numeric:tabular-nums;color:#065f46}
+.c-ima .ich.run{background:rgba(16,185,129,.12);color:#047857}
 /* pre-flight box */
 .ima-ov{display:none;position:fixed;inset:0;z-index:9500;background:rgba(15,23,42,.5);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);align-items:center;justify-content:center;padding:14px}
 .ima-box{background:#fff;border-radius:20px;max-width:640px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 40px 100px rgba(0,0,0,.35);font-family:Inter,sans-serif}
@@ -659,7 +677,8 @@ body::before{content:'';position:fixed;inset:-20% -10% auto;height:520px;z-index
    • Timer link, same as Reddit Central / ALTR Studio: work only counts while the portal timer runs on that
      client's project (the pairing box waits for it), and the hub writes its heartbeat to Supabase tool_beat
      (tool "clients") so the portal can pair with it and stop a timer when the hub shows no work for 10 min.
-   • Outputs go through the proof gate → po_bump, which is what the portal scorecard (productivity) reads.
+   • Outputs go straight to po_bump (Oct 14: timer-based — no screenshots), which is what the portal scorecard reads. Every tab
+     has a work timer the VA can see (Imperium and Project 2 their own, the rest the hub timer); the owner sees them live.
    Adding a client later = one entry in CLIENTS + its module (see DS for the shape: mount / render / poll).
    Oct 14 (Jeth): "from now on all of our tools should be timer based, not screenshots" — Project 2 (P2) is the first tab built
    that way: the timed step is the record, outputs go straight to po_bump with no proof panel.
@@ -702,13 +721,13 @@ var CLIENTS=[
   { id:'design-shopify', name:'Design & Shopify', client:'Torchlight', kind:'Design · Shopify', project:'Design & Shopify', match:/shopify|torchlight/i,
     c:'#059669', g:'linear-gradient(135deg,#34d399,#059669 55%,#065f46)', icon:'shop', live:true, mod:'DS' },
   { id:'imperium', name:'Imperium', client:'Imperium Management Agency', kind:'IG · physical phones', project:'Imperium', match:/imperium/i,
-    c:'#dd2a7b', g:'linear-gradient(135deg,#f58529,#dd2a7b 55%,#8134af)', icon:'reels', live:true, mod:'IMA' },   // Oct 9: live from SOP-02
+    c:'#dd2a7b', g:'linear-gradient(135deg,#f58529,#dd2a7b 55%,#8134af)', icon:'reels', live:true, mod:'IMA', ownTimer:true },   // Oct 9: live from SOP-02
   { id:'ember', name:'Ember', client:'Ember Management', kind:'Snapchat · VPS ops', project:'Ember Management', match:/\bember\b|snapchat/i,
     c:'#d97706', g:'linear-gradient(135deg,#fcd34d,#f59e0b 55%,#b45309)', icon:'vps', live:true, mod:'EM' },   // Oct 9: moved in from ember.html
   { id:'skyvern', name:'Skyvern', client:'Skyvern', kind:'Project 3 · Reddit farming', project:'Skyvern', match:/skyvern|project\s*3\b/i,
     c:'#0284c7', g:'linear-gradient(135deg,#7dd3fc,#0ea5e9 55%,#4338ca)', icon:'sky', live:true, mod:'SKY' },   // Oct 10: 3 comments + 5-min scroll + karma, daily
   { id:'project2', name:'Project 2', client:'Ricardo', kind:'IG Reels · posting', project:'Project 2', match:/project\s*2\b|ricardo/i,
-    c:'#8134af', g:'linear-gradient(135deg,#a855f7,#8134af 55%,#4f46e5)', icon:'reels', live:true, mod:'P2' }   // Oct 14: live from Ricardo's SOP — timer-based, no screenshots
+    c:'#8134af', g:'linear-gradient(135deg,#a855f7,#8134af 55%,#4f46e5)', icon:'reels', live:true, mod:'P2', ownTimer:true }   // Oct 14: live from Ricardo's SOP — timer-based, no screenshots
 ];
 function clientById(id){ for(var i=0;i<CLIENTS.length;i++) if(CLIENTS[i].id===id) return CLIENTS[i]; return null; }
 function clientOfTask(task){ task=String(task||''); for(var i=0;i<CLIENTS.length;i++) if(CLIENTS[i].match.test(task)) return CLIENTS[i]; return null; }
@@ -1229,7 +1248,8 @@ setInterval(function(){ try{ var cl=HUB.cur(); if(!USER || isOwner() || !cl || !
 setInterval(function(){ try{ if(USER && !isOwner()) linkLoad(false).then(function(){ HUB.repaintLink(); }); }catch(e){} }, 30000);
 function hm(secs){ secs=Math.max(0,Math.round(secs||0)); var h=Math.floor(secs/3600), m=Math.round((secs%3600)/60); return h?(h+'h '+(m<10?'0':'')+m+'m'):(m+'m'); }
 function linkBanner(cl){
-  if(isOwner() || !cl || !cl.live || typeof PFX==='undefined') return '';
+  if(isOwner()) return ownerLiveHtml(cl);   // Oct 14: the owner sees every VA's timer on this client
+  if(!cl || !cl.live || typeof PFX==='undefined') return '';
   var st=linkState(LINK.me, cl); if(st.k==='unknown') return '';
   var id=myId();
   if(st.k==='ok'){
@@ -1252,7 +1272,7 @@ function linkBanner(cl){
    works). Owners don't send (they're never paired). */
 var ACT={ last:Date.now() };
 var WORK={ at:0, what:'' };
-function hubWork(what){ WORK.at=Date.now(); WORK.what=String(what||''); try{ if(typeof IMA!=='undefined' && IMA.tmTouch) IMA.tmTouch(); }catch(_t){} try{ if(typeof P2!=='undefined' && P2.tmTouch) P2.tmTouch(); }catch(_t2){} try{ tbSend(true); }catch(e){} }
+function hubWork(what){ WORK.at=Date.now(); WORK.what=String(what||''); try{ if(typeof IMA!=='undefined' && IMA.tmTouch) IMA.tmTouch(); }catch(_t){} try{ if(typeof P2!=='undefined' && P2.tmTouch) P2.tmTouch(); }catch(_t2){} try{ htAuto(); }catch(_h){} try{ tbSend(true); }catch(e){} }
 /* every work write in every client tab goes through fetch — mark it there, so no module can forget */
 (function(){
   if(typeof window==='undefined' || !window.fetch || window.__hubWorkWrap) return; window.__hubWorkWrap=1;
@@ -1274,6 +1294,7 @@ function hubRunInfo(){
   try{ if(typeof SKY!=='undefined' && SKY.S && SKY.S.run && SKY.S.run.ends>Date.now()){ var cl=HUB.cur(); return { start:SKY.S.run.start, label:'5-min scroll · '+(cl?cl.name:'Client Hub') }; } }catch(e){}
   try{ if(typeof IMA!=='undefined' && IMA.timerInfo){ var x=IMA.timerInfo(); if(x) return x; } }catch(e){}
   try{ if(typeof P2!=='undefined' && P2.timerInfo){ var y=P2.timerInfo(); if(y) return y; } }catch(e){}   // Oct 14: Project 2 step timers
+  try{ var z=htInfo(); if(z) return z; }catch(e){}   // Oct 14: the hub work timer (Design & Shopify, Ember, Skyvern)
   return null;
 }
 function toolTimerRunning(){ return !!hubRunInfo(); }
@@ -1309,6 +1330,114 @@ function tbSend(force){
 }
 setInterval(function(){ tbSend(false); }, 15000);
 document.addEventListener('visibilitychange', function(){ if(!document.hidden) tbSend(true); });
+
+/* ═══════════ ⏱ THE HUB WORK TIMER (Oct 14, evening — Jeth: "fix all tools sitting under the Client Hub") ═══════════
+   Every client tab now has a timer the VA can see. Imperium and Project 2 run their own (per phone / per SOP step);
+   Design & Shopify, Ember and Skyvern share this one. It starts BY ITSELF on the first task in the tab (anything that
+   logs, moves, adds or counts work) or with ▶ Start, runs while you work, and asks "still working?" every 30 minutes —
+   any task answers it; no answer in 2 minutes and it stops. While it runs the hub tells the portal you're working, so the
+   portal timer doesn't stop for "no mouse or keyboard". One at a time; it survives a reload; owners never run it. */
+var HT={ run:null, tick:null, ask:null, restored:false }, HT_LIM=30*60000, HT_ASK=2*60000;
+function htKey(){ return 'hub_wt_'+myId(); }
+function htSave(){ try{ if(HT.run) localStorage.setItem(htKey(), JSON.stringify(HT.run)); else localStorage.removeItem(htKey()); }catch(e){} }
+function htOwn(cl){ return !!(cl && cl.ownTimer); }
+function htModuleRunning(){
+  try{ if(typeof SKY!=='undefined' && SKY.S && SKY.S.run && SKY.S.run.ends>Date.now()) return true; }catch(e){}
+  try{ if(typeof IMA!=='undefined' && IMA.timerOn && IMA.timerOn()) return true; }catch(e){}
+  try{ if(typeof P2!=='undefined' && P2.timerOn && P2.timerOn()) return true; }catch(e){}
+  return false;
+}
+function htRestore(){
+  if(HT.restored || !USER || isOwner()) return; HT.restored=true;
+  try{ var x=JSON.parse(localStorage.getItem(htKey())||'null');
+    if(x && x.cid && x.start && Date.now()-(x.seen||x.start)<5*60000 && Date.now()-(x.chk||x.start)<HT_LIM+HT_ASK) HT.run=x; else localStorage.removeItem(htKey()); }catch(e){}
+  if(HT.run) htTickOn();
+}
+function htName(cid){ var c=clientById(cid); return c?c.name:'Client Hub'; }
+function htClock(ms){ var s=Math.max(0,Math.floor(ms/1000)), h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60; return (h?h+':'+(m<10?'0':''):'')+m+':'+(x<10?'0':'')+x; }
+function htStart(cid, quiet){
+  if(!USER || isOwner()) return; var c=clientById(cid); if(!c || !c.live || htOwn(c)) return;
+  htRestore();
+  if(HT.run && HT.run.cid===cid){ if(!HT.ask){ HT.run.chk=Date.now(); htSave(); } return; }
+  var now=Date.now(); htAskClose(); HT.run={ cid:cid, start:now, chk:now, seen:now }; htSave(); htTickOn();
+  if(!quiet) try{ toast('⏱ Work timer started — '+c.name+'. It keeps your portal timer running while you work.'); }catch(e){}
+  try{ tbSend(true); }catch(e){} htPaint();
+}
+function htAuto(){ try{ if(!USER || isOwner()) return; var c=HUB.cur(); if(c && c.live && !htOwn(c)) htStart(c.id, false); }catch(e){} }
+function htStop(){ HT.run=null; htAskClose(); htSave(); try{ tbSend(true); }catch(e){} htPaint(); }
+function htStill(){ if(HT.run){ HT.run.chk=Date.now(); htSave(); } htAskClose(); try{ tbSend(true); }catch(e){} htPaint(); }
+function htAskOpen(){
+  var R=HT.run; if(!R) return; HT.ask={ at:Date.now() }; var o=$('ht-ask'); if(o) o.remove();
+  o=document.createElement('div'); o.id='ht-ask'; o.className='ima-ask';
+  o.innerHTML='<div class="box"><b>Still working on '+esc(htName(R.cid))+'?</b><p>Your work timer has run 30 minutes since your last task. Tap below to keep it going — with no answer it stops in 2 minutes.</p><div class="row"><button class="btn" onclick="htStill()">Yes, still working</button><button class="btn sec" onclick="htStop()">Stop</button></div></div>';
+  document.body.appendChild(o); try{ if(window.PFX && PFX.chime) PFX.chime(0.1); }catch(e){}
+}
+function htAskClose(){ HT.ask=null; var o=$('ht-ask'); if(o) o.remove(); }
+function htTickOn(){ if(HT.tick) return; HT.tick=setInterval(htTick, 1000); }
+function htTick(){
+  var R=HT.run; if(!R){ if(HT.tick){ clearInterval(HT.tick); HT.tick=null; } return; }
+  var now=Date.now(); if(!document.hidden) try{ ACT.last=now; }catch(e){}
+  if(now-(R.seen||0)>=30000){ R.seen=now; htSave(); }
+  if(!HT.ask){ if(now-(R.chk||R.start)>=HT_LIM) htAskOpen(); }
+  else if(now-HT.ask.at>=HT_ASK){ htAskClose(); HT.run=null; htSave(); try{ toast('Work timer stopped — no answer to “still working?”.'); }catch(e){} try{ tbSend(true); }catch(e){} htPaint(); return; }
+  var c=$('ht-clk'); if(c) c.textContent=htClock(now-R.start);
+}
+function htInfo(){ var R=HT.run; if(!R || HT.ask) return null; return { start:R.start, label:'Work timer · '+htName(R.cid) }; }
+function htBanner(cl){
+  if(!USER || isOwner() || !cl || !cl.live || htOwn(cl)) return '';
+  htRestore(); var R=HT.run;
+  if(R && R.cid===cl.id) return '<div class="htb on"><span class="dot"></span><div class="tx"><small>Work timer running</small><b>'+esc(cl.name)+'</b><span><span id="ht-clk">'+htClock(Date.now()-R.start)+'</span> · asks “still working?” every 30 min — any task answers it</span></div><button class="btn sm sec" onclick="htStop()">Stop</button></div>';
+  if(htModuleRunning()) return '';
+  return '<div class="htb"><div class="tx"><small>No timer running</small><b>Your work timer starts by itself on your first task here</b><span>Or press ▶ Start when you begin. Without a running timer your portal timer stops after 3 minutes with no computer activity.</span></div><button class="btn sm" onclick="htStart(\''+cl.id+'\')">▶ Start</button></div>';
+}
+function htPaint(){ var b=$('htbox'), c=HUB.cur(); if(b && c){ var h=htBanner(c); if(b.__h!==h || !$('ht-clk')){ b.innerHTML=h; b.__h=h; } } }
+setInterval(function(){ try{ if(USER && !isOwner()) htPaint(); }catch(e){} }, 5000);
+
+/* ═══ OWNER: who is timing work right now (Jeth, Oct 14 — "Where is the timer here??") ═══
+   A VA's timer lives in that VA's own browser, so the owner's view never showed it. The hub now reads every VA's
+   heartbeat (Supabase tool_beat, tool "clients": run_since / run_label / open_at / last_active) every 15 seconds and shows,
+   on each client tab, every VA on it: the timer running and for how long, "hub open — no timer", or not in the hub.
+   Imperium phone cards also show who is timing that phone. */
+var OLIVE={ rows:{}, at:0, busy:false };
+async function oliveLoad(){
+  if(!USER || !isOwner() || OLIVE.busy) return; OLIVE.busy=true;
+  try{ var r=await fetch(SB_URL+'/rest/v1/tool_beat?select=employee_id,run_since,run_label,open_at,last_active,today_secs&tool=eq.clients', { headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY } });
+    if(r.ok){ var rows=await r.json(), m={}; (rows||[]).forEach(function(x){ m[String(x.employee_id||'').toUpperCase()]=x; }); OLIVE.rows=m; OLIVE.at=Date.now(); } }catch(e){}
+  OLIVE.busy=false;
+  try{ HUB.repaintLink(); }catch(e){}
+  try{ var c=HUB.cur(); if(c && c.id==='imperium' && $('ima-body') && IMA.paint) IMA.paint(); }catch(e){}
+}
+function oliveAgo(ms){ var m=Math.round(ms/60000); return m<1?'just now':(m<60?m+'m ago':(Math.floor(m/60)+'h '+(m%60)+'m ago')); }
+function oliveOf(emp, cl){
+  var x=OLIVE.rows[String(emp||'').toUpperCase()]; if(!x) return { k:'off', seen:0 };
+  var now=Date.now(), open=Date.parse(x.open_at||'')||0, la=Date.parse(x.last_active||'')||0, rs=Date.parse(x.run_since||'')||0, lbl=String(x.run_label||''), suf=' · '+(cl?cl.name:'');
+  var fresh=open && now-open<3*60000;
+  if(fresh && rs && cl && lbl.slice(-suf.length)===suf) return { k:'run', since:rs, label:lbl.slice(0, -suf.length), la:la };
+  if(fresh && rs) return { k:'other', label:lbl, since:rs };
+  if(fresh) return { k:'open', la:la };
+  return { k:'off', seen:Math.max(open, la) };
+}
+function ownerLiveHtml(cl){
+  if(!cl || !cl.live) return '';
+  var M=HUB.membersOf(cl.id).filter(function(id){ return OWNER_IDS.indexOf(id)<0; }); if(!M.length) return '';
+  var now=Date.now(), order={ run:0, open:1, other:2, off:3 };
+  var L=M.map(function(id){ return { id:id, s:oliveOf(id, cl) }; }).sort(function(a,b){ return order[a.s.k]-order[b.s.k] || vaName(a.id).localeCompare(vaName(b.id)); });
+  var running=L.filter(function(x){ return x.s.k==='run'; }).length;
+  return '<div class="olv"><div class="olv-h"><b>Timers right now</b><span>'+running+' of '+L.length+' VA'+(L.length===1?'':'s')+' timing work in '+esc(cl.name)+' · from each VA\'s Client Hub · refreshes every 15 s'+(OLIVE.at?'':' · loading…')+'</span></div><div class="olv-g">'+
+    L.map(function(x){ var s=x.s, body;
+      if(s.k==='run') body='<span class="olv-on">⏱ '+esc(s.label)+'</span><span class="olv-clk" data-since="'+s.since+'">'+htClock(now-s.since)+'</span>';
+      else if(s.k==='other') body='<span class="olv-mute">Timing another client · '+esc(s.label)+'</span>';
+      else if(s.k==='open') body='<span class="olv-warn">Hub open — no timer running</span>'+(s.la?'<small>last task '+oliveAgo(now-s.la)+'</small>':'');
+      else body='<span class="olv-mute">Not in the Client Hub'+(s.seen?' · seen '+oliveAgo(now-s.seen):'')+'</span>';
+      return '<div class="olv-i '+s.k+'">'+avatar(x.id,'a')+'<div class="olv-t"><b>'+esc(vaName(x.id))+'</b>'+body+'</div></div>'; }).join('')+'</div></div>';
+}
+/* the VA timing one Imperium phone right now (owner view) */
+function olivePhone(label, cl){
+  var out=[]; Object.keys(OLIVE.rows).forEach(function(emp){ var s=oliveOf(emp, cl); if(s.k!=='run') return; if(s.label.split(' · ').indexOf(label)>=0) out.push({ emp:emp, s:s }); });
+  return out;
+}
+setInterval(function(){ try{ var o=document.querySelectorAll('.olv-clk[data-since]'); for(var i=0;i<o.length;i++) o[i].textContent=htClock(Date.now()-(+o[i].getAttribute('data-since')||Date.now())); }catch(e){} }, 1000);
+setInterval(function(){ try{ if(USER && isOwner() && !document.hidden && HUB.cur()) oliveLoad(); }catch(e){} }, 15000);
 
 /* ══════════════ PROOF OF WORK — shared by every client tab ══════════════
    Every counted output needs a screenshot first. bump(project, task, n) is the single choke point: it opens the
@@ -1476,18 +1605,15 @@ async function proofSubmit(){
       .catch(function(){ if(tries>0) setTimeout(function(){ record(tries-1); }, 2500); else { toast('Saved — the count may take a moment to show.'); if(res){ try{ res(true); }catch(_e){} res=null; } } });
   })(5);
 }
-/* THE GATE: every counted output in every client tab goes through here. */
+/* THE GATE (Oct 14, evening — Jeth: "all of our tools should be timer based, not screenshots" / "fix all tools sitting
+   under the Client Hub"): no screenshot panel any more. A counted output goes straight to po_bump, and the work timer is the
+   record — the hub timer starts by itself on the first task in a tab (htAuto), Imperium and Project 2 run their own.
+   The proof panel above stays in the file, unused. Imperium's pre-flight keeps its three screenshots: that check is
+   Imperium's own SOP (Maps · IP · Scamalytics), not our proof. */
 function bump(project, task, n){
-  return new Promise(function(resolve,reject){
-    PROOF.imgs=[]; PROOF.ctx={ project:project, task:task, n:(n||1) }; PROOF.resolve=null; PROOF.reject=reject;
-    var ov=proofPanel(); ov.style.display='flex';
-    $('proof-what').textContent=project+' · '+task+' · counts as '+(n||1);
-    $('proof-note').value=''; $('proof-thumbs').innerHTML=''; pupPaint();
-    PROOF.resolve=function(){
-      fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(myId())+'&project='+encodeURIComponent(project)+'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now())
-        .then(function(){ resolve(true); }).catch(function(){ resolve(true); });
-    };
-  });
+  try{ htAuto(); }catch(e){}
+  return fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(myId())+'&project='+encodeURIComponent(project)+'&task='+encodeURIComponent(task)+'&n='+(n||1)+'&_='+Date.now())
+    .then(function(){ return true; }, function(){ return true; });
 }
 window.addEventListener('unhandledrejection', function(ev){ if(ev.reason && ev.reason.proofCancelled) ev.preventDefault(); });
 
@@ -1799,7 +1925,7 @@ var IMA=(function(){
     if(TM.run) tmTickOn(); else tmSave();
   }
   function timerOn(){ tmRestore(); var R=TM.run; if(!R || TM.ask) return false; return R.ends ? R.ends>Date.now() : true; }
-  function timerInfo(){ return timerOn() ? { start:TM.run.start, label:tmLabel(TM.run) } : null; }
+  function timerInfo(){ if(!timerOn()) return null; var R=TM.run, p=rowById(R.pid); return { start:R.start, label:tmLabel(R)+(R.aid && p?' · '+phoneLabel(p):'')+' · '+CL().name }; }
   function tmLabel(R){ var p=rowById(R.pid), a=R.aid?rowById(R.aid):null; return TNAME[R.k]+' · '+(a?String(a.handle):(p?phoneLabel(p):'phone')); }
   function tmWho(R){ return tmLabel(R).split(' · ').slice(1).join(' · '); }
   function upClock(ms){ var s=Math.max(0,Math.floor(ms/1000)), h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60; return (h?h+':'+(m<10?'0':''):'')+m+':'+(x<10?'0':'')+x; }
@@ -1812,7 +1938,7 @@ var IMA=(function(){
       var now=Date.now();
       if(R.ends){
         if(R.ends>now){ if(!document.hidden) try{ ACT.last=now; }catch(_a){} }
-        else if(!R.rang){ R.rang=1; tmSave(); try{ toast('15 minutes done on '+tmWho(R)+' — log the scroll with its screenshot.'); }catch(e){} try{ if(window.PFX && PFX.chime) PFX.chime(0.08); }catch(e){} tmPaint(true); return; }
+        else if(!R.rang){ R.rang=1; tmSave(); try{ toast('15 minutes done on '+tmWho(R)+' — log the scroll.'); }catch(e){} try{ if(window.PFX && PFX.chime) PFX.chime(0.08); }catch(e){} tmPaint(true); return; }
       } else if(!TM.ask){
         if(!document.hidden) try{ ACT.last=now; }catch(_a){}
         if(now-(R.chk||R.start) >= (TLIM[R.k]||20)*60000) tmAskOpen();
@@ -1828,7 +1954,7 @@ var IMA=(function(){
     var now=Date.now();
     if(R.ends){ var left=Math.max(0,R.ends-now), done=left<=0;
       return '<div class="im-run'+(done?' done':'')+'"><div class="ring"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19" class="bg"/><circle cx="22" cy="22" r="19" class="fg" id="ima-run-arc" style="stroke-dashoffset:'+(119.4*(left/SCROLL_MS)).toFixed(1)+'"/></svg></div>'+
-        '<div class="tx"><small>'+(done?'Scroll finished':'Scrolling now')+'</small><b>'+esc(tmLabel(R))+'</b><span id="ima-run-clk">'+(done?'15:00 done — log it with the feed screenshot':downClock(left)+' left · keep scrolling on this account')+'</span></div>'+
+        '<div class="tx"><small>'+(done?'Scroll finished':'Scrolling now')+'</small><b>'+esc(tmLabel(R))+'</b><span id="ima-run-clk">'+(done?'15:00 done — press Log the scroll':downClock(left)+' left · keep scrolling on this account')+'</span></div>'+
         (done?'<button class="btn sm" onclick="IMA.log(\''+jsq(R.aid)+'\',\'scroll\')">＋ Log the scroll</button>':'<button class="btn sec sm" onclick="IMA.tmStop()">Stop</button>')+'</div>';
     }
     return '<div class="im-run up"><span class="dot"></span><div class="tx"><small>Timer running</small><b>'+esc(tmLabel(R))+'</b><span id="ima-run-clk">'+upLine(R)+'</span></div><button class="btn sec sm" onclick="IMA.tmStop()">Stop</button></div>';
@@ -1909,6 +2035,12 @@ var IMA=(function(){
       ['pfp','feed','reels','trial'].forEach(function(k){ if(due[k]) ks.push(k); }); }
     if(!ks.length) return '<div class="ipick"><span class="muted">Nothing on this phone needs a timer right now'+(open?' — scrolls use ▶ Start 15:00 on the account.':'.')+'</span></div>';
     return '<div class="ipick"><span class="muted">Time this phone for…</span>'+ks.map(function(k){ var on=TM.run && TM.run.pid===p.id && TM.run.k===k; return '<button class="itk'+(on?' run':'')+'" '+(on?'disabled':'')+' onclick="IMA.tmStart(\''+jsq(p.id)+'\',\''+k+'\')">'+(on?'⏱ ':'▶ ')+esc(TNAME[k])+'</button>'; }).join('')+'</div>';
+  }
+  /* owner: who is timing this phone right now (from the VAs' heartbeats) */
+  function ownerTimerChip(p){
+    if(!isOwner()) return ''; var L=[]; try{ L=olivePhone(phoneLabel(p), CL()); }catch(e){}
+    if(!L.length) return '<span class="ich mute" style="margin-right:6px">No timer on this phone</span>';
+    return L.map(function(x){ return '<span class="ich run" style="margin-right:6px">⏱ '+esc(vaName(x.emp).split(/[ ,]/)[0])+' · '+esc(x.s.label.split(' · ')[0])+' <span class="olv-clk" data-since="'+x.s.since+'">'+htClock(Date.now()-x.s.since)+'</span></span>'; }).join('');
   }
   function timerBtn(p){
     if(isOwner()) return ''; var on=TM.run && TM.run.pid===p.id;
@@ -2287,7 +2419,7 @@ var IMA=(function(){
     menu.push(['Proxy (record)…',"IMA.phoneNote('"+id+"','proxy')"]); menu.push(['Coordinates (record)…',"IMA.phoneNote('"+id+"','coords')"]);
     menu.push('---'); menu.push(['Delete phone (wrong entry)',"IMA.del('"+id+"')",'danger']);
     var head='<div class="ip-h"><span class="ip-ic">'+IC.phone+'</span><div class="ip-t"><b>'+esc(phoneLabel(p))+'</b><small>'+esc(p.model||'—')+' · '+A.length+'/'+MAX_ACCTS+' accounts · '+esc(vaName(ownerOf(p)))+'</small></div>'+
-      (sd?chip('ok','Ready'):chip('warn','Setting up · '+Object.keys(p.meta.setup||{}).length+'/'+SETUP.length))+'<span class="sp"></span>'+(mode==='today'&&sd?pfBadge(p):'')+timerBtn(p)+kmenu(menu)+'</div>'+pickRow(p);
+      (sd?chip('ok','Ready'):chip('warn','Setting up · '+Object.keys(p.meta.setup||{}).length+'/'+SETUP.length))+'<span class="sp"></span>'+(mode==='today'&&sd?pfBadge(p):'')+ownerTimerChip(p)+timerBtn(p)+kmenu(menu)+'</div>'+pickRow(p);
     if(mode==='phones') return '<div class="iphone">'+head+setupList(p)+pfHistory(p)+'</div>';
     if(!sd) return '<div class="iphone dim">'+head+'<div class="ip-note">Setup isn\'t finished — '+(v7?'tick steps 8–10':'work through the checklist')+' in <a onclick="IMA.setView(\'phones\')">Phones &amp; setup</a>.'+(v7&&A.length<MAX_ACCTS?' Accounts can be added now (steps 1–7 are done).':'')+'</div>'+(v7?acctList(p, A, open):'')+'</div>';
     return '<div class="iphone'+(open?'':' closed')+'">'+head+(open||isOwner()?'':'<div class="ip-lock">🔒 Log this session\'s pre-flight to open '+esc(phoneLabel(p))+'\'s accounts.</div>')+acctList(p, A, open)+'</div>';
@@ -2494,7 +2626,7 @@ var EM=(function(){
     var madison=S.rows.filter(function(r){ return String(r.model).toLowerCase()==='madison' && r.status!=='banned'; }).length;
     return 'Model balance · Emma <b>'+emma+'</b> · Madison <b>'+madison+'</b>'+(emma===madison?' · even':' → create <b>'+(emma<madison?'Emma':'Madison')+'</b> next');
   }
-  function camBtn(r){ var has=!!S.proofDone[r.id];
+  function camBtn(r){ return '';   /* Oct 14: timer-based — no screenshots on the cards */ var has=!!S.proofDone[r.id];
     return '<button class="cam'+(has?' has':'')+'" title="'+(has?'Screenshots attached':'Attach screenshots for this account (evidence only)')+'" onclick="event.stopPropagation();EM.proof(\''+jsq(r.id)+'\')">'+CAM+'</button>'; }
   function board(){
     if(!S.loaded) return '<div class="muted" style="padding:8px">'+(S.err?esc(S.err):'Loading the board…')+'</div>';
@@ -2522,8 +2654,8 @@ var EM=(function(){
     host.innerHTML='<div class="c-ds c-em">'+
       '<div class="sub">Snapchat account ops — keep every VPS full, every Live account running, and Airtable in sync. Creating an account counts <b>+1 Account Creation</b>; taking one Live counts <b>+1 Account Setup</b>. Banned / locked accounts leave the pool — your credit stays.</div>'+
       '<details class="sopbox"><summary>How the board works</summary><div class="sopgrid">'+
-        '<div class="sopph"><b>1 · Stock</b>Search the board first — every username lives here once. Add new accounts with the model that keeps Emma and Madison even. Tick "just created it" only for an account you made today (+1 Account Creation, screenshot required).</div>'+
-        '<div class="sopph"><b>2 · Setting up → Live</b>Assign a Stock account to a free VPS slot, finish the setup, then "Setup done → Live" (+1 Account Setup, screenshot required). Traffic starts about 10 minutes after it goes Live.</div>'+
+        '<div class="sopph"><b>1 · Stock</b>Search the board first — every username lives here once. Add new accounts with the model that keeps Emma and Madison even. Tick "just created it" only for an account you made today (+1 Account Creation).</div>'+
+        '<div class="sopph"><b>2 · Setting up → Live</b>Assign a Stock account to a free VPS slot, finish the setup, then "Setup done → Live" (+1 Account Setup). Traffic starts about 10 minutes after it goes Live.</div>'+
         '<div class="sopph"><b>3 · Verified running</b>Once per shift, confirm each Live account is actually running and type the friends count it shows. That feeds the Account Center and your progress bar.</div>'+
         '<div class="sopph"><b>4 · Needs fix / Banned</b>Anything off → Needs fix until it\'s resolved. Banned or locked: don\'t try to recover — set Airtable to Banned, remove the VPS link, keep the row and the AdsPower profile, then fill the slot from Stock.</div>'+
       '</div></details>'+
@@ -2749,8 +2881,8 @@ var SKY=(function(){
     var R=S.run; if(!R) return '';
     var r=rowById(R.id), left=Math.max(0, R.ends-Date.now()), done=left<=0;
     return '<div class="sk-run'+(done?' done':'')+'" id="sky-run"><div class="ring"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19" class="bg"/><circle cx="22" cy="22" r="19" class="fg" id="sky-run-arc" style="stroke-dashoffset:'+(119.4*(left/SCROLL_MS)).toFixed(1)+'"/></svg></div>'+
-      '<div class="tx"><small>'+(done?'Scroll finished':'Scrolling now')+'</small><b>'+esc(r?handle(r):'account')+'</b><span id="sky-run-clk">'+(done?'5:00 done — attach a screenshot of the feed to count it':clock(left)+' left · keep scrolling on this account')+'</span></div>'+
-      (done?'<button class="sk-btn go" onclick="SKY.scrollFinish()">Attach screenshot &amp; count it</button>':'<button class="sk-btn ln" onclick="SKY.scrollStop()">Stop</button>')+'</div>';
+      '<div class="tx"><small>'+(done?'Scroll finished':'Scrolling now')+'</small><b>'+esc(r?handle(r):'account')+'</b><span id="sky-run-clk">'+(done?'5:00 done — press Count it':clock(left)+' left · keep scrolling on this account')+'</span></div>'+
+      (done?'<button class="sk-btn go" onclick="SKY.scrollFinish()">✓ Count it</button>':'<button class="sk-btn ln" onclick="SKY.scrollStop()">Stop</button>')+'</div>';
   }
   function clock(ms){ var s=Math.ceil(ms/1000); return Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60); }
   function card(r){
@@ -2818,11 +2950,11 @@ var SKY=(function(){
   }
   function render(host){
     host.innerHTML='<div class="c-sky">'+
-      '<div class="sub">Reddit accounts are farmed <b>every day</b>: <b>3 comments</b>, a <b>5-minute scroll</b> and <b>today\'s karma</b> written down — each one with a screenshot. An account is farmed for the day when all three are done.</div>'+
+      '<div class="sub">Reddit accounts are farmed <b>every day</b>: <b>3 comments</b>, a <b>5-minute scroll</b> and <b>today\'s karma</b> written down — timed in the hub, no screenshots. An account is farmed for the day when all three are done.</div>'+
       '<details class="sk-sop"><summary>SOP — daily farming</summary><div class="sk-sopg">'+
-        '<div><b>1 · Three comments</b>Leave 3 genuine comments from the account. Press <b>+ Comment</b> after each one and attach a screenshot of it. Three a day — the tool stops at three.</div>'+
-        '<div><b>2 · Scroll 5 minutes</b>Press <b>Start 5:00</b>, then scroll the feed on that account for the full five minutes. When the timer ends, attach a screenshot of the feed. Stopping early counts nothing. One scroll at a time.</div>'+
-        '<div><b>3 · Update karma</b>Open the profile, type the karma it shows right now, and attach a screenshot of it. This builds the karma trend the client sees.</div>'+
+        '<div><b>1 · Three comments</b>Leave 3 genuine comments from the account. Press <b>+ Comment</b> after each one. Three a day — the tool stops at three.</div>'+
+        '<div><b>2 · Scroll 5 minutes</b>Press <b>Start 5:00</b>, then scroll the feed on that account for the full five minutes. When the timer ends, press <b>Count it</b>. Stopping early counts nothing. One scroll at a time.</div>'+
+        '<div><b>3 · Update karma</b>Open the profile, type the karma it shows right now. This builds the karma trend the client sees.</div>'+
         '<div><b>Every account, every day</b>Missed days show as red dots on the card. Restricted, suspended or on-hold accounts drop off the daily list — change the status from the ⋯ menu.</div>'+
       '</div></details>'+
       (isOwner()?'<div class="sk-nav"><button class="'+(S.view!=='karma'?'on':'')+'" onclick="SKY.setView(\'today\')">Today</button><button class="'+(S.view==='karma'?'on':'')+'" onclick="SKY.setView(\'karma\')">Karma</button></div>':
@@ -2907,7 +3039,7 @@ var SKY=(function(){
       var left=S.run.ends-Date.now();
       try{ if(left>0 && !document.hidden){ ACT.last=Date.now(); } }catch(e){}   // a running scroll is work in this tool (the portal's 10-minute rule)
       var c=$('sky-run-clk'), a=$('sky-run-arc');
-      if(left<=0){ if(!S.run.rang){ S.run.rang=1; runSave(); try{ toast('5 minutes done on '+(rowById(S.run.id)?handle(rowById(S.run.id)):'the account')+' — attach a screenshot to count it.'); }catch(e){} try{ if(window.PFX && PFX.chime) PFX.chime(0.08); }catch(e){} }
+      if(left<=0){ if(!S.run.rang){ S.run.rang=1; runSave(); try{ toast('5 minutes done on '+(rowById(S.run.id)?handle(rowById(S.run.id)):'the account')+' — press Count it.'); }catch(e){} try{ if(window.PFX && PFX.chime) PFX.chime(0.08); }catch(e){} }
         var rb=$('sky-run'); if($('sky-runbox') && (!rb || !rb.classList.contains('done'))){ $('sky-runbox').innerHTML=runBanner(); paintList(); } return; }
       if(c) c.textContent=clock(left)+' left · keep scrolling on this account';
       if(a) a.style.strokeDashoffset=(119.4*(left/SCROLL_MS)).toFixed(1);
@@ -3727,7 +3859,7 @@ var HUB=(function(){
     }
     var h='<div class="pane" style="--g:'+c.g+';--c:'+c.c+'">'+
       '<div class="phead"><div><h2><em>'+esc(c.name)+'</em></h2><div class="chips"><span class="chip"><i></i>'+esc(c.client)+'</span><span class="chip">'+esc(c.kind)+'</span>'+(isOwner()?memberChips(c.id):'')+(c.live?'':'<span class="chip" style="color:#a16207">Waiting for the SOP</span>')+'</div></div></div>'+
-      '<div id="linkbox">'+linkBanner(c)+'</div><div id="cbody"></div></div>';
+      '<div id="linkbox">'+linkBanner(c)+'</div><div id="htbox">'+htBanner(c)+'</div><div id="cbody"></div></div>';
     main.innerHTML=h;
     var body=$('cbody');
     if(c.live && MODS[c.id]) MODS[c.id].render(body);
@@ -3737,7 +3869,7 @@ var HUB=(function(){
         :'<p>Your '+esc(c.name)+' tool is being built from the SOP and will open right here, same link. Until then, keep following your current process.</p>')+'</div>';
   }
   function repaint(){ renderTabs(); var c=cur(); if(c && c.live && MODS[c.id] && $('cbody') && $('cbody').firstChild && MODS[c.id].paint) MODS[c.id].paint(); else renderMain(); renderMe(); }
-  function repaintLink(){ var b=$('linkbox'), c=cur(); if(b && c) b.innerHTML=linkBanner(c); }
+  function repaintLink(){ var b=$('linkbox'), c=cur(); if(b && c) b.innerHTML=linkBanner(c); try{ htPaint(); }catch(e){} }
   function onData(cid){
     if(!S.ready) return;
     if(S.view===cid && $('cbody') && $('cbody').firstChild){ MODS[cid].paint(); renderTabs(); }
@@ -3845,6 +3977,8 @@ function start(){
   HUB.renderMe(); loadNames(); HUB.boot(false);
   try{ SKY.runRestore(); }catch(_sr){}   // a Skyvern scroll timer survives a refresh
   try{ P2.tmRestore(); }catch(_p2){}     // so does a Project 2 step timer (Oct 14)
+  try{ htRestore(); }catch(_ht){}        // and the hub work timer
+  if(isOwner()) setTimeout(function(){ try{ oliveLoad(); }catch(e){} }, 1500);
   setTimeout(function(){ tbSend(true); }, 2500);
   /* keep the boards fresh: every minute while visible, and on focus */
   setInterval(function(){ if(!document.hidden) HUB.loadAll(); }, 60000);
@@ -3863,7 +3997,7 @@ async function pageWatch(){
     if(_pageTag===null){ _pageTag=tag; return; }
     if(tag===_pageTag) return;
     var ae=document.activeElement, typing=ae && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.type!=='checkbox';
-    var busy=(($('qcmask')||{}).classList||{ contains:function(){ return false; } }).contains('on') || ($('proof-ov') && $('proof-ov').style.display==='flex') || ($('ima-pf') && $('ima-pf').style.display==='flex') || $('pfx-ov') || $('p2-ask') || $('ima-ask') || typing;
+    var busy=(($('qcmask')||{}).classList||{ contains:function(){ return false; } }).contains('on') || ($('proof-ov') && $('proof-ov').style.display==='flex') || ($('ima-pf') && $('ima-pf').style.display==='flex') || $('pfx-ov') || $('p2-ask') || $('ima-ask') || $('ht-ask') || typing;
     if(busy) return;
     _pageTag=tag; toast('The Client Hub was updated — refreshing…');
     setTimeout(function(){ try{ var u=new URL(location.href); u.searchParams.set('v', String(Date.now())); location.replace(u.toString()); }catch(e){ location.reload(); } }, 3000);
