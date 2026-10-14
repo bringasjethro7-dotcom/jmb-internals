@@ -4051,10 +4051,61 @@ async function pageWatch(){
 }
 setTimeout(pageWatch, 15000); setInterval(pageWatch, 120000);
 
+/* ── 📱 PHONE WORK MODE BRIDGE (Oct 15) ── When this page runs inside the portal's Work mode on a phone (the portal timer on
+   top, this tool underneath — portal opens it with ?pw=1): it signs in with the VA's portal sign-in (asked of the portal,
+   which answers only its own frame), every tap here tells the portal "still working" (a tap inside a frame never reaches
+   the portal page, whose 3-minute no-activity rule would stop the timer), and the layout is tightened for a phone.
+   Opened any other way: nothing changes. */
+var PWB=(function(){
+  var PORTAL='https://portal.jmbvirtuals.com', KEY='clienthub_user', TOOL='clients', on=false;
+  try{ on = window.parent!==window && /(^|&)pw=1(&|$)/.test(location.search.slice(1)); }catch(e){}
+  if(!on) return { on:false, signin:function(){ return false; }, check:function(){} };
+  try{ document.documentElement.classList.add('pw-embed'); }catch(e){}
+  try{ var st=document.createElement('style'); st.textContent='html.pw-embed .hb-in{padding:8px 10px 0;gap:8px}html.pw-embed .wrap{padding:10px 10px 48px}html.pw-embed .brand small,html.pw-embed .me span{display:none}html.pw-embed .brand .mk{width:32px;height:32px;border-radius:10px}html.pw-embed .phead h2{font-size:19px}'+
+    '#pwb-wait{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;background:rgba(244,245,249,.96);font-family:Inter,system-ui,-apple-system,sans-serif}'+
+    '#pwb-wait>div{display:flex;flex-direction:column;align-items:center;gap:6px;color:#0f172a}#pwb-wait b{font-size:16px}#pwb-wait span{font-size:13px;color:#64748b}'+
+    '#pwb-wait i{width:26px;height:26px;border-radius:50%;border:3px solid rgba(139,92,246,.25);border-top-color:#8b5cf6;animation:pwbSpin .8s linear infinite;margin-bottom:6px}@keyframes pwbSpin{to{transform:rotate(360deg)}}'+
+    '#pwb-wait button{margin-top:10px;border:0;background:none;color:#6d28d9;font:700 13px Inter,system-ui,sans-serif;text-decoration:underline;cursor:pointer}';
+    (document.head||document.documentElement).appendChild(st); }catch(e){}
+  var last=0;
+  function ping(){ var n=Date.now(); if(n-last<8000) return; last=n; try{ window.parent.postMessage({ jmbTool:'activity', tool:TOOL }, PORTAL); }catch(e){} }
+  ['pointerdown','touchstart','touchmove','keydown','wheel','input','change'].forEach(function(ev){ try{ document.addEventListener(ev, ping, { passive:true, capture:true }); }catch(e){} });
+  var waiters=[];
+  window.addEventListener('message', function(ev){
+    if(ev.origin!==PORTAL || ev.source!==window.parent) return;
+    var d=ev.data, s=d&&typeof d==='object'&&d.jmbSSO; if(!s || !s.id) return;
+    var u={ id:String(s.id), name:String(s.name||s.id), sess:String(s.sess||'') };
+    try{ sessionStorage.setItem(KEY, JSON.stringify(u)); }catch(e){}
+    waiters.splice(0).forEach(function(f){ try{ f(u); }catch(e){} });
+  });
+  function ask(){ try{ window.parent.postMessage({ jmbTool:'sso?', tool:TOOL }, PORTAL); }catch(e){} }
+  function wait(show){
+    var el=document.getElementById('pwb-wait'); if(!show){ if(el) el.remove(); return; } if(el || !document.body) return;
+    el=document.createElement('div'); el.id='pwb-wait';
+    el.innerHTML='<div><i></i><b>📱 Signing you in from your portal…</b><span>One moment — no PIN needed in work mode.</span><button type="button">Use my PIN instead</button></div>';
+    el.querySelector('button').onclick=function(){ wait(false); }; document.body.appendChild(el);
+  }
+  /* no saved sign-in here: take the portal's (asks a few times, then leaves the normal sign-in form) */
+  function signin(onUser){
+    var done=false, n=0; wait(true);
+    waiters.push(function(u){ if(done) return; done=true; wait(false); onUser(u); });
+    (function again(){ if(done) return; ask(); if(++n<4) setTimeout(again, 2500); else setTimeout(function(){ if(!done) wait(false); }, 2500); })();
+    return true;
+  }
+  /* already signed in here: if the portal is someone else's sign-in, switch to it; same person → fresh token */
+  function check(cur){
+    if(!cur) return;
+    waiters.push(function(u){ if(String(u.id).toUpperCase()!==String(cur.id).toUpperCase()){ location.reload(); return; } if(u.sess) cur.sess=u.sess; });
+    ask();
+  }
+  return { on:true, signin:signin, check:check };
+})();
+
 /* ── boot: an existing hub session (or one from the old Design & Shopify / Ember pages) skips the sign-in ── */
 setTimeout(function(){
   var u=null; try{ u=JSON.parse(sessionStorage.getItem('clienthub_user')||'null')||JSON.parse(sessionStorage.getItem('designshopify_user')||'null')||JSON.parse(sessionStorage.getItem('ember_user')||'null'); }catch(e){}
-  if(u && u.id){ USER=u; start(); }
+  if(u && u.id){ USER=u; start(); PWB.check(USER); }
+  else if(PWB.on){ PWB.signin(function(x){ USER=x; start(); }); }
   else { try{ $('si-id').focus(); $('si-pin').addEventListener('keydown', function(e){ if(e.key==='Enter') signIn(); }); $('si-id').addEventListener('keydown', function(e){ if(e.key==='Enter') $('si-pin').focus(); }); }catch(e){} }
 }, 0);
 </script>
