@@ -728,12 +728,16 @@ var CLIENTS=[
   { id:'ember', name:'Ember', client:'Ember Management', kind:'Snapchat · VPS ops', project:'Ember Management', match:/\bember\b|snapchat/i,
     c:'#d97706', g:'linear-gradient(135deg,#fcd34d,#f59e0b 55%,#b45309)', icon:'vps', live:true, mod:'EM' },   // Oct 9: moved in from ember.html
   { id:'skyvern', name:'Skyvern', client:'Skyvern', kind:'Project 3 · Reddit farming', project:'Skyvern', match:/skyvern|project\s*3\b/i,
-    c:'#0284c7', g:'linear-gradient(135deg,#7dd3fc,#0ea5e9 55%,#4338ca)', icon:'sky', live:true, mod:'SKY' },   // Oct 10: 3 comments + 5-min scroll + karma, daily
+    c:'#0284c7', g:'linear-gradient(135deg,#7dd3fc,#0ea5e9 55%,#4338ca)', icon:'sky', live:true, mod:'SKY', retired:true },   // Oct 10: 3 comments + 5-min scroll + karma, daily · RETIRED Oct 15 (Jeth: "not relevant anymore") — tab hidden, accounts kept; delete retired:true to bring it back
   { id:'project2', name:'Project 2', client:'Ricardo', kind:'IG Reels · posting', project:'Project 2', match:/project\s*2\b|ricardo/i,
     c:'#8134af', g:'linear-gradient(135deg,#a855f7,#8134af 55%,#4f46e5)', icon:'reels', live:true, mod:'P2', ownTimer:true },   // Oct 14: live from Ricardo's SOP — timer-based, no screenshots
   { id:'slaybae', name:'Slaybae', client:'Slaybae', kind:'IG · physical phones', project:'Slaybae', match:/slay\s*bae/i,
     c:'#e11d48', g:'linear-gradient(135deg,#fb7185,#e11d48 55%,#9d174d)', icon:'reels', live:true, mod:'SLB', ownTimer:true }   // Oct 14: new project — same SOP and tool as Imperium
 ];
+/* RETIRED CLIENTS (Oct 15): a retired client leaves the hub — no tab, no Team row, no loading, no timers. Its accounts and
+   history stay in the database untouched, so taking retired:true off brings the tab back as it was. */
+var RETIRED_CLIENTS=CLIENTS.filter(function(c){ return c.retired; });
+CLIENTS=CLIENTS.filter(function(c){ return !c.retired; });
 function clientById(id){ for(var i=0;i<CLIENTS.length;i++) if(CLIENTS[i].id===id) return CLIENTS[i]; return null; }
 function clientOfTask(task){ task=String(task||''); for(var i=0;i<CLIENTS.length;i++) if(CLIENTS[i].match.test(task)) return CLIENTS[i]; return null; }
 
@@ -3802,6 +3806,7 @@ var P2=(function(){
 /* ═══════════ THE HUB — tabs, who sees what, Team ═══════════ */
 var HUB=(function(){
   var MODS={ 'design-shopify':DS, 'imperium':IMA, 'ember':EM, 'skyvern':SKY, 'project2':P2, 'slaybae':SLB };
+  Object.keys(MODS).forEach(function(k){ if(!clientById(k)) delete MODS[k]; });   // retired clients don't load (Oct 15)
   function loadAll(){ Object.keys(MODS).forEach(function(k){ try{ MODS[k].load(); }catch(e){} }); }
   /* WHO IS ON A CLIENT = THE WORKLOG (Jeth, Oct 9: "just based on the worklog") — anyone who tracked time on that
      client's project in the last WL_DAYS days. Nothing is added by hand. The project names come from the portal's
@@ -4021,7 +4026,7 @@ function start(){
   try{ fetch(API+'?action=tool_used&employee_id='+encodeURIComponent(USER.id)+'&tool=clients&_='+Date.now()); }catch(_tu){}
   $('signin').classList.add('hide'); $('app').classList.remove('hide');
   HUB.renderMe(); loadNames(); HUB.boot(false);
-  try{ SKY.runRestore(); }catch(_sr){}   // a Skyvern scroll timer survives a refresh
+  try{ if(clientById('skyvern')) SKY.runRestore(); }catch(_sr){}   // a Skyvern scroll timer survives a refresh (Skyvern retired Oct 15)
   try{ P2.tmRestore(); }catch(_p2){}     // so does a Project 2 step timer (Oct 14)
   try{ htRestore(); }catch(_ht){}        // and the hub work timer
   if(isOwner()) setTimeout(function(){ try{ oliveLoad(); }catch(e){} }, 1500);
