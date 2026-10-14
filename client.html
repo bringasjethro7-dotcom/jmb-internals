@@ -2398,7 +2398,7 @@ document.addEventListener('visibilitychange', function(){ if(!document.hidden &&
 
 /* ── shell ── */
 var TABS=[['overview','Overview'],['accounts','Accounts'],['pipeline','Pipeline'],['insights','Insights']];
-function tabsC(){ return SUBSD?TABS.concat([['subs','Subreddits']]):TABS; }
+function tabsC(){ if(!SUBSD) return TABS; var t=[]; TABS.forEach(function(x){ t.push(x); if(x[0]==='accounts') t.push(['subs','Subreddits']); }); return t; }   // Oct 14: Subreddits sits right after Accounts
 function paintTabs(){ $('tabs').innerHTML=tabsC().map(function(t){ return '<button class="'+(VIEW===t[0]?'on':'')+'" onclick="go(\''+t[0]+'\')">'+t[1]+'</button>'; }).join(''); }
 function go(v){ VIEW=v; closeAll(); paintTabs(); renderView(); try{ window.scrollTo({ top:0, behavior:'smooth' }); }catch(e){ window.scrollTo(0,0); } }
 function renderView(){
@@ -2588,21 +2588,73 @@ function vPipeline(){
 }
 
 /* ═══ SUBREDDITS (Jeth, Oct 14 — "so he can see what subreddits perform well, which ones have a lot of removals or spam
-   filters") ═══ Built from the subs block of the snapshot: the Client API adds up every account's post log on the server
-   (posts, stayed up, removed by moderators, caught by spam filters, accounts, bans within 3 days) for 7 / 30 / 90 days /
-   all time, a 10-week trend and the latest removals. No names — who posted or tagged anything never leaves our side.
-   The tab shows only once the Client API sends the block (cl-2026-10-14). */
-var SUBSD=null, SUBC={ range:30, q:'', sort:'posts' };
+   filters"; v2 the same day: "it will identify subreddits that are working fine or really restricted, or where a model is
+   not performing well on a subreddit — so we find the main factors behind removals") ═══
+   Built from the subs block of the snapshot. The Client API adds every account's post log up on the server (posts, stayed
+   up, removed by moderators, caught by spam filters, accounts, bans within 3 days) for 7 / 30 / 90 days / all time, split
+   by the account's MODEL, plus the factors behind removals (model, the account's stage when it posted, method, account age
+   when it posted), a 10-week trend and the latest removals. No names — who posted or tagged anything never leaves our side.
+   The tab sits right after Accounts and shows once the Client API sends the block. */
+var SUBSD=null, SUBC={ range:30, q:'', sort:'posts', model:'' };
+function subPct(a, b){ return b?Math.round(a/b*100):0; }
+function subDay(d){ if(!/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))) return String(d||'—'); var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return M[+d.slice(5,7)-1]+' '+(+d.slice(8,10)); }
+function subDayBack(n){ try{ return new Intl.DateTimeFormat('en-CA',{ timeZone:'Asia/Manila' }).format(new Date(Date.now()-8*3600000-n*86400000)); }catch(e){ return new Date(Date.now()-n*86400000).toISOString().slice(0,10); } }
+function subBar(pc, col){ return '<div class="row" style="gap:6px;flex-wrap:nowrap"><div style="flex:1;min-width:60px;height:6px;border-radius:6px;background:#f1f5f9;overflow:hidden"><i style="display:block;height:100%;width:'+pc+'%;background:'+col+'"></i></div><b style="font-size:11.5px;min-width:34px;text-align:right">'+pc+'%</b></div>'; }
+function subCol(pc){ return pc>=50?'#ef4444':(pc>=25?'#f59e0b':'#10b981'); }
+/* model names as the rest of the portal spells them (the same merge as the Accounts view) */
+function subModelLabel(raw){
+  raw=String(raw||'').trim(); if(!raw || raw==='(no model)') return '(no model)';
+  var k=cxModelKey(raw), L=allRows();
+  for(var i=0;i<L.length;i++){ if(L[i].model && cxModelKey(L[i].model)===k) return L[i].model; }
+  var p=cxModelParts(raw); return p.length>1?p.join(' & '):raw;
+}
+function subMethodLabel(raw){ var m=methodOf({ method:raw }); return m||String(raw||'(not tagged)'); }
+function subStageLabel(k){ if(!k || k==='unknown') return 'Not recorded'; try{ return stageMeta(k).n; }catch(e){ return k; } }
+/* {raw:[p,x,s]} → {label:[p,x,s]} */
+function subMerge(map, lab){ var o={}; Object.keys(map||{}).forEach(function(k){ var l=lab(k), a=map[k]||[0,0,0], b=o[l]||(o[l]=[0,0,0]); b[0]+=+a[0]||0; b[1]+=+a[1]||0; b[2]+=+a[2]||0; }); return o; }
+function subModelsOf(D){ var R=D.r['0']||D.r['90']||D.r['30']; if(!R || !R.dims) return []; var M=subMerge(R.dims.model, subModelLabel); return Object.keys(M).filter(function(k){ return M[k][0]>0; }).sort(function(a,b){ return M[b][0]-M[a][0]; }); }
+/* one range, optionally narrowed to one model */
+function subView(D, R, model){
+  if(!model) return { tot:R.tot, list:R.list.map(function(e){ var o=Object.assign({}, e); o.mm=subMerge(e.m, subModelLabel); return o; }) };
+  var list=[], t={ posts:0, up:0, mod:0, spam:0, acc:null };
+  R.list.forEach(function(e){ var mm=subMerge(e.m, subModelLabel), a=mm[model]; if(!a || !a[0]) return;
+    var o={ n:e.n, p:a[0], x:a[1], s:a[2], u:a[0]-a[1]-a[2], a:null, b3:null, last:e.last, mm:mm, f:null };
+    list.push(o); t.posts+=o.p; t.up+=o.u; t.mod+=o.x; t.spam+=o.s; });
+  list.sort(function(a,b){ return b.p-a.p || (a.n<b.n?-1:1); });
+  return { tot:t, list:list };
+}
 function subVerdictC(s, avoid){
   var rate=s.p?(s.x+s.s)/s.p:0;
   if(avoid[String(s.n).toLowerCase()]) return { t:'Avoided by our team', c:'#9f1239', bg:'#fff1f2' };
-  if(s.p>=3 && rate>=0.5) return { t:'Removes often', c:'#b91c1c', bg:'#fef2f2' };
+  if(s.p>=3 && rate>=0.5){
+    var ms=Object.keys(s.mm||{}).filter(function(k){ return s.mm[k][0]>=1; });
+    if(ms.length>=2 && ms.every(function(k){ var a=s.mm[k]; return (a[1]+a[2])/a[0]>=0.4; })) return { t:'Restrictive — every model', c:'#9f1239', bg:'#fef2f2' };
+    return { t:'Removes often', c:'#b91c1c', bg:'#fef2f2' };
+  }
   if(s.p>=3 && rate>=0.25) return { t:'Watch', c:'#b45309', bg:'#fffbeb' };
   if(s.p>=5 && rate<=0.1) return { t:'Works well', c:'#047857', bg:'#ecfdf5' };
   return { t:s.p<3?'Too few posts yet':'OK', c:'#475569', bg:'#f1f5f9' };
 }
-function subPct(a, b){ return b?Math.round(a/b*100):0; }
-function subBar(pc, col){ return '<div class="row" style="gap:6px;flex-wrap:nowrap"><div style="flex:1;min-width:70px;height:6px;border-radius:6px;background:#f1f5f9;overflow:hidden"><i style="display:block;height:100%;width:'+pc+'%;background:'+col+'"></i></div><b style="font-size:11.5px;min-width:34px;text-align:right">'+pc+'%</b></div>'; }
+/* the model doing worst in one subreddit (2+ posts) */
+function subWeakest(s){
+  var best=null; Object.keys(s.mm||{}).forEach(function(k){ var a=s.mm[k]; if(a[0]<2) return; var r=(a[1]+a[2])/a[0]; if(r>0 && (!best || r>best.r || (r===best.r && a[0]>best.p))) best={ k:k, r:r, p:a[0], d:a[1]+a[2] }; });
+  return best;
+}
+/* what stands out in a subreddit with many removals: the model / stage / method / account age taken down far more often
+   than the subreddit as a whole — or, when every model is taken down alike, the subreddit itself */
+function subLikely(s){
+  var rate=s.p?(s.x+s.s)/s.p:0, cands=[];
+  function scan(dim, map, lab){ Object.keys(map||{}).forEach(function(k){ var a=map[k]; if(!a || a[0]<2) return; var r=(a[1]+a[2])/a[0]; cands.push({ dim:dim, v:lab(k), r:r, p:a[0], d:a[1]+a[2] }); }); }
+  scan('Model', s.mm, function(k){ return k; });
+  if(s.f){ scan('Stage', s.f.stage, subStageLabel); scan('Method', s.f.method, subMethodLabel); scan('Account age', s.f.age, function(k){ return k==='unknown'?'unknown age':k+' old'; }); }
+  if(!cands.length) return '';
+  var models=cands.filter(function(c){ return c.dim==='Model'; });
+  if(models.length>=2 && models.every(function(c){ return c.r>=0.4; })) return 'Taken down across every model — the subreddit itself is strict (rules, karma or account-age limits).';
+  cands.sort(function(a,b){ return (b.r-a.r) || (b.p-a.p); });
+  var top=cands[0];
+  if(top.r>=0.5 && top.r-rate>=0.1) return 'Most removals: '+top.dim.toLowerCase()+' <b>'+esc(top.v)+'</b> — '+top.d+' of '+top.p+' taken down.';
+  return '';
+}
 function subTrend(wk){
   if(!wk || !wk.length) return '';
   var W=1000, H=210, pl=30, pb=24, pt=8, n=wk.length, bw=(W-pl-10)/n, mx=1;
@@ -2612,8 +2664,7 @@ function subTrend(wk){
   for(var i=0;i<=4;i++){ var v=step*i, yy=y(v).toFixed(1); g+='<line x1="'+pl+'" x2="'+(W-6)+'" y1="'+yy+'" y2="'+yy+'" stroke="#eef0f5"/><text x="'+(pl-6)+'" y="'+(+yy+3.5)+'" text-anchor="end" font-size="10" fill="#94a3b8">'+v+'</text>'; }
   wk.forEach(function(w, i){
     var x=pl+i*bw+bw*0.18, wd=bw*0.64, up=w.p-w.x-w.s, y0=y(0), yu=y(up), yx=y(up+w.x), ys=y(w.p);
-    var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'], lb=M[+w.w.slice(5,7)-1]+' '+(+w.w.slice(8,10));
-    var tip=esc('Week of '+lb+': '+w.p+' posts · '+up+' stayed up · '+w.x+' removed by moderators · '+w.s+' spam filter');
+    var lb=subDay(w.w), tip=esc('Week of '+lb+': '+w.p+' posts · '+up+' stayed up · '+w.x+' removed by moderators · '+w.s+' spam filter');
     g+='<g><title>'+tip+'</title>'+
       (up>0?'<rect x="'+x.toFixed(1)+'" y="'+yu.toFixed(1)+'" width="'+wd.toFixed(1)+'" height="'+(y0-yu).toFixed(1)+'" rx="2" fill="#10b981"/>':'')+
       (w.x>0?'<rect x="'+x.toFixed(1)+'" y="'+yx.toFixed(1)+'" width="'+wd.toFixed(1)+'" height="'+(yu-yx).toFixed(1)+'" fill="#ef4444"/>':'')+
@@ -2623,56 +2674,101 @@ function subTrend(wk){
   return '<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block;max-height:240px" role="img" aria-label="Posts per week">'+g+'</svg>'+
     '<div class="row" style="gap:14px;margin-top:6px;font-size:11.5px;color:var(--ink2);font-weight:700"><span><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#10b981;margin-right:5px"></i>Stayed up</span><span><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#ef4444;margin-right:5px"></i>Removed by moderators</span><span><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#f59e0b;margin-right:5px"></i>Spam filter</span></div>';
 }
+function subWeeks(D, model){
+  if(!model) return D.wk;
+  var rows={}; Object.keys(D.wkm||{}).forEach(function(raw){ if(subModelLabel(raw)!==model) return; (D.wkm[raw]||[]).forEach(function(c, i){ var r=rows[i]||(rows[i]=[0,0,0]); r[0]+=c[0]; r[1]+=c[1]; r[2]+=c[2]; }); });
+  return (D.wk||[]).map(function(w, i){ var r=rows[i]||[0,0,0]; return { w:w.w, p:r[0], x:r[1], s:r[2] }; });
+}
 function subMini(list, kind){
-  if(!list.length) return '<div class="muted" style="font-size:12.5px;padding:6px 0">'+(kind==='good'?'Not enough posts yet — a subreddit needs 3 or more posts to rank here.':'Nothing stands out — no subreddit with 3+ posts removes a quarter or more of them.')+'</div>';
-  return list.map(function(s){ var up=subPct(s.u, s.p), rm=subPct(s.x+s.s, s.p);
-    return '<div class="row" style="justify-content:space-between;padding:8px 0;border-top:1px solid var(--line);flex-wrap:nowrap"><div style="min-width:0"><b style="font-size:13px">'+esc(s.n)+'</b><div class="muted" style="font-size:11.5px">'+s.p+' post'+(s.p===1?'':'s')+' · '+s.a+' account'+(s.a===1?'':'s')+
+  if(!list.length) return '<div class="muted" style="font-size:12.5px;padding:6px 0">'+(kind==='good'?'Not enough posts yet — a subreddit needs 3 or more posts to rank here.':'Nothing stands out — no subreddit with 3+ posts loses a quarter or more of them.')+'</div>';
+  return list.map(function(s){ var up=subPct(s.u, s.p), rm=subPct(s.x+s.s, s.p), why=kind==='bad'?subLikely(s):'';
+    return '<div style="padding:8px 0;border-top:1px solid var(--line)"><div class="row" style="justify-content:space-between;flex-wrap:nowrap"><div style="min-width:0"><b style="font-size:13px">'+esc(s.n)+'</b><div class="muted" style="font-size:11.5px">'+s.p+' post'+(s.p===1?'':'s')+(s.a!=null?' · '+s.a+' account'+(s.a===1?'':'s'):'')+
       (kind==='bad'?' · '+s.x+' by moderators · '+s.s+' spam filter':'')+'</div></div>'+
-      '<div style="width:150px">'+(kind==='good'?subBar(up,'#10b981'):subBar(rm, rm>=50?'#ef4444':'#f59e0b'))+'<div class="muted" style="font-size:10.5px;text-align:right">'+(kind==='good'?'stayed up':'taken down')+'</div></div></div>'; }).join('');
+      '<div style="width:150px;flex:none">'+(kind==='good'?subBar(up,'#10b981'):subBar(rm, subCol(rm)))+'<div class="muted" style="font-size:10.5px;text-align:right">'+(kind==='good'?'stayed up':'taken down')+'</div></div></div>'+
+      (why?'<div style="font-size:11.5px;color:#9a3412;margin-top:4px;line-height:1.45">'+why+'</div>':'')+'</div>'; }).join('');
+}
+/* models × the busiest subreddits: share of posts taken down in each cell */
+function subMatrix(V, models){
+  var rows=V.list.filter(function(s){ return s.p>=3; }).slice(0,12); if(!rows.length || models.length<1) return '';
+  var cols=models.slice(0,8), tot={}; cols.forEach(function(m){ tot[m]=[0,0,0]; });
+  rows.forEach(function(s){ cols.forEach(function(m){ var a=(s.mm||{})[m]; if(a){ tot[m][0]+=a[0]; tot[m][1]+=a[1]; tot[m][2]+=a[2]; } }); });
+  function cell(a){
+    if(!a || !a[0]) return '<td class="muted" style="text-align:center">·</td>';
+    var pc=subPct(a[1]+a[2], a[0]), few=a[0]<3, bg=few?'#f8fafc':(pc>=50?'#fee2e2':(pc>=25?'#fef3c7':'#dcfce7')), fg=few?'#94a3b8':(pc>=50?'#b91c1c':(pc>=25?'#92400e':'#166534'));
+    return '<td style="text-align:center;background:'+bg+';color:'+fg+';font-weight:800" title="'+esc(a[0]+' posts · '+a[1]+' by moderators · '+a[2]+' spam filter')+'">'+pc+'%<small style="display:block;font-weight:600;opacity:.75">'+a[0]+' post'+(a[0]===1?'':'s')+'</small></td>';
+  }
+  return '<div class="card" style="margin-top:12px;padding:14px 16px"><div class="ch-h"><b>Models × subreddits</b><span>share of each model\'s posts taken down in your busiest subreddits · red 50%+ · amber 25%+ · green below · grey = fewer than 3 posts</span></div>'+
+    '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Subreddit</th>'+cols.map(function(m){ return '<th style="text-align:center">'+esc(m)+'</th>'; }).join('')+'<th style="text-align:center">All models</th></tr></thead><tbody>'+
+    rows.map(function(s){ return '<tr><td class="c1"><b>'+esc(s.n)+'</b></td>'+cols.map(function(m){ return cell((s.mm||{})[m]); }).join('')+cell([s.p, s.x, s.s])+'</tr>'; }).join('')+
+    '<tr><td class="c1" style="font-weight:800">These subreddits</td>'+cols.map(function(m){ return cell(tot[m]); }).join('')+'<td></td></tr></tbody></table></div></div>';
+}
+/* the factors behind removals, across every subreddit in the range */
+function subFactors(R){
+  var dims=R.dims; if(!dims) return '';
+  var T=R.tot, base=T.posts?(T.mod+T.spam)/T.posts:0;
+  var sets=[['Model','model', subMerge(dims.model, subModelLabel)], ['Account stage when it posted','stage', subMerge(dims.stage, subStageLabel)], ['Method','method', subMerge(dims.method, subMethodLabel)], ['Account age when it posted','account age', subMerge(dims.age, function(k){ return k==='unknown'?'Not recorded':k; })]];
+  var flags=[];
+  var panels=sets.map(function(S){
+    var name=S[0], short=S[1], M=S[2], keys=Object.keys(M).filter(function(k){ return M[k][0]>0; });
+    if(!keys.length) return '';
+    keys.sort(function(a,b){ var A=M[a], B=M[b]; return ((B[1]+B[2])/B[0])-((A[1]+A[2])/A[0]) || B[0]-A[0]; });
+    var worst=keys.filter(function(k){ return M[k][0]>=5; })[0], wr=worst?(M[worst][1]+M[worst][2])/M[worst][0]:0, hot=!!worst && wr-base>=0.1 && wr>=0.25;
+    if(hot) flags.push(short+' <b>'+esc(worst)+'</b> ('+Math.round(wr*100)+'%)');
+    return '<div style="flex:1 1 230px;min-width:220px"><div style="font-size:11px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+esc(name)+'</div>'+
+      keys.slice(0,7).map(function(k){ var a=M[k], pc=subPct(a[1]+a[2], a[0]), few=a[0]<3, isW=hot && k===worst;
+        return '<div style="padding:5px 0;'+(few?'opacity:.55':'')+'"><div class="row" style="justify-content:space-between;flex-wrap:nowrap;font-size:12px"><span style="font-weight:'+(isW?'800':'600')+';color:'+(isW?'#b91c1c':'var(--ink)')+'">'+esc(k)+(isW?' · highest':'')+'</span><span class="muted" style="font-size:11px">'+a[0]+' post'+(a[0]===1?'':'s')+'</span></div>'+subBar(pc, few?'#cbd5e1':subCol(pc))+'</div>'; }).join('')+'</div>';
+  }).join('');
+  return '<div class="card" style="margin-top:12px;padding:14px 16px"><div class="ch-h"><b>What drives removals</b><span>share of posts taken down, by the account behind the post · overall '+Math.round(base*100)+'%</span></div>'+
+    '<div style="font-size:12.5px;color:var(--ink2);margin:-2px 0 10px;line-height:1.5">'+(flags.length?'Stands out (5+ posts, 10 points above the average): '+flags.join(' · ')+'.':'Nothing stands out yet — no model, stage, method or account age is taken down much more often than the rest (5+ posts needed).')+'</div>'+
+    '<div class="row" style="gap:18px;align-items:flex-start">'+panels+'</div></div>';
 }
 function vSubsC(){
   var D=SUBSD; if(!D || !D.r) return '<div class="card empty">The subreddit report is getting ready — check back shortly.</div>';
-  var R=D.r[String(SUBC.range)]||D.r['30']||{ tot:{ posts:0, up:0, mod:0, spam:0, acc:0 }, list:[] }, T=R.tot, rl=SUBC.range?('last '+SUBC.range+' days'):'all time';
+  var R=D.r[String(SUBC.range)]||D.r['30']||{ tot:{ posts:0, up:0, mod:0, spam:0, acc:0 }, list:[] }, rl=SUBC.range?('last '+SUBC.range+' days'):'all time';
+  var models=subModelsOf(D); if(SUBC.model && models.indexOf(SUBC.model)<0) SUBC.model='';
+  var V=subView(D, R, SUBC.model), T=V.tot, ml=SUBC.model?(' · '+SUBC.model):'';
   var avoid={}; (D.avoid||[]).forEach(function(n){ avoid[String(n).toLowerCase()]=1; });
-  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Sub<span class="gtxt">reddits</span></h2><p>Where your accounts post, how much of it stays up, and which subreddits take posts down — by their moderators or by spam filters. We use this to keep posting where content stays up and to drop the subreddits that keep removing it.</p></div>'+
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Sub<span class="gtxt">reddits</span></h2><p>Where your accounts post, which subreddits keep posts up, which are strict, and where a model struggles — posts taken down by moderators or caught by spam filters. We use this to keep posting where content stays up and to fix or drop what keeps getting removed.</p></div>'+
     '<div class="seg no-print" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(SUBC.range===x[0]?'on':'')+'" onclick="SUBC.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div></div>';
-  var down=T.mod+T.spam;
-  h+='<div class="kpis">'+kpi('Posts made',T.posts,rl,'#ec4899')+kpi('Stayed up',T.up,T.posts?subPct(T.up,T.posts)+'% of posts':'—','#10b981')+
+  if(models.length>1) h+='<div class="chips no-print" style="margin:-4px 0 12px;align-items:center"><span class="muted" style="font-size:12px;font-weight:700;margin-right:2px">Model</span>'+
+    [''].concat(models).map(function(m){ var on=SUBC.model===m; return '<button class="chip" style="cursor:pointer;'+(on?'background:var(--ink);color:#fff;border-color:var(--ink)':'')+'" onclick="SUBC.model=\''+jsq(m)+'\';renderView()">'+esc(m||'All models')+'</button>'; }).join('')+'</div>';
+  h+='<div class="kpis">'+kpi('Posts made',T.posts,rl+ml,'#ec4899')+kpi('Stayed up',T.up,T.posts?subPct(T.up,T.posts)+'% of posts':'—','#10b981')+
     kpi('Removed by moderators',T.mod,T.posts?subPct(T.mod,T.posts)+'% of posts':'—','#ef4444')+kpi('Caught by spam filters',T.spam,T.posts?subPct(T.spam,T.posts)+'% of posts':'—','#f59e0b')+
-    kpi('Subreddits',R.list.length,'posted in · '+rl,'#a855f7')+kpi('Accounts posting',T.acc,'with at least one post','#0ea5e9')+'</div>';
-  if(!T.posts) return h+'<div class="card empty" style="margin-top:12px">No posts logged '+(SUBC.range?'in the '+rl:'yet')+'. Every posting session records which subreddits the posts went to — they show up here.</div>';
-  var ranked=R.list.filter(function(s){ return s.p>=3; });
+    kpi('Subreddits',V.list.length,'posted in · '+rl,'#a855f7')+(T.acc!=null?kpi('Accounts posting',T.acc,'with at least one post','#0ea5e9'):'')+'</div>';
+  if(!T.posts) return h+'<div class="card empty" style="margin-top:12px">No posts logged '+(SUBC.range?'in the '+rl:'yet')+esc(ml)+'. Every posting session records which subreddits the posts went to — they show up here.</div>';
+  var ranked=V.list.filter(function(s){ return s.p>=3; });
   var good=ranked.filter(function(s){ return !avoid[s.n.toLowerCase()] && (s.x+s.s)/s.p<0.25; }).sort(function(a,b){ return (a.x+a.s)/a.p-(b.x+b.s)/b.p || b.p-a.p; }).slice(0,6);
-  var bad=R.list.filter(function(s){ return (s.p>=3 && (s.x+s.s)/s.p>=0.25) || (avoid[s.n.toLowerCase()] && s.p); }).sort(function(a,b){ return (b.x+b.s)/b.p-(a.x+a.s)/a.p || b.p-a.p; }).slice(0,6);
+  var bad=V.list.filter(function(s){ return (s.p>=3 && (s.x+s.s)/s.p>=0.25) || (avoid[s.n.toLowerCase()] && s.p); }).sort(function(a,b){ return (b.x+b.s)/b.p-(a.x+a.s)/a.p || b.p-a.p; }).slice(0,6);
   h+='<div class="row" style="gap:12px;align-items:stretch;margin-top:12px">'+
-    '<div class="card" style="flex:1 1 320px;padding:14px 16px"><div class="ch-h"><b>Performing well</b><span>3+ posts · most posts stay up</span></div>'+subMini(good,'good')+'</div>'+
-    '<div class="card" style="flex:1 1 320px;padding:14px 16px"><div class="ch-h"><b>Needs attention</b><span>3+ posts · a quarter or more taken down</span></div>'+subMini(bad,'bad')+'</div></div>';
-  h+='<div class="card" style="margin-top:12px;padding:14px 16px"><div class="ch-h"><b>Posts per week</b><span>last 10 weeks · what stayed up and what was taken down</span></div>'+subTrend(D.wk)+'</div>';
+    '<div class="card" style="flex:1 1 320px;padding:14px 16px"><div class="ch-h"><b>Performing well</b><span>3+ posts · most posts stay up'+esc(ml)+'</span></div>'+subMini(good,'good')+'</div>'+
+    '<div class="card" style="flex:1 1 320px;padding:14px 16px"><div class="ch-h"><b>Needs attention</b><span>3+ posts · a quarter or more taken down'+esc(ml)+' · with what stands out</span></div>'+subMini(bad,'bad')+'</div></div>';
+  if(!SUBC.model){ h+=subMatrix(V, models); h+=subFactors(R); }
+  h+='<div class="card" style="margin-top:12px;padding:14px 16px"><div class="ch-h"><b>Posts per week</b><span>last 10 weeks · what stayed up and what was taken down'+esc(ml)+'</span></div>'+subTrend(subWeeks(D, SUBC.model))+'</div>';
   if((D.avoid||[]).length) h+='<div class="card" style="margin-top:12px;padding:14px 16px"><div class="ch-h"><b>Avoided by our team</b><span>subreddits we no longer post in</span></div><div class="chips">'+D.avoid.map(function(n){ return '<span class="chip" style="background:#fff1f2;color:#9f1239">'+esc(n)+'</span>'; }).join('')+'</div></div>';
   var q=String(SUBC.q||'').trim().toLowerCase();
   var sorters={ posts:function(a,b){ return b.p-a.p || (a.n<b.n?-1:1); }, up:function(a,b){ return b.u-a.u || b.p-a.p; }, rate:function(a,b){ return (b.x+b.s)/b.p-(a.x+a.s)/a.p || b.p-a.p; }, spam:function(a,b){ return b.s-a.s || b.p-a.p; }, last:function(a,b){ return a.last<b.last?1:(a.last>b.last?-1:0); } };
-  var list=R.list.filter(function(s){ return !q || s.n.toLowerCase().indexOf(q)>=0; }).slice().sort(sorters[SUBC.sort]||sorters.posts);
+  var list=V.list.filter(function(s){ return !q || s.n.toLowerCase().indexOf(q)>=0; }).slice().sort(sorters[SUBC.sort]||sorters.posts);
   var th=function(k,l,t){ return '<th style="cursor:pointer" title="'+esc(t||'Sort')+'" onclick="SUBC.sort=\''+k+'\';renderView()">'+l+(SUBC.sort===k?' <span class="ar">▼</span>':'')+'</th>'; };
-  h+='<div class="sec-h"><b>Every subreddit</b><span>'+list.length+' of '+R.list.length+' · '+rl+'</span><hr><div class="cl-q no-print">'+IC.search+'<input id="sub-q" value="'+esc(SUBC.q)+'" placeholder="Search a subreddit…" oninput="SUBC.q=this.value;renderView()"></div></div>';
-  h+='<div class="tbl-w"><table class="db"><thead><tr><th class="c1">Subreddit</th><th>Verdict</th>'+th('posts','Posts')+th('up','Stayed up')+'<th>Moderators</th>'+th('spam','Spam filter','Caught by Reddit\'s or AutoModerator\'s spam filters')+th('rate','Taken down','Removed by moderators + spam filters, as a share of posts')+'<th>Accounts</th><th title="Accounts banned within 3 days after posting here — a hint, not proof">Banned ≤ 3 days</th>'+th('last','Last post')+'</tr></thead><tbody>'+
-    list.map(function(s){ var vd=subVerdictC(s, avoid), pc=subPct(s.x+s.s, s.p);
+  h+='<div class="sec-h"><b>Every subreddit</b><span>'+list.length+' of '+V.list.length+' · '+rl+esc(ml)+'</span><hr><div class="cl-q no-print">'+IC.search+'<input id="sub-q" value="'+esc(SUBC.q)+'" placeholder="Search a subreddit…" oninput="SUBC.q=this.value;renderView()"></div></div>';
+  h+='<div class="tbl-w"><table class="db"><thead><tr><th class="c1">Subreddit</th><th>Verdict</th>'+th('posts','Posts')+th('up','Stayed up')+'<th>Moderators</th>'+th('spam','Spam filter','Caught by Reddit\'s or AutoModerator\'s spam filters')+th('rate','Taken down','Removed by moderators + spam filters, as a share of posts')+
+    (SUBC.model?'':'<th title="The model with the highest share taken down here (2+ posts)">Weakest model</th><th>Accounts</th><th title="Accounts banned within 3 days after posting here — a hint, not proof">Banned ≤ 3 days</th>')+th('last','Last post')+'</tr></thead><tbody>'+
+    list.map(function(s){ var vd=subVerdictC(s, avoid), pc=subPct(s.x+s.s, s.p), wm=SUBC.model?null:subWeakest(s);
       return '<tr><td class="c1"><a href="https://www.reddit.com/'+esc(s.n)+'/" target="_blank" rel="noopener" style="color:inherit;font-weight:800">'+esc(s.n)+' ↗</a></td>'+
         '<td><span class="flag" style="background:'+vd.bg+';color:'+vd.c+'">'+esc(vd.t)+'</span></td>'+
         '<td class="num">'+s.p+'</td><td class="num" style="color:#047857;font-weight:700">'+s.u+'</td>'+
         '<td class="num" style="'+(s.x?'color:#b91c1c;font-weight:800':'')+'">'+(s.x||'·')+'</td><td class="num" style="'+(s.s?'color:#b45309;font-weight:800':'')+'">'+(s.s||'·')+'</td>'+
-        '<td style="min-width:130px">'+subBar(pc, pc>=50?'#ef4444':(pc>=25?'#f59e0b':'#10b981'))+'</td>'+
-        '<td class="num">'+s.a+'</td><td class="num" style="'+(s.b3?'color:#b91c1c;font-weight:700':'')+'">'+(s.b3||'·')+'</td><td class="muted">'+esc(subDay(s.last))+'</td></tr>'; }).join('')+'</tbody></table></div>';
-  var start=SUBC.range?subDayBack(SUBC.range-1):'', rm=(D.rm||[]).filter(function(x){ return !start || x.d>=start; });
+        '<td style="min-width:130px">'+subBar(pc, subCol(pc))+'</td>'+
+        (SUBC.model?'':'<td>'+(wm?'<b>'+esc(wm.k)+'</b> <span class="muted">· '+Math.round(wm.r*100)+'% of '+wm.p+'</span>':'<span class="muted">—</span>')+'</td><td class="num">'+s.a+'</td><td class="num" style="'+(s.b3?'color:#b91c1c;font-weight:700':'')+'">'+(s.b3||'·')+'</td>')+
+        '<td class="muted">'+esc(subDay(s.last))+'</td></tr>'; }).join('')+'</tbody></table></div>';
+  var start=SUBC.range?subDayBack(SUBC.range-1):'', rm=(D.rm||[]).filter(function(x){ return (!start || x.d>=start) && (!SUBC.model || subModelLabel(x.m)===SUBC.model); });
   if(rm.length){
-    h+='<div class="sec-h"><b>Latest removals</b><span>'+rm.length+(rm.length>=60?'+':'')+' · '+rl+'</span><hr></div><div class="tbl-w" style="max-height:360px"><table class="db"><thead><tr><th class="c1">Subreddit</th><th>Account</th><th>Stage</th><th>Taken down by</th><th>Posted</th></tr></thead><tbody>'+
+    h+='<div class="sec-h"><b>Latest removals</b><span>'+rm.length+(rm.length>=60?'+':'')+' · '+rl+esc(ml)+'</span><hr></div><div class="tbl-w" style="max-height:360px"><table class="db"><thead><tr><th class="c1">Subreddit</th><th>Account</th><th>Model</th><th>Stage</th><th>Taken down by</th><th>Posted</th></tr></thead><tbody>'+
       rm.slice(0,40).map(function(x){ var sm=stageMeta(x.st);
-        return '<tr><td class="c1">'+esc(x.n)+'</td><td>'+esc(x.h)+'</td><td><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+'">'+esc(sm.n)+'</span></td><td>'+(x.k==='spam'?'<span class="flag a">Spam filter</span>':'<span class="flag r">Moderators</span>')+'</td><td class="muted">'+esc(subDay(x.d))+'</td></tr>'; }).join('')+'</tbody></table></div>';
+        return '<tr><td class="c1">'+esc(x.n)+'</td><td>'+esc(x.h)+'</td><td>'+esc(x.m?subModelLabel(x.m):'—')+'</td><td><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+'">'+esc(sm.n)+'</span></td><td>'+(x.k==='spam'?'<span class="flag a">Spam filter</span>':'<span class="flag r">Moderators</span>')+'</td><td class="muted">'+esc(subDay(x.d))+'</td></tr>'; }).join('')+'</tbody></table></div>';
   }
-  h+='<div class="muted" style="font-size:11.5px;margin:12px 2px 0;line-height:1.55">Every posting session records the subreddit of each post; our team tags a post when it is taken down. <b>Moderators</b> = removed by a subreddit moderator. <b>Spam filter</b> = removed by Reddit’s or AutoModerator’s filters. Removals tagged before Oct 14 count as moderator removals.</div>';
+  h+='<div class="muted" style="font-size:11.5px;margin:12px 2px 0;line-height:1.55">Every posting session records the subreddit of each post; our team tags a post when it is taken down. <b>Moderators</b> = removed by a subreddit moderator. <b>Spam filter</b> = removed by Reddit’s or AutoModerator’s filters. <b>Restrictive — every model</b> = every model loses 40%+ of its posts there, so the subreddit itself is the limit (rules, karma or account-age requirements). Tagging started Oct 14 — the picture sharpens as more posts are logged.</div>';
   return h;
 }
-function subDay(d){ if(!/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))) return String(d||'—'); var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return M[+d.slice(5,7)-1]+' '+(+d.slice(8,10)); }
-function subDayBack(n){ try{ return new Intl.DateTimeFormat('en-CA',{ timeZone:'Asia/Manila' }).format(new Date(Date.now()-8*3600000-n*86400000)); }catch(e){ return new Date(Date.now()-n*86400000).toISOString().slice(0,10); } }
 
 /* ═══ INSIGHTS — the same engine as Reddit Central, client view always on ═══ */
 function vInsights(){
