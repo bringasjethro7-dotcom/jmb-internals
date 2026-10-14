@@ -242,6 +242,29 @@ body::before{content:'';position:fixed;inset:-20% -10% auto;height:520px;z-index
 .c-ima .itk{border:1px solid rgba(221,42,123,.35);background:#fff;color:#9d174d;border-radius:10px;padding:7px 11px;font:800 11.5px Inter,sans-serif;cursor:pointer;transition:transform .12s,background .15s}
 .c-ima .itk:hover:not([disabled]){background:var(--igs);transform:translateY(-1px)}
 .c-ima .itk.done{border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.08);color:#047857;cursor:default}
+.c-ima .itk.run{border-color:rgba(14,165,233,.45);background:rgba(14,165,233,.08);color:#0369a1;cursor:default}
+.c-ima .itk.go{border-color:#10b981;background:#10b981;color:#fff}
+.c-ima .itm{border:1px solid var(--line2);background:#fff;color:var(--ink2);border-radius:9px;padding:5px 10px;font:800 11px Inter,sans-serif;cursor:pointer;margin-right:6px;white-space:nowrap}
+.c-ima .itm.on{border-color:#0ea5e9;background:rgba(14,165,233,.1);color:#0369a1}
+.c-ima .ipick{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0 2px;padding:9px 10px;border:1px dashed rgba(14,165,233,.45);border-radius:12px;background:rgba(14,165,233,.04)}
+.c-ima .im-run{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#831843,#6d28d9);color:#fce7f3;border-radius:16px;padding:12px 16px;margin:0 0 12px;box-shadow:0 18px 40px -22px rgba(109,40,217,.8)}
+.c-ima .im-run.done{background:linear-gradient(135deg,#065f46,#0e7490)}
+.c-ima .im-run.idle{background:var(--s1);color:var(--ink2);border:1px dashed var(--line2);box-shadow:none}
+.c-ima .im-run .ring{width:46px;height:46px;flex:none} .c-ima .im-run .ring svg{width:46px;height:46px;transform:rotate(-90deg)}
+.c-ima .im-run .ring .bg{fill:none;stroke:rgba(255,255,255,.18);stroke-width:4}
+.c-ima .im-run .ring .fg{fill:none;stroke:#f9a8d4;stroke-width:4;stroke-linecap:round;stroke-dasharray:119.4;transition:stroke-dashoffset 1s linear}
+.c-ima .im-run.done .ring .fg{stroke:#6ee7b7}
+.c-ima .im-run .dot{width:12px;height:12px;border-radius:50%;background:#f472b6;box-shadow:0 0 0 0 rgba(244,114,182,.7);animation:imPulse 1.6s infinite;flex:none;margin:0 6px}
+@keyframes imPulse{0%{box-shadow:0 0 0 0 rgba(244,114,182,.7)}70%{box-shadow:0 0 0 10px rgba(244,114,182,0)}100%{box-shadow:0 0 0 0 rgba(244,114,182,0)}}
+.c-ima .im-run .tx{flex:1;min-width:0} .c-ima .im-run .tx small{display:block;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;opacity:.85}
+.c-ima .im-run .tx b{display:block;font:800 15px Sora,sans-serif;color:#fff} .c-ima .im-run.idle .tx b{color:var(--ink1)}
+.c-ima .im-run .tx span{font-size:12.5px;font-variant-numeric:tabular-nums;opacity:.9}
+.c-ima .im-run .btn.sec{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.3)}
+@media (prefers-reduced-motion:reduce){ .c-ima .im-run .dot{animation:none} }
+.ima-ask{position:fixed;inset:0;z-index:9990;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.5);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);padding:18px}
+.ima-ask .box{width:100%;max-width:420px;background:#fff;color:#0f172a;border-radius:20px;padding:22px;box-shadow:0 30px 80px -30px rgba(0,0,0,.6)}
+.ima-ask b{display:block;font:800 18px Sora,sans-serif;margin-bottom:6px} .ima-ask p{font-size:13.5px;color:#475569;line-height:1.55;margin:0 0 14px}
+.ima-ask .row{display:flex;gap:8px} .ima-ask .btn{flex:1;background:linear-gradient(135deg,#f58529,#dd2a7b 55%,#8134af)} .ima-ask .btn.sec{flex:0 0 auto;background:#f1f5f9;color:#334155;border:1px solid #e2e8f0}
 .c-ima .itk.lock{border-style:dashed;color:var(--ink3);border-color:var(--line2);cursor:not-allowed}
 .c-ima .ia-add{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
 .c-ima .ia-add input{flex:1;min-width:130px;padding:8px 10px;border:1px solid var(--line2);border-radius:10px;font:inherit;font-size:12.5px;background:#fff}
@@ -1101,7 +1124,7 @@ function linkBanner(cl){
    works). Owners don't send (they're never paired). */
 var ACT={ last:Date.now() };
 var WORK={ at:0, what:'' };
-function hubWork(what){ WORK.at=Date.now(); WORK.what=String(what||''); try{ tbSend(true); }catch(e){} }
+function hubWork(what){ WORK.at=Date.now(); WORK.what=String(what||''); try{ if(typeof IMA!=='undefined' && IMA.tmTouch) IMA.tmTouch(); }catch(_t){} try{ tbSend(true); }catch(e){} }
 /* every work write in every client tab goes through fetch — mark it there, so no module can forget */
 (function(){
   if(typeof window==='undefined' || !window.fetch || window.__hubWorkWrap) return; window.__hubWorkWrap=1;
@@ -1118,7 +1141,13 @@ function hubWork(what){ WORK.at=Date.now(); WORK.what=String(what||''); try{ tbS
     return f0.apply(this, arguments);
   };
 })();
-function toolTimerRunning(){ try{ return typeof SKY!=='undefined' && SKY.S && SKY.S.run && SKY.S.run.ends>Date.now(); }catch(e){ return false; } }
+/* the tool timer that is running right now, if any — Skyvern's 5-minute scroll or the Imperium work timer (Oct 14) */
+function hubRunInfo(){
+  try{ if(typeof SKY!=='undefined' && SKY.S && SKY.S.run && SKY.S.run.ends>Date.now()){ var cl=HUB.cur(); return { start:SKY.S.run.start, label:'5-min scroll · '+(cl?cl.name:'Client Hub') }; } }catch(e){}
+  try{ if(typeof IMA!=='undefined' && IMA.timerInfo){ var x=IMA.timerInfo(); if(x) return x; } }catch(e){}
+  return null;
+}
+function toolTimerRunning(){ return !!hubRunInfo(); }
 function hubWorking(){ return (Date.now()-WORK.at)<90000 || toolTimerRunning(); }
 function actKey(){ return 'hub_act_'+myId()+'_'+phtToday(); }
 function actToday(){ try{ return parseInt(localStorage.getItem(actKey())||'0',10)||0; }catch(e){ return 0; } }
@@ -1141,7 +1170,7 @@ function tbSend(force){
     if(!dueAct && !dueOpen) return;
     var body={ employee_id:me, tool:'clients' };
     if(dueAct){ body.last_active=new Date().toISOString(); TB.sent=now; }
-    if(TB.ext){ var cl=HUB.cur(), tt=toolTimerRunning(); body.open_at=new Date().toISOString(); body.run_since=(tt&&SKY.S.run.start)?new Date(SKY.S.run.start).toISOString():null; body.run_label=tt?('5-min scroll · '+(cl?cl.name:'Client Hub')):(act&&cl?('Working in '+cl.name):(cl?'Open · no task pressed yet':null)); body.today_secs=actToday(); TB.openSent=now; }
+    if(TB.ext){ var cl=HUB.cur(), hr=hubRunInfo(); body.open_at=new Date().toISOString(); body.run_since=hr?new Date(hr.start).toISOString():null; body.run_label=hr?hr.label:(act&&cl?('Working in '+cl.name):(cl?'Open · no task pressed yet':null)); body.today_secs=actToday(); TB.openSent=now; }
     if(!body.last_active && !body.open_at) return;
     tbPost(body).then(function(r){
       if(r.status===404){ TB.off=Date.now()+10*60000; return; }
@@ -1614,6 +1643,129 @@ var IMA=(function(){
   }
   function planTotals(list){ var t=0, d=0; list.forEach(function(x){ t+=x.target; d+=x.done; }); return { t:t, d:d }; }
 
+  /* ══════════ ⏱ WORK TIMER (Jeth, Oct 14 — JMB002: "her tool doesn't have any timer at all") ══════════
+     Imperium is phone work — scrolling, posting, setting a phone up. Until now only a logged step (with its
+     screenshot) told the portal she was working, so a 15-minute scroll or half an hour of reels looked like nothing
+     was happening and the portal timer kept stopping. Now the phone work itself is timed here:
+     • Scroll 15 min → "▶ Start 15:00" on the account: a 15-minute countdown; the scroll is logged once it ends.
+     • Every other step → "⏱ Timer" on the phone → pick the step (pre-flight, setup, creating accounts, profile /
+       feed photos, reels, trial reels): it counts up and asks "Still working?" every 20–30 minutes (logging any step
+       answers it). No answer in 2 minutes → it stops.
+     While a timer runs this tab tells the portal you're working (last_active, today's tool time, run_since + label),
+     so the portal timer keeps going and the time counts as tool time. One timer at a time; switching steps on a
+     phone carries on without a gap. It survives a reload. Owners never run it. */
+  var TM={ run:null, tick:null, ask:null, restored:false, pick:'' };
+  var TLIM={ pre:20, phone:30, create:30, pfp:20, feed:20, reels:30, trial:30 };
+  var TNAME={ pre:'Pre-flight check', phone:'Phone setup', create:'Creating accounts', scroll:'Warm-up scroll', pfp:'Profile photos', feed:'Feed photos', reels:'Reels', trial:'Trial reels' };
+  var SCROLL_MS=15*60*1000, ASK_MS=2*60*1000;
+  function tmKey(){ return 'ima_run_'+me(); }
+  function tmSave(){ try{ if(TM.run) localStorage.setItem(tmKey(), JSON.stringify(TM.run)); else localStorage.removeItem(tmKey()); }catch(e){} }
+  function tmRestore(){
+    if(TM.restored || !USER || !USER.id || isOwner()) return; TM.restored=true;
+    try{ var x=JSON.parse(localStorage.getItem(tmKey())||'null');
+      if(x && x.k && x.pid && x.start){
+        if(x.ends){ if(Date.now()-x.ends<6*3600e3) TM.run=x; }
+        else if(Date.now()-(x.chk||x.start) < (TLIM[x.k]||20)*60000+ASK_MS) TM.run=x;   // a stale count-up (tab closed) is dropped
+      } }catch(e){}
+    if(TM.run) tmTickOn(); else tmSave();
+  }
+  function timerOn(){ tmRestore(); var R=TM.run; if(!R || TM.ask) return false; return R.ends ? R.ends>Date.now() : true; }
+  function timerInfo(){ return timerOn() ? { start:TM.run.start, label:tmLabel(TM.run) } : null; }
+  function tmLabel(R){ var p=rowById(R.pid), a=R.aid?rowById(R.aid):null; return TNAME[R.k]+' · '+(a?String(a.handle):(p?phoneLabel(p):'phone')); }
+  function tmWho(R){ return tmLabel(R).split(' · ').slice(1).join(' · '); }
+  function upClock(ms){ var s=Math.max(0,Math.floor(ms/1000)), h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60; return (h?h+':'+(m<10?'0':''):'')+m+':'+(x<10?'0':'')+x; }
+  function downClock(ms){ var s=Math.max(0,Math.ceil(ms/1000)); return Math.floor(s/60)+':'+(s%60<10?'0':'')+(s%60); }
+  function upLine(R){ return upClock(Date.now()-R.start)+' · asks “still working?” every '+(TLIM[R.k]||20)+' min — logging a step answers it'; }
+  function tmTickOn(){
+    if(TM.tick) return;
+    TM.tick=setInterval(function(){
+      var R=TM.run; if(!R){ clearInterval(TM.tick); TM.tick=null; return; }
+      var now=Date.now();
+      if(R.ends){
+        if(R.ends>now){ if(!document.hidden) try{ ACT.last=now; }catch(_a){} }
+        else if(!R.rang){ R.rang=1; tmSave(); try{ toast('15 minutes done on '+tmWho(R)+' — log the scroll with its screenshot.'); }catch(e){} try{ if(window.PFX && PFX.chime) PFX.chime(0.08); }catch(e){} tmPaint(true); return; }
+      } else if(!TM.ask){
+        if(!document.hidden) try{ ACT.last=now; }catch(_a){}
+        if(now-(R.chk||R.start) >= (TLIM[R.k]||20)*60000) tmAskOpen();
+      } else if(now-TM.ask.at >= ASK_MS){
+        var lbl=tmLabel(R); tmAskClose(); TM.run=null; tmSave(); try{ toast('Timer stopped — no answer to “still working?” ('+lbl+').'); }catch(e){} try{ tbSend(true); }catch(e){} tmPaint(true); return;
+      }
+      tmPaint(false);
+    }, 1000);
+  }
+  function runBanner(){
+    var R=TM.run; if(isOwner()) return '';
+    if(!R) return phones().length?'<div class="im-run idle"><div class="tx"><small>No timer running</small><b>Time the phone work you\'re doing</b><span>▶ Start 15:00 on a scroll, or ⏱ Timer on the phone you\'re working. Your portal timer keeps running only while a step is being timed or logged here.</span></div></div>':'';
+    var now=Date.now();
+    if(R.ends){ var left=Math.max(0,R.ends-now), done=left<=0;
+      return '<div class="im-run'+(done?' done':'')+'"><div class="ring"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19" class="bg"/><circle cx="22" cy="22" r="19" class="fg" id="ima-run-arc" style="stroke-dashoffset:'+(119.4*(left/SCROLL_MS)).toFixed(1)+'"/></svg></div>'+
+        '<div class="tx"><small>'+(done?'Scroll finished':'Scrolling now')+'</small><b>'+esc(tmLabel(R))+'</b><span id="ima-run-clk">'+(done?'15:00 done — log it with the feed screenshot':downClock(left)+' left · keep scrolling on this account')+'</span></div>'+
+        (done?'<button class="btn sm" onclick="IMA.log(\''+jsq(R.aid)+'\',\'scroll\')">＋ Log the scroll</button>':'<button class="btn sec sm" onclick="IMA.tmStop()">Stop</button>')+'</div>';
+    }
+    return '<div class="im-run up"><span class="dot"></span><div class="tx"><small>Timer running</small><b>'+esc(tmLabel(R))+'</b><span id="ima-run-clk">'+upLine(R)+'</span></div><button class="btn sec sm" onclick="IMA.tmStop()">Stop</button></div>';
+  }
+  function tmPaint(full){
+    var box=$('ima-runbox'); if(!box) return;
+    if(full){ box.innerHTML=runBanner(); try{ paint(); }catch(e){} return; }
+    var R=TM.run, c=$('ima-run-clk'); if(!R || !c) return;
+    if(R.ends){ var left=R.ends-Date.now(); if(left>0){ c.textContent=downClock(left)+' left · keep scrolling on this account'; var a=$('ima-run-arc'); if(a) a.style.strokeDashoffset=(119.4*(left/SCROLL_MS)).toFixed(1); } }
+    else c.textContent=upLine(R);
+  }
+  function tmAskOpen(){
+    var R=TM.run; if(!R) return; TM.ask={ at:Date.now() }; var o=$('ima-ask'); if(o) o.remove();
+    o=document.createElement('div'); o.id='ima-ask'; o.className='ima-ask';
+    o.innerHTML='<div class="box"><b>Still working on '+esc(tmLabel(R))+'?</b><p>The timer has run '+(TLIM[R.k]||20)+' minutes since your last step. Tap below to keep it going — with no answer it stops in 2 minutes.</p><div class="row"><button class="btn" onclick="IMA.tmStill()">Yes, still working</button><button class="btn sec" onclick="IMA.tmStop()">Stop</button></div></div>';
+    document.body.appendChild(o); try{ if(window.PFX && PFX.chime) PFX.chime(0.1); }catch(e){}
+  }
+  function tmAskClose(){ TM.ask=null; var o=$('ima-ask'); if(o) o.remove(); }
+  function tmStill(){ if(TM.run){ TM.run.chk=Date.now(); tmSave(); } tmAskClose(); try{ hubWork('timer'); }catch(e){} tmPaint(true); }
+  function tmTouch(){ if(TM.run && !TM.run.ends && !TM.ask){ TM.run.chk=Date.now(); tmSave(); } }   // any logged step = still working
+  async function scrollStart(aid){
+    if(isOwner()) return;
+    var a=rowById(aid); if(!a) return; var p=rowById(a.meta.phone);
+    if(p && !phoneOpen(p)){ toast('Log this session\'s pre-flight on '+phoneLabel(p)+' first.'); preflightOpen(p.id); return; }
+    var it=plan(a).filter(function(x){ return x.k==='scroll'; })[0];
+    if(!it || it.done>=it.target){ toast('No scroll due on '+a.handle+' today.'); return; }
+    tmRestore();
+    if(TM.run && TM.run.ends){ toast(TM.run.aid===aid?'Already scrolling '+a.handle+'.':(TM.run.ends>Date.now()?'Finish the scroll on '+tmWho(TM.run)+' first — one at a time.':'Log the finished scroll on '+tmWho(TM.run)+' first.')); return; }
+    if(!(await linkGate(CL(), 'Starting the timer'))) return;
+    var now=Date.now(); tmAskClose(); TM.run={ k:'scroll', pid:a.meta.phone, aid:aid, start:now, ends:now+SCROLL_MS }; TM.pick=''; tmSave(); tmTickOn();
+    try{ hubWork('timer'); }catch(e){}
+    toast('Scroll started on '+a.handle+' — 15 minutes.'); tmPaint(true);
+  }
+  async function tmStart(pid, k){
+    if(isOwner()) return; var p=rowById(pid); if(!p || !TNAME[k] || k==='scroll') return;
+    if(!/^(pre|phone|create)$/.test(k) && !phoneOpen(p)){ toast('Log this session\'s pre-flight on '+phoneLabel(p)+' first.'); return; }
+    tmRestore();
+    if(TM.run && TM.run.ends){ toast(TM.run.ends>Date.now()?'A scroll is running on '+tmWho(TM.run)+' — finish or stop it first.':'Log the finished scroll on '+tmWho(TM.run)+' first.'); return; }
+    if(!(await linkGate(CL(), 'Starting the timer'))) return;
+    var now=Date.now(), same=TM.run && TM.run.pid===pid && TM.run.k===k;
+    tmAskClose(); TM.run={ k:k, pid:pid, start:same?TM.run.start:now, chk:now }; TM.pick=''; tmSave(); tmTickOn();
+    try{ hubWork('timer'); }catch(e){}
+    toast('⏱ '+tmLabel(TM.run)+' — timer running.'); tmPaint(true);
+  }
+  function tmStop(){
+    var R=TM.run; if(!R){ tmAskClose(); return; }
+    if(R.ends && R.ends>Date.now() && !confirm('Stop the scroll now? It won\'t count — the full 15 minutes are needed.')) return;
+    TM.run=null; tmAskClose(); tmSave(); try{ tbSend(true); }catch(e){} tmPaint(true);
+  }
+  function tmPick(pid){ TM.pick=(TM.pick===pid?'':pid); paint(); }
+  function pickRow(p){
+    if(isOwner() || TM.pick!==p.id) return '';
+    var A=acctsOf(p.id), ks=[], sd=setupDone(p), v7=setupDone(p, VERIFY_STEPS), open=phoneOpen(p);
+    if(!sd) ks.push('phone');
+    if(v7 && A.length<MAX_ACCTS) ks.push('create');
+    if(sd && !open) ks.push('pre');
+    if(open){ var due={}; A.forEach(function(a){ plan(a).forEach(function(x){ if(x.done<x.target && x.k!=='scroll') due[x.k]=1; }); });
+      ['pfp','feed','reels','trial'].forEach(function(k){ if(due[k]) ks.push(k); }); }
+    if(!ks.length) return '<div class="ipick"><span class="muted">Nothing on this phone needs a timer right now'+(open?' — scrolls use ▶ Start 15:00 on the account.':'.')+'</span></div>';
+    return '<div class="ipick"><span class="muted">Time this phone for…</span>'+ks.map(function(k){ var on=TM.run && TM.run.pid===p.id && TM.run.k===k; return '<button class="itk'+(on?' run':'')+'" '+(on?'disabled':'')+' onclick="IMA.tmStart(\''+jsq(p.id)+'\',\''+k+'\')">'+(on?'⏱ ':'▶ ')+esc(TNAME[k])+'</button>'; }).join('')+'</div>';
+  }
+  function timerBtn(p){
+    if(isOwner()) return ''; var on=TM.run && TM.run.pid===p.id;
+    return '<button class="itm'+(on?' on':'')+'" onclick="IMA.tmPick(\''+jsq(p.id)+'\')" title="Time the work on this phone">⏱ '+(on?'Timing':'Timer')+'</button>';
+  }
+
   /* ── pre-flight (per phone, per shift) ── */
   function sessKey(){ return vaKeyOf(me()); }
   function pfList(p, date){ return (((p.meta||{}).pf||{})[date||today()]||[]).slice(); }
@@ -1696,6 +1848,8 @@ var IMA=(function(){
     var it=plan(a).filter(function(x){ return x.k===k; })[0];
     if(!it){ toast('That isn\'t due today on @'+String(a.handle).replace(/^@/,'')+' — the SOP calendar doesn\'t allow it yet.'); return; }
     if(it.done>=it.target){ toast('Today\'s '+(k==='reels'?'reels are':'step is')+' already done on '+a.handle+' — nothing ahead of the schedule.'); return; }
+    if(k==='scroll' && !isOwner()){ tmRestore(); var R0=TM.run;   // Oct 14: the scroll is timed here — it counts once its 15 minutes are done
+      if(!(R0 && R0.ends && R0.aid===aid && R0.ends<=Date.now())){ toast(R0 && R0.ends && R0.aid===aid?('Keep scrolling — '+downClock(R0.ends-Date.now())+' left.'):('Press ▶ Start 15:00 on '+a.handle+' first — the scroll counts once the 15 minutes are done.')); return; } }
     if(!(await linkGate(CL(), 'Logging work'))) return;
     try{ await bump(PROJECT, T[k], 1); }catch(e){ return; }
     await guarded(aid, function(){ return patchMeta(aid, function(m){
@@ -1704,6 +1858,7 @@ var IMA=(function(){
       L.who=L.who||{}; L.who[me()]=(+L.who[me()]||0)+1;
       Object.keys(m.log).sort().slice(0,-45).forEach(function(old){ delete m.log[old]; });   // keep ~6 weeks
     }, null, '+1 '+T[k]+' · '+a.handle); });
+    if(k==='scroll' && TM.run && TM.run.ends && TM.run.aid===aid){ TM.run=null; tmSave(); tmPaint(true); } else tmTouch();
     try{ snap(); }catch(_s){}
   }
   async function setStatus(aid, st){
@@ -1940,6 +2095,9 @@ var IMA=(function(){
     var ph=phase(a), items=plan(a), id=jsq(a.id);
     var tasks=items.map(function(x){
       var full=x.done>=x.target, lbl=x.target>1||x.k==='reels'||x.k==='trial'?(x.label+' '+x.done+'/'+x.target):x.label;
+      if(x.k==='scroll' && !full && open && !isOwner()){ var R=TM.run;   // Oct 14: timed scroll
+        if(R && R.ends && R.aid===a.id) return R.ends>Date.now()?'<button class="itk run" disabled>⏱ Scrolling… '+esc(lbl)+'</button>':'<button class="itk go" onclick="IMA.log(\''+id+'\',\'scroll\')">＋ Log scroll (15:00 done)</button>';
+        return '<button class="itk" onclick="IMA.scrollStart(\''+id+'\')">▶ Start 15:00 · '+esc(lbl)+'</button>'; }
       return '<button class="itk'+(full?' done':'')+(open?'':' lock')+'" '+(full||!open||isOwner()?'disabled':'')+' onclick="IMA.log(\''+id+'\',\''+x.k+'\')">'+(full?'✓ ':(open?'＋ ':'🔒 '))+esc(lbl)+'</button>';
     }).join('');
     if(!items.length && !DEAD[a.status] && ph.n>=1) tasks='<span class="muted">Nothing due today.</span>';
@@ -1976,7 +2134,7 @@ var IMA=(function(){
     menu.push(['Proxy (record)…',"IMA.phoneNote('"+id+"','proxy')"]); menu.push(['Coordinates (record)…',"IMA.phoneNote('"+id+"','coords')"]);
     menu.push('---'); menu.push(['Delete phone (wrong entry)',"IMA.del('"+id+"')",'danger']);
     var head='<div class="ip-h"><span class="ip-ic">'+IC.phone+'</span><div class="ip-t"><b>'+esc(phoneLabel(p))+'</b><small>'+esc(p.model||'—')+' · '+A.length+'/'+MAX_ACCTS+' accounts · '+esc(vaName(ownerOf(p)))+'</small></div>'+
-      (sd?chip('ok','Ready'):chip('warn','Setting up · '+Object.keys(p.meta.setup||{}).length+'/'+SETUP.length))+'<span class="sp"></span>'+(mode==='today'&&sd?pfBadge(p):'')+kmenu(menu)+'</div>';
+      (sd?chip('ok','Ready'):chip('warn','Setting up · '+Object.keys(p.meta.setup||{}).length+'/'+SETUP.length))+'<span class="sp"></span>'+(mode==='today'&&sd?pfBadge(p):'')+timerBtn(p)+kmenu(menu)+'</div>'+pickRow(p);
     if(mode==='phones') return '<div class="iphone">'+head+setupList(p)+pfHistory(p)+'</div>';
     if(!sd) return '<div class="iphone dim">'+head+'<div class="ip-note">Setup isn\'t finished — '+(v7?'tick steps 8–10':'work through the checklist')+' in <a onclick="IMA.setView(\'phones\')">Phones &amp; setup</a>.'+(v7&&A.length<MAX_ACCTS?' Accounts can be added now (steps 1–7 are done).':'')+'</div>'+(v7?acctList(p, A, open):'')+'</div>';
     return '<div class="iphone'+(open?'':' closed')+'">'+head+(open||isOwner()?'':'<div class="ip-lock">🔒 Log this session\'s pre-flight to open '+esc(phoneLabel(p))+'\'s accounts.</div>')+acctList(p, A, open)+'</div>';
@@ -2067,14 +2225,15 @@ var IMA=(function(){
   }
   function render(host){
     if(S.view==='qa' && !isOwner()) S.view='today';
+    tmRestore();
     host.innerHTML='<div class="c-ima">'+
       '<div class="sub">Imperium · Instagram on physical phones. Every step you log here counts as output — and a phone\'s accounts open for the shift only after its pre-flight is logged.</div>'+
-      sop()+'<div class="istats" id="ima-stats">'+statStrip()+'</div>'+navPills().replace('class="inav"','class="inav" id="ima-nav"')+'<div id="ima-body">'+body()+'</div></div>';
+      sop()+'<div class="istats" id="ima-stats">'+statStrip()+'</div>'+navPills().replace('class="inav"','class="inav" id="ima-nav"')+'<div id="ima-runbox">'+(S.loaded?runBanner():'')+'</div><div id="ima-body">'+body()+'</div></div>';
   }
   function paint(){
     if(!$('ima-body')) return HUB.repaint();
     var ae=document.activeElement, typing=ae && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && $('ima-body').contains(ae);
-    $('ima-stats').innerHTML=statStrip(); $('ima-nav').outerHTML=navPills().replace('class="inav"','class="inav" id="ima-nav"');
+    $('ima-stats').innerHTML=statStrip(); $('ima-nav').outerHTML=navPills().replace('class="inav"','class="inav" id="ima-nav"'); if($('ima-runbox')) $('ima-runbox').innerHTML=runBanner();
     if(!typing) $('ima-body').innerHTML=body();
   }
   function setView(v){ S.view=v; try{ sessionStorage.setItem('ima_view', v); }catch(e){} paint(); }
@@ -2088,6 +2247,7 @@ var IMA=(function(){
     addAcct:addAcct, log:logTask, setStatus:setStatus, trialUnlocked:trialUnlocked, trialSet:trialSet, trialUndo:trialUndo, history:history, reassign:reassign, del:del,
     preflight:preflightOpen, pfClose:pfClose, pfPick:pfPick, pfClear:pfClear, pfAttach:pfAttach, pfCap:pfCap, pfRule:pfRule, pfSave:pfSave, pfReview:pfReview,
     qaSave:qaSave, qaDate:qaDateSet, qaShift:qaShift,
+    scrollStart:scrollStart, tmStart:tmStart, tmStop:tmStop, tmPick:tmPick, tmStill:tmStill, tmTouch:tmTouch, timerOn:timerOn, timerInfo:timerInfo, _TM:TM,
     _t:{ dayN:dayN, plan:plan, phase:phase, reelTarget:reelTarget, pfOk:pfOk, qaRows:qaRows, phoneOpen:phoneOpen, setupDone:setupDone } };
 })();
 
