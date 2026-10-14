@@ -727,7 +727,9 @@ var CLIENTS=[
   { id:'skyvern', name:'Skyvern', client:'Skyvern', kind:'Project 3 · Reddit farming', project:'Skyvern', match:/skyvern|project\s*3\b/i,
     c:'#0284c7', g:'linear-gradient(135deg,#7dd3fc,#0ea5e9 55%,#4338ca)', icon:'sky', live:true, mod:'SKY' },   // Oct 10: 3 comments + 5-min scroll + karma, daily
   { id:'project2', name:'Project 2', client:'Ricardo', kind:'IG Reels · posting', project:'Project 2', match:/project\s*2\b|ricardo/i,
-    c:'#8134af', g:'linear-gradient(135deg,#a855f7,#8134af 55%,#4f46e5)', icon:'reels', live:true, mod:'P2', ownTimer:true }   // Oct 14: live from Ricardo's SOP — timer-based, no screenshots
+    c:'#8134af', g:'linear-gradient(135deg,#a855f7,#8134af 55%,#4f46e5)', icon:'reels', live:true, mod:'P2', ownTimer:true },   // Oct 14: live from Ricardo's SOP — timer-based, no screenshots
+  { id:'slaybae', name:'Slaybae', client:'Slaybae', kind:'IG · physical phones', project:'Slaybae', match:/slay\s*bae/i,
+    c:'#e11d48', g:'linear-gradient(135deg,#fb7185,#e11d48 55%,#9d174d)', icon:'reels', live:true, mod:'SLB', ownTimer:true }   // Oct 14: new project — same SOP and tool as Imperium
 ];
 function clientById(id){ for(var i=0;i<CLIENTS.length;i++) if(CLIENTS[i].id===id) return CLIENTS[i]; return null; }
 function clientOfTask(task){ task=String(task||''); for(var i=0;i<CLIENTS.length;i++) if(CLIENTS[i].match.test(task)) return CLIENTS[i]; return null; }
@@ -1272,7 +1274,7 @@ function linkBanner(cl){
    works). Owners don't send (they're never paired). */
 var ACT={ last:Date.now() };
 var WORK={ at:0, what:'' };
-function hubWork(what){ WORK.at=Date.now(); WORK.what=String(what||''); try{ if(typeof IMA!=='undefined' && IMA.tmTouch) IMA.tmTouch(); }catch(_t){} try{ if(typeof P2!=='undefined' && P2.tmTouch) P2.tmTouch(); }catch(_t2){} try{ htAuto(); }catch(_h){} try{ tbSend(true); }catch(e){} }
+function hubWork(what){ WORK.at=Date.now(); WORK.what=String(what||''); try{ if(typeof IGP!=='undefined') IGP.forEach(function(m){ try{ m.tmTouch(); }catch(_m){} }); }catch(_t){} try{ if(typeof P2!=='undefined' && P2.tmTouch) P2.tmTouch(); }catch(_t2){} try{ htAuto(); }catch(_h){} try{ tbSend(true); }catch(e){} }
 /* every work write in every client tab goes through fetch — mark it there, so no module can forget */
 (function(){
   if(typeof window==='undefined' || !window.fetch || window.__hubWorkWrap) return; window.__hubWorkWrap=1;
@@ -1292,7 +1294,7 @@ function hubWork(what){ WORK.at=Date.now(); WORK.what=String(what||''); try{ if(
 /* the tool timer that is running right now, if any — Skyvern's 5-minute scroll, the Imperium work timer or a Project 2 step timer (Oct 14) */
 function hubRunInfo(){
   try{ if(typeof SKY!=='undefined' && SKY.S && SKY.S.run && SKY.S.run.ends>Date.now()){ var cl=HUB.cur(); return { start:SKY.S.run.start, label:'5-min scroll · '+(cl?cl.name:'Client Hub') }; } }catch(e){}
-  try{ if(typeof IMA!=='undefined' && IMA.timerInfo){ var x=IMA.timerInfo(); if(x) return x; } }catch(e){}
+  try{ if(typeof IGP!=='undefined') for(var gi=0;gi<IGP.length;gi++){ var x=IGP[gi].timerInfo(); if(x) return x; } }catch(e){}   // Imperium, Slaybae
   try{ if(typeof P2!=='undefined' && P2.timerInfo){ var y=P2.timerInfo(); if(y) return y; } }catch(e){}   // Oct 14: Project 2 step timers
   try{ var z=htInfo(); if(z) return z; }catch(e){}   // Oct 14: the hub work timer (Design & Shopify, Ember, Skyvern)
   return null;
@@ -1343,7 +1345,7 @@ function htSave(){ try{ if(HT.run) localStorage.setItem(htKey(), JSON.stringify(
 function htOwn(cl){ return !!(cl && cl.ownTimer); }
 function htModuleRunning(){
   try{ if(typeof SKY!=='undefined' && SKY.S && SKY.S.run && SKY.S.run.ends>Date.now()) return true; }catch(e){}
-  try{ if(typeof IMA!=='undefined' && IMA.timerOn && IMA.timerOn()) return true; }catch(e){}
+  try{ if(typeof IGP!=='undefined' && IGP.some(function(m){ return m.timerOn(); })) return true; }catch(e){}
   try{ if(typeof P2!=='undefined' && P2.timerOn && P2.timerOn()) return true; }catch(e){}
   return false;
 }
@@ -1405,7 +1407,7 @@ async function oliveLoad(){
     if(r.ok){ var rows=await r.json(), m={}; (rows||[]).forEach(function(x){ m[String(x.employee_id||'').toUpperCase()]=x; }); OLIVE.rows=m; OLIVE.at=Date.now(); } }catch(e){}
   OLIVE.busy=false;
   try{ HUB.repaintLink(); }catch(e){}
-  try{ var c=HUB.cur(); if(c && c.id==='imperium' && $('ima-body') && IMA.paint) IMA.paint(); }catch(e){}
+  try{ var c=HUB.cur(); if(c && typeof IGP!=='undefined') IGP.forEach(function(m){ if(m.id===c.id && $(m.px+'-body') && m.paint) m.paint(); }); }catch(e){}
 }
 function oliveAgo(ms){ var m=Math.round(ms/60000); return m<1?'just now':(m<60?m+'m ago':(Math.floor(m/60)+'h '+(m%60)+'m ago')); }
 function oliveOf(emp, cl){
@@ -1826,8 +1828,13 @@ document.addEventListener('click', function(e){ document.querySelectorAll('detai
    • PRODUCTIVITY — every logged step counts (Jeth, Oct 9: "Everything"), through the proof gate → po_bump, plus a
      per-shift completion % of the day's plan (po_snap).  QA — the owner's QA tab: one line per VA per day (pre-flights,
      phones worked, plan done, misses) with a suggested score /10 that can be adjusted and saved to the portal's daily QA. */
-var IMA=(function(){
-  var CID='imperium', PROJECT='Imperium';
+/* Oct 14 (Jeth — new project Slaybae, "same as Imperium SOP"): the Imperium tool is now a factory. Each Instagram-on-
+   physical-phones client gets its own copy with its own data (pa_* project), its own storage keys and DOM ids, and the
+   same SOP-02 flow: phones & setup, pre-flight, 7-day warm-up, feed photos, reels ramp, trial reels, QA and the work timer.
+   IMA = Imperium, SLB = Slaybae. One running timer across them: starting one stops the other's count-up timer; a running
+   15-minute scroll in the other client has to finish (or be stopped) first. */
+function IGPhones(CFG){
+  var CID=CFG.cid, PROJECT=CFG.project, NS=CFG.ns, PX=CFG.px, KP=CFG.kp, SELF=null;
   var CL=function(){ return clientById(CID); };
   var T={ phone:'IG Phone Setup', pre:'IG Pre-flight Check', create:'IG Account Created', scroll:'IG Warm-up Scroll',
           pfp:'IG Profile Photo', feed:'IG Feed Photo', reels:'IG Reel', trial:'IG Trial Reel' };
@@ -1846,11 +1853,11 @@ var IMA=(function(){
   var VERIFY_STEPS=7;           // steps 1–7 = the device is verified → accounts may be created on it
   var MAX_ACCTS=3, FRAUD_MAX=3;
   var S={ rows:[], loaded:false, err:'', view:'today', who:'all', qaDate:'', busy:{} };
-  try{ S.view=sessionStorage.getItem('ima_view')||'today'; }catch(e){}
+  try{ S.view=sessionStorage.getItem(KP+'_view')||'today'; }catch(e){}
 
   /* ── data ── */
-  function cacheRows(){ try{ sessionStorage.setItem('ima_rows', JSON.stringify({ t:Date.now(), rows:S.rows })); }catch(e){} }
-  function paintCached(){ try{ var c=JSON.parse(sessionStorage.getItem('ima_rows')||'null'); if(c && c.rows && (Date.now()-c.t)<10*60*1000){ S.rows=c.rows; S.loaded=true; return true; } }catch(e){} return false; }
+  function cacheRows(){ try{ sessionStorage.setItem(KP+'_rows', JSON.stringify({ t:Date.now(), rows:S.rows })); }catch(e){} }
+  function paintCached(){ try{ var c=JSON.parse(sessionStorage.getItem(KP+'_rows')||'null'); if(c && c.rows && (Date.now()-c.t)<10*60*1000){ S.rows=c.rows; S.loaded=true; return true; } }catch(e){} return false; }
   async function load(){
     try{
       var d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
@@ -1913,7 +1920,7 @@ var IMA=(function(){
   var TLIM={ pre:20, phone:30, create:30, pfp:20, feed:20, reels:30, trial:30, work:20 };
   var TNAME={ pre:'Pre-flight check', phone:'Phone setup', create:'Creating accounts', scroll:'Warm-up scroll', pfp:'Profile photos', feed:'Feed photos', reels:'Reels', trial:'Trial reels', work:'Phone work' };
   var SCROLL_MS=15*60*1000, ASK_MS=2*60*1000;
-  function tmKey(){ return 'ima_run_'+me(); }
+  function tmKey(){ return KP+'_run_'+me(); }
   function tmSave(){ try{ if(TM.run) localStorage.setItem(tmKey(), JSON.stringify(TM.run)); else localStorage.removeItem(tmKey()); }catch(e){} }
   function tmRestore(){
     if(TM.restored || !USER || !USER.id || isOwner()) return; TM.restored=true;
@@ -1953,28 +1960,33 @@ var IMA=(function(){
     if(!R) return phones().length?'<div class="im-run idle"><div class="tx"><small>No timer running</small><b>Time the phone work you\'re doing</b><span>It starts by itself when you log a step, open a pre-flight or tick setup — or press ⏱ Timer on the phone you\'re working. Without a running timer your portal timer stops after 3 minutes with no computer activity (phone work doesn\'t move the mouse).</span></div></div>':'';
     var now=Date.now();
     if(R.ends){ var left=Math.max(0,R.ends-now), done=left<=0;
-      return '<div class="im-run'+(done?' done':'')+'"><div class="ring"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19" class="bg"/><circle cx="22" cy="22" r="19" class="fg" id="ima-run-arc" style="stroke-dashoffset:'+(119.4*(left/SCROLL_MS)).toFixed(1)+'"/></svg></div>'+
-        '<div class="tx"><small>'+(done?'Scroll finished':'Scrolling now')+'</small><b>'+esc(tmLabel(R))+'</b><span id="ima-run-clk">'+(done?'15:00 done — press Log the scroll':downClock(left)+' left · keep scrolling on this account')+'</span></div>'+
-        (done?'<button class="btn sm" onclick="IMA.log(\''+jsq(R.aid)+'\',\'scroll\')">＋ Log the scroll</button>':'<button class="btn sec sm" onclick="IMA.tmStop()">Stop</button>')+'</div>';
+      return '<div class="im-run'+(done?' done':'')+'"><div class="ring"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19" class="bg"/><circle cx="22" cy="22" r="19" class="fg" id="'+PX+'-run-arc" style="stroke-dashoffset:'+(119.4*(left/SCROLL_MS)).toFixed(1)+'"/></svg></div>'+
+        '<div class="tx"><small>'+(done?'Scroll finished':'Scrolling now')+'</small><b>'+esc(tmLabel(R))+'</b><span id="'+PX+'-run-clk">'+(done?'15:00 done — press Log the scroll':downClock(left)+' left · keep scrolling on this account')+'</span></div>'+
+        (done?'<button class="btn sm" onclick="'+NS+'.log(\''+jsq(R.aid)+'\',\'scroll\')">＋ Log the scroll</button>':'<button class="btn sec sm" onclick="'+NS+'.tmStop()">Stop</button>')+'</div>';
     }
-    return '<div class="im-run up"><span class="dot"></span><div class="tx"><small>Timer running</small><b>'+esc(tmLabel(R))+'</b><span id="ima-run-clk">'+upLine(R)+'</span></div><button class="btn sec sm" onclick="IMA.tmStop()">Stop</button></div>';
+    return '<div class="im-run up"><span class="dot"></span><div class="tx"><small>Timer running</small><b>'+esc(tmLabel(R))+'</b><span id="'+PX+'-run-clk">'+upLine(R)+'</span></div><button class="btn sec sm" onclick="'+NS+'.tmStop()">Stop</button></div>';
   }
   function tmPaint(full){
-    var box=$('ima-runbox'); if(!box) return;
+    var box=$(''+PX+'-runbox'); if(!box) return;
     if(full){ box.innerHTML=runBanner(); try{ paint(); }catch(e){} return; }
-    var R=TM.run, c=$('ima-run-clk'); if(!R || !c) return;
-    if(R.ends){ var left=R.ends-Date.now(); if(left>0){ c.textContent=downClock(left)+' left · keep scrolling on this account'; var a=$('ima-run-arc'); if(a) a.style.strokeDashoffset=(119.4*(left/SCROLL_MS)).toFixed(1); } }
+    var R=TM.run, c=$(''+PX+'-run-clk'); if(!R || !c) return;
+    if(R.ends){ var left=R.ends-Date.now(); if(left>0){ c.textContent=downClock(left)+' left · keep scrolling on this account'; var a=$(''+PX+'-run-arc'); if(a) a.style.strokeDashoffset=(119.4*(left/SCROLL_MS)).toFixed(1); } }
     else c.textContent=upLine(R);
   }
   function tmAskOpen(){
-    var R=TM.run; if(!R) return; TM.ask={ at:Date.now() }; var o=$('ima-ask'); if(o) o.remove();
-    o=document.createElement('div'); o.id='ima-ask'; o.className='ima-ask';
-    o.innerHTML='<div class="box"><b>Still working on '+esc(tmLabel(R))+'?</b><p>The timer has run '+(TLIM[R.k]||20)+' minutes since your last step. Tap below to keep it going — with no answer it stops in 2 minutes.</p><div class="row"><button class="btn" onclick="IMA.tmStill()">Yes, still working</button><button class="btn sec" onclick="IMA.tmStop()">Stop</button></div></div>';
+    var R=TM.run; if(!R) return; TM.ask={ at:Date.now() }; var o=$(''+PX+'-ask'); if(o) o.remove();
+    o=document.createElement('div'); o.id=''+PX+'-ask'; o.className='ima-ask';
+    o.innerHTML='<div class="box"><b>Still working on '+esc(tmLabel(R))+'?</b><p>The timer has run '+(TLIM[R.k]||20)+' minutes since your last step. Tap below to keep it going — with no answer it stops in 2 minutes.</p><div class="row"><button class="btn" onclick="'+NS+'.tmStill()">Yes, still working</button><button class="btn sec" onclick="'+NS+'.tmStop()">Stop</button></div></div>';
     document.body.appendChild(o); try{ if(window.PFX && PFX.chime) PFX.chime(0.1); }catch(e){}
   }
-  function tmAskClose(){ TM.ask=null; var o=$('ima-ask'); if(o) o.remove(); }
+  function tmAskClose(){ TM.ask=null; var o=$(''+PX+'-ask'); if(o) o.remove(); }
   function tmStill(){ if(TM.run){ TM.run.chk=Date.now(); tmSave(); } tmAskClose(); try{ hubWork('timer'); }catch(e){} tmPaint(true); }
   function tmTouch(){ if(TM.run && !TM.run.ends && !TM.ask){ TM.run.chk=Date.now(); tmSave(); } }   // any logged step = still working
+  /* one timer across the Instagram-phone clients (Imperium, Slaybae …) */
+  function otherIG(){ try{ return (typeof IGP!=='undefined'?IGP:[]).filter(function(m){ return m.ns!==NS; }); }catch(e){ return []; } }
+  function scrollElsewhere(){ var n=''; otherIG().forEach(function(m){ try{ m.timerOn(); var R=m._TM.run; if(!n && R && R.ends && R.ends>Date.now()) n=m.name; }catch(e){} }); return n; }
+  function stopElsewhere(){ otherIG().forEach(function(m){ try{ m.tmQuiet(); }catch(e){} }); }
+  function tmQuiet(){ tmRestore(); var R=TM.run; if(!R || R.ends) return; TM.run=null; tmAskClose(); tmSave(); tmPaint(true); }
   /* Oct 14, evening (Jeth — JMB003's bar in slivers again): Imperium work happens on the phone, so the computer sits idle
      and the portal's 3-minute no-activity rule cut her timer between reels — she logged every reel but never pressed
      ⏱ Timer, so the hub told the portal "no task pressed yet". Now the timer starts BY ITSELF on the work she does here:
@@ -1988,6 +2000,7 @@ var IMA=(function(){
       var R=TM.run;
       if(R && R.ends) return;
       if(R && R.pid===pid && R.k===k){ tmTouch(); return; }
+      if(scrollElsewhere()) return; stopElsewhere();
       var now=Date.now(); tmAskClose();
       TM.run={ k:k, pid:pid, start:(R && R.pid===pid)?R.start:now, chk:now, auto:1 }; TM.pick=''; tmSave(); tmTickOn();
       try{ hubWork('timer'); }catch(e){}
@@ -2003,7 +2016,9 @@ var IMA=(function(){
     if(!it || it.done>=it.target){ toast('No scroll due on '+a.handle+' today.'); return; }
     tmRestore();
     if(TM.run && TM.run.ends){ toast(TM.run.aid===aid?'Already scrolling '+a.handle+'.':(TM.run.ends>Date.now()?'Finish the scroll on '+tmWho(TM.run)+' first — one at a time.':'Log the finished scroll on '+tmWho(TM.run)+' first.')); return; }
+    var _el=scrollElsewhere(); if(_el){ toast('A 15-minute scroll is running in '+_el+' — finish or stop it first.'); return; }
     if(!(await linkGate(CL(), 'Starting the timer'))) return;
+    stopElsewhere();
     var now=Date.now(); tmAskClose(); TM.run={ k:'scroll', pid:a.meta.phone, aid:aid, start:now, ends:now+SCROLL_MS }; TM.pick=''; tmSave(); tmTickOn();
     try{ hubWork('timer'); }catch(e){}
     toast('Scroll started on '+a.handle+' — 15 minutes.'); tmPaint(true);
@@ -2013,7 +2028,9 @@ var IMA=(function(){
     if(!/^(pre|phone|create)$/.test(k) && !phoneOpen(p)){ toast('Log this session\'s pre-flight on '+phoneLabel(p)+' first.'); return; }
     tmRestore();
     if(TM.run && TM.run.ends){ toast(TM.run.ends>Date.now()?'A scroll is running on '+tmWho(TM.run)+' — finish or stop it first.':'Log the finished scroll on '+tmWho(TM.run)+' first.'); return; }
+    var _el=scrollElsewhere(); if(_el){ toast('A 15-minute scroll is running in '+_el+' — finish or stop it first.'); return; }
     if(!(await linkGate(CL(), 'Starting the timer'))) return;
+    stopElsewhere();
     var now=Date.now(), same=TM.run && TM.run.pid===pid && TM.run.k===k;
     tmAskClose(); TM.run={ k:k, pid:pid, start:same?TM.run.start:now, chk:now }; TM.pick=''; tmSave(); tmTickOn();
     try{ hubWork('timer'); }catch(e){}
@@ -2034,7 +2051,7 @@ var IMA=(function(){
     if(open){ var due={}; A.forEach(function(a){ plan(a).forEach(function(x){ if(x.done<x.target && x.k!=='scroll') due[x.k]=1; }); });
       ['pfp','feed','reels','trial'].forEach(function(k){ if(due[k]) ks.push(k); }); }
     if(!ks.length) return '<div class="ipick"><span class="muted">Nothing on this phone needs a timer right now'+(open?' — scrolls use ▶ Start 15:00 on the account.':'.')+'</span></div>';
-    return '<div class="ipick"><span class="muted">Time this phone for…</span>'+ks.map(function(k){ var on=TM.run && TM.run.pid===p.id && TM.run.k===k; return '<button class="itk'+(on?' run':'')+'" '+(on?'disabled':'')+' onclick="IMA.tmStart(\''+jsq(p.id)+'\',\''+k+'\')">'+(on?'⏱ ':'▶ ')+esc(TNAME[k])+'</button>'; }).join('')+'</div>';
+    return '<div class="ipick"><span class="muted">Time this phone for…</span>'+ks.map(function(k){ var on=TM.run && TM.run.pid===p.id && TM.run.k===k; return '<button class="itk'+(on?' run':'')+'" '+(on?'disabled':'')+' onclick="'+NS+'.tmStart(\''+jsq(p.id)+'\',\''+k+'\')">'+(on?'⏱ ':'▶ ')+esc(TNAME[k])+'</button>'; }).join('')+'</div>';
   }
   /* owner: who is timing this phone right now (from the VAs' heartbeats) */
   function ownerTimerChip(p){
@@ -2044,7 +2061,7 @@ var IMA=(function(){
   }
   function timerBtn(p){
     if(isOwner()) return ''; var on=TM.run && TM.run.pid===p.id;
-    return '<button class="itm'+(on?' on':'')+'" onclick="IMA.tmPick(\''+jsq(p.id)+'\')" title="Time the work on this phone">⏱ '+(on?'Timing':'Timer')+'</button>';
+    return '<button class="itm'+(on?' on':'')+'" onclick="'+NS+'.tmPick(\''+jsq(p.id)+'\')" title="Time the work on this phone">⏱ '+(on?'Timing':'Timer')+'</button>';
   }
 
   /* ── pre-flight (per phone, per shift) ── */
@@ -2078,14 +2095,14 @@ var IMA=(function(){
 
   /* phones */
   async function addPhone(){
-    var lab=($('ima-pl').value||'').trim(), mdl=($('ima-pm').value||'').trim(), px=($('ima-px').value||'').trim(), co=($('ima-pc').value||'').trim();
-    if(!lab){ toast('Name the phone (e.g. IMA-07).'); return; } if(!mdl){ toast('Which model is this phone for?'); return; }
+    var lab=($(''+PX+'-pl').value||'').trim(), mdl=($(''+PX+'-pm').value||'').trim(), px=($(''+PX+'-px').value||'').trim(), co=($(''+PX+'-pc').value||'').trim();
+    if(!lab){ toast('Name the phone (e.g. '+CFG.phEx+').'); return; } if(!mdl){ toast('Which model is this phone for?'); return; }
     if(phones().some(function(p){ return phoneLabel(p).toLowerCase()===lab.toLowerCase(); })){ toast('There is already a phone called '+lab+'.'); return; }
     if(!(await linkGate(CL(), 'Adding a phone'))) return;
     try{
       var meta={ kind:'phone', proxy:px, coords:co, setup:{}, pf:{} };
       var d=await jFetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent('phone:'+lab)+'&model='+encodeURIComponent(mdl)+'&status=setup&meta='+encodeURIComponent(JSON.stringify(meta))+'&employee_id='+encodeURIComponent(me())+'&_='+Date.now(), 0);
-      if(d&&d.ok){ ['ima-pl','ima-pm','ima-px','ima-pc'].forEach(function(k){ if($(k)) $(k).value=''; }); S.addPhone=false; toast('Phone '+lab+' added — work through its setup checklist.'); S.view='phones'; load(); }
+      if(d&&d.ok){ [''+PX+'-pl',''+PX+'-pm',''+PX+'-px',''+PX+'-pc'].forEach(function(k){ if($(k)) $(k).value=''; }); S.addPhone=false; toast('Phone '+lab+' added — work through its setup checklist.'); S.view='phones'; load(); }
       else toast(d&&d.error==='DUPLICATE'?'That phone already exists.':'Could not add the phone.');
     }catch(e){ toast('Connection error.'); }
   }
@@ -2108,7 +2125,7 @@ var IMA=(function(){
   /* accounts */
   async function addAcct(pid){
     var p=rowById(pid); if(!p) return;
-    var h=(($('ima-ah-'+pid)||{}).value||'').trim().replace(/^@+/,''), st=(($('ima-ad-'+pid)||{}).value||'').trim()||today();
+    var h=(($(''+PX+'-ah-'+pid)||{}).value||'').trim().replace(/^@+/,''), st=(($(''+PX+'-ad-'+pid)||{}).value||'').trim()||today();
     if(!h){ toast('Type the Instagram username.'); return; }
     if(!setupDone(p, VERIFY_STEPS)){ toast('Finish setup steps 1–7 on '+phoneLabel(p)+' first — accounts are created only on a verified phone.'); return; }
     if(acctsOf(pid).length>=MAX_ACCTS){ toast(phoneLabel(p)+' already has '+MAX_ACCTS+' accounts — one phone, one model, three accounts.'); return; }
@@ -2209,11 +2226,11 @@ var IMA=(function(){
   /* ── pre-flight box: three screenshots + fraud score + the manager's go-ahead ── */
   var PF={ pid:null, shots:{ maps:null, ip:null, scam:null, mgr:null }, slot:null };
   function pfBox(){
-    var ov=$('ima-pf'); if(ov) return ov;
-    ov=document.createElement('div'); ov.id='ima-pf'; ov.className='ima-ov';
+    var ov=$(''+PX+'-pf'); if(ov) return ov;
+    ov=document.createElement('div'); ov.id=''+PX+'-pf'; ov.className='ima-ov';
     document.body.appendChild(ov);
     document.addEventListener('paste', function(ev){
-      if(!$('ima-pf') || $('ima-pf').style.display!=='flex' || !PF.slot) return;
+      if(!$(''+PX+'-pf') || $(''+PX+'-pf').style.display!=='flex' || !PF.slot) return;
       var items=(ev.clipboardData&&ev.clipboardData.items)||[];
       for(var i=0;i<items.length;i++){ if(items[i].type.indexOf('image')===0){ var f=items[i].getAsFile(); if(f){ ev.preventDefault(); pfFile(PF.slot, f); return; } } }
     });
@@ -2221,39 +2238,39 @@ var IMA=(function(){
   }
   function pfSlotHtml(k, title, hint){
     var d=PF.shots[k];
-    return '<div class="pfslot'+(d?' on':'')+(PF.slot===k?' sel':'')+'" onclick="IMA.pfPick(\''+k+'\')">'+
+    return '<div class="pfslot'+(d?' on':'')+(PF.slot===k?' sel':'')+'" onclick="'+NS+'.pfPick(\''+k+'\')">'+
       (d?'<img src="'+d+'" alt="">':'<div class="ph">＋</div>')+
       '<div class="cap"><b>'+title+'</b><small>'+hint+'</small></div>'+
-      '<div class="act"><button onclick="event.stopPropagation();IMA.pfCap(\''+k+'\')" title="Capture a window">📷</button><button onclick="event.stopPropagation();IMA.pfAttach(\''+k+'\')" title="Attach a file">📎</button>'+(d?'<button onclick="event.stopPropagation();IMA.pfClear(\''+k+'\')" title="Remove">✕</button>':'')+'</div></div>';
+      '<div class="act"><button onclick="event.stopPropagation();'+NS+'.pfCap(\''+k+'\')" title="Capture a window">📷</button><button onclick="event.stopPropagation();'+NS+'.pfAttach(\''+k+'\')" title="Attach a file">📎</button>'+(d?'<button onclick="event.stopPropagation();'+NS+'.pfClear(\''+k+'\')" title="Remove">✕</button>':'')+'</div></div>';
   }
   function pfPaint(){
-    var ov=$('ima-pf'); if(!ov) return; var p=rowById(PF.pid); if(!p) return;
-    var fr=($('ima-pf-fr')||{}).value; fr=(fr===undefined)?'':fr;
+    var ov=$(''+PX+'-pf'); if(!ov) return; var p=rowById(PF.pid); if(!p) return;
+    var fr=($(''+PX+'-pf-fr')||{}).value; fr=(fr===undefined)?'':fr;
     var keep=function(id){ var e=$(id); return e?e.checked:false; };
-    var st={ m:keep('ima-ok-m'), i:keep('ima-ok-i'), s:keep('ima-ok-s'), g:keep('ima-ok-g') };
+    var st={ m:keep(''+PX+'-ok-m'), i:keep(''+PX+'-ok-i'), s:keep(''+PX+'-ok-s'), g:keep(''+PX+'-ok-g') };
     ov.innerHTML='<div class="ima-box">'+
       '<div class="ima-bh"><div><div class="eb">Pre-flight · '+esc(phoneLabel(p))+' · '+esc(p.model||'')+'</div><h3>Log this session\'s pre-flight</h3>'+
         '<p>Before Instagram is opened on this phone: a screenshot of each check, the fraud score, and the manager\'s go-ahead from the group. Click a box, then 📷 capture, 📎 attach or Ctrl+V paste.</p></div>'+
-        '<button class="x" onclick="IMA.pfClose()">✕</button></div>'+
+        '<button class="x" onclick="'+NS+'.pfClose()">✕</button></div>'+
       '<div class="pfgrid">'+pfSlotHtml('maps','1 · Maps','location on the phone')+pfSlotHtml('ip','2 · IP','whatismyipaddress.com')+pfSlotHtml('scam','3 · Scamalytics','fraud score + location')+'</div>'+
-      '<div class="pfrow"><label>Fraud score <input id="ima-pf-fr" type="number" min="0" max="100" step="1" inputmode="numeric" value="'+esc(fr)+'" oninput="IMA.pfRule()"></label><span id="ima-pf-rule" class="rule"></span></div>'+
+      '<div class="pfrow"><label>Fraud score <input id="'+PX+'-pf-fr" type="number" min="0" max="100" step="1" inputmode="numeric" value="'+esc(fr)+'" oninput="'+NS+'.pfRule()"></label><span id="'+PX+'-pf-rule" class="rule"></span></div>'+
       '<div class="pfchk">'+
-        '<label><input type="checkbox" id="ima-ok-m"'+(st.m?' checked':'')+' onchange="IMA.pfRule()"> Maps shows the right location</label>'+
-        '<label><input type="checkbox" id="ima-ok-i"'+(st.i?' checked':'')+' onchange="IMA.pfRule()"> The IP is in the right location</label>'+
-        '<label><input type="checkbox" id="ima-ok-s"'+(st.s?' checked':'')+' onchange="IMA.pfRule()"> Scamalytics shows the right location</label>'+
-        '<label class="mg"><input type="checkbox" id="ima-ok-g"'+(st.g?' checked':'')+' onchange="IMA.pfRule()"> A manager confirmed it\'s good to go in the group</label></div>'+
-      '<div class="pfmgr">'+pfSlotHtml('mgr','Manager\'s go-ahead','optional · screenshot of the reply')+'<input id="ima-pf-who" placeholder="Manager\'s name (optional)" value="'+esc(($('ima-pf-who')||{}).value||'')+'"></div>'+
-      '<div class="ima-bf"><span id="ima-pf-st" class="muted"></span><button class="btn sec" onclick="IMA.pfClose()">Cancel</button><button class="btn" id="ima-pf-go" onclick="IMA.pfSave()">Save pre-flight</button></div></div>';
+        '<label><input type="checkbox" id="'+PX+'-ok-m"'+(st.m?' checked':'')+' onchange="'+NS+'.pfRule()"> Maps shows the right location</label>'+
+        '<label><input type="checkbox" id="'+PX+'-ok-i"'+(st.i?' checked':'')+' onchange="'+NS+'.pfRule()"> The IP is in the right location</label>'+
+        '<label><input type="checkbox" id="'+PX+'-ok-s"'+(st.s?' checked':'')+' onchange="'+NS+'.pfRule()"> Scamalytics shows the right location</label>'+
+        '<label class="mg"><input type="checkbox" id="'+PX+'-ok-g"'+(st.g?' checked':'')+' onchange="'+NS+'.pfRule()"> A manager confirmed it\'s good to go in the group</label></div>'+
+      '<div class="pfmgr">'+pfSlotHtml('mgr','Manager\'s go-ahead','optional · screenshot of the reply')+'<input id="'+PX+'-pf-who" placeholder="Manager\'s name (optional)" value="'+esc(($(''+PX+'-pf-who')||{}).value||'')+'"></div>'+
+      '<div class="ima-bf"><span id="'+PX+'-pf-st" class="muted"></span><button class="btn sec" onclick="'+NS+'.pfClose()">Cancel</button><button class="btn" id="'+PX+'-pf-go" onclick="'+NS+'.pfSave()">Save pre-flight</button></div></div>';
     pfRule();
   }
   function pfRule(){
-    var fr=parseFloat(($('ima-pf-fr')||{}).value), el=$('ima-pf-rule'), go=$('ima-pf-go');
+    var fr=parseFloat(($(''+PX+'-pf-fr')||{}).value), el=$(''+PX+'-pf-rule'), go=$(''+PX+'-pf-go');
     var ok=function(id){ var e=$(id); return !!(e&&e.checked); };
-    var shots=PF.shots.maps&&PF.shots.ip&&PF.shots.scam, checks=ok('ima-ok-m')&&ok('ima-ok-i')&&ok('ima-ok-s'), mgr=ok('ima-ok-g'), frOk=!isNaN(fr)&&fr>=0&&fr<=FRAUD_MAX;
+    var shots=PF.shots.maps&&PF.shots.ip&&PF.shots.scam, checks=ok(''+PX+'-ok-m')&&ok(''+PX+'-ok-i')&&ok(''+PX+'-ok-s'), mgr=ok(''+PX+'-ok-g'), frOk=!isNaN(fr)&&fr>=0&&fr<=FRAUD_MAX;
     if(el){ el.className='rule '+(isNaN(fr)?'':(frOk?'good':'bad')); el.textContent=isNaN(fr)?'0–3 is clean':(frOk?'Clean (0–3)':'Above 3 — stop, don\'t open Instagram; tell a manager'); }
     var stop=(!isNaN(fr)&&!frOk) || (shots && !checks);
     if(go){ go.textContent=stop?'Log it as STOP':'Save pre-flight'; go.className='btn'+(stop?' bad':''); go.disabled=!(shots && !isNaN(fr) && (stop || mgr)); }
-    var st=$('ima-pf-st'); if(st) st.textContent=!shots?'All three screenshots first.':(isNaN(fr)?'Type the fraud score.':(stop?'Something doesn\'t line up — it is logged as STOP and the phone stays closed.':(mgr?'Ready — this opens the phone\'s accounts for this shift.':'Waiting for the manager\'s go-ahead.')));
+    var st=$(''+PX+'-pf-st'); if(st) st.textContent=!shots?'All three screenshots first.':(isNaN(fr)?'Type the fraud score.':(stop?'Something doesn\'t line up — it is logged as STOP and the phone stays closed.':(mgr?'Ready — this opens the phone\'s accounts for this shift.':'Waiting for the manager\'s go-ahead.')));
   }
   function preflightOpen(pid){
     var p=rowById(pid); if(!p) return;
@@ -2261,7 +2278,7 @@ var IMA=(function(){
     PF={ pid:pid, shots:{ maps:null, ip:null, scam:null, mgr:null }, slot:'maps' };
     var ov=pfBox(); ov.style.display='flex'; ov.innerHTML=''; pfPaint();
   }
-  function pfClose(){ var ov=$('ima-pf'); if(ov) ov.style.display='none'; PF.pid=null; }
+  function pfClose(){ var ov=$(''+PX+'-pf'); if(ov) ov.style.display='none'; PF.pid=null; }
   function pfPick(k){ PF.slot=k; pfPaint(); }
   function pfClear(k){ PF.shots[k]=null; pfPaint(); }
   async function pfFile(k, f){ try{ PF.shots[k]=await proofCompress(f); PF.slot=k; pfPaint(); }catch(e){ toast('Could not read that image.'); } }
@@ -2269,17 +2286,17 @@ var IMA=(function(){
   async function pfCap(k){ if(!shotLive()){ var ok=await shotStart(); if(!ok) return; } var img=shotGrab(); if(!img){ toast('Could not read the window — pick it again.'); shotStop(); return; } PF.shots[k]=img; PF.slot=k; pfPaint(); }
   async function pfSave(){
     var p=rowById(PF.pid); if(!p) return;
-    var fr=parseFloat(($('ima-pf-fr')||{}).value), ok=function(id){ var e=$(id); return !!(e&&e.checked); };
+    var fr=parseFloat(($(''+PX+'-pf-fr')||{}).value), ok=function(id){ var e=$(id); return !!(e&&e.checked); };
     if(!(PF.shots.maps&&PF.shots.ip&&PF.shots.scam) || isNaN(fr)) return;
     if(!(await linkGate(CL(), 'The pre-flight'))) return;
-    var go=$('ima-pf-go'); if(go){ go.disabled=true; go.textContent='Saving…'; }
+    var go=$(''+PX+'-pf-go'); if(go){ go.disabled=true; go.textContent='Saving…'; }
     var up={};
     try{
       var keys=['maps','ip','scam','mgr'].filter(function(k){ return PF.shots[k]; });
       for(var i=0;i<keys.length;i++){ up[keys[i]]=await psUpload(PF.shots[keys[i]], me(), 'preflight-'+phoneLabel(p)+'-'+keys[i]); }
     }catch(e){ toast('Upload failed — check your connection and save again.'); if(go){ go.disabled=false; go.textContent='Save pre-flight'; } return; }
     var rec={ at:new Date().toISOString(), by:me(), sess:sessKey(), fraud:Math.round(fr*10)/10,
-      okMaps:ok('ima-ok-m'), okIp:ok('ima-ok-i'), okScam:ok('ima-ok-s'), mgr:ok('ima-ok-g'), mgrName:String(($('ima-pf-who')||{}).value||'').slice(0,40),
+      okMaps:ok(''+PX+'-ok-m'), okIp:ok(''+PX+'-ok-i'), okScam:ok(''+PX+'-ok-s'), mgr:ok(''+PX+'-ok-g'), mgrName:String(($(''+PX+'-pf-who')||{}).value||'').slice(0,40),
       maps:up.maps||'', ip:up.ip||'', scam:up.scam||'', mgrShot:up.mgr||'' };
     var clean=pfOk(rec);
     /* the screenshots are the proof — recorded like every other proof, and the check counts as work */
@@ -2306,7 +2323,7 @@ var IMA=(function(){
   }
   function snap(){
     if(!USER || isOwner()) return; var m=myPlan(); if(!m.t) return;
-    var k='ima_snap_'+vaKeyOf(me()), v=m.d+'/'+m.t; try{ if(sessionStorage.getItem(k)===v) return; sessionStorage.setItem(k, v); }catch(e){}
+    var k=KP+'_snap_'+vaKeyOf(me()), v=m.d+'/'+m.t; try{ if(sessionStorage.getItem(k)===v) return; sessionStorage.setItem(k, v); }catch(e){}
     fetch(API+'?action=po_snap&employee_id='+encodeURIComponent(me())+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent('📋 Daily Plan Completion')+'&done='+m.d+'&total='+m.t+'&date='+encodeURIComponent(today())+'&_='+Date.now()).catch(function(){});
   }
 
@@ -2338,12 +2355,12 @@ var IMA=(function(){
   }
   function admPass(){ var p=''; try{ p=sessionStorage.getItem('hub_adm')||''; }catch(e){} if(!p){ p=prompt('Admin password — to save QA scores to the portal (kept for this tab only):')||''; if(p) try{ sessionStorage.setItem('hub_adm', p); }catch(e){} } return p; }
   async function qaSave(emp, date){
-    var v=($('ima-qs-'+emp)||{}).value, note=(($('ima-qn-'+emp)||{}).value||'').trim();
+    var v=($(''+PX+'-qs-'+emp)||{}).value, note=(($(''+PX+'-qn-'+emp)||{}).value||'').trim();
     var sc=parseFloat(v); if(isNaN(sc)||sc<0||sc>10){ toast('Score is 0 to 10.'); return; }
     var pass=admPass(); if(!pass) return;
     try{
-      var d=await jFetch(API+'?action=qa_daily_save&employee_id='+encodeURIComponent(emp)+'&date='+encodeURIComponent(date)+'&score='+sc+'&note='+encodeURIComponent(('Imperium · '+note).slice(0,300))+'&pass='+encodeURIComponent(pass)+'&_='+Date.now(), 0);
-      if(d&&d.ok){ toast('Saved to the portal QA — '+vaName(emp)+' · '+date+' · '+sc+'/10'); var s=JSON.parse(sessionStorage.getItem('ima_qa_saved')||'{}'); s[emp+'|'+date]=sc; sessionStorage.setItem('ima_qa_saved', JSON.stringify(s)); paint(); }
+      var d=await jFetch(API+'?action=qa_daily_save&employee_id='+encodeURIComponent(emp)+'&date='+encodeURIComponent(date)+'&score='+sc+'&note='+encodeURIComponent((PROJECT+' · '+note).slice(0,300))+'&pass='+encodeURIComponent(pass)+'&_='+Date.now(), 0);
+      if(d&&d.ok){ toast('Saved to the portal QA — '+vaName(emp)+' · '+date+' · '+sc+'/10'); var s=JSON.parse(sessionStorage.getItem(KP+'_qa_saved')||'{}'); s[emp+'|'+date]=sc; sessionStorage.setItem(KP+'_qa_saved', JSON.stringify(s)); paint(); }
       else if(d&&d.error==='UNAUTHORIZED'){ try{ sessionStorage.removeItem('hub_adm'); }catch(e){} toast('Wrong admin password — try again.'); }
       else toast((d&&(d.message||d.error))||'Could not save.');
     }catch(e){ toast('Connection error.'); }
@@ -2360,15 +2377,15 @@ var IMA=(function(){
   }
   function navPills(){
     var v=[['today','Today'],['phones','Phones & setup']]; if(isOwner()) v.push(['qa','QA']);
-    return '<div class="inav">'+v.map(function(x){ return '<button class="'+(S.view===x[0]?'on':'')+'" onclick="IMA.setView(\''+x[0]+'\')">'+x[1]+'</button>'; }).join('')+'</div>';
+    return '<div class="inav">'+v.map(function(x){ return '<button class="'+(S.view===x[0]?'on':'')+'" onclick="'+NS+'.setView(\''+x[0]+'\')">'+x[1]+'</button>'; }).join('')+'</div>';
   }
   function chip(cls, t){ return '<span class="ich '+cls+'">'+t+'</span>'; }
   function pfBadge(p){
     var x=pfNow(p);
     if(isOwner()){ var L=pfList(p); if(!L.length) return chip('mute','No pre-flight today'); var l=L[L.length-1]; return chip(pfOk(l)?'ok':'bad', (pfOk(l)?'✓ Pre-flight ':'⛔ STOP ')+fmtT(l.at)+' · fraud '+esc(l.fraud)); }
-    if(!x) return '<button class="ipf go" onclick="IMA.preflight(\''+p.id+'\')">Log pre-flight to open</button>';
-    if(pfOk(x)) return chip('ok','✓ Pre-flight '+fmtT(x.at)+' · fraud '+esc(x.fraud))+'<button class="ipf ln" onclick="IMA.preflight(\''+p.id+'\')" title="Log a new session">＋ session</button>';
-    return chip('bad','⛔ STOP '+fmtT(x.at)+' · fraud '+esc(x.fraud))+'<button class="ipf go" onclick="IMA.preflight(\''+p.id+'\')">Log a new pre-flight</button>';
+    if(!x) return '<button class="ipf go" onclick="'+NS+'.preflight(\''+p.id+'\')">Log pre-flight to open</button>';
+    if(pfOk(x)) return chip('ok','✓ Pre-flight '+fmtT(x.at)+' · fraud '+esc(x.fraud))+'<button class="ipf ln" onclick="'+NS+'.preflight(\''+p.id+'\')" title="Log a new session">＋ session</button>';
+    return chip('bad','⛔ STOP '+fmtT(x.at)+' · fraud '+esc(x.fraud))+'<button class="ipf go" onclick="'+NS+'.preflight(\''+p.id+'\')">Log a new pre-flight</button>';
   }
   function kmenu(items){
     return '<details class="kmenu" onclick="event.stopPropagation()"><summary>⋯</summary><div class="dd">'+items.map(function(it){
@@ -2381,22 +2398,22 @@ var IMA=(function(){
     var tasks=items.map(function(x){
       var full=x.done>=x.target, lbl=x.target>1||x.k==='reels'||x.k==='trial'?(x.label+' '+x.done+'/'+x.target):x.label;
       if(x.k==='scroll' && !full && open && !isOwner()){ var R=TM.run;   // Oct 14: timed scroll
-        if(R && R.ends && R.aid===a.id) return R.ends>Date.now()?'<button class="itk run" disabled>⏱ Scrolling… '+esc(lbl)+'</button>':'<button class="itk go" onclick="IMA.log(\''+id+'\',\'scroll\')">＋ Log scroll (15:00 done)</button>';
-        return '<button class="itk" onclick="IMA.scrollStart(\''+id+'\')">▶ Start 15:00 · '+esc(lbl)+'</button>'; }
-      return '<button class="itk'+(full?' done':'')+(open?'':' lock')+'" '+(full||!open||isOwner()?'disabled':'')+' onclick="IMA.log(\''+id+'\',\''+x.k+'\')">'+(full?'✓ ':(open?'＋ ':'🔒 '))+esc(lbl)+'</button>';
+        if(R && R.ends && R.aid===a.id) return R.ends>Date.now()?'<button class="itk run" disabled>⏱ Scrolling… '+esc(lbl)+'</button>':'<button class="itk go" onclick="'+NS+'.log(\''+id+'\',\'scroll\')">＋ Log scroll (15:00 done)</button>';
+        return '<button class="itk" onclick="'+NS+'.scrollStart(\''+id+'\')">▶ Start 15:00 · '+esc(lbl)+'</button>'; }
+      return '<button class="itk'+(full?' done':'')+(open?'':' lock')+'" '+(full||!open||isOwner()?'disabled':'')+' onclick="'+NS+'.log(\''+id+'\',\''+x.k+'\')">'+(full?'✓ ':(open?'＋ ':'🔒 '))+esc(lbl)+'</button>';
     }).join('');
     if(!items.length && !DEAD[a.status] && ph.n>=1) tasks='<span class="muted">Nothing due today.</span>';
     var tr=a.meta.trial;
     var trialChip=tr?(tr.allowed==null?chip('warn','Trial reels unlocked · waiting for the managers'):chip('vio','Trial reels · '+tr.allowed+'/day')):'';
     var menu=[];
-    if(!tr && ph.n>12 && !DEAD[a.status]) menu.push(['Trial reels unlocked → tell the managers',"IMA.trialUnlocked('"+id+"')"]);
-    if(isOwner() && tr) menu.push(['Set trial reels a day…',"IMA.trialSet('"+id+"')"]);
-    if(tr && (tr.allowed==null || isOwner())) menu.push(['Undo trial reels flag (wrong account)',"IMA.trialUndo('"+id+"')"]);
-    if(a.status!=='active') menu.push(['Back to active',"IMA.setStatus('"+id+"','active')"]);
-    if(a.status!=='restricted') menu.push(['Restricted',"IMA.setStatus('"+id+"','restricted')"]);
-    if(a.status!=='hold') menu.push(['On hold',"IMA.setStatus('"+id+"','hold')"]);
-    if(a.status!=='banned') menu.push(['Banned',"IMA.setStatus('"+id+"','banned')",'danger']);
-    menu.push('---'); menu.push(['History of changes',"IMA.history('"+id+"')"]); menu.push(['Delete (wrong entry)',"IMA.del('"+id+"')",'danger']);
+    if(!tr && ph.n>12 && !DEAD[a.status]) menu.push(['Trial reels unlocked → tell the managers',NS+".trialUnlocked('"+id+"')"]);
+    if(isOwner() && tr) menu.push(['Set trial reels a day…',NS+".trialSet('"+id+"')"]);
+    if(tr && (tr.allowed==null || isOwner())) menu.push(['Undo trial reels flag (wrong account)',NS+".trialUndo('"+id+"')"]);
+    if(a.status!=='active') menu.push(['Back to active',NS+".setStatus('"+id+"','active')"]);
+    if(a.status!=='restricted') menu.push(['Restricted',NS+".setStatus('"+id+"','restricted')"]);
+    if(a.status!=='hold') menu.push(['On hold',NS+".setStatus('"+id+"','hold')"]);
+    if(a.status!=='banned') menu.push(['Banned',NS+".setStatus('"+id+"','banned')",'danger']);
+    menu.push('---'); menu.push(['History of changes',NS+".history('"+id+"')"]); menu.push(['Delete (wrong entry)',NS+".del('"+id+"')",'danger']);
     var lastBy=(function(){ var L=(a.meta.log||{})[today()]; return L&&L.by?vaName(L.by):''; })();
     return '<div class="iacct ph-'+ph.k+'">'+
       '<div class="ia-h"><b>'+esc(a.handle)+'</b>'+chip('ph-'+ph.k, esc(ph.t))+trialChip+'<span class="sp"></span>'+(lastBy?'<span class="muted" style="font-size:11px">today · '+esc(lastBy)+'</span>':'')+kmenu(menu)+'</div>'+
@@ -2415,49 +2432,49 @@ var IMA=(function(){
   }
   function phoneCard(p, mode){
     var A=acctsOf(p.id), open=phoneOpen(p), id=jsq(p.id), sd=setupDone(p), v7=setupDone(p, VERIFY_STEPS);
-    var menu=[]; if(isOwner()) menu.push(['Assign to a VA…',"IMA.reassign('"+id+"')"]);
-    menu.push(['Proxy (record)…',"IMA.phoneNote('"+id+"','proxy')"]); menu.push(['Coordinates (record)…',"IMA.phoneNote('"+id+"','coords')"]);
-    menu.push('---'); menu.push(['Delete phone (wrong entry)',"IMA.del('"+id+"')",'danger']);
+    var menu=[]; if(isOwner()) menu.push(['Assign to a VA…',NS+".reassign('"+id+"')"]);
+    menu.push(['Proxy (record)…',NS+".phoneNote('"+id+"','proxy')"]); menu.push(['Coordinates (record)…',NS+".phoneNote('"+id+"','coords')"]);
+    menu.push('---'); menu.push(['Delete phone (wrong entry)',NS+".del('"+id+"')",'danger']);
     var head='<div class="ip-h"><span class="ip-ic">'+IC.phone+'</span><div class="ip-t"><b>'+esc(phoneLabel(p))+'</b><small>'+esc(p.model||'—')+' · '+A.length+'/'+MAX_ACCTS+' accounts · '+esc(vaName(ownerOf(p)))+'</small></div>'+
       (sd?chip('ok','Ready'):chip('warn','Setting up · '+Object.keys(p.meta.setup||{}).length+'/'+SETUP.length))+'<span class="sp"></span>'+(mode==='today'&&sd?pfBadge(p):'')+ownerTimerChip(p)+timerBtn(p)+kmenu(menu)+'</div>'+pickRow(p);
     if(mode==='phones') return '<div class="iphone">'+head+setupList(p)+pfHistory(p)+'</div>';
-    if(!sd) return '<div class="iphone dim">'+head+'<div class="ip-note">Setup isn\'t finished — '+(v7?'tick steps 8–10':'work through the checklist')+' in <a onclick="IMA.setView(\'phones\')">Phones &amp; setup</a>.'+(v7&&A.length<MAX_ACCTS?' Accounts can be added now (steps 1–7 are done).':'')+'</div>'+(v7?acctList(p, A, open):'')+'</div>';
+    if(!sd) return '<div class="iphone dim">'+head+'<div class="ip-note">Setup isn\'t finished — '+(v7?'tick steps 8–10':'work through the checklist')+' in <a onclick="'+NS+'.setView(\'phones\')">Phones &amp; setup</a>.'+(v7&&A.length<MAX_ACCTS?' Accounts can be added now (steps 1–7 are done).':'')+'</div>'+(v7?acctList(p, A, open):'')+'</div>';
     return '<div class="iphone'+(open?'':' closed')+'">'+head+(open||isOwner()?'':'<div class="ip-lock">🔒 Log this session\'s pre-flight to open '+esc(phoneLabel(p))+'\'s accounts.</div>')+acctList(p, A, open)+'</div>';
   }
   function acctList(p, A, open){
     var add=A.length<MAX_ACCTS && setupDone(p, VERIFY_STEPS) && !isOwner()
-      ?'<div class="ia-add"><input id="ima-ah-'+p.id+'" placeholder="@username"><input id="ima-ad-'+p.id+'" type="date" value="'+today()+'" title="Creation day (day 1)"><button class="btn sm" onclick="IMA.addAcct(\''+jsq(p.id)+'\')">＋ Add account</button></div>':'';
+      ?'<div class="ia-add"><input id="'+PX+'-ah-'+p.id+'" placeholder="@username"><input id="'+PX+'-ad-'+p.id+'" type="date" value="'+today()+'" title="Creation day (day 1)"><button class="btn sm" onclick="'+NS+'.addAcct(\''+jsq(p.id)+'\')">＋ Add account</button></div>':'';
     return '<div class="ip-b">'+(A.length?A.map(function(a){ return acctRow(a, open); }).join(''):'<div class="muted" style="padding:6px 2px">No accounts on this phone yet.</div>')+add+'</div>';
   }
   function setupList(p){
     var s=p.meta.setup||{}, id=jsq(p.id), next=0; while(s[next]) next++;
     return '<div class="isetup"><div class="is-h"><b>Setup checklist</b><span class="muted">SOP §X · in order · steps 1–7 verify the device, 8–10 finish it</span></div>'+
       SETUP.map(function(t,i){ var d=s[i];
-        return '<label class="is-i'+(d?' ok':'')+(i===next?' next':'')+'"><input type="checkbox"'+(d?' checked':'')+(isOwner()?' disabled':'')+' onclick="event.preventDefault();IMA.setupTick(\''+id+'\','+i+')"><span class="n">'+(i+1)+'</span><span class="tx">'+esc(t)+(d?'<small>'+esc(vaName(d.by))+' · '+esc(fmtT(d.at))+' · '+esc(String(d.at).slice(0,10))+'</small>':'')+'</span></label>';
+        return '<label class="is-i'+(d?' ok':'')+(i===next?' next':'')+'"><input type="checkbox"'+(d?' checked':'')+(isOwner()?' disabled':'')+' onclick="event.preventDefault();'+NS+'.setupTick(\''+id+'\','+i+')"><span class="n">'+(i+1)+'</span><span class="tx">'+esc(t)+(d?'<small>'+esc(vaName(d.by))+' · '+esc(fmtT(d.at))+' · '+esc(String(d.at).slice(0,10))+'</small>':'')+'</span></label>';
       }).join('')+
-      '<div class="is-rec"><span><b>Proxy</b> '+esc(p.meta.proxy||'—')+'</span><span><b>Coordinates</b> '+esc(p.meta.coords||'—')+'</span><a onclick="IMA.phoneNote(\''+id+'\',\'proxy\')">edit</a></div></div>';
+      '<div class="is-rec"><span><b>Proxy</b> '+esc(p.meta.proxy||'—')+'</span><span><b>Coordinates</b> '+esc(p.meta.coords||'—')+'</span><a onclick="'+NS+'.phoneNote(\''+id+'\',\'proxy\')">edit</a></div></div>';
   }
   function pfHistory(p){
     var days=Object.keys(p.meta.pf||{}).sort().reverse().slice(0,7); if(!days.length) return '<div class="ihist muted">No pre-flights logged yet.</div>';
     return '<div class="ihist"><div class="is-h"><b>Pre-flight log</b><span class="muted">last 7 days</span></div>'+days.map(function(d){
       return (p.meta.pf[d]||[]).map(function(x, ix){
         var thumbs=['maps','ip','scam','mgrShot'].filter(function(k){ return x[k]; }).map(function(k){ return '<a href="'+esc(x[k])+'" target="_blank" rel="noopener"><img src="'+esc(x[k])+'" alt="'+k+'"></a>'; }).join('');
-        var rv=isOwner()?'<span class="rv"><button class="'+(x.review==='ok'?'on':'')+'" onclick="IMA.pfReview(\''+jsq(p.id)+'\',\''+d+'\','+ix+',\'ok\')">✓ OK</button><button class="'+(x.review==='bad'?'on bad':'')+'" onclick="IMA.pfReview(\''+jsq(p.id)+'\',\''+d+'\','+ix+',\'bad\')">✕ Not acceptable</button></span>':(x.review==='bad'?chip('bad','Not acceptable'):(x.review==='ok'?chip('ok','Reviewed'):''));
+        var rv=isOwner()?'<span class="rv"><button class="'+(x.review==='ok'?'on':'')+'" onclick="'+NS+'.pfReview(\''+jsq(p.id)+'\',\''+d+'\','+ix+',\'ok\')">✓ OK</button><button class="'+(x.review==='bad'?'on bad':'')+'" onclick="'+NS+'.pfReview(\''+jsq(p.id)+'\',\''+d+'\','+ix+',\'bad\')">✕ Not acceptable</button></span>':(x.review==='bad'?chip('bad','Not acceptable'):(x.review==='ok'?chip('ok','Reviewed'):''));
         return '<div class="ih-r'+(pfOk(x)?'':' stop')+'"><div class="ih-m"><b>'+esc(d)+' · '+esc(fmtT(x.at))+'</b><small>'+esc(vaName(x.by))+' · fraud '+esc(x.fraud)+(x.mgr?' · manager ✓'+(x.mgrName?' ('+esc(x.mgrName)+')':''):' · no manager go-ahead')+(pfOk(x)?'':' · STOP')+'</small></div><div class="ih-th">'+thumbs+'</div>'+rv+'</div>';
       }).join('');
     }).join('')+'</div>';
   }
   function addPhoneBox(){
     if(isOwner()) return '';
-    if(!S.addPhone) return '<button class="btn sec iaddp" onclick="IMA.toggleAddPhone()">＋ Add a phone</button>';
-    return '<div class="card iaddbox"><b>New phone</b><div class="row"><input id="ima-pl" placeholder="Phone name (e.g. IMA-07)"><input id="ima-pm" placeholder="Model (one model per phone)" list="ima-models"><datalist id="ima-models">'+modelsList().map(function(m){ return '<option value="'+esc(m)+'">'; }).join('')+'</datalist></div>'+
-      '<div class="row"><input id="ima-px" placeholder="Proxy (from Airtable — optional, for the record)"><input id="ima-pc" placeholder="Coordinates (optional)"></div>'+
-      '<div class="row end"><button class="btn sec sm" onclick="IMA.toggleAddPhone()">Cancel</button><button class="btn sm" onclick="IMA.addPhone()">Add phone</button></div></div>';
+    if(!S.addPhone) return '<button class="btn sec iaddp" onclick="'+NS+'.toggleAddPhone()">＋ Add a phone</button>';
+    return '<div class="card iaddbox"><b>New phone</b><div class="row"><input id="'+PX+'-pl" placeholder="Phone name (e.g. '+CFG.phEx+')"><input id="'+PX+'-pm" placeholder="Model (one model per phone)" list="'+PX+'-models"><datalist id="'+PX+'-models">'+modelsList().map(function(m){ return '<option value="'+esc(m)+'">'; }).join('')+'</datalist></div>'+
+      '<div class="row"><input id="'+PX+'-px" placeholder="Proxy (from Airtable — optional, for the record)"><input id="'+PX+'-pc" placeholder="Coordinates (optional)"></div>'+
+      '<div class="row end"><button class="btn sec sm" onclick="'+NS+'.toggleAddPhone()">Cancel</button><button class="btn sm" onclick="'+NS+'.addPhone()">Add phone</button></div></div>';
   }
   function modelsList(){ var m={}; phones().forEach(function(p){ if(p.model) m[p.model]=1; }); return Object.keys(m).sort(); }
   function whoPills(){
     var by={}; phones().forEach(function(p){ var k=ownerOf(p); by[k]=(by[k]||0)+1; });
-    function pill(v, l){ return '<button class="vpill'+(S.who===v?' on':'')+'" onclick="IMA.setWho(\''+jsq(v)+'\')">'+l+'</button>'; }
+    function pill(v, l){ return '<button class="vpill'+(S.who===v?' on':'')+'" onclick="'+NS+'.setWho(\''+jsq(v)+'\')">'+l+'</button>'; }
     var h=[pill('all','All phones')]; if(!isOwner()) h.unshift(pill('mine','Mine'));
     Object.keys(by).forEach(function(k){ if(k && (isOwner() || k!==me().toLowerCase())) h.push(pill(k, esc(vaName(k))+' · '+by[k])); });
     return h.length>2||isOwner()?'<div class="iwho">'+h.join('')+'</div>':'';
@@ -2483,21 +2500,21 @@ var IMA=(function(){
   }
   function viewQA(){
     if(!isOwner()) return '';
-    var date=S.qaDate||today(), rows=qaRows(date), saved={}; try{ saved=JSON.parse(sessionStorage.getItem('ima_qa_saved')||'{}'); }catch(e){}
+    var date=S.qaDate||today(), rows=qaRows(date), saved={}; try{ saved=JSON.parse(sessionStorage.getItem(KP+'_qa_saved')||'{}'); }catch(e){}
     var trials=accts().filter(function(a){ return a.meta.trial && a.meta.trial.allowed==null; });
-    var trialBox=trials.length?'<div class="card iqtrial"><b>Trial reels waiting for a number</b><div>'+trials.map(function(a){ return '<span class="mc">'+esc(a.handle)+' · since '+esc(String(a.meta.trial.at).slice(0,10))+' <button class="btn sm" onclick="IMA.trialSet(\''+jsq(a.id)+'\')">Set</button> <button class="btn sm sec" title="Flagged by mistake — remove the flag" onclick="IMA.trialUndo(\''+jsq(a.id)+'\')">Not trial</button></span>'; }).join('')+'</div></div>':'';
+    var trialBox=trials.length?'<div class="card iqtrial"><b>Trial reels waiting for a number</b><div>'+trials.map(function(a){ return '<span class="mc">'+esc(a.handle)+' · since '+esc(String(a.meta.trial.at).slice(0,10))+' <button class="btn sm" onclick="'+NS+'.trialSet(\''+jsq(a.id)+'\')">Set</button> <button class="btn sm sec" title="Flagged by mistake — remove the flag" onclick="'+NS+'.trialUndo(\''+jsq(a.id)+'\')">Not trial</button></span>'; }).join('')+'</div></div>':'';
     return trialBox+'<div class="card iqa"><div class="iq-h"><b>QA · '+esc(date)+'</b><span class="muted">one line per VA · suggested score from the record · adjust, then save to the portal\'s daily QA</span><span class="sp"></span>'+
-      '<button class="btn sm sec" onclick="IMA.qaShift(-1)">‹</button><input type="date" value="'+esc(date)+'" onchange="IMA.qaDate(this.value)"><button class="btn sm sec" onclick="IMA.qaShift(1)">›</button></div>'+
+      '<button class="btn sm sec" onclick="'+NS+'.qaShift(-1)">‹</button><input type="date" value="'+esc(date)+'" onchange="'+NS+'.qaDate(this.value)"><button class="btn sm sec" onclick="'+NS+'.qaShift(1)">›</button></div>'+
       (rows.length?rows.map(function(r){
         var sv=saved[r.emp+'|'+date];
         return '<div class="iq-r"><div class="iq-who">'+avatar(r.emp,'a')+'<div><b>'+esc(vaName(r.emp))+'</b><small>'+esc(r.emp)+'</small></div></div>'+
           '<div class="iq-n"><span><b>'+r.pfClean+'/'+r.pfDone+'</b> clean pre-flights</span><span><b>'+r.phones+'</b> phone'+(r.phones===1?'':'s')+' worked</span><span><b>'+r.done+'/'+r.due+'</b> plan done</span><span><b>'+r.tasks+'</b> steps logged</span></div>'+
           '<div class="iq-i">'+(r.issues.length?r.issues.map(function(t){ return '<div>• '+esc(t)+'</div>'; }).join(''):'<div class="good">No issues on the record.</div>')+'</div>'+
-          '<div class="iq-s"><label>Score<input id="ima-qs-'+esc(r.emp)+'" type="number" min="0" max="10" step="0.5" value="'+(sv!=null?sv:r.score)+'"></label><input id="ima-qn-'+esc(r.emp)+'" placeholder="Note (optional)" value="'+esc(r.issues.join('; ').slice(0,200))+'"><button class="btn sm" onclick="IMA.qaSave(\''+esc(r.emp)+'\',\''+esc(date)+'\')">'+(sv!=null?'Saved ✓ · update':'Save to portal')+'</button></div></div>';
-      }).join(''):'<div class="muted" style="padding:14px 4px">Nobody logged Imperium work on '+esc(date)+'.</div>')+'</div>';
+          '<div class="iq-s"><label>Score<input id="'+PX+'-qs-'+esc(r.emp)+'" type="number" min="0" max="10" step="0.5" value="'+(sv!=null?sv:r.score)+'"></label><input id="'+PX+'-qn-'+esc(r.emp)+'" placeholder="Note (optional)" value="'+esc(r.issues.join('; ').slice(0,200))+'"><button class="btn sm" onclick="'+NS+'.qaSave(\''+esc(r.emp)+'\',\''+esc(date)+'\')">'+(sv!=null?'Saved ✓ · update':'Save to portal')+'</button></div></div>';
+      }).join(''):'<div class="muted" style="padding:14px 4px">Nobody logged '+esc(PROJECT)+' work on '+esc(date)+'.</div>')+'</div>';
   }
   function sop(){
-    return '<details class="sopbox"><summary>SOP-02 — Instagram setup &amp; warm-up (physical phone)</summary><div class="sopgrid">'+
+    return '<details class="sopbox"><summary>'+CFG.sop+'</summary><div class="sopgrid">'+
       '<div class="sopph"><b>📱 Device setup</b>One phone, one model, three accounts. Finish the setup and all three verifications on one phone before you touch the next. Tick each step in <i>Phones &amp; setup</i> as you do it.</div>'+
       '<div class="sopph"><b>🛫 Before every session</b>Maps · IP · Scamalytics (0–3), a screenshot of each, then the manager\'s go-ahead in the group. Log it here — the phone\'s accounts open for the shift once it\'s logged. Anything off → stop and tell a manager.</div>'+
       '<div class="sopph"><b>🌱 Warm-up</b>Day 1 create + scroll 15 min · Day 2 profile photo + scroll · Days 3–7 scroll naturally (likes, a few comments, open profiles) · Days 8–12 one feed photo from the model\'s Drive.</div>'+
@@ -2505,36 +2522,40 @@ var IMA=(function(){
       '<div class="sopph"><b>✅ When you\'re done</b>Swipe Instagram closed to clear it.</div></div></details>';
   }
   function body(){
-    if(!S.loaded) return '<div class="muted" style="padding:10px">'+(S.err?esc(S.err):'Loading Imperium…')+'</div>';
+    if(!S.loaded) return '<div class="muted" style="padding:10px">'+(S.err?esc(S.err):'Loading '+esc(PROJECT)+'…')+'</div>';
     return S.view==='phones'?viewPhones():(S.view==='qa'?viewQA():viewToday());
   }
   function render(host){
     if(S.view==='qa' && !isOwner()) S.view='today';
     tmRestore();
     host.innerHTML='<div class="c-ima">'+
-      '<div class="sub">Imperium · Instagram on physical phones. Every step you log here counts as output — and a phone\'s accounts open for the shift only after its pre-flight is logged.</div>'+
-      sop()+'<div class="istats" id="ima-stats">'+statStrip()+'</div>'+navPills().replace('class="inav"','class="inav" id="ima-nav"')+'<div id="ima-runbox">'+(S.loaded?runBanner():'')+'</div><div id="ima-body">'+body()+'</div></div>';
+      '<div class="sub">'+esc(PROJECT)+' · Instagram on physical phones. Every step you log here counts as output — and a phone\'s accounts open for the shift only after its pre-flight is logged.</div>'+
+      sop()+'<div class="istats" id="'+PX+'-stats">'+statStrip()+'</div>'+navPills().replace('class="inav"','class="inav" id="'+PX+'-nav"')+'<div id="'+PX+'-runbox">'+(S.loaded?runBanner():'')+'</div><div id="'+PX+'-body">'+body()+'</div></div>';
   }
   function paint(){
-    if(!$('ima-body')) return HUB.repaint();
-    var ae=document.activeElement, typing=ae && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && $('ima-body').contains(ae);
-    $('ima-stats').innerHTML=statStrip(); $('ima-nav').outerHTML=navPills().replace('class="inav"','class="inav" id="ima-nav"'); if($('ima-runbox')) $('ima-runbox').innerHTML=runBanner();
-    if(!typing) $('ima-body').innerHTML=body();
+    if(!$(''+PX+'-body')) return HUB.repaint();
+    var ae=document.activeElement, typing=ae && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && $(''+PX+'-body').contains(ae);
+    $(''+PX+'-stats').innerHTML=statStrip(); $(''+PX+'-nav').outerHTML=navPills().replace('class="inav"','class="inav" id="'+PX+'-nav"'); if($(''+PX+'-runbox')) $(''+PX+'-runbox').innerHTML=runBanner();
+    if(!typing) $(''+PX+'-body').innerHTML=body();
   }
-  function setView(v){ S.view=v; try{ sessionStorage.setItem('ima_view', v); }catch(e){} paint(); }
+  function setView(v){ S.view=v; try{ sessionStorage.setItem(KP+'_view', v); }catch(e){} paint(); }
   function setWho(v){ S.who=v; paint(); }
-  function toggleAddPhone(){ S.addPhone=!S.addPhone; paint(); setTimeout(function(){ try{ $('ima-pl').focus(); }catch(e){} }, 30); }
+  function toggleAddPhone(){ S.addPhone=!S.addPhone; paint(); setTimeout(function(){ try{ $(''+PX+'-pl').focus(); }catch(e){} }, 30); }
   function qaDateSet(v){ S.qaDate=String(v||'').slice(0,10); paint(); }
   function qaShift(n){ var t=dnum(S.qaDate||today())+n, d=new Date(t*864e5).toISOString().slice(0,10); if(d>today()) return; S.qaDate=d; paint(); }
   if(!S.who) S.who='all';
-  return { id:CID, S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners,
+  var api={ id:CID, ns:NS, px:PX, name:PROJECT, tmQuiet:tmQuiet, S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners,
     setView:setView, setWho:setWho, toggleAddPhone:toggleAddPhone, addPhone:addPhone, setupTick:setupTick, phoneNote:phoneNote,
     addAcct:addAcct, log:logTask, setStatus:setStatus, trialUnlocked:trialUnlocked, trialSet:trialSet, trialUndo:trialUndo, history:history, reassign:reassign, del:del,
     preflight:preflightOpen, pfClose:pfClose, pfPick:pfPick, pfClear:pfClear, pfAttach:pfAttach, pfCap:pfCap, pfRule:pfRule, pfSave:pfSave, pfReview:pfReview,
     qaSave:qaSave, qaDate:qaDateSet, qaShift:qaShift,
     scrollStart:scrollStart, tmStart:tmStart, tmStop:tmStop, tmPick:tmPick, tmStill:tmStill, tmTouch:tmTouch, timerOn:timerOn, timerInfo:timerInfo, _TM:TM,
     _t:{ dayN:dayN, plan:plan, phase:phase, reelTarget:reelTarget, pfOk:pfOk, qaRows:qaRows, phoneOpen:phoneOpen, setupDone:setupDone } };
-})();
+  SELF=api; IGP.push(api); return api;
+}
+var IGP=[];
+var IMA=IGPhones({ ns:'IMA', cid:'imperium', project:'Imperium', px:'ima', kp:'ima', phEx:'IMA-07', sop:'SOP-02 — Instagram setup &amp; warm-up (physical phone)' });
+var SLB=IGPhones({ ns:'SLB', cid:'slaybae',  project:'Slaybae',  px:'slb', kp:'slb', phEx:'SLB-01', sop:'Slaybae SOP-01 — Instagram setup &amp; warm-up (physical phone)' });
 
 /* ═══════════ CLIENT: EMBER (Snapchat VPS Ops) — moved in from ember.html (Oct 9), same board, same data ═══════════
    Every card is one Snapchat account: Stock → Setting up → Live, with Needs fix and Banned / Locked off to the side.
@@ -3755,7 +3776,7 @@ var P2=(function(){
 
 /* ═══════════ THE HUB — tabs, who sees what, Team ═══════════ */
 var HUB=(function(){
-  var MODS={ 'design-shopify':DS, 'imperium':IMA, 'ember':EM, 'skyvern':SKY, 'project2':P2 };
+  var MODS={ 'design-shopify':DS, 'imperium':IMA, 'ember':EM, 'skyvern':SKY, 'project2':P2, 'slaybae':SLB };
   function loadAll(){ Object.keys(MODS).forEach(function(k){ try{ MODS[k].load(); }catch(e){} }); }
   /* WHO IS ON A CLIENT = THE WORKLOG (Jeth, Oct 9: "just based on the worklog") — anyone who tracked time on that
      client's project in the last WL_DAYS days. Nothing is added by hand. The project names come from the portal's
