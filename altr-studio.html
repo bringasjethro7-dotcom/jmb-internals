@@ -693,7 +693,7 @@ function livePoll(){
   loadState(true);
 }
 setInterval(livePoll, 45000);
-setInterval(function(){ linkLoad(false).then(function(){ try{ var st=linkState(LINK.me); if(wtGet() && (st.k==='off'||st.k==='other')) wtStop('Work timer stopped — '+st.why); }catch(_w){} if(VIEW==='delivery'||VIEW==='sourcing') renderView(); }); }, 60000); setTimeout(function(){ linkLoad(true).then(renderView); }, 2500);
+setInterval(function(){ linkLoad(false).then(function(){ try{ var st=linkState(LINK.me); if(wtGet() && (st.k==='off'||st.k==='other')){ var _hw=wtGet(); wtStop('Work timer stopped — '+st.why); if(st.k==='off') wtHold(_hw); } }catch(_w){} if(VIEW==='delivery'||VIEW==='sourcing') renderView(); }); }, 60000); setTimeout(function(){ linkLoad(true).then(renderView); }, 2500);
 document.addEventListener('visibilitychange', function(){ if(!document.hidden) livePoll(); });
 
 /* ── derived model ── */
@@ -1861,6 +1861,7 @@ async function linkLoad(force){
     }
   }catch(e){}
   try{ linkAfter(); }catch(_la){}
+  try{ wtResumeIfHeld(); }catch(_wr){}
 }
 function linkState(p){
   if(!p) return { k:'unknown', why:'no presence row' };
@@ -1908,7 +1909,27 @@ async function wtStart(lane){
   ACT.work=Date.now(); ACT.last=Date.now(); try{ tbSend(true); }catch(_s){}
   toast('Work timer started — it counts while you keep working: a box, tick or note at least every 15 minutes'); renderView();
 }
-function wtStop(why){ var w=wtGet(); if(w) wtLog(w, true); try{ localStorage.removeItem(wtKey()); }catch(e){} try{ tbSend(true); }catch(_s){} if(why) toast(why); renderView(); }
+function wtStop(why){ wtHold(null); var w=wtGet(); if(w) wtLog(w, true); try{ localStorage.removeItem(wtKey()); }catch(e){} try{ tbSend(true); }catch(_s){} if(why) toast(why); renderView(); }
+/* Oct 14 (Jeth — ALTR timelines in slivers): when the portal timer stops, the work timer stops with it (the 60-s check).
+   It used to stay off after Resume until the next tick — and a post on Vysor often takes longer than the portal's hand-over
+   window, so once the portal was 30+ minutes ahead it cut again after every Resume: Resume → cut → Resume → cut. Now a timer
+   the PORTAL stopped comes back by itself (same lane) as soon as the portal timer runs on ALTR again (within 90 minutes).
+   A timer the VA stopped (■ Stop) stays off. The 15-minute tick rule is unchanged. */
+function wtHoldKey(){ return 'altr_wt_held_'+String(USER&&USER.id||'x').toUpperCase(); }
+function wtHold(w){ try{ if(w) localStorage.setItem(wtHoldKey(), JSON.stringify({ lane:w.lane||'Posting', at:Date.now() })); else localStorage.removeItem(wtHoldKey()); }catch(e){} }
+function wtResumeIfHeld(){
+  try{
+    if(!USER || isOwner() || wtGet()) return;
+    var h=JSON.parse(localStorage.getItem(wtHoldKey())||'null'); if(!h || !h.at) return;
+    if(Date.now()-h.at>90*60000){ wtHold(null); return; }
+    if(linkState(LINK.me).k!=='ok') return;
+    wtHold(null);
+    var now=Date.now(); wtPut({ t:now, lane:h.lane||'Posting', ticks:0, accts:[], secs:0, last:now, resumed:1 }); ACT.work=now;
+    try{ tbSend(true); }catch(_s){}
+    toast('⏱ '+(h.lane||'Posting')+' timer back on — your portal timer is running again. Keep ticking as you go (at least every 15 minutes).');
+    try{ if(VIEW==='delivery'||VIEW==='sourcing') renderView(); }catch(_r){}
+  }catch(e){}
+}
 /* every real piece of work calls this: starts the timer if it isn't running (or switches lane), counts the tick and the account */
 function wtTick(lane, k){
   try{ if(!USER || isOwner()) return; }catch(e){ return; }
