@@ -1008,7 +1008,7 @@ var TAB_IC={
   pipeline:SI('<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/>',15),
   insights:SI('<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>',15),
   health:SI('<path d="M3 12h4l3-8 4 16 3-8h4"/>',15),
-  subs:SI('<circle cx="12" cy="12" r="9"/><path d="M8 13.5c1 1.3 2.4 2 4 2s3-.7 4-2"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/>',15),
+  subs:SI('<path d="M4 4.5h16a1.5 1.5 0 0 1 1.5 1.5v9.5a1.5 1.5 0 0 1-1.5 1.5h-8.5L7 20.5V17H4a1.5 1.5 0 0 1-1.5-1.5V6A1.5 1.5 0 0 1 4 4.5z"/><path d="M8 13.5v-2.5M12 13.5V8.5M16 13.5v-4"/>',15),   // Oct 14: a community bubble with bars (was a smiley face)
   prod:SI('<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',15),
   settings:SI('<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="9" cy="6" r="2.2" fill="currentColor"/><circle cx="15" cy="12" r="2.2" fill="currentColor"/><circle cx="7" cy="18" r="2.2" fill="currentColor"/>',15)
 };
@@ -2489,21 +2489,21 @@ function subDayDiff(a,b){ var x=Date.parse(a+'T00:00:00Z'), y=Date.parse(b+'T00:
 function subRows(base){ var out=[]; BASES.forEach(function(b){ if(base && base!=='all' && b.id!==base) return; (ALL[b.id]||[]).forEach(function(r){ out.push(r); }); }); if(!out.length) out=ROWS.slice(); return out; }
 function subStats(range, base){
   var start=range?phtDate(new Date(Date.now()-8*3600000-(range-1)*86400000)):'';
-  var by={}, tot={ posts:0, removed:0, accts:{} }, removed=[];
+  var by={}, tot={ posts:0, removed:0, spam:0, accts:{} }, removed=[];
   subRows(base).forEach(function(r){
     var be=isDead(r)?endedAt(r):null, bd=be?phtDate(be):'';
     postsOf(r).forEach(function(p,i){
       if(!p || !p.r) return; var d=String(p.d||''); if(start && d<start) return;
-      var k=subKey(p.r), s=by[k]||(by[k]={ k:k, name:p.r, posts:0, up:0, removed:0, accts:{}, upAccts:{}, banned3:{}, last:'', first:'' });
+      var k=subKey(p.r), s=by[k]||(by[k]={ k:k, name:p.r, posts:0, up:0, removed:0, spam:0, accts:{}, upAccts:{}, banned3:{}, last:'', first:'' });
       s.posts++; tot.posts++; tot.accts[r.id]=1; s.accts[r.id]=1;
-      if(p.x){ s.removed++; tot.removed++; removed.push({ r:r, p:p, i:i }); } else { s.up++; s.upAccts[r.id]=1; }
+      if(p.x){ s.removed++; tot.removed++; if(p.xr==='spam'){ s.spam++; tot.spam++; } removed.push({ r:r, p:p, i:i }); } else { s.up++; s.upAccts[r.id]=1; }
       if(d>s.last){ s.last=d; s.name=p.r; } if(!s.first || d<s.first) s.first=d;
       if(bd && d && bd>=d && subDayDiff(d,bd)<=3) s.banned3[r.id]=1;
     });
   });
   var list=Object.keys(by).map(function(k){ var s=by[k]; s.nAcc=Object.keys(s.accts).length; s.nUp=Object.keys(s.upAccts).length; s.nBan=Object.keys(s.banned3).length; s.rate=s.posts?s.removed/s.posts:0; return s; });
   removed.sort(function(a,b){ return String(b.p.xt||b.p.t||'')<String(a.p.xt||a.p.t||'')?-1:1; });
-  return { list:list, tot:{ posts:tot.posts, removed:tot.removed, accts:Object.keys(tot.accts).length }, removed:removed };
+  return { list:list, tot:{ posts:tot.posts, removed:tot.removed, spam:tot.spam, accts:Object.keys(tot.accts).length }, removed:removed };
 }
 function subIndex(){ var o={}; subStats(90,'all').list.forEach(function(s){ o[s.k]=s; }); return o; }
 function subVerdict(s){
@@ -2563,10 +2563,16 @@ function postsWith(r, subs, n){
 }
 async function postToggle(id, i){
   var r=rowById(id); if(!r) return; var arr=postsOf(r).map(function(p){ return Object.assign({}, p); }), p=arr[i]; if(!p) return;
-  var on=!p.x;
-  if(!(await confirmBox(on?'Removed by the moderators?':'Undo “removed”?', on?('<b>'+esc(p.r)+'</b> · posted '+esc(fmtDay(p.d))+' from <b>'+esc(r.handle)+'</b>. It counts against this subreddit in the report.'):('<b>'+esc(p.r)+'</b> goes back to “stayed up”.'), on?'Mark removed':'Undo', on))) return;
-  if(on){ p.x=1; p.xt=phtStamp(); p.xb=myId(); } else { delete p.x; delete p.xt; delete p.xb; }
-  if(await saveMeta(r,{ posts:arr })){ toast(on?(p.r+' — marked removed'):(p.r+' — back to stayed up')); renderView(); if($('drawer').classList.contains('on') && $('drawer').getAttribute('data-id')===id) openRec(id); }
+  var on=!p.x, kind='';
+  if(on){   /* Oct 14 (Jeth): removals are split — moderators vs spam filters — so the report (and the client's) shows which is which */
+    kind=await new Promise(function(res){ _mResolve=res;
+      openModal('<div class="md-h"><h3>What took it down?</h3><p><b>'+esc(p.r)+'</b> · posted '+esc(fmtDay(p.d))+' from <b>'+esc(r.handle)+'</b>. It counts against this subreddit in the report.</p>'+
+        '<p class="muted" style="font-size:12.5px;margin-top:6px"><b>Spam filter</b> — the post never showed in the subreddit, or it says “removed by Reddit’s filters” / AutoModerator.<br><b>Moderators</b> — a mod took it down (a removal reason or rule).</p></div>'+
+        '<div class="md-f"><button class="btn sec" onclick="closeModal(false)">Cancel</button><button class="btn dark" onclick="closeModal(\'spam\')">Spam filter</button><button class="btn dark" onclick="closeModal(\'mod\')">Removed by moderators</button></div>'); });
+    if(kind!=='spam' && kind!=='mod') return;
+  } else if(!(await confirmBox('Undo “removed”?', '<b>'+esc(p.r)+'</b> goes back to “stayed up”.', 'Undo', false))) return;
+  if(on){ p.x=1; p.xr=kind; p.xt=phtStamp(); p.xb=myId(); } else { delete p.x; delete p.xr; delete p.xt; delete p.xb; }
+  if(await saveMeta(r,{ posts:arr })){ toast(on?(p.r+' — '+(kind==='spam'?'caught by the spam filter':'removed by the moderators')):(p.r+' — back to stayed up')); renderView(); if($('drawer').classList.contains('on') && $('drawer').getAttribute('data-id')===id) openRec(id); }
   else toast('Could not save — try again.');
 }
 /* the last two days' posts as chips under a posting account: tap one when the mods removed it */
@@ -2576,7 +2582,7 @@ function postsStrip(r){
   ps.forEach(function(p,i){ if(p && p.r && String(p.d||'')>=y) list.push([p,i]); });
   if(!list.length) return '';
   return '<div class="posts-strip" title="Tap a post if the moderators removed it">'+list.slice(-8).map(function(x){ var p=x[0], rm=!!p.x;
-    return '<button class="pchip'+(rm?' rm':'')+'" onclick="event.stopPropagation();postToggle(\''+jsq(r.id)+'\','+x[1]+')">'+esc(p.r)+(p.d===today()?'':' <small>'+esc(fmtDay(p.d))+'</small>')+(rm?' · removed':'')+'</button>'; }).join('')+'</div>';
+    return '<button class="pchip'+(rm?' rm':'')+'" onclick="event.stopPropagation();postToggle(\''+jsq(r.id)+'\','+x[1]+')">'+esc(p.r)+(p.d===today()?'':' <small>'+esc(fmtDay(p.d))+'</small>')+(rm?(p.xr==='spam'?' · spam filter':' · removed'):'')+'</button>'; }).join('')+'</div>';
 }
 function postsSection(r){
   var ps=postsOf(r); if(!ps.length && !isPostingStage(r.status)) return '';
@@ -2585,7 +2591,7 @@ function postsSection(r){
   return '<div class="sec-h" style="margin-top:4px"><b>Posts</b><span>'+(rows.length?rows.length+' logged · '+rm+' removed':'none logged yet')+'</span><hr></div>'+
     (rows.length?'<div class="tbl-w" style="max-height:260px;margin-bottom:14px"><table class="db"><tbody>'+rows.slice(0,60).map(function(x){ var p=x[0];
       return '<tr><td class="c1">'+esc(p.r)+'</td><td class="muted">'+esc(fmtDay(p.d))+(p.n?' · S'+p.n:'')+'</td><td class="muted">'+esc(firstName(p.b||''))+'</td>'+
-        '<td>'+(p.x?'<span class="flag r" title="'+esc('Tagged '+(p.xt||'')+' by '+vaName(p.xb||''))+'">Removed</span>':'<span class="flag g">Stayed up</span>')+'</td>'+
+        '<td>'+(p.x?'<span class="flag r" title="'+esc('Tagged '+(p.xt||'')+' by '+vaName(p.xb||''))+'">'+(p.xr==='spam'?'Spam filter':'Removed')+'</span>':'<span class="flag g">Stayed up</span>')+'</td>'+
         '<td style="white-space:nowrap"><button class="btn sm sec" onclick="postToggle(\''+jsq(r.id)+'\','+x[1]+')">'+(p.x?'Undo':'Removed?')+'</button></td></tr>'; }).join('')+'</tbody></table></div>':
       '<div class="muted" style="font-size:12px;margin-bottom:14px">Each posting session asks for the subreddits — they show up here.</div>');
 }
@@ -2608,12 +2614,12 @@ function vSubs(){
   var admin=isAdmin(), S=subStats(SUBS.range, admin?SUBS.base:'all'), q=String(SUBS.q||'').trim().toLowerCase();
   window._SUBIX=subIndex();
   var rl=SUBS.range?('last '+SUBS.range+' days'):'all time';
-  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Sub<span class="gtxt">reddits</span></h2><p>Every post logged at the end of a posting session, and every post the moderators removed. Keep posting where our content stays up — drop the subreddits that keep removing it.</p></div>'+
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Sub<span class="gtxt">reddits</span></h2><p>Every post logged at the end of a posting session, and every post the moderators or a spam filter took down. Keep posting where our content stays up — drop the subreddits that keep removing it. The client sees the same numbers (no names) in their portal.</p></div>'+
     (admin?'<select class="sel" onchange="SUBS.base=this.value;renderView()"><option value="all">All bases</option>'+BASES.map(function(b){ return '<option value="'+esc(b.id)+'"'+(SUBS.base===b.id?' selected':'')+'>'+esc(b.n)+'</option>'; }).join('')+'</select>':'')+
     '<div class="seg" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(SUBS.range===x[0]?'on':'')+'" onclick="SUBS.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div></div>';
   var rate=S.tot.posts?Math.round(S.tot.removed/S.tot.posts*100):0;
   h+='<div class="kpis" style="margin-top:12px">'+kpi('Posts logged',S.tot.posts,rl,'#ec4899')+kpi('Subreddits',S.list.length,'used · '+rl,'#a855f7')+
-    kpi('Stayed up',S.tot.posts-S.tot.removed,S.tot.posts?(100-rate)+'% of posts':'—','#10b981')+kpi('Removed by mods',S.tot.removed,S.tot.posts?rate+'% removal rate':'—','#ef4444')+kpi('Accounts posting',S.tot.accts,'with at least one post','#0ea5e9')+'</div>';
+    kpi('Stayed up',S.tot.posts-S.tot.removed,S.tot.posts?(100-rate)+'% of posts':'—','#10b981')+kpi('Removed by mods',S.tot.removed-S.tot.spam,S.tot.posts?rate+'% removal rate (both kinds)':'—','#ef4444')+kpi('Spam filter',S.tot.spam,S.tot.posts?Math.round(S.tot.spam/S.tot.posts*100)+'% of posts':'—','#f59e0b')+kpi('Accounts posting',S.tot.accts,'with at least one post','#0ea5e9')+'</div>';
   var A=subAvoidAll();
   h+='<div class="card pad" style="margin-top:12px"><div class="ch-h"><b>Don\'t post in</b><span>your avoid list + any subreddit that removed half or more of 3+ posts (90 days) · every VA sees this before posting</span></div>'+
     (A.length?'<div class="chips" style="margin-top:8px">'+A.map(function(x){ var man=x.why==='avoid list';
@@ -2624,18 +2630,18 @@ function vSubs(){
   var list=S.list.filter(function(s){ return !q || s.k.indexOf(q)>=0; }).sort(sorters[SUBS.sort]||sorters.posts);
   var th=function(k,l,t){ return '<th style="cursor:pointer" title="'+esc(t||'Sort')+'" onclick="SUBS.sort=\''+k+'\';renderView()">'+l+(SUBS.sort===k?' <span class="ar">▼</span>':'')+'</th>'; };
   h+='<div class="row" style="margin:16px 0 8px;gap:8px"><b style="font-size:14px">By subreddit</b><span class="muted" style="font-size:12px">'+list.length+' of '+S.list.length+'</span><div style="flex:1"></div><input class="inp" placeholder="Search a subreddit…" value="'+esc(SUBS.q)+'" oninput="SUBS.q=this.value;renderView()" style="width:220px" id="sub-q"></div>';
-  h+='<div class="tbl-w"><table class="db"><thead><tr><th class="c1">Subreddit</th><th>Verdict</th>'+th('posts','Posts')+th('up','Stayed up')+'<th>Removed</th>'+th('rate','Removal rate')+'<th>Accounts</th>'+th('ban','Banned ≤3 days','Accounts banned within 3 days after posting here — a hint, not proof')+th('last','Last post')+(admin?'<th></th>':'')+'</tr></thead><tbody>'+
+  h+='<div class="tbl-w"><table class="db"><thead><tr><th class="c1">Subreddit</th><th>Verdict</th>'+th('posts','Posts')+th('up','Stayed up')+'<th>Removed</th><th title="Caught by Reddit\'s or AutoModerator\'s spam filter">Spam filter</th>'+th('rate','Removal rate')+'<th>Accounts</th>'+th('ban','Banned ≤3 days','Accounts banned within 3 days after posting here — a hint, not proof')+th('last','Last post')+(admin?'<th></th>':'')+'</tr></thead><tbody>'+
     list.map(function(s){ var vd=subVerdict(s), pc=Math.round(s.rate*100), av=subAvoidList().indexOf(s.k)>=0;
       return '<tr><td class="c1"><a href="https://www.reddit.com/'+esc(s.name)+'/" target="_blank" rel="noopener" style="color:inherit;font-weight:700">'+esc(s.name)+' ↗</a></td>'+
         '<td><span class="flag" style="background:'+vd.bg+';color:'+vd.c+'">'+esc(vd.t)+'</span></td>'+
-        '<td class="num">'+s.posts+'</td><td class="num" style="color:#047857;font-weight:700">'+s.up+'</td><td class="num" style="'+(s.removed?'color:#b91c1c;font-weight:800':'')+'">'+(s.removed||'·')+'</td>'+
+        '<td class="num">'+s.posts+'</td><td class="num" style="color:#047857;font-weight:700">'+s.up+'</td><td class="num" style="'+(s.removed-s.spam?'color:#b91c1c;font-weight:800':'')+'">'+((s.removed-s.spam)||'·')+'</td><td class="num" style="'+(s.spam?'color:#b45309;font-weight:800':'')+'">'+(s.spam||'·')+'</td>'+
         '<td style="min-width:120px"><div class="row" style="gap:6px"><div style="flex:1;height:6px;border-radius:6px;background:#f1f5f9;overflow:hidden"><i style="display:block;height:100%;width:'+pc+'%;background:'+(pc>=50?'#ef4444':(pc>=25?'#f59e0b':'#10b981'))+'"></i></div><b style="font-size:11.5px;min-width:32px;text-align:right">'+pc+'%</b></div></td>'+
         '<td class="num">'+s.nAcc+'</td><td class="num" style="'+(s.nBan?'color:#b91c1c;font-weight:700':'')+'">'+(s.nBan||'·')+'</td><td class="muted">'+esc(fmtDay(s.last))+'</td>'+
         (admin?'<td style="white-space:nowrap"><button class="btn sm '+(av?'sec':'dark')+'" onclick="subAvoidSet(\''+jsq(s.k)+'\','+(av?'false':'true')+')">'+(av?'Allow again':'Avoid')+'</button></td>':'')+'</tr>'; }).join('')+'</tbody></table></div>';
   if(S.removed.length){
-    h+='<div class="sec-h" style="margin-top:18px"><b>Latest removals</b><span>'+S.removed.length+' in the '+rl+'</span><hr></div><div class="tbl-w" style="max-height:340px"><table class="db"><thead><tr><th class="c1">Subreddit</th><th>Account</th><th>Stage</th><th>Posted</th><th>Tagged</th>'+(admin?'<th>By</th>':'')+'</tr></thead><tbody>'+
+    h+='<div class="sec-h" style="margin-top:18px"><b>Latest removals</b><span>'+S.removed.length+' in the '+rl+'</span><hr></div><div class="tbl-w" style="max-height:340px"><table class="db"><thead><tr><th class="c1">Subreddit</th><th>Account</th><th>Stage</th><th>Kind</th><th>Posted</th><th>Tagged</th>'+(admin?'<th>By</th>':'')+'</tr></thead><tbody>'+
       S.removed.slice(0,40).map(function(x){ var p=x.p, sm=stageMeta(p.st||x.r.status);
-        return '<tr><td class="c1">'+esc(p.r)+'</td><td><a href="#" onclick="openRec(\''+jsq(x.r.id)+'\');return false" style="color:inherit">'+esc(x.r.handle)+'</a></td><td><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+'">'+esc(sm.n)+'</span></td><td class="muted">'+esc(fmtDay(p.d))+'</td><td class="muted">'+esc(p.xt?fmtDT(parseTs(p.xt)):'—')+'</td>'+(admin?'<td>'+esc(firstName(p.xb||p.b||''))+'</td>':'')+'</tr>'; }).join('')+'</tbody></table></div>';
+        return '<tr><td class="c1">'+esc(p.r)+'</td><td><a href="#" onclick="openRec(\''+jsq(x.r.id)+'\');return false" style="color:inherit">'+esc(x.r.handle)+'</a></td><td><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+'">'+esc(sm.n)+'</span></td><td>'+(p.xr==='spam'?'<span class="flag a">Spam filter</span>':'<span class="flag r">Moderators</span>')+'</td><td class="muted">'+esc(fmtDay(p.d))+'</td><td class="muted">'+esc(p.xt?fmtDT(parseTs(p.xt)):'—')+'</td>'+(admin?'<td>'+esc(firstName(p.xb||p.b||''))+'</td>':'')+'</tr>'; }).join('')+'</tbody></table></div>';
   }
   return h;
 }
