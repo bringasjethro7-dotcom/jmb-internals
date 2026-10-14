@@ -267,6 +267,9 @@ body::before{content:'';position:fixed;inset:-20% -10% auto;height:520px;z-index
 .ima-ask .row{display:flex;gap:8px} .ima-ask .btn{flex:1;background:linear-gradient(135deg,#f58529,#dd2a7b 55%,#8134af)} .ima-ask .btn.sec{flex:0 0 auto;background:#f1f5f9;color:#334155;border:1px solid #e2e8f0}
 .c-ima .itk.lock{border-style:dashed;color:var(--ink3);border-color:var(--line2);cursor:not-allowed}
 .c-ima .ia-add{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.c-ima .ia-create{display:flex;flex-direction:column;gap:7px;margin-top:4px;padding:10px;border:1px dashed rgba(221,42,123,.35);border-radius:12px;background:var(--igs)}
+.c-ima .ia-go{display:flex;align-items:center;gap:10px;flex-wrap:wrap} .c-ima .ia-go .muted{font-size:11.5px}
+.c-ima .ia-own{font-size:11.5px;padding:6px 2px}
 .c-ima .ia-add input{flex:1;min-width:130px;padding:8px 10px;border:1px solid var(--line2);border-radius:10px;font:inherit;font-size:12.5px;background:#fff}
 .c-ima .ia-add input[type=date]{flex:0 0 150px}
 .c-ima .kmenu{position:relative}
@@ -2438,13 +2441,35 @@ function IGPhones(CFG){
     var head='<div class="ip-h"><span class="ip-ic">'+IC.phone+'</span><div class="ip-t"><b>'+esc(phoneLabel(p))+'</b><small>'+esc(p.model||'—')+' · '+A.length+'/'+MAX_ACCTS+' accounts · '+esc(vaName(ownerOf(p)))+'</small></div>'+
       (sd?chip('ok','Ready'):chip('warn','Setting up · '+Object.keys(p.meta.setup||{}).length+'/'+SETUP.length))+'<span class="sp"></span>'+(mode==='today'&&sd?pfBadge(p):'')+ownerTimerChip(p)+timerBtn(p)+kmenu(menu)+'</div>'+pickRow(p);
     if(mode==='phones') return '<div class="iphone">'+head+setupList(p)+pfHistory(p)+'</div>';
-    if(!sd) return '<div class="iphone dim">'+head+'<div class="ip-note">Setup isn\'t finished — '+(v7?'tick steps 8–10':'work through the checklist')+' in <a onclick="'+NS+'.setView(\'phones\')">Phones &amp; setup</a>.'+(v7&&A.length<MAX_ACCTS?' Accounts can be added now (steps 1–7 are done).':'')+'</div>'+(v7?acctList(p, A, open):'')+'</div>';
+    if(!sd) return '<div class="iphone dim">'+head+'<div class="ip-note">Setup isn\'t finished — '+(v7?'tick steps 8–10':'work through the checklist')+' in <a onclick="'+NS+'.setView(\'phones\')">Phones &amp; setup</a>.'+(v7&&A.length<MAX_ACCTS?' Steps 1–7 are done — create the accounts below with ▶ Create account.':'')+'</div>'+(v7?acctList(p, A, open):'')+'</div>';
     return '<div class="iphone'+(open?'':' closed')+'">'+head+(open||isOwner()?'':'<div class="ip-lock">🔒 Log this session\'s pre-flight to open '+esc(phoneLabel(p))+'\'s accounts.</div>')+acctList(p, A, open)+'</div>';
   }
+  /* Oct 14 (Jeth — "there's no button to start the creation of the accounts with timer"): account creation is its own
+     timed step on the phone card. ▶ Create account N of 3 opens the pre-flight if the phone isn't open yet, otherwise starts
+     the "Creating accounts" timer; once the account exists on the phone the VA types its @username and saves it (day 1). */
+  function createBox(p, A, open){
+    var v7=setupDone(p, VERIFY_STEPS), n=A.length+1;
+    if(A.length>=MAX_ACCTS) return '';
+    if(isOwner()) return v7?'<div class="ia-own muted">VAs create the accounts here: ▶ Create account '+n+' of '+MAX_ACCTS+' (timed) → type its @username → Save.</div>':'';
+    if(!v7) return '';
+    var on=TM.run && TM.run.pid===p.id && TM.run.k==='create' && !TM.run.ends;
+    var go=!open
+      ?'<button class="itk lock" onclick="'+NS+'.createStart(\''+jsq(p.id)+'\')">🔒 Log the pre-flight to create account '+n+' of '+MAX_ACCTS+'</button>'
+      :(on?'<button class="itk run" disabled>⏱ Creating account '+n+' of '+MAX_ACCTS+' — timer running</button>'
+          :'<button class="itk go" onclick="'+NS+'.createStart(\''+jsq(p.id)+'\')">▶ Create account '+n+' of '+MAX_ACCTS+'</button>');
+    var form=open?'<div class="ia-add"><input id="'+PX+'-ah-'+p.id+'" placeholder="@username of the new account"><input id="'+PX+'-ad-'+p.id+'" type="date" value="'+today()+'" title="Creation day (day 1)"><button class="btn sm" onclick="'+NS+'.addAcct(\''+jsq(p.id)+'\')">Save account</button></div>':'';
+    return '<div class="ia-create"><div class="ia-go">'+go+'<span class="muted">'+(open?(on?'Create it on the phone, then save its @username below — day 1 starts today.':'Starts the timer while you create it on the phone.'):'Instagram opens only after a clean pre-flight.')+'</span></div>'+form+'</div>';
+  }
+  async function createStart(pid){
+    var p=rowById(pid); if(!p || isOwner()) return;
+    if(!setupDone(p, VERIFY_STEPS)){ toast('Finish setup steps 1–7 on '+phoneLabel(p)+' first.'); return; }
+    if(acctsOf(pid).length>=MAX_ACCTS){ toast(phoneLabel(p)+' already has '+MAX_ACCTS+' accounts.'); return; }
+    if(!phoneOpen(p)){ toast('Log this session\'s pre-flight on '+phoneLabel(p)+' first — then create the account.'); preflightOpen(pid); return; }
+    await tmStart(pid, 'create');
+    setTimeout(function(){ try{ var e=$(''+PX+'-ah-'+pid); if(e) e.focus(); }catch(_e){} }, 60);
+  }
   function acctList(p, A, open){
-    var add=A.length<MAX_ACCTS && setupDone(p, VERIFY_STEPS) && !isOwner()
-      ?'<div class="ia-add"><input id="'+PX+'-ah-'+p.id+'" placeholder="@username"><input id="'+PX+'-ad-'+p.id+'" type="date" value="'+today()+'" title="Creation day (day 1)"><button class="btn sm" onclick="'+NS+'.addAcct(\''+jsq(p.id)+'\')">＋ Add account</button></div>':'';
-    return '<div class="ip-b">'+(A.length?A.map(function(a){ return acctRow(a, open); }).join(''):'<div class="muted" style="padding:6px 2px">No accounts on this phone yet.</div>')+add+'</div>';
+    return '<div class="ip-b">'+(A.length?A.map(function(a){ return acctRow(a, open); }).join(''):'<div class="muted" style="padding:6px 2px">No accounts on this phone yet.</div>')+createBox(p, A, open)+'</div>';
   }
   function setupList(p){
     var s=p.meta.setup||{}, id=jsq(p.id), next=0; while(s[next]) next++;
@@ -2492,7 +2517,7 @@ function IGPhones(CFG){
     var body=Object.keys(byModel).sort().map(function(mdl){
       return '<div class="imodel"><div class="im-h"><span class="dot"></span><b>'+esc(mdl)+'</b><span class="muted">'+byModel[mdl].length+' phone'+(byModel[mdl].length===1?'':'s')+'</span></div>'+byModel[mdl].map(function(p){ return phoneCard(p, 'today'); }).join('')+'</div>';
     }).join('');
-    return bar+whoPills()+(body||'<div class="card empty" style="padding:28px"><h3>No phones yet</h3><p>Add the first phone, work through its setup checklist, then add its three accounts.</p></div>')+addPhoneBox();
+    return bar+whoPills()+(body||'<div class="card empty" style="padding:28px"><h3>No phones yet</h3><p>'+(isOwner()?'The VAs on '+esc(PROJECT)+' add the phones here (＋ Add a phone), tick each phone\'s setup checklist, then create its three accounts with ▶ Create account. Everything they add shows here for you.':'Add the first phone, work through its setup checklist, then create its three accounts with ▶ Create account.')+'</p></div>')+addPhoneBox();
   }
   function viewPhones(){
     var P=filtered();
@@ -2546,7 +2571,7 @@ function IGPhones(CFG){
   if(!S.who) S.who='all';
   var api={ id:CID, ns:NS, px:PX, name:PROJECT, tmQuiet:tmQuiet, S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners,
     setView:setView, setWho:setWho, toggleAddPhone:toggleAddPhone, addPhone:addPhone, setupTick:setupTick, phoneNote:phoneNote,
-    addAcct:addAcct, log:logTask, setStatus:setStatus, trialUnlocked:trialUnlocked, trialSet:trialSet, trialUndo:trialUndo, history:history, reassign:reassign, del:del,
+    addAcct:addAcct, createStart:createStart, log:logTask, setStatus:setStatus, trialUnlocked:trialUnlocked, trialSet:trialSet, trialUndo:trialUndo, history:history, reassign:reassign, del:del,
     preflight:preflightOpen, pfClose:pfClose, pfPick:pfPick, pfClear:pfClear, pfAttach:pfAttach, pfCap:pfCap, pfRule:pfRule, pfSave:pfSave, pfReview:pfReview,
     qaSave:qaSave, qaDate:qaDateSet, qaShift:qaShift,
     scrollStart:scrollStart, tmStart:tmStart, tmStop:tmStop, tmPick:tmPick, tmStill:tmStill, tmTouch:tmTouch, timerOn:timerOn, timerInfo:timerInfo, _TM:TM,
