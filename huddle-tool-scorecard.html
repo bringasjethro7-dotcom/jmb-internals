@@ -613,6 +613,36 @@ function animCounts(){
 }
 var _show0=show; show=function(n){ _show0(n); animCounts(); };
 
+
+/* ── Oct 15 (Jeth): the Feed's "I've read this" button unlocks only after the film was really watched ──
+   A scene counts once it has been on screen, playing, for at least half its length. When the film ends it tells
+   the Feed (the post it sits in, or the portal window that opened it full screen) whether every scene was seen.
+   Skipped scenes → the end card says which, and the Feed button stays locked until they are watched. */
+var SEEN=[], _seenT=Date.now();
+(function seenLoop(){ var now=Date.now(), dt=Math.min(1000, now-_seenT); _seenT=now; if(playing && !ENDED && STARTED && !document.hidden) SEEN[i]=(SEEN[i]||0)+dt; requestAnimationFrame(seenLoop); })();
+function sceneNeed(k){ return (parseFloat(scenes[k].getAttribute('data-secs'))||12)*500; }
+function missedScenes(){ var out=[]; for(var k=0;k<scenes.length;k++) if((SEEN[k]||0)<sceneNeed(k)) out.push(k); return out; }
+post=function(state){
+  var msg={ jmbFilm:state, scene:i+1, scenes:scenes.length, src:location.pathname };
+  if(state==='ended'){ var m=missedScenes(); msg.complete=!m.length; msg.missed=m.map(function(k){ return k+1; }); }
+  try{ if(window.parent && window.parent!==window) window.parent.postMessage(msg, '*'); else if(window.opener && !window.opener.closed) window.opener.postMessage(msg, '*'); }catch(e){}
+};
+var _finish0=finishFilm; finishFilm=function(){
+  _finish0();
+  try{
+    var m=missedScenes(), big=document.querySelector('#endcard .big'), sub=document.getElementById('endcard-sub'), row=document.querySelector('#endcard div:last-child');
+    var old=document.getElementById('ctl-missed'); if(old) old.remove();
+    if(m.length){
+      if(big) big.textContent='Almost — '+m.length+' scene'+(m.length>1?'s were':' was')+' skipped';
+      if(sub) sub.innerHTML='The button in the Feed unlocks only after <b>every scene</b> is watched. Skipped: scene '+m.map(function(k){ return k+1; }).join(', ')+'.';
+      if(row){ var b=document.createElement('button'); b.type='button'; b.id='ctl-missed'; b.textContent='▶ Watch scene '+(m[0]+1); b.onclick=function(ev){ ev.stopPropagation(); stepFilm(m[0]-i); }; row.insertBefore(b, row.firstChild); }
+    } else {
+      if(big) big.textContent='Follow the tool — it’s half your score ✓';
+      if(sub) sub.innerHTML='Now go back to the post in the Feed — the <b>“I’ve read this”</b> button is unlocked. Tap it to unlock your time tracker.';
+    }
+  }catch(e){}
+};
+
 /* Render FIRST. Narration, ambience and the safety net are nice-to-have; the slides
    are not. Nothing after this may be able to stop them appearing. */
 try{ show(0); }catch(e){ try{ scenes[0].classList.add('on'); }catch(_){} }
