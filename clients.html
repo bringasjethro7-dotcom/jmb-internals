@@ -1784,8 +1784,8 @@ var IMA=(function(){
      so the portal timer keeps going and the time counts as tool time. One timer at a time; switching steps on a
      phone carries on without a gap. It survives a reload. Owners never run it. */
   var TM={ run:null, tick:null, ask:null, restored:false, pick:'' };
-  var TLIM={ pre:20, phone:30, create:30, pfp:20, feed:20, reels:30, trial:30 };
-  var TNAME={ pre:'Pre-flight check', phone:'Phone setup', create:'Creating accounts', scroll:'Warm-up scroll', pfp:'Profile photos', feed:'Feed photos', reels:'Reels', trial:'Trial reels' };
+  var TLIM={ pre:20, phone:30, create:30, pfp:20, feed:20, reels:30, trial:30, work:20 };
+  var TNAME={ pre:'Pre-flight check', phone:'Phone setup', create:'Creating accounts', scroll:'Warm-up scroll', pfp:'Profile photos', feed:'Feed photos', reels:'Reels', trial:'Trial reels', work:'Phone work' };
   var SCROLL_MS=15*60*1000, ASK_MS=2*60*1000;
   function tmKey(){ return 'ima_run_'+me(); }
   function tmSave(){ try{ if(TM.run) localStorage.setItem(tmKey(), JSON.stringify(TM.run)); else localStorage.removeItem(tmKey()); }catch(e){} }
@@ -1824,7 +1824,7 @@ var IMA=(function(){
   }
   function runBanner(){
     var R=TM.run; if(isOwner()) return '';
-    if(!R) return phones().length?'<div class="im-run idle"><div class="tx"><small>No timer running</small><b>Time the phone work you\'re doing</b><span>▶ Start 15:00 on a scroll, or ⏱ Timer on the phone you\'re working. Your portal timer keeps running only while a step is being timed or logged here.</span></div></div>':'';
+    if(!R) return phones().length?'<div class="im-run idle"><div class="tx"><small>No timer running</small><b>Time the phone work you\'re doing</b><span>It starts by itself when you log a step, open a pre-flight or tick setup — or press ⏱ Timer on the phone you\'re working. Without a running timer your portal timer stops after 3 minutes with no computer activity (phone work doesn\'t move the mouse).</span></div></div>':'';
     var now=Date.now();
     if(R.ends){ var left=Math.max(0,R.ends-now), done=left<=0;
       return '<div class="im-run'+(done?' done':'')+'"><div class="ring"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19" class="bg"/><circle cx="22" cy="22" r="19" class="fg" id="ima-run-arc" style="stroke-dashoffset:'+(119.4*(left/SCROLL_MS)).toFixed(1)+'"/></svg></div>'+
@@ -1849,6 +1849,26 @@ var IMA=(function(){
   function tmAskClose(){ TM.ask=null; var o=$('ima-ask'); if(o) o.remove(); }
   function tmStill(){ if(TM.run){ TM.run.chk=Date.now(); tmSave(); } tmAskClose(); try{ hubWork('timer'); }catch(e){} tmPaint(true); }
   function tmTouch(){ if(TM.run && !TM.run.ends && !TM.ask){ TM.run.chk=Date.now(); tmSave(); } }   // any logged step = still working
+  /* Oct 14, evening (Jeth — JMB003's bar in slivers again): Imperium work happens on the phone, so the computer sits idle
+     and the portal's 3-minute no-activity rule cut her timer between reels — she logged every reel but never pressed
+     ⏱ Timer, so the hub told the portal "no task pressed yet". Now the timer starts BY ITSELF on the work she does here:
+     a step she logs (reel, feed photo, profile photo, trial reel), a pre-flight she opens, a setup step she ticks, an account
+     she adds; after a logged 15-minute scroll it carries on as "Phone work". It keeps asking "still working?" every 20–30
+     minutes as before. A 15-minute scroll that is running (or finished and waiting to be logged) is left alone. */
+  function tmAuto(pid, k){
+    try{
+      if(isOwner() || !USER || !pid || !TNAME[k] || k==='scroll') return;
+      tmRestore();
+      var R=TM.run;
+      if(R && R.ends) return;
+      if(R && R.pid===pid && R.k===k){ tmTouch(); return; }
+      var now=Date.now(); tmAskClose();
+      TM.run={ k:k, pid:pid, start:(R && R.pid===pid)?R.start:now, chk:now, auto:1 }; TM.pick=''; tmSave(); tmTickOn();
+      try{ hubWork('timer'); }catch(e){}
+      if(!R) try{ toast('⏱ '+tmLabel(TM.run)+' — the timer started by itself. It keeps your portal timer running while you work on the phone.'); }catch(e){}
+      tmPaint(true);
+    }catch(e){}
+  }
   async function scrollStart(aid){
     if(isOwner()) return;
     var a=rowById(aid); if(!a) return; var p=rowById(a.meta.phone);
@@ -1941,6 +1961,7 @@ var IMA=(function(){
     var p=rowById(pid); if(!p) return; var s=(p.meta.setup||{});
     if(s[i]){ if(!confirm('Untick "'+SETUP[i]+'"?')) return; return guarded(pid, function(){ return patchMeta(pid, function(m){ m.setup=m.setup||{}; delete m.setup[i]; }, null, 'Unticked.'); }); }
     for(var j=0;j<i;j++) if(!s[j]){ toast('Do the steps in order — step '+(j+1)+' first.'); return; }
+    tmAuto(pid, 'phone');
     if(!(await linkGate(CL(), 'The setup checklist'))) return;
     var last=(i===SETUP.length-1);
     if(last){ try{ await bump(PROJECT, T.phone, 1); }catch(e){ return; } }   // proof before the phone is marked Ready
@@ -1960,6 +1981,7 @@ var IMA=(function(){
     if(!setupDone(p, VERIFY_STEPS)){ toast('Finish setup steps 1–7 on '+phoneLabel(p)+' first — accounts are created only on a verified phone.'); return; }
     if(acctsOf(pid).length>=MAX_ACCTS){ toast(phoneLabel(p)+' already has '+MAX_ACCTS+' accounts — one phone, one model, three accounts.'); return; }
     if(!phoneOpen(p)){ toast('Log this session\'s pre-flight on '+phoneLabel(p)+' first.'); preflightOpen(pid); return; }
+    tmAuto(pid, 'create');
     if(!(await linkGate(CL(), 'Adding an account'))) return;
     var isNew=(st===today());
     if(isNew){ try{ await bump(PROJECT, T.create, 1); }catch(e){ return; } }
@@ -1979,6 +2001,7 @@ var IMA=(function(){
     if(it.done>=it.target){ toast('Today\'s '+(k==='reels'?'reels are':'step is')+' already done on '+a.handle+' — nothing ahead of the schedule.'); return; }
     if(k==='scroll' && !isOwner()){ tmRestore(); var R0=TM.run;   // Oct 14: the scroll is timed here — it counts once its 15 minutes are done
       if(!(R0 && R0.ends && R0.aid===aid && R0.ends<=Date.now())){ toast(R0 && R0.ends && R0.aid===aid?('Keep scrolling — '+downClock(R0.ends-Date.now())+' left.'):('Press ▶ Start 15:00 on '+a.handle+' first — the scroll counts once the 15 minutes are done.')); return; } }
+    if(k!=='scroll' && p) tmAuto(p.id, k);   // Oct 14: the timer starts by itself
     if(!(await linkGate(CL(), 'Logging work'))) return;
     try{ await bump(PROJECT, T[k], 1); }catch(e){ return; }
     await guarded(aid, function(){ return patchMeta(aid, function(m){
@@ -1987,7 +2010,7 @@ var IMA=(function(){
       L.who=L.who||{}; L.who[me()]=(+L.who[me()]||0)+1;
       Object.keys(m.log).sort().slice(0,-45).forEach(function(old){ delete m.log[old]; });   // keep ~6 weeks
     }, null, '+1 '+T[k]+' · '+a.handle); });
-    if(k==='scroll' && TM.run && TM.run.ends && TM.run.aid===aid){ TM.run=null; tmSave(); tmPaint(true); } else tmTouch();
+    if(k==='scroll' && TM.run && TM.run.ends && TM.run.aid===aid){ TM.run=null; tmSave(); tmAuto(a.meta.phone, 'work'); tmPaint(true); } else tmTouch();   // after a scroll the phone work carries on, timed
     try{ snap(); }catch(_s){}
   }
   async function setStatus(aid, st){
@@ -2102,6 +2125,7 @@ var IMA=(function(){
   }
   function preflightOpen(pid){
     var p=rowById(pid); if(!p) return;
+    tmAuto(pid, 'pre');
     PF={ pid:pid, shots:{ maps:null, ip:null, scam:null, mgr:null }, slot:'maps' };
     var ov=pfBox(); ov.style.display='flex'; ov.innerHTML=''; pfPaint();
   }
