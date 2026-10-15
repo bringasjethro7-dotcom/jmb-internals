@@ -1474,7 +1474,7 @@ function stageSelect(r, cls){
   var cur=r.status, sm=stageMeta(cur);
   var opts=ORDER.filter(function(k){ return (k!=='creationstandby' || cur==='creationstandby') && (isAdmin() || (k!=='onhold' && k!=='archived') || k===cur); }).map(function(k){ return '<option value="'+k+'"'+(k===cur?' selected':'')+'>'+esc(stageMeta(k).n)+'</option>'; }).join('');
   if(ORDER.indexOf(cur)<0) opts='<option value="'+esc(cur)+'" selected>'+esc(cur)+'</option>'+opts;
-  return '<select class="stg '+(cls||'')+'" onchange="changeStage(\''+jsq(r.id)+'\',this)" data-prev="'+esc(cur)+'" title="Move this account to another stage" '+
+  return '<select class="stg '+(cls||'')+'" onchange="changeStage(\''+jsq(r.id)+'\',this)" data-prev="'+esc(cur)+'" title="Move this account to another stage — when the client says so you can move it ahead (e.g. Warm-up → Early + DMs or Posting) without going through each stage; no QA deduction" '+
     'style="color:'+sm.c+';border-color:'+sm.c+'40;background-color:'+sm.c+'12">'+opts+'</select>';
 }
 function chipsHtml(r, withVa){
@@ -4693,7 +4693,9 @@ var QA_RULES=[
   { k:'hc_missing', n:'Daily health check not finished by the end of the shift', d:1, u:'' },
   { k:'hc_none',    n:'Daily health check never started', d:2, u:'instead of the −1' },
   { k:'hc_late',    n:'Health check started after 8:15 (AM or PM shift)', d:0.5, u:'' },
-  { k:'skip',       n:'Stage skipped, or promoted before the stage\'s days were up', d:1, u:'each' },
+  /* Oct 15 (Jeth): the client may move an account ahead — e.g. Warm-up straight to Early + DMs or Posting — so
+     skipping a stage or promoting before its days are up is allowed and costs nothing. The old 'skip' rule (−1 each)
+     is gone, and every deduction it made since Oct 5 was refunded. */
   { k:'tagging',    n:'Accounts not tagged right — method or model missing, or a new account without its phone', d:0.5, u:'each · max 2' },
   { k:'quick',      n:'Session or DMs finished within 20 seconds of starting', d:0.5, u:'each · max 2' },
   { k:'fast',       n:'Under 35% of the team time for that task (once it is learned)', d:0.5, u:'each · max 2' },
@@ -4933,14 +4935,7 @@ function pqFlags(va, day, dr, L){
   var openFix=allRows().filter(function(r){ var f=M(r).fix; return f && fixTo(r)===va && !isDead(r) && String(f.day||'')<=day && (day===today() || String(f.day||'')<day); });
   if(openFix.length && (day<today() || phtStamp()>day+(SHIFTOF[va]==='night'?' 23:00:00':' 12:00:00'))) F.push({ k:'fix_open', t:openFix.length+' username fix'+(openFix.length===1?'':'es')+' still open', d:Math.min(3, openFix.length*pqRule('fix_open').d), c:'a', tip:openFix.map(function(r){ return r.handle+' (asked '+String((M(r).fix||{}).day||'')+')'; }).join(' · ') });
   if(untag.length) F.push({ k:'tagging', t:untag.length+' account'+(untag.length===1?'':'s')+' missing tags', d:Math.min(2,untag.length*pqRule('tagging').d), c:'a', tip:untag.slice(0,12).map(function(r){ return r.handle+': '+[!methodOf(r)?'method':'',!r.model?'model':'',(cdateOf(r)>=ps&&!r.device&&phoneList(false,r.project).length)?'phone':''].filter(String).join(', '); }).join('\n') });
-  (EVENTS||[]).forEach(function(e){
-    if(e.kind!=='stage' || String(e.by||'').toLowerCase()!==va || bizDayOf(e.at)!==day) return;
-    var a=phaseIx(e.from), b=phaseIx(e.to); if(a<0 || b<0 || b<=a) return;
-    if(b-a>1){ F.push({ k:'skip', t:(e.handle||'?')+': '+stageMeta(e.from).n+' → '+stageMeta(e.to).n, d:pqRule('skip').d, c:'r' }); return; }
-    var p=PH[a]; if(!p.dur) return; var ent=pqEntered(e); if(!ent) return;
-    var days=Math.floor((parseTs(e.at).getTime()-new Date(bizDayOf(ent)+'T00:00:00+08:00').getTime())/86400000);
-    if(days<p.dur) F.push({ k:'skip', t:(e.handle||'?')+': left '+p.n+' on day '+(days+1)+' of '+p.dur, d:pqRule('skip').d, c:'r' });
-  });
+  // Oct 15: stage jumps / early promotions are no longer a QA finding (the client may move accounts ahead).
   return F;
 }
 /* portal time vs tool time for a VA-day: live from presence + today's task log, past days from the ledger */
