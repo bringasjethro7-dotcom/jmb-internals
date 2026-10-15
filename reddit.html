@@ -2665,7 +2665,7 @@ function vSubs(){
    If Supabase cannot be reached the old rule comes back (everyone who owns live accounts), so the check
    never stops. */
 var HC_DAY_END='17:00:00', HC_NIGHT_END='05:00:00';
-var CHK={ day:'', map:{}, at:0, err:'' };
+var CHK={ day:'', map:{}, prev:{}, at:0, err:'' };
 function hcShiftOf(va){ return SHIFTOF[String(va||'').toLowerCase()]==='night'?'night':'day'; }
 function hcDue(shift, day){ day=day||today(); return shift==='night'?dAdd(day,1)+' '+HC_NIGHT_END:day+' '+HC_DAY_END; }
 function hcDueLbl(shift){ return shift==='night'?'5:00 AM':'5:00 PM'; }
@@ -2676,9 +2676,10 @@ function chkLoad(force){
   var first=(CHK.day!==d);
   _chkP=(async function(){
     try{
-      var rows=await sbGet('rc_checkin?day=eq.'+encodeURIComponent(d)+'&select=employee_id,shift,first_at');
-      var m={}; (rows||[]).forEach(function(x){ m[String(x.employee_id||'').toLowerCase()]={ shift:x.shift==='night'?'night':'day', at:x.first_at }; });
-      CHK={ day:d, map:m, at:Date.now(), err:'' };
+      var yd=dAdd(d,-1);
+      var rows=await sbGet('rc_checkin?day=in.('+encodeURIComponent(d)+','+encodeURIComponent(yd)+')&select=day,employee_id,shift,first_at');
+      var m={}, pm={}; (rows||[]).forEach(function(x){ var o={ shift:x.shift==='night'?'night':'day', at:x.first_at }, k=String(x.employee_id||'').toLowerCase(); if(String(x.day)===d) m[k]=o; else pm[k]=o; });
+      CHK={ day:d, map:m, prev:pm, at:Date.now(), err:'' };
     }catch(e){ CHK.err=String((e&&e.message)||e||'failed'); CHK.at=Date.now(); }
     _CC=null; _chkP=null;
     if(first){ try{ if(VIEW==='health'||VIEW==='today') renderView(); else paintTabs(); }catch(_r){} }   // the first answer of the day replaces "Loading today's list…"
@@ -2710,7 +2711,7 @@ function ccPlan(){
   var ended={ day:now>hcDue('day',day), night:now>hcDue('night',day) };
   if(CHK.day!==day && !CHK.err){ chkLoad(false);
     return { day:day, plan:{}, of:{}, missed:{}, checkers:[], ins:{}, exp:exp, present:{ day:[], night:[] }, unassigned:[], waiting:[], ended:ended, loading:true }; }
-  var key=day+'|'+live.length+'|'+DIR_READY+'|'+now.slice(0,16)+'|'+(CHK.day===day?Object.keys(CHK.map).sort().join(','):'fallback');
+  var key=day+'|'+live.length+'|'+DIR_READY+'|'+now.slice(0,16)+'|'+(CHK.day===day?Object.keys(CHK.map).sort().join(',')+'/'+Object.keys(CHK.prev||{}).sort().join(','):'fallback');
   if(_CC && _CCK===key) return _CC;
   var present={ day:[], night:[] }, ins={};
   if(CHK.day===day && !CHK.err){ Object.keys(CHK.map).forEach(function(v){ if(!v || OWNERS.indexOf(v)>=0 || isGone(v)) return; ins[v]=CHK.map[v]; present[CHK.map[v].shift==='night'?'night':'day'].push(v); }); }
@@ -2719,7 +2720,25 @@ function ccPlan(){
   var plan={}, of={}, missed={}, un=[], wait=[];
   var checkers=present.day.concat(present.night).sort();
   checkers.forEach(function(c){ plan[c]=[]; missed[c]=[]; });
-  var rv=function(cands, r){ var o=owner(r), best=null, bh=-1; cands.forEach(function(c){ if(c===o) return; var h=hcH(day+'|'+r.id+'|'+c); if(h>bh){ bh=h; best=c; } }); return best; };
+  /* Oct 15 (Jeth): "Don't assign the same accounts every day to the same VA." The hash already changes every day, but
+     with 3–4 VAs on a shift the same person still drew the same account about one day in three. Now an account never
+     goes to (1) its owner, (2) whoever checked or reported it last time, or (3) whoever it was dealt to yesterday —
+     unless nobody else on that shift is in (then the old rule). A VA who skipped an account yesterday therefore never
+     gets it back today: someone else looks at it. */
+  var yday=dAdd(day,-1), presentY={ day:[], night:[] };
+  Object.keys(CHK.prev||{}).forEach(function(v){ if(!v || OWNERS.indexOf(v)>=0 || isGone(v)) return; presentY[CHK.prev[v].shift==='night'?'night':'day'].push(v); });
+  var rvRaw=function(cands, r, dd, excl){ var best=null, bh=-1; cands.forEach(function(c){ if(excl[c]) return; var h=hcH(dd+'|'+r.id+'|'+c); if(h>bh){ bh=h; best=c; } }); return best; };
+  var notAgain=function(r){
+    var m=M(r), o=owner(r), last={}, ya=null;
+    if(m.hcok && String(m.hcok)!==day && m.hcby) last[String(m.hcby).toLowerCase()]=1;
+    if(m.hcrep && String(m.hcrep.day||'')!==day && m.hcrep.by) last[String(m.hcrep.by).toLowerCase()]=1;
+    var oy={}; oy[o]=1;
+    var py=((hcH(yday+'#pool|'+r.id)%10000)/10000)<shareDay?'day':'night'; ya=rvRaw(presentY[py], r, yday, oy);
+    var a={}, b={}, c={}, d={}; [a,b,c,d].forEach(function(x){ x[o]=1; });
+    Object.keys(last).forEach(function(k){ a[k]=1; c[k]=1; }); if(ya){ a[ya]=1; b[ya]=1; }
+    return [a, b, c, d];   // strictest first: not the owner, not yesterday's checker, not the last one who looked · then relax
+  };
+  var rv=function(cands, r){ var L=notAgain(r); for(var i=0;i<L.length;i++){ var w=rvRaw(cands, r, day, L[i]); if(w) return w; } return null; };
   live.forEach(function(r){
     var st=ccState(r), m=M(r);
     if(st){ var who=String(st==='rep'?((m.hcrep||{}).by||''):(m.hcby||'')).toLowerCase(); if(plan[who]){ plan[who].push(r.id); of[r.id]=who; return; } }
@@ -2800,7 +2819,7 @@ function fixRows(L){
 }
 async function fixGate(){
   if(isAdmin()) return true; var L=fixMine(); if(!L.length) return true;
-  openModal('<div class="md-h"><h3>Fix '+(L.length===1?'this username':'these '+L.length+' usernames')+' first</h3><p>The health check could not find '+(L.length===1?'it':'them')+' on Reddit, so the owner sent '+(L.length===1?'it':'them')+' back to you. <b>This comes before any session, DMs or new account</b> — the timers stay locked until it is done. Every day one stays open costs <b>−1 on your QA</b> for each account.</p></div>'+
+  openModal('<div class="md-h"><h3>Fix '+(L.length===1?'this username':'these '+L.length+' usernames')+' first</h3><p>The health check could not find '+(L.length===1?'it':'them')+' on Reddit, and you created '+(L.length===1?'this account':'these accounts')+', so '+(L.length===1?'it comes':'they come')+' straight back to you. <b>This comes before any session, DMs or new account</b> — the timers stay locked until it is done. Every day one stays open costs <b>−1 on your QA</b> for each account.</p></div>'+
     '<div class="md-b fix-gate" style="display:grid;gap:6px">'+fixRows(L)+'</div><div class="md-f"><button class="btn sec" onclick="closeModal(false)">Close</button></div>');
   return false;
 }
@@ -4226,7 +4245,9 @@ function vHealthAuto(){
   var list=HCF==='problems'?prob:(HCF==='error'?rows.filter(function(x){ return x.result==='error'; }):rows);
   h+='<div class="sec-h"><b>'+(HCF==='problems'?'Marked active in the tool, not alive on Reddit':(HCF==='error'?"Couldn't check":'Every account checked'))+'</b><span>'+list.length+'</span><hr>'+
     '<div class="chips">'+[['problems','Problems '+prob.length],['error',"Couldn't check "+(c.error||0)],['all','All '+rows.length]].map(function(x){ return '<button class="chip '+(HCF===x[0]?'sel':'')+'" onclick="HCF=\''+x[0]+'\';renderView()">'+x[1]+'</button>'; }).join('')+'</div></div>';
-  if(HCF==='problems' && prob.length) h+='<div class="row" style="margin-bottom:10px"><div class="sp"></div><button class="btn sm dark" onclick="hcBanAll()">'+IC.ban+' Mark all '+prob.length+' as banned</button></div>';
+  var probS=prob.filter(function(x){ return x.result==='suspended'; }).length;
+  if(HCF==='problems' && probS) h+='<div class="row" style="margin-bottom:10px"><div class="sp"></div><button class="btn sm dark" onclick="hcBanAll()">'+IC.ban+' Mark all '+probS+' suspended as banned</button></div>';
+  if(prob.length>probS) setTimeout(hcAutoFix, 300);
   if(!list.length) return h+'<div class="card empty">'+(HCF==='problems'?'Nothing to fix — every account marked active was found alive on Reddit (or already tagged).':'Nothing here.')+'</div>';
   var day=String(L.at||'').slice(0,10);
   h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Account</th><th>Reddit says</th><th>Stage in tool</th><th>Method</th><th>Base</th><th>VA</th><th>Last session ticked</th><th>Karma on Reddit</th><th></th></tr></thead><tbody>'+
@@ -4239,7 +4260,7 @@ function vHealthAuto(){
         '<td>'+methodPill(r?methodOf(r):x.method,true)+'</td><td>'+esc(baseOf(x.project).n)+'</td><td>'+esc(vaName(r?owner(r):x.va))+'</td>'+
         '<td>'+(lw?esc(fmtD(parseTs(lw))):'—')+(still?' <span class="flag r" title="Session ticked on or after the day Reddit showed it dead">still ticking</span>':'')+'</td>'+
         '<td class="num">'+(x.karma!==''&&x.karma!=null?esc(x.karma):'—')+'</td>'+
-        '<td style="white-space:nowrap">'+(r && M(r).fix?'<span class="flag a" title="Sent back to the owner to correct the username">fix requested</span> ':'')+(r && !isDead(r) && (x.result==='suspended'||x.result==='notfound')?'<button class="btn sm dark" onclick="hcBan(\''+jsq(x.account_id)+'\',\''+x.result+'\')">Mark banned</button> ':'')+(r && !isDead(r) && x.result==='notfound' && !M(r).fix?'<button class="btn sm pri" onclick="fixAsk(\''+jsq(x.account_id)+'\',\'health run\')">Ask to fix username</button> ':'')+(r?'<button class="btn sm sec" onclick="openRec(\''+jsq(x.account_id)+'\')">Record</button>':'')+'</td></tr>';
+        '<td style="white-space:nowrap">'+(r && M(r).fix?'<span class="flag a" title="Sent back to the owner to correct the username">fix requested</span> ':'')+(r && !isDead(r) && x.result==='suspended'?'<button class="btn sm dark" onclick="hcBan(\''+jsq(x.account_id)+'\',\''+x.result+'\')">Mark banned</button> ':'')+(r && !isDead(r) && x.result==='notfound' && !M(r).fix?'<button class="btn sm pri" onclick="fixAsk(\''+jsq(x.account_id)+'\',\'health run\')">Ask to fix username</button> ':'')+(r?'<button class="btn sm sec" onclick="openRec(\''+jsq(x.account_id)+'\')">Record</button>':'')+'</td></tr>';
     }).join('')+'</tbody></table></div>'+
     '<p class="muted" style="font-size:11.5px;margin-top:8px">"Not found" can also mean the username in the tool has a typo — open the link before marking it banned. "Still ticking" = a session was logged for the account on or after the check day.</p>';
   return h;
@@ -4380,9 +4401,11 @@ function qrContinue(){ var i=QR.list.findIndex(function(id){ return !QR.ans[id] 
 function qrSet(id, k){ if(QR.sending) return; if(k) QR.ans[id]=k; else delete QR.ans[id]; delete QR.fail[id]; qrSave(); renderView(); }
 async function qrSaveOne(r, k){
   if(k==='a') return await saveMeta(r,{ hcok:today(), hcby:USER.id, hcrep:null });
-  if((k==='b'||k==='n') && !isAdmin()) return await saveMeta(r,{ hcrep:{ by:USER.id, res:k, at:phtStamp(), day:today() } });   // a VA reports — the owner confirms
+  /* Oct 15 (Jeth): "Not found is not banned — the creator mistyped it." It goes straight back to the VA who CREATED the
+     account to fix the username — no admin step. Only "Banned" waits for the owner to confirm. */
+  if(k==='n') return await saveMeta(r,{ hcrep:(isAdmin()?null:{ by:USER.id, res:'n', at:phtStamp(), day:today(), fix:1 }), fix:fixReq(r, (isAdmin()?'manual review':'health check · '+vaName(USER.id))) });
+  if(k==='b' && !isAdmin()) return await saveMeta(r,{ hcrep:{ by:USER.id, res:k, at:phtStamp(), day:today() } });   // a VA reports banned — the owner confirms
   if(k==='b'){ var ok=await moveTo(r,'banned',{ end_reason:'Permanently suspended: found banned in manual review', meta_patch:JSON.stringify({ hcrep:null }) }, r.handle+' marked banned'); if(ok) qaHit(r,'review'); return ok; }
-  if(k==='n'){ var ok2=await moveTo(r,'banned',{ end_reason:'Other: profile not found on Reddit (manual review)', meta_patch:JSON.stringify({ hcrep:null }) }, r.handle+' marked banned (not found)'); if(ok2) qaHit(r,'review'); return ok2; }
   return true;
 }
 async function qrSubmit(){
@@ -4392,7 +4415,7 @@ async function qrSubmit(){
   var dead=ids.filter(function(id){ return QR.ans[id]==='b'||QR.ans[id]==='n'; });
   if(dead.length){
     var names=dead.map(function(id){ return '<b>'+esc(rowById(id).handle)+'</b> — '+(QR.ans[id]==='b'?'Banned':'Not found'); }).join('<br>');
-    if(!(await confirmBox('Report '+dead.length+' account'+(dead.length===1?'':'s')+' as dead?', names+'<br><br>'+(isAdmin()?'These will be marked banned right away.':'The admin confirms before anything is banned, but the owner is pulled off the account meanwhile.')+' Did you open each profile and see "suspended" or "nobody goes by that name"?', 'Yes — submit', true))) return;
+    if(!(await confirmBox('Report '+dead.length+' account'+(dead.length===1?'':'s')+' as dead?', names+'<br><br>'+(isAdmin()?'Banned ones are marked banned right away; not-found ones go back to the VA who created them to fix the username.':'<b>Banned</b> goes to the admin to confirm. <b>Not found</b> goes straight back to the VA who created the account to fix the username.')+' Did you open each profile and see "suspended" or "nobody goes by that name"?', 'Yes — submit', true))) return;
   }
   QR.sending={ done:0, total:ids.length }; QR.fail={}; renderView();
   var q=ids.slice(), sent=0;
@@ -4407,7 +4430,7 @@ async function qrSubmit(){
   if(!isAdmin()){ var finished=!ccMineLeft().length; hcProgress(finished, true); }
   Object.keys(QR.ans).forEach(function(id){ if(QR.ans[id]==='s') delete QR.ans[id]; });
   qrClear(); QR.on=false; QR.review=false;
-  toast('Submitted ✓ '+sent+' answer'+(sent===1?'':'s')+(skipped?' · '+skipped+' skipped — check them later':'')+(dead.length&&!isAdmin()?' · the admin will confirm the dead ones':''));
+  toast('Submitted ✓ '+sent+' answer'+(sent===1?'':'s')+(skipped?' · '+skipped+' skipped — check them later':'')+(dead.length&&!isAdmin()?' · banned ones go to the admin, not-found ones straight to their creator':''));
   renderView();
 }
 /* after submitting, a VA can still take back their OWN answer for today (wrong tag noticed later) */
@@ -4454,8 +4477,8 @@ async function hcBan(id, res){
   if(await moveTo(r, 'banned', { end_reason:hcReason(res) }, 'Marked banned (health check)')) qaHit(r,'api');
 }
 async function hcBanAll(){
-  var p=hcProblems(); if(!p.length) return;
-  if(!(await confirmBox('Mark '+p.length+' accounts as banned?', 'Every account the check found suspended or missing on Reddit. Open a few links first if you want to be sure — "not found" can be a typo in the username.', 'Mark all banned', true))) return;
+  var p=hcProblems().filter(function(x){ return x.result==='suspended'; }); if(!p.length) return;   // Oct 15: "not found" is not banned — it goes to the creator
+  if(!(await confirmBox('Mark '+p.length+' suspended accounts as banned?', 'Every account Reddit reports suspended. "Not found" ones are not included — they go back to the VA who created them to fix the username.', 'Mark all banned', true))) return;
   var ok=0, fail=0; toast('Marking '+p.length+'…');
   for(var i=0;i<p.length;i+=5){
     await Promise.all(p.slice(i,i+5).map(async function(x){ try{ var d=await upd(x.account_id,{ status:'banned', end_reason:hcReason(x.result) }); if(d&&d.ok){ ok++; qaHit(rowById(x.account_id),'api'); patchLocal(x.account_id,{ status:'banned', ended_at:phtStamp(), end_reason:hcReason(x.result) }); } else fail++; }catch(e){ fail++; } }));
@@ -4476,10 +4499,16 @@ function ccLive(){ var out=[]; BASES.forEach(function(b){ (ALL[b.id]||[]).forEac
 function ccState(r){ var m=M(r), d=today(); if(m.hcrep && m.hcrep.day===d) return 'rep'; if(String(m.hcok||'')===d) return 'ok'; return ''; }
 function ccMine(){ if(isAdmin()) return []; var p=ccPlan(); return (p.plan[myId()]||[]).map(rowById).filter(Boolean); }
 function ccMineLeft(){ return ccMine().filter(function(r){ return !ccState(r); }); }
-function ccReports(){ return ccLive().filter(function(r){ return M(r).hcrep; }).sort(function(a,b){ return String(M(b).hcrep.at||'')<String(M(a).hcrep.at||'')?-1:1; }); }
+function ccReports(){ return ccLive().filter(function(r){ var x=M(r).hcrep; return x && x.res!=='n'; }).sort(function(a,b){ return String(M(b).hcrep.at||'')<String(M(a).hcrep.at||'')?-1:1; }); }
+/* the day an account was last looked at in the daily check ('' = never) */
+function hcLast(r){ var m=M(r), a=String(m.hcok||''), b=String((m.hcrep&&m.hcrep.day)||''); return a>b?a:b; }
+function hcAgeDays(r){ var l=hcLast(r); if(!l) return 99; var t=today(), n=0; while(l<t && n<99){ l=dAdd(l,1); n++; } return n; }
 function ccPrioSort(list){
+  /* Oct 15: the longest-unchecked accounts go first (never checked, then missed for days), so a skipped account is
+     the first thing someone looks at the next day — then the live phases, as before */
   var P1=phaseIx('day1');
-  return list.slice().sort(function(a,b){ var pa=phaseIx(a.status)>=P1?0:(isWorkable(a)?1:2), pb=phaseIx(b.status)>=P1?0:(isWorkable(b)?1:2); return pa-pb || String(a.handle).localeCompare(String(b.handle)); });
+  return list.slice().sort(function(a,b){ var la=hcLast(a), lb=hcLast(b); if(la!==lb) return la<lb?-1:1;
+    var pa=phaseIx(a.status)>=P1?0:(isWorkable(a)?1:2), pb=phaseIx(b.status)>=P1?0:(isWorkable(b)?1:2); return pa-pb || String(a.handle).localeCompare(String(b.handle)); });
 }
 function ccGuide(open){
   return '<details class="card pad"'+(open?' open':'')+' style="margin-bottom:14px"><summary style="cursor:pointer;font-weight:800;font-size:14px">How the daily health check works</summary>'+
@@ -4493,7 +4522,7 @@ function ccGuide(open){
         '<div class="row" style="gap:8px;margin:6px 0 2px;flex-wrap:wrap">'+
           '<span class="chip" style="background:#ecfdf5;color:#047857"><b>A</b>&nbsp;Alive — the profile shows normally</span>'+
           '<span class="chip" style="background:#fff1f2;color:#9f1239"><b>B</b>&nbsp;Banned — "This account has been suspended"</span>'+
-          '<span class="chip" style="background:#fff7ed;color:#c2410c"><b>N</b>&nbsp;Not found — "nobody on Reddit goes by that name" / page not found</span>'+
+          '<span class="chip" style="background:#fff7ed;color:#c2410c"><b>N</b>&nbsp;Not found — "nobody on Reddit goes by that name" / page not found · goes straight to whoever created it to fix the username</span>'+
           '<span class="chip"><b>S</b>&nbsp;Skip — the page didn\'t load</span></div></li>'+
       '<li>The next profile opens by itself in the same tab. Pressed the wrong key? <b>U</b> goes back one.</li>'+
       '<li>At the end you see <b>all your answers on one screen</b> — change any of them, then press <b>Submit</b>. Nothing is saved before that.</li></ol>'+
@@ -4536,15 +4565,32 @@ async function ccMark(id,k){
   var r=rowById(id); if(!r) return;
   if(!isAdmin()) hcProgress(false);
   if(k==='a'){ if(await saveMeta(r,{ hcok:today(), hcby:USER.id })){ toast(r.handle+' — alive ✓'); renderView(); } return; }
+  if(k==='n'){ var fq=fixReq(r,'health check · '+vaName(USER.id)); if(await saveMeta(r,{ hcrep:{ by:USER.id, res:'n', at:phtStamp(), day:today(), fix:1 }, fix:fq })){ toast(r.handle+' — sent to '+vaName(fq.to)+' to fix the username'); renderView(); } return; }
   if(await saveMeta(r,{ hcrep:{ by:USER.id, res:k, at:phtStamp(), day:today() } })){ toast('Reported — the admin will confirm'); renderView(); }
+}
+/* Oct 15 (Jeth): "monitor the accounts 100% on the health check" — how much of the live board was really looked at,
+   and which accounts have gone longest without anyone looking (they top tomorrow's lists automatically). */
+function ccCoverage(P){
+  var live=ccLive(); if(!live.length) return '';
+  var d=today(), yd=dAdd(d,-1), done=0, ydone=0, stale=[];
+  live.forEach(function(r){ var l=hcLast(r); if(l===d) done++; if(l>=yd) ydone++; if(!l || l<yd) stale.push(r); });
+  stale.sort(function(a,b){ var la=hcLast(a), lb=hcLast(b); return la<lb?-1:(la>lb?1:0); });
+  var pc=Math.round(done/live.length*100), pcy=Math.round(ydone/live.length*100);
+  return '<div class="card pad" style="margin-bottom:12px;'+(stale.length?'border-color:#fde68a':'')+'"><div class="ch-h"><b>Coverage</b><span>'+done+' / '+live.length+' live accounts checked today ('+pc+'%) · '+pcy+'% since yesterday · every day the list is dealt again, never to the same checker as last time</span></div>'+
+    '<div class="prog" style="height:8px;margin:6px 0 4px"><i style="width:'+pc+'%"></i></div>'+
+    (stale.length?'<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:#92400e">'+stale.length+' account'+(stale.length===1?'':'s')+' not checked since before yesterday — they go first on today\'s lists</summary>'+
+      '<div class="tbl-w" style="max-height:260px;margin-top:6px"><table class="db"><thead><tr><th class="c1">Account</th><th>Last checked</th><th>Today with</th></tr></thead><tbody>'+
+      stale.slice(0,80).map(function(r){ var l=hcLast(r), w=P.of[r.id]; return '<tr><td class="c1"><a href="'+qrUrl(r)+'" target="rc-profile" rel="noopener" style="color:inherit">'+esc(r.handle)+' ↗</a></td><td>'+(l?esc(fmtD(parseTs(l))):'<span class="flag r">never</span>')+'</td><td>'+(w?esc(vaName(w)):'<span class="muted">waiting for a checker</span>')+'</td></tr>'; }).join('')+
+      '</tbody></table></div></details>':'<div class="muted" style="font-size:12px">Every live account was checked yesterday or today ✓</div>')+'</div>';
 }
 function ccAdmin(){
   var P=ccPlan(), d=today();
   var rowsH=ccAdminRows(P);
+  try{ if(ccLive().some(function(r){ var x=M(r).hcrep; return x && x.res==='n' && !M(r).fix; })) setTimeout(hcAutoFix, 300); }catch(_a){}
   var reps=ccReports();
-  var h='<div class="sec-h"><b>Today\'s cross-check</b><span>'+esc(fmtD(parseTs(d)))+' · '+P.checkers.length+' signed in · only VAs who opened the tool today get a list · nobody checks their own</span><hr></div>';
+  var h='<div class="sec-h"><b>Today\'s cross-check</b><span>'+esc(fmtD(parseTs(d)))+' · '+P.checkers.length+' signed in · only VAs who opened the tool today get a list · nobody checks their own</span><hr></div>'+(P.loading?'':ccCoverage(P));
   if(reps.length){
-    h+='<div class="card pad" style="margin-bottom:12px;border-color:#fecdd3"><div class="ch-h"><b style="color:#9f1239">Reported dead — confirm</b><span>open the profile, then confirm or clear</span></div>'+
+    h+='<div class="card pad" style="margin-bottom:12px;border-color:#fecdd3"><div class="ch-h"><b style="color:#9f1239">Reported banned — your confirmation</b><span>open the profile, then confirm or clear · "not found" never comes here: it goes straight to the creator to fix</span></div>'+
       '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Account</th><th>Reported</th><th>By</th><th>Owner</th><th>Stage</th><th>Last session</th><th></th></tr></thead><tbody>'+
       reps.map(function(r){ var x=M(r).hcrep, lw=lastWorked(r);
         return '<tr><td class="c1"><a href="'+qrUrl(r)+'" target="rc-profile" rel="noopener" style="color:inherit">'+esc(r.handle)+' ↗</a></td><td><span class="flag r">'+(x.res==='n'?'Not found':'Banned')+'</span> <span class="muted" style="font-size:11px">'+esc(fmtDT(parseTs(x.at)))+'</span></td><td>'+esc(vaName(x.by))+'</td><td>'+esc(vaName(owner(r)))+'</td>'+
@@ -4554,9 +4600,9 @@ function ccAdmin(){
   }
   var fixes=fixPending();
   if(fixes.length){
-    h+='<div class="card pad" style="margin-bottom:12px;border-color:#fde68a"><div class="ch-h"><b style="color:#92400e">Usernames sent back for fixing</b><span>'+fixes.length+' waiting · the owner sees it at the top of their board until it is corrected or marked banned</span></div>'+
-      '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Account</th><th>Owner</th><th>Asked</th><th>From</th><th></th></tr></thead><tbody>'+
-      fixes.map(function(r){ var x=M(r).fix||{}; return '<tr><td class="c1">'+esc(r.handle)+'</td><td>'+esc(vaName(owner(r)))+'</td><td>'+esc(fmtDT(parseTs(x.at)))+'</td><td class="muted">'+esc(x.src||'')+'</td>'+
+    h+='<div class="card pad" style="margin-bottom:12px;border-color:#fde68a"><div class="ch-h"><b style="color:#92400e">Usernames sent back for fixing</b><span>'+fixes.length+' waiting · sent straight to the VA who created the account (no approval needed) · it stays at the top of their board and locks their timers until it is corrected or marked banned</span></div>'+
+      '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Account</th><th>Sent to</th><th>Asked</th><th>From</th><th></th></tr></thead><tbody>'+
+      fixes.map(function(r){ var x=M(r).fix||{}; return '<tr><td class="c1">'+esc(r.handle)+'</td><td>'+esc(vaName(fixTo(r)))+(fixTo(r)!==owner(r)?' <span class="muted" style="font-size:11px">creator · held by '+esc(firstName(owner(r)))+'</span>':'')+'</td><td>'+esc(fmtDT(parseTs(x.at)))+'</td><td class="muted">'+esc(x.src||'')+'</td>'+
         '<td style="white-space:nowrap"><button class="btn sm sec" onclick="fixCancel(\''+jsq(r.id)+'\')">Withdraw</button> <button class="btn sm sec" onclick="openRec(\''+jsq(r.id)+'\')">Record</button></td></tr>'; }).join('')+'</tbody></table></div></div>';
   }
   h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Checker</th><th>Signed in</th><th>Accounts</th><th>Alive ✓</th><th>Reported</th><th>Status</th><th>Due</th></tr></thead><tbody>'+(rowsH||'<tr><td colspan="7" class="muted">Nobody has signed in yet today.</td></tr>')+'</tbody></table></div>'+ccAdminFoot(P);
@@ -4569,10 +4615,30 @@ function ccAdmin(){
    a QA finding, −0.5 each, max 2 a day) or confirm the account is really gone (marked banned, no finding). */
 function fixSrc(){ var a=allRows(); return a.length?a:(ALL[PROJECT]||ROWS); }   // every base (Oct 13) — a fix on another base used to stay invisible
 function fixPending(){ return fixSrc().filter(function(r){ return !isDead(r) && M(r).fix; }); }
-function fixMine(){ var me=myId(); return fixSrc().filter(function(r){ return !isDead(r) && M(r).fix && worksFor(r)===me; }); }
+/* Oct 15 (Jeth): the fix goes to the VA who CREATED the account (they typed the username). If the creator is no longer on
+   the team, to whoever holds the account now. */
+function fixTarget(r){ var c=String(r.created_by||'').toLowerCase(); return (c && !isGone(c) && OWNERS.indexOf(c)<0)?c:worksFor(r); }
+function fixTo(r){ var f=M(r).fix||{}; return f.to?String(f.to).toLowerCase():fixTarget(r); }
+function fixReq(r, src){ return { by:USER.id, at:phtStamp(), day:today(), src:src||'', handle:r.handle, to:fixTarget(r) }; }
+function fixMine(){ var me=myId(); return fixSrc().filter(function(r){ return !isDead(r) && M(r).fix && fixTo(r)===me; }); }
 async function fixAsk(id, src){
-  var r=rowById(id); if(!r || !isAdmin()) return;
-  if(await saveMeta(r,{ hcrep:null, fix:{ by:USER.id, at:phtStamp(), day:today(), src:src||'', handle:r.handle } })){ toast(r.handle+' — sent back to '+vaName(owner(r))+' to fix the username'); renderView(); }
+  var r=rowById(id); if(!r || !isAdmin()) return; var fq=fixReq(r, src);
+  if(await saveMeta(r,{ hcrep:null, fix:fq })){ toast(r.handle+' — sent to '+vaName(fq.to)+' to fix the username'); renderView(); }
+}
+/* "Not found" reports from before Oct 15 (they waited for the owner) and the Reddit API check's "not found" go to the
+   creator by themselves — the owner no longer has to press anything for them. Once per account. */
+var _hcAuto=false;
+async function hcAutoFix(){
+  if(!isAdmin() || _hcAuto) return; _hcAuto=true;
+  try{
+    var L=ccLive().filter(function(r){ var x=M(r).hcrep; return x && x.res==='n' && !M(r).fix; });
+    (HC && HC.rows || []).forEach(function(x){ if(x.result!=='notfound') return; var r=rowById(x.account_id); if(r && !isDead(r) && !isParked(r) && !M(r).fix && L.indexOf(r)<0) L.push(r); });
+    var n=0;
+    for(var i=0;i<L.length;i++){ var r=L[i], x=M(r).hcrep||{};
+      try{ if(await saveMeta(r,{ hcrep:null, fix:fixReq(r, x.by?('health check · '+vaName(x.by)):'Reddit API check') })) n++; }catch(e){} }
+    if(n){ toast(n+' "not found" username'+(n===1?'':'s')+' sent to '+(n===1?'its creator':'their creators')+' to fix'); renderView(); }
+  }catch(e){}
+  setTimeout(function(){ _hcAuto=false; }, 60000);
 }
 async function fixCancel(id){ var r=rowById(id); if(!r || !isAdmin()) return; if(await saveMeta(r,{ fix:null })){ toast('Withdrawn'); renderView(); } }
 function fixBanner(){
@@ -4586,7 +4652,7 @@ async function fixSave(id){
   if(!v){ toast('Type the correct username first.'); return; }
   if(v===r.handle){ toast('That is the same username. Open the profile on Reddit and check the exact spelling — or mark it banned if it is really gone.'); return; }
   var old=r.handle, fx=M(r).fix||{};
-  var d=await upd(r.id, { handle:v, meta_patch:JSON.stringify({ fix:null, typo:{ day:today(), at:phtStamp(), from:old, to:v, asked:fx.at||'', by:USER.id } }) });
+  var d=await upd(r.id, { handle:v, meta_patch:JSON.stringify({ fix:null, hcrep:null, typo:{ day:today(), at:phtStamp(), from:old, to:v, asked:fx.at||'', by:USER.id } }) });
   if(d && d.ok){ var m=Object.assign({}, M(r)); delete m.fix; m.typo={ day:today(), at:phtStamp(), from:old, to:v, asked:fx.at||'', by:USER.id }; patchLocal(r.id,{ handle:v, meta:m }); r.handle=v; r.meta=m; EVENTS_AT=0; toast('Username corrected: '+old+' → '+v); renderView(); fixGateRefresh(); }
   else toast('Could not save — '+((d&&d.error)||'try again'));
 }
@@ -4862,9 +4928,9 @@ function pqFlags(va, day, dr, L){
   if(ovr) F.push({ k:'overrun', t:ovr+' timer'+(ovr===1?'':'s')+' ran past the limit', d:Math.min(2, ovr*pqRule('overrun').d), c:'r' });
   try{ var cv=pqCover(va, day, dr); if(cv && cv.tracked-cv.timed>1800) F.push({ k:'cover', t:'Portal '+hm(cv.tracked-cv.timed)+' ahead of the tool ('+hm(cv.timed)+' of '+hm(cv.tracked)+')', d:pqRule('cover').d, c:'r', tip:'The portal tracked '+hm(cv.tracked)+' but this tool\'s timers only covered '+hm(cv.timed)+' of it.' }); }catch(_cv){}
   var ps=CFG.process_start||'2026-10-01', untag=allRows().filter(function(r){ return owner(r)===va && !isDead(r) && !isParked(r) && (!methodOf(r) || !r.model || (cdateOf(r)>=ps && !r.device && phoneList(false, r.project).length)); });
-  var typos=allRows().filter(function(r){ return owner(r)===va && M(r).typo && M(r).typo.day===day; });
+  var typos=allRows().filter(function(r){ var ty=M(r).typo; return ty && ty.day===day && String(ty.by||owner(r)).toLowerCase()===va; });
   if(typos.length) F.push({ k:'typo', t:typos.length+' username typo'+(typos.length===1?'':'s')+' corrected', d:Math.min(2,typos.length*pqRule('typo').d), c:'r', tip:typos.map(function(r){ var t=M(r).typo; return t.from+' → '+t.to; }).join(' · ') });
-  var openFix=allRows().filter(function(r){ var f=M(r).fix; return owner(r)===va && !isDead(r) && f && String(f.day||'')<=day && (day===today() || String(f.day||'')<day); });
+  var openFix=allRows().filter(function(r){ var f=M(r).fix; return f && fixTo(r)===va && !isDead(r) && String(f.day||'')<=day && (day===today() || String(f.day||'')<day); });
   if(openFix.length && (day<today() || phtStamp()>day+(SHIFTOF[va]==='night'?' 23:00:00':' 12:00:00'))) F.push({ k:'fix_open', t:openFix.length+' username fix'+(openFix.length===1?'':'es')+' still open', d:Math.min(3, openFix.length*pqRule('fix_open').d), c:'a', tip:openFix.map(function(r){ return r.handle+' (asked '+String((M(r).fix||{}).day||'')+')'; }).join(' · ') });
   if(untag.length) F.push({ k:'tagging', t:untag.length+' account'+(untag.length===1?'':'s')+' missing tags', d:Math.min(2,untag.length*pqRule('tagging').d), c:'a', tip:untag.slice(0,12).map(function(r){ return r.handle+': '+[!methodOf(r)?'method':'',!r.model?'model':'',(cdateOf(r)>=ps&&!r.device&&phoneList(false,r.project).length)?'phone':''].filter(String).join(', '); }).join('\n') });
   (EVENTS||[]).forEach(function(e){
