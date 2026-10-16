@@ -256,7 +256,7 @@ function tick(){
     var p=Math.min(1,sceneNow()/(secs()*1000));
     var pb=document.querySelector('#filmprog i'); if(pb) pb.style.width=(p*100).toFixed(1)+'%';
     if(p>=1){
-      if(VOICE && synth && synth.speaking) return;   // let the narration finish first
+      if(VOICE && synth && synth.speaking && ((typeof sceneNow==='function'?sceneNow():(Date.now()-t0))-secs()*1000)<20000){ requestAnimationFrame(tick); return; }   // let the narration finish first — Oct 16: this used to stop the frame loop for good, and Chrome sometimes never reports the voice ending, so the film froze and never reached the end
       if(i<scenes.length-1) show(i+1); else finishFilm();   // no loop: ends on the card (Oct 6)
     }
   }
