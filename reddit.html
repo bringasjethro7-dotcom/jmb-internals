@@ -912,6 +912,7 @@ async function load(){
     if(_retryT){ clearTimeout(_retryT); _retryT=null; }
     autoGraduate();
     paintTop(); renderView();
+    try{ hoLoad(false); }catch(_ho){}
   }catch(e){
     if(ROWS.length) toast('Refresh failed — showing your last board. Retrying…');
     else if(typeof qzOn==='function' && qzOn()) toast('The board is still loading in the background — carry on with the quiz.');   // never wipe the quiz (VAs saw it vanish mid-answer)
@@ -1194,6 +1195,7 @@ function vToday(){
     (tmOn()?(crGet()?'<button class="btn run" onclick="newAccount()" title="Account exists on the phone? Log it — the timer stops when it is counted"><span class="sq"></span> Creating… <span class="tmv" data-tm="'+crGet().t+'">'+tmFmt(Date.now()-crGet().t)+'</span></button><button class="btn sec sm" onclick="crCancel()" title="Cancel the creation timer">'+IC.x+'</button>'
       :'<button class="btn sec" onclick="crStart()" title="Press when you START creating an account on the iPhone">▶ Start creating</button>'):'')+
     '<button class="btn pri" onclick="newAccount()">'+IC.plus+' Log new account</button></div>';
+  h+=hoBanner();
   h+=fixBanner();
   h+=tmCapBanner()+gapBanner();
   if(tmOn() && !(function(){ try{ return localStorage.getItem('rc_tm_seen_'+myId()); }catch(e){ return 1; } })())
@@ -5016,11 +5018,66 @@ function qaHit(r, how){
    Covers and holds last for this business day only; ownership never changes. */
 function coverable(r){ var s=r.status; return s!=='banned'&&s!=='tempban'&&s!=='creation'&&s!=='creationstandby'&&!isParked(r); }
 function offIds(){ var s={}; ((OFF&&OFF.off)||[]).forEach(function(o){ s[String(o.employee_id).toLowerCase()]=o; }); return s; }
+/* ══════════ LEAVE HANDOVER (Oct 19, Jeth) ══════════
+   A VA filing leave in the portal picks who covers their accounts. The pick lands here: Accept / Decline at the top of
+   the board. Accepting covers every workable account of the VA on leave for each leave day (the same per-day cover map
+   the owner sets in Coverage — the owner's own covers and holds are never overwritten). The VA on leave sees whether
+   it was accepted; the owner sees every pick in Coverage. Backend: rc_ho_mine / rc_ho_answer / rc_ho_list. */
+var HO={ mine:null, all:null, at:0, busy:false };
+async function hoLoad(force){
+  if(!USER || !USER.id) return;
+  if(!force && HO.at && Date.now()-HO.at<60000) return; HO.at=Date.now();
+  try{ var d=await api({ action:'rc_ho_mine', employee_id:USER.id }); if(d && d.ok){ var was=JSON.stringify(HO.mine); HO.mine=d; if(was!==JSON.stringify(d) && VIEW==='today') renderView(); } }catch(e){}
+  if(isAdmin()){ try{ var a=await api({ action:'rc_ho_list', by:USER.id }); if(a && a.ok){ var w2=JSON.stringify(HO.all); HO.all=a.rows||[]; if(w2!==JSON.stringify(HO.all) && VIEW==='settings') renderView(); } }catch(e){} }
+}
+function hoRange(r){ return (!r.end||r.start===r.end) ? fmtDay(r.start) : fmtDay(r.start)+' – '+fmtDay(r.end); }
+function hoName(id, nm){ var v=vaName(id); return (v && v!==String(id||'').toUpperCase()) ? v : (nm||String(id||'')); }
+function hoBanner(){
+  var M=HO.mine; if(!M) return ''; var h='';
+  (M.incoming||[]).forEach(function(r){
+    var who=hoName(r.from, r.from_name);
+    if(r.status==='pending')
+      h+='<div class="banner info" style="flex-wrap:wrap;align-items:center">'+IC.swap+'<div style="flex:1;min-width:240px"><b>'+esc(who)+' asked you to cover their accounts</b> — '+esc(r.type||'Leave')+', '+esc(hoRange(r))+
+         '. If you accept, their Reddit accounts appear on your board for those days only and go back to them after.</div>'+
+         '<div style="display:flex;gap:6px"><button class="btn sm pri" onclick="hoAnswer(\''+jsq(r.id)+'\',\'accept\')">Accept</button><button class="btn sm sec" onclick="hoAnswer(\''+jsq(r.id)+'\',\'decline\')">Decline</button></div></div>';
+    else if(r.status==='accepted')
+      h+='<div class="banner info">'+IC.check+'<div style="flex:1"><b>You are covering '+esc(who)+'\'s accounts</b> — '+esc(hoRange(r))+'. They are on your board for those days and go back after.</div></div>';
+  });
+  (M.outgoing||[]).forEach(function(r){
+    var who=hoName(r.to, r.to_name);
+    if(r.status==='pending') h+='<div class="banner info">'+IC.hour+'<div style="flex:1"><b>Waiting for '+esc(who)+'</b> to accept covering your accounts for '+esc(hoRange(r))+'.</div></div>';
+    else if(r.status==='accepted') h+='<div class="banner info">'+IC.check+'<div style="flex:1"><b>'+esc(who)+' is covering your accounts</b> for '+esc(hoRange(r))+'. They come back to you after.</div></div>';
+    else if(r.status==='declined'||r.status==='expired') h+='<div class="banner warn">'+IC.swap+'<div style="flex:1"><b>'+esc(who)+' can\'t cover your accounts</b> for '+esc(hoRange(r))+'. Ask someone else from the Leave page in the portal.</div><a class="btn sm sec" href="https://portal.jmbvirtuals.com/" target="_blank" rel="noopener">Open the portal</a></div>';
+  });
+  return h;
+}
+async function hoAnswer(id, dec){
+  if(HO.busy) return;
+  if(dec==='decline' && !confirm('Decline covering these accounts? They will be asked to pick someone else.')) return;
+  HO.busy=true;
+  try{
+    var d=await api({ action:'rc_ho_answer', id:id, decision:dec });
+    if(d && d.ok){
+      toast(dec==='accept' ? 'Accepted — their accounts are on your board for those days.' : 'Declined — they will pick someone else.');
+      HO.at=0; await hoLoad(true); load();
+    } else toast(d && d.error==='ALREADY' ? 'Already answered.' : (d && d.error==='EXPIRED' ? 'That leave has already passed.' : 'Could not save — '+((d&&d.error)||'try again')+'.'));
+  }catch(e){ toast('Connection error — try again.'); }
+  HO.busy=false;
+}
+function hoAdminList(){
+  var L=HO.all; if(!L || !L.length) return '';
+  var st=function(s){ return s==='accepted'?'<span class="chip" style="color:#166534;background:#dcfce7">Accepted</span>':s==='pending'?'<span class="chip" style="color:#92400e;background:#fef3c7">Waiting</span>':s==='declined'?'<span class="chip" style="color:#9f1239;background:#ffe4e6">Declined</span>':'<span class="chip">'+esc(s)+'</span>'; };
+  return '<div class="sec-h"><b>Leave handovers</b><span>'+L.length+' · picked by the VA on leave, accepted by the teammate</span><hr></div>'+
+    '<div class="tbl-w" style="max-height:none;margin-bottom:16px"><table class="db"><thead><tr><th class="c1">On leave</th><th>Covered by</th><th>Days</th><th>Type</th><th>Status</th></tr></thead><tbody>'+
+    L.map(function(r){ return '<tr><td class="c1">'+esc(hoName(r.from,r.from_name))+'</td><td>'+esc(hoName(r.to,r.to_name))+'</td><td>'+esc(hoRange(r))+'</td><td class="muted">'+esc(r.type||'')+'</td><td>'+st(r.status)+'</td></tr>'; }).join('')+
+    '</tbody></table></div>';
+}
 function vCoverage(){
   if(!isAdmin()) return '<div class="card empty">Owner only.</div>';
   var rows=ALL[PROJECT]||ROWS, offs=offIds();
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Coverage</h2><p>Business day '+esc(fmtD(parseTs(today())))+' · anyone who clocked in today is never listed. Off = approved leave, a rest day you set in Settings, or their usual day off from attendance.</p></div>'+
     '<button class="btn sec" onclick="loadOff();toast(\'Refreshing…\')">Refresh</button><button class="btn sec" onclick="xferOpen()">'+IC.swap+' Permanent transfer</button></div>';
+  h+=hoAdminList();
   if(!OFF) h+='<div class="card empty">Checking leave and rest days…</div>';
   else {
     var withAcc=(OFF.off||[]).filter(function(o){ return o.accounts && Object.keys(o.accounts).length; });
