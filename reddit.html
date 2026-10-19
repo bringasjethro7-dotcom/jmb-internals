@@ -2812,8 +2812,8 @@ function ccAdminFoot(P){
 function fixRows(L){
   return L.map(function(r){ return '<div class="row" style="gap:6px;flex-wrap:wrap;background:#fff;border:1px solid #fecaca;border-radius:10px;padding:6px 8px">'+
       '<span style="font-weight:800;min-width:120px">'+esc(r.handle)+'</span>'+(r.project && r.project!==PROJECT?'<span class="chip" style="font-size:10.5px">'+esc(baseOf(r.project).n)+' base</span>':'')+'<span class="muted" style="font-size:11.5px">asked '+esc(fmtDT(parseTs((M(r).fix||{}).at)))+'</span>'+
-      '<input class="inp" id="fx-'+esc(r.id)+'" value="'+esc(r.handle)+'" placeholder="correct username" style="width:200px;padding:5px 8px" onkeydown="if(event.key===\'Enter\'){ fixSave(\''+jsq(r.id)+'\'); }">'+
-      '<button class="btn sm pri" onclick="fixSave(\''+jsq(r.id)+'\')">Save the correct name</button>'+
+      '<input class="inp" id="fx-'+esc(r.id)+'" value="'+esc(r.handle)+'" placeholder="correct username" style="width:200px;padding:5px 8px" onkeydown="if(event.key===\'Enter\'){ fixSave(\''+jsq(r.id)+'\', this); }">'+
+      '<button class="btn sm pri" onclick="fixSave(\''+jsq(r.id)+'\', this)">Save the correct name</button>'+
       '<a class="btn sm sec" href="'+qrUrl(r)+'" target="rc-profile" rel="noopener">Open on Reddit ↗</a>'+
       '<button class="btn sm sec" style="color:#b91c1c" onclick="fixGone(\''+jsq(r.id)+'\')">It\'s really gone — mark banned</button></div>'; }).join('');
 }
@@ -4647,8 +4647,14 @@ function fixBanner(){
     'If you typed it wrong when you logged it, correct it here (a typo is a QA finding). If the account is really gone, mark it banned. <b>Your session, DMs and creation timers stay locked until it is done, and every day one stays open costs −1 on your QA per account.</b>'+
     '<div style="margin-top:8px;display:grid;gap:6px">'+fixRows(L)+'</div></div></div>';
 }
-async function fixSave(id){
-  var r=rowById(id); if(!r) return; var inp=$('fx-'+r.id); var v=String((inp&&inp.value)||'').trim().replace(/^https?:\/\/(www\.)?reddit\.com\/(u|user)\//i,'').replace(/^\/?u\//i,'').replace(/^@/,'').replace(/\/.*$/,'');
+async function fixSave(id, el){
+  /* Oct 19 fix: the same row is drawn twice — in the banner on the board AND in the "Fix this username first" pop-up
+     that opens when a timer is pressed — so two inputs share id fx-<id>. $() returned the banner's (still holding the
+     old name), and every save from the pop-up said "That is the same username". Read the input beside the button. */
+  var r=rowById(id); if(!r) return;
+  var row=el && el.closest ? el.closest('.row') : null;
+  var inp=(row && row.querySelector('input.inp')) || document.querySelector('#modal.on .fix-gate input.inp[id="fx-'+r.id+'"]') || $('fx-'+r.id);
+  var v=String((inp&&inp.value)||'').trim().replace(/^https?:\/\/(www\.)?reddit\.com\/(u|user)\//i,'').replace(/^\/?u\//i,'').replace(/^@/,'').replace(/\/.*$/,'');
   if(!v){ toast('Type the correct username first.'); return; }
   if(v===r.handle){ toast('That is the same username. Open the profile on Reddit and check the exact spelling — or mark it banned if it is really gone.'); return; }
   var old=r.handle, fx=M(r).fix||{};

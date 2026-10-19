@@ -2053,7 +2053,19 @@ function IGPhones(CFG){
       } }catch(e){}
     if(TM.run) tmTickOn(); else tmSave();
   }
-  function timerOn(){ tmRestore(); var R=TM.run; if(!R || TM.ask) return false; return R.ends ? R.ends>Date.now() : true; }
+  /* Oct 19 fix (Julian, Slaybae): a finished scroll whose step was already counted today (logged from another tab, by the
+     other VA on the phone, or a save that went through twice) could not be logged ("already done") and could not be
+     cleared either — every timer refused with "log the finished scroll first", and since a finished scroll is not a
+     running timer the portal kept warning and stopping. Now a finished scroll that is already counted turns into Phone
+     work by itself, the banner has a way out, and the 10 minutes after the 15:00 still count while it is being logged. */
+  function scrollCounted(R){ try{ var a=rowById(R.aid); if(!a || DEAD[a.status]) return true; var it=plan(a).filter(function(x){ return x.k==='scroll'; })[0]; return !it || it.done>=it.target; }catch(e){ return false; } }
+  function scrollDrop(silent){
+    tmRestore(); var R=TM.run; if(!R || !R.ends) return; var pid=R.pid, who=tmWho(R);
+    TM.run=null; tmAskClose(); tmSave(); tmAuto(pid, 'work');
+    if(!silent) try{ toast('Scroll on '+who+' cleared — your timer carries on as Phone work.'); }catch(e){}
+    tmPaint(true);
+  }
+  function timerOn(){ tmRestore(); var R=TM.run; if(!R || TM.ask) return false; return R.ends ? (R.ends>Date.now() || Date.now()-R.ends<10*60e3) : true; }
   function timerInfo(){ if(!timerOn()) return null; var R=TM.run, p=rowById(R.pid); return { start:R.start, label:tmLabel(R)+(R.aid && p?' · '+phoneLabel(p):'')+' · '+CL().name }; }
   function tmLabel(R){ var p=rowById(R.pid), a=R.aid?rowById(R.aid):null; return TNAME[R.k]+' · '+(a?String(a.handle):(p?phoneLabel(p):'phone')); }
   function tmWho(R){ return tmLabel(R).split(' · ').slice(1).join(' · '); }
@@ -2067,7 +2079,9 @@ function IGPhones(CFG){
       var now=Date.now();
       if(R.ends){
         if(R.ends>now){ if(!document.hidden) try{ ACT.last=now; }catch(_a){} }
+        else if(!(S.busy && S.busy[lockKey(R.aid)]) && scrollCounted(R)){ var _w=tmWho(R); scrollDrop(true); try{ toast('The scroll on '+_w+' is already counted for today — your timer carries on as Phone work.'); }catch(e){} return; }
         else if(!R.rang){ R.rang=1; tmSave(); try{ toast('15 minutes done on '+tmWho(R)+' — log the scroll.'); }catch(e){} try{ if(window.PFX && PFX.chime) PFX.chime(0.08); }catch(e){} tmPaint(true); return; }
+        else if(now-R.ends>=10*60e3){ var _w2=tmWho(R); scrollDrop(true); try{ toast('The finished scroll on '+_w2+' was not logged in 10 minutes — the timer moved to Phone work. You can still log the scroll.'); }catch(e){} return; }
       } else if(!TM.ask){
         if(!document.hidden) try{ ACT.last=now; }catch(_a){}
         if(now-(R.chk||R.start) >= (TLIM[R.k]||20)*60000) tmAskOpen();
@@ -2084,7 +2098,7 @@ function IGPhones(CFG){
     if(R.ends){ var left=Math.max(0,R.ends-now), done=left<=0;
       return '<div class="im-run'+(done?' done':'')+'"><div class="ring"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19" class="bg"/><circle cx="22" cy="22" r="19" class="fg" id="'+PX+'-run-arc" style="stroke-dashoffset:'+(119.4*(left/SCROLL_MS)).toFixed(1)+'"/></svg></div>'+
         '<div class="tx"><small>'+(done?'Scroll finished':'Scrolling now')+'</small><b>'+esc(tmLabel(R))+'</b><span id="'+PX+'-run-clk">'+(done?'15:00 done — press Log the scroll':downClock(left)+' left · keep scrolling on this account')+'</span></div>'+
-        (done?'<button class="btn sm" onclick="'+NS+'.log(\''+jsq(R.aid)+'\',\'scroll\')">＋ Log the scroll</button>':'<button class="btn sec sm" onclick="'+NS+'.tmStop()">Stop</button>')+'</div>';
+        (done?'<button class="btn sm" onclick="'+NS+'.log(\''+jsq(R.aid)+'\',\'scroll\')">＋ Log the scroll</button><button class="btn sec sm" style="margin-left:6px" title="Use this if the scroll is already logged" onclick="'+NS+'.scrollDrop()">Already logged</button>':'<button class="btn sec sm" onclick="'+NS+'.tmStop()">Stop</button>')+'</div>';
     }
     return '<div class="im-run up"><span class="dot"></span><div class="tx"><small>Timer running</small><b>'+esc(tmLabel(R))+'</b><span id="'+PX+'-run-clk">'+upLine(R)+'</span></div><button class="btn sec sm" onclick="'+NS+'.tmStop()">Stop</button></div>';
   }
@@ -2268,6 +2282,7 @@ function IGPhones(CFG){
     var a=rowById(aid); if(!a) return; var p=rowById(a.meta.phone);
     if(p && !phoneOpen(p)){ toast('Log this session\'s pre-flight on '+phoneLabel(p)+' before working its accounts.'); preflightOpen(p.id); return; }
     var it=plan(a).filter(function(x){ return x.k===k; })[0];
+    if(k==='scroll' && (!it || it.done>=it.target)){ tmRestore(); if(TM.run && TM.run.ends && TM.run.aid===aid){ scrollDrop(true); toast('The scroll on '+a.handle+' is already counted for today — nothing more to log. Your timer carries on as Phone work.'); return; } }
     if(!it){ toast('That isn\'t due today on @'+String(a.handle).replace(/^@/,'')+' — the SOP calendar doesn\'t allow it yet.'); return; }
     if(it.done>=it.target){ toast('Today\'s '+(k==='reels'?'reels are':'step is')+' already done on '+a.handle+' — nothing ahead of the schedule.'); return; }
     if(k==='scroll' && !isOwner()){ tmRestore(); var R0=TM.run;   // Oct 14: the scroll is timed here — it counts once its 15 minutes are done
@@ -2693,7 +2708,7 @@ function IGPhones(CFG){
     addAcct:addAcct, createStart:createStart, log:logTask, setStatus:setStatus, trialUnlocked:trialUnlocked, trialSet:trialSet, trialUndo:trialUndo, history:history, reassign:reassign, del:del,
     preflight:preflightOpen, pfClose:pfClose, pfPick:pfPick, pfClear:pfClear, pfAttach:pfAttach, pfCap:pfCap, pfRule:pfRule, pfSave:pfSave, pfReview:pfReview,
     qaSave:qaSave, qaDate:qaDateSet, qaShift:qaShift,
-    scrollStart:scrollStart, tmStart:tmStart, tmStop:tmStop, tmPick:tmPick, tmStill:tmStill, tmTouch:tmTouch, timerOn:timerOn, timerInfo:timerInfo, _TM:TM,
+    scrollStart:scrollStart, scrollDrop:function(){ scrollDrop(false); }, tmStart:tmStart, tmStop:tmStop, tmPick:tmPick, tmStill:tmStill, tmTouch:tmTouch, timerOn:timerOn, timerInfo:timerInfo, _TM:TM,
     _t:{ dayN:dayN, plan:plan, phase:phase, reelTarget:reelTarget, pfOk:pfOk, qaRows:qaRows, phoneOpen:phoneOpen, setupDone:setupDone } };
   SELF=api; IGP.push(api); return api;
 }
