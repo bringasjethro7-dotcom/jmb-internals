@@ -1435,6 +1435,51 @@ function tbPost(body){
     headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json', Prefer:'resolution=merge-duplicates,return=minimal' },
     body:JSON.stringify(body) });
 }
+/* ═══ THE CLIENT HUB DECIDES THE PORTAL TASK (Jeth, Oct 20) ═══
+   `want` on the tool_beat row tells the portal which project · category · task the VA is on, from the tab in front:
+     Imperium / Slaybae (IG Reels): Phone setup, Creating accounts → Account Creation · Pre-flight, Warm-up scroll,
+       Profile / Feed photos, Phone work → Account Warm Up · Reels, Trial reels → IG Reels Posting (from the running timer)
+     Project 2 → IG Reels Posting · Threads Alts: adding an account → Threads Account Creation, everything else → Threads Warmup
+     Ember: Add account ("just created it") → Snapchat Creation, other adds and Assign to VPS / Setup done → Account transfer,
+       Verified running / Needs fix / Banned → VPS Monitoring
+     Design & Shopify: new card, Waiting for files, Drive → Uploading / Downloading · Editing → Photoshop ·
+       Shopify listing, Final QC, Publish → Shopify
+   A board action counts for 10 minutes; after that, or with no timer running, it is a hold: the portal keeps the task it
+   is on. Esano Cart has no hub step, so the VA still picks it in the portal. */
+var HW={ last:null };
+function hwKey(){ return 'hub_want_'+myId(); }
+function hwLast(){ if(HW.last) return HW.last; try{ HW.last=JSON.parse(localStorage.getItem(hwKey())||'{}')||{}; }catch(e){ HW.last={}; } return HW.last; }
+function hwSet(cid, task){ try{ if(!cid || !task || !USER || isOwner()) return; var L=hwLast(); L[cid]={ task:task, at:Date.now() }; localStorage.setItem(hwKey(), JSON.stringify(L)); setTimeout(function(){ try{ tbSend(true); }catch(_s){} }, 60); }catch(e){} }
+var HW_MAP={ imperium:{ p:'Imperium Agency', c:'IG Reels', def:'Account Warm Up' }, slaybae:{ p:'Slaybae', c:'IG Reels', def:'Account Warm Up' },
+  project2:{ p:'JMB Internal', c:'Project 2 (Ricardo)', def:'IG Reels Posting' }, threads:{ p:'Reddit - Altz', c:'Threads', def:'Threads Warmup' },
+  ember:{ p:'Ember Management (YT)', c:'Snapchat', def:'VPS Monitoring' }, 'design-shopify':{ p:'Torchlight', c:'Graphics', def:'Shopify' } };
+var IGP_TASK={ phone:'Account Creation', create:'Account Creation', pre:'Account Warm Up', scroll:'Account Warm Up', pfp:'Account Warm Up', feed:'Account Warm Up', work:'Account Warm Up', reels:'IG Reels Posting', trial:'IG Reels Posting' };
+function hubWant(){
+  var cl=HUB.cur(); if(!cl) return null; var M=HW_MAP[cl.id]; if(!M) return null;
+  var task='', hold=true;
+  if(cl.id==='imperium' || cl.id==='slaybae'){
+    try{ for(var i=0;i<IGP.length;i++){ var g=IGP[i]; if(g.id!==cl.id) continue; var R=g._TM && g._TM.run; if(R && g.timerOn && g.timerOn()){ task=IGP_TASK[R.k]||M.def; hold=false; } } }catch(e){}
+  } else if(cl.id==='project2'){ task='IG Reels Posting'; try{ if(P2.timerOn && P2.timerOn()) hold=false; }catch(e){} }
+  if(!task){ var L=hwLast()[cl.id]; if(L && Date.now()-L.at<12*3600*1000){ task=L.task; hold=(Date.now()-L.at)>10*60000; } }
+  if(!task) task=M.def;
+  return { t:'clients', cid:cl.id, p:M.p, c:M.c, task:task, hold:hold, lbl:cl.name, at:new Date().toISOString() };
+}
+/* board actions → the task they belong to (wrapped once the modules exist) */
+function hwWrap(){
+  var W=function(obj, name, fn){ try{ if(!obj || typeof obj[name]!=='function') return; var o=obj[name]; obj[name]=function(){ try{ fn.apply(null, arguments); }catch(_e){} return o.apply(this, arguments); }; }catch(e){} };
+  try{ if(typeof EM!=='undefined' && !EM.__hw){ EM.__hw=1;
+    W(EM,'add',function(){ var n=false; try{ n=!!(document.getElementById('em-new')||{}).checked; }catch(e){} hwSet('ember', n?'Snapchat Creation':'Account transfer'); });
+    W(EM,'move',function(id, st){ hwSet('ember', (st==='setup'||st==='live')?'Account transfer':'VPS Monitoring'); });
+    W(EM,'verify',function(){ hwSet('ember','VPS Monitoring'); }); } }catch(e){}
+  try{ if(typeof DS!=='undefined' && !DS.__hw){ DS.__hw=1;
+    W(DS,'add',function(){ hwSet('design-shopify','Uploading / Downloading'); });
+    W(DS,'move',function(id, st){ hwSet('design-shopify', st==='editing'?'Photoshop':((st==='shopify'||st==='website')?'Shopify':'Uploading / Downloading')); });
+    ['qcOpen','qcTick','qcPublish'].forEach(function(n){ W(DS,n,function(){ hwSet('design-shopify','Shopify'); }); }); } }catch(e){}
+  try{ if(typeof THR!=='undefined' && !THR.__hw){ THR.__hw=1;
+    W(THR,'add',function(){ hwSet('threads','Threads Account Creation'); });
+    ['step','post','cs','roll','still','skip','moveTo','saveNote','report','setStatus'].forEach(function(n){ W(THR,n,function(){ hwSet('threads','Threads Warmup'); }); }); } }catch(e){}
+}
+setTimeout(hwWrap, 0);
 function tbSend(force){
   try{
     var me=myId(); if(!me || isOwner()) return;
@@ -1443,10 +1488,12 @@ function tbSend(force){
     if(!dueAct && !dueOpen) return;
     var body={ employee_id:me, tool:'clients' };
     if(dueAct){ body.last_active=new Date().toISOString(); TB.sent=now; }
-    if(TB.ext){ var cl=HUB.cur(), hr=hubRunInfo(); body.open_at=new Date().toISOString(); body.run_since=hr?new Date(hr.start).toISOString():null; body.run_label=hr?hr.label:(act&&cl?('Working in '+cl.name):(cl?'Open · no task pressed yet':null)); body.today_secs=actToday(); TB.openSent=now; }
+    if(TB.ext){ var cl=HUB.cur(), hr=hubRunInfo(); body.open_at=new Date().toISOString(); body.run_since=hr?new Date(hr.start).toISOString():null; body.run_label=hr?hr.label:(act&&cl?('Working in '+cl.name):(cl?'Open · no task pressed yet':null)); body.today_secs=actToday(); TB.openSent=now;
+      if(TB.want!==false){ try{ var hw=hubWant(); body.want=hw?JSON.stringify(hw):null; }catch(_w){} } }   // Oct 20: the portal's category + task come from here
     if(!body.last_active && !body.open_at) return;
     tbPost(body).then(function(r){
       if(r.status===404){ TB.off=Date.now()+10*60000; return; }
+      if(r.status===400 && body.want!==undefined){ TB.want=false; delete body.want; tbPost(body).catch(function(){}); return; }   // `want` column missing → keep the rest of the link working
       if(r.status===400 && TB.ext){ TB.ext=false; if(body.last_active) tbPost({ employee_id:me, tool:'clients', last_active:body.last_active }).catch(function(){}); }
     }).catch(function(){});
   }catch(e){}

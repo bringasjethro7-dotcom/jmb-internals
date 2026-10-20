@@ -2063,6 +2063,21 @@ function tbInfo(){ var td=0; try{ td=toolToday(); }catch(e){}
   if(w) return { run_since:new Date(w.t).toISOString(), run_label:w.lane+(wtLive()?'':' — not counting (nothing ticked for 15 min)'), today_secs:td };
   var on=isLead() && !document.hidden && (Date.now()-((typeof ACT!=='undefined'&&ACT.last)||0))<90000;
   return { run_since:null, run_label: on ? 'Working in the Studio' : null, today_secs: td }; }
+/* ═══ THE STUDIO DECIDES THE PORTAL TASK (Jeth, Oct 20) ═══
+   The VA no longer picks ALTR Media's category/task in the portal; `want` on the tool_beat row tells it:
+   Sourcing lane → TP_1 · Content Sourcing · Posting and Daily reel lanes → TP_2 · Vysor IG Posting.
+   No lane running (or nothing ticked for 15 min) → hold: the portal keeps the task it is on (and starts on the last lane).
+   2FA Authentication and Extra Task (Posting Team) have no Studio step, so the VA still picks those in the portal. */
+function altrLaneKey(){ return 'altr_lastlane_'+String(USER&&USER.id||'x').toUpperCase(); }
+function altrWant(){
+  var w=null; try{ w=wtGet(); }catch(e){}
+  var lane=w&&w.lane?w.lane:'', live=false; try{ live=!!w && wtLive(); }catch(e){}
+  if(lane){ try{ localStorage.setItem(altrLaneKey(), lane); }catch(e){} }
+  else { try{ lane=localStorage.getItem(altrLaneKey())||''; }catch(e){} if(!lane){ try{ var h=JSON.parse(localStorage.getItem(wtHoldKey())||'null'); if(h&&h.lane) lane=h.lane; }catch(e){} } }
+  lane=lane||'Posting';
+  var src=(lane==='Sourcing');
+  return { t:'altr', p:'ALTR Media', c:src?'TP_1':'TP_2', task:src?'Content Sourcing':'Vysor IG Posting', k:lane, hold:!live, lbl:lane, at:new Date().toISOString() };
+}
 function tbPost(body){
   return fetch(SB_URL+'/rest/v1/tool_beat?on_conflict=employee_id,tool', { method:'POST', keepalive:true,
     headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json', Prefer:'resolution=merge-duplicates,return=minimal' },
@@ -2078,10 +2093,12 @@ function tbSend(force){
     if(!dueAct && !dueOpen) return;
     var body={ employee_id:me, tool:"altr" };
     if(dueAct){ body.last_active=new Date().toISOString(); TB.sent=now; }
-    if(TB.ext){ var x=tbInfo()||{}; body.open_at=new Date().toISOString(); body.run_since=x.run_since||null; body.run_label=x.run_label||null; body.today_secs=Math.max(0,Math.round(x.today_secs||0)); TB.openSent=now; }
+    if(TB.ext){ var x=tbInfo()||{}; body.open_at=new Date().toISOString(); body.run_since=x.run_since||null; body.run_label=x.run_label||null; body.today_secs=Math.max(0,Math.round(x.today_secs||0)); TB.openSent=now;
+      if(TB.want!==false && !isOwner()){ try{ body.want=JSON.stringify(altrWant()); }catch(_w){} } }   // Oct 20: the portal's category + task come from here
     if(!body.last_active && !body.open_at) return;
     tbPost(body).then(function(r){
       if(r.status===404){ TB.off=Date.now()+10*60000; return; }
+      if(r.status===400 && body.want!==undefined){ TB.want=false; delete body.want; tbPost(body).catch(function(){}); return; }   // `want` column missing → keep the rest of the link working
       if(r.status===400 && TB.ext){ TB.ext=false; if(body.last_active) tbPost({ employee_id:me, tool:"altr", last_active:body.last_active }).catch(function(){}); }   // pairing columns not added yet
     }).catch(function(){});
   }catch(e){}
