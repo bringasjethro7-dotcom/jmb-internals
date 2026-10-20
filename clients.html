@@ -1453,7 +1453,7 @@ function hwSet(cid, task){ try{ if(!cid || !task || !USER || isOwner()) return; 
 var HW_MAP={ imperium:{ p:'Imperium Agency', c:'IG Reels', def:'Account Warm Up' }, slaybae:{ p:'Slaybae', c:'IG Reels', def:'Account Warm Up' },
   project2:{ p:'JMB Internal', c:'Project 2 (Ricardo)', def:'IG Reels Posting' }, threads:{ p:'Reddit - Altz', c:'Threads', def:'Threads Warmup' },
   ember:{ p:'Ember Management (YT)', c:'Snapchat', def:'VPS Monitoring' }, 'design-shopify':{ p:'Torchlight', c:'Graphics', def:'Shopify' } };
-var IGP_TASK={ phone:'Account Creation', create:'Account Creation', pre:'Account Warm Up', scroll:'Account Warm Up', pfp:'Account Warm Up', feed:'Account Warm Up', work:'Account Warm Up', reels:'IG Reels Posting', trial:'IG Reels Posting' };
+var IGP_TASK={ phone:'Account Creation', create:'Account Creation', pre:'Account Warm Up', scroll:'Account Warm Up', email:'Account Warm Up', pfp:'Account Warm Up', feed:'Account Warm Up', work:'Account Warm Up', reels:'IG Reels Posting', trial:'IG Reels Posting' };
 function hubWant(){
   var cl=HUB.cur(); if(!cl) return null; var M=HW_MAP[cl.id]; if(!M) return null;
   var task='', hold=true;
@@ -2006,7 +2006,13 @@ function IGPhones(CFG){
   var CID=CFG.cid, PROJECT=CFG.project, NS=CFG.ns, PX=CFG.px, KP=CFG.kp, SELF=null;
   var CL=function(){ return clientById(CID); };
   var T={ phone:'IG Phone Setup', pre:'IG Pre-flight Check', create:'IG Account Created', scroll:'IG Warm-up Scroll',
-          pfp:'IG Profile Photo', feed:'IG Feed Photo', reels:'IG Reel', trial:'IG Trial Reel' };
+          pfp:'IG Profile Photo', feed:'IG Feed Photo', reels:'IG Reel', trial:'IG Trial Reel', email:'IG Email Added' };
+  /* Oct 20 (Jeth — "Slaybae has their own SOP now, and they are not doing feed posts at all"): a client can carry its own
+     day plan (CFG.sched). Slaybae, from the client's Airtable views: Day 1 Creation · Day 2 Email · Day 3 Profile Picture ·
+     Day 4 1 reel · Day 5 2 reels · Day 6 onward 3 reels. No warm-up scroll, no feed photos. Accounts already past day 4
+     move to posting on the next refresh. Imperium has no sched and keeps SOP-02 (7-day warm-up, feed photos, reels day 13). */
+  var SCH=CFG.sched||null;
+  function postDay(){ return SCH?SCH.reels:13; }
   var SETUP=[
     'Pulled an available proxy from Airtable and assigned it to this phone',
     'Entered that proxy into Shadowrocket and switched it on',
@@ -2016,7 +2022,7 @@ function IGPhones(CFG){
     'Checked whatismyipaddress.com — IP is in the same state as the location',
     'Checked Scamalytics — fraud score is between 0 and 3',
     'Installed Instagram and created 3 accounts on this phone (one model only)',
-    'Started the 7-day warm-up and logged the start date for each account',
+    SCH?'Logged day 1 (the creation date) for each account':'Started the 7-day warm-up and logged the start date for each account',
     'Read and understood the pre-flight check — to be run before every session'
   ];
   var VERIFY_STEPS=7;           // steps 1–7 = the device is verified → accounts may be created on it
@@ -2048,13 +2054,20 @@ function IGPhones(CFG){
   /* ── the SOP calendar ── */
   function dnum(d){ var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(d||'')); return m?Date.UTC(+m[1],+m[2]-1,+m[3])/864e5:NaN; }
   function dayN(a, date){ var s=dnum(a.meta.start), t=dnum(date||today()); return (isNaN(s)||isNaN(t))?0:(t-s+1); }
-  function reelTarget(n){ var r=n-12; return r<1?0:(r<=3?1:(r<=6?2:3)); }
+  function reelTarget(n){
+    if(SCH){ var q=n-SCH.reels; return q<0?0:SCH.ramp[Math.min(q, SCH.ramp.length-1)]; }
+    var r=n-12; return r<1?0:(r<=3?1:(r<=6?2:3)); }
   function everDone(a, k){ var lg=a.meta.log||{}; return Object.keys(lg).some(function(d){ return (lg[d]||{})[k]; }); }
   var DEAD={ banned:1, restricted:1, hold:1 };
   function phase(a, date){
     var n=dayN(a, date);
     if(DEAD[a.status]) return { k:a.status, t:{ banned:'Banned', restricted:'Restricted', hold:'On hold' }[a.status], n:n };
     if(n<1) return { k:'soon', t:'Starts '+a.meta.start, n:n };
+    if(SCH){
+      if(n<SCH.reels) return { k:'warm', t:'Day '+n+' · '+(SCH.lbl[n]||'Setup'), n:n };
+      var q=n-SCH.reels+1;
+      return { k:'reels', t:'Reels · '+reelTarget(n)+'/day'+(q<SCH.ramp.length?' (day '+n+')':''), n:n };
+    }
     if(n<=7) return { k:'warm', t:'Warm-up · day '+n+'/7', n:n };
     if(n<=12) return { k:'feed', t:'Feed photos · day '+n+'/12', n:n };
     return { k:'reels', t:'Reels · '+reelTarget(n)+'/day'+(n-12<=6?' (ramp day '+(n-12)+')':''), n:n };
@@ -2064,6 +2077,18 @@ function IGPhones(CFG){
     date=date||today(); var n=dayN(a, date), lg=(a.meta.log||{})[date]||{}, out=[];
     if(DEAD[a.status] || n<1) return out;
     function it(k, label, target){ out.push({ k:k, label:label, target:target, done:Math.min(target, +lg[k]||0) }); }
+    if(SCH){
+      var st=String(a.meta.start||'');
+      var before=function(k){ var L=a.meta.log||{}; return Object.keys(L).some(function(d){ return d<date && (L[d]||{})[k]; }); };   // done on an earlier day (e.g. the old SOP's day-2 photo)
+      if(SCH.email && ((n===SCH.email && !before('email')) || (n>SCH.email && n<=12 && st>=SCH.from && !everDone(a,'email'))))
+        it('email', n===SCH.email?'Add the email':'Email (missed on day '+SCH.email+')', 1);
+      if((n===SCH.pfp && !before('pfp')) || (n>SCH.pfp && n<=12 && !everDone(a,'pfp')))
+        it('pfp', n===SCH.pfp?'Add the profile picture':'Profile picture (missed on day '+SCH.pfp+')', 1);
+      if(n>=SCH.reels) it('reels', 'Post reels', reelTarget(n));
+      var tr0=a.meta.trial||null;
+      if(tr0 && +tr0.allowed>0 && n>=SCH.reels) it('trial', 'Trial reels (set by the managers)', +tr0.allowed);
+      return out;
+    }
     if(n===2 || (n>2 && n<=12 && !everDone(a,'pfp'))) it('pfp', n===2?'Add the profile picture':'Profile picture (missed on day 2)', 1);
     if(n<=7) it('scroll', n<=2?'Scroll 15 min':'Scroll 15 min — like, comment, open profiles', 1);
     else if(n<=12) it('feed', 'Post 1 feed photo (from the model\'s Drive)', 1);
@@ -2086,8 +2111,8 @@ function IGPhones(CFG){
      so the portal timer keeps going and the time counts as tool time. One timer at a time; switching steps on a
      phone carries on without a gap. It survives a reload. Owners never run it. */
   var TM={ run:null, tick:null, ask:null, restored:false, pick:'' };
-  var TLIM={ pre:20, phone:30, create:30, pfp:20, feed:20, reels:30, trial:30, work:20 };
-  var TNAME={ pre:'Pre-flight check', phone:'Phone setup', create:'Creating accounts', scroll:'Warm-up scroll', pfp:'Profile photos', feed:'Feed photos', reels:'Reels', trial:'Trial reels', work:'Phone work' };
+  var TLIM={ pre:20, phone:30, create:30, email:20, pfp:20, feed:20, reels:30, trial:30, work:20 };
+  var TNAME={ pre:'Pre-flight check', phone:'Phone setup', create:'Creating accounts', scroll:'Warm-up scroll', email:'Adding emails', pfp:'Profile photos', feed:'Feed photos', reels:'Reels', trial:'Trial reels', work:'Phone work' };
   var SCROLL_MS=15*60*1000, ASK_MS=2*60*1000;
   function tmKey(){ return KP+'_run_'+me(); }
   function tmSave(){ try{ if(TM.run) localStorage.setItem(tmKey(), JSON.stringify(TM.run)); else localStorage.removeItem(tmKey()); }catch(e){} }
@@ -2232,8 +2257,8 @@ function IGPhones(CFG){
     if(v7 && A.length<MAX_ACCTS) ks.push('create');
     if(sd && !open) ks.push('pre');
     if(open){ var due={}; A.forEach(function(a){ plan(a).forEach(function(x){ if(x.done<x.target && x.k!=='scroll') due[x.k]=1; }); });
-      ['pfp','feed','reels','trial'].forEach(function(k){ if(due[k]) ks.push(k); }); }
-    if(!ks.length) return '<div class="ipick"><span class="muted">Nothing on this phone needs a timer right now'+(open?' — scrolls use ▶ Start 15:00 on the account.':'.')+'</span></div>';
+      ['email','pfp','feed','reels','trial'].forEach(function(k){ if(due[k]) ks.push(k); }); }
+    if(!ks.length) return '<div class="ipick"><span class="muted">Nothing on this phone needs a timer right now'+(open&&!SCH?' — scrolls use ▶ Start 15:00 on the account.':'.')+'</span></div>';
     return '<div class="ipick"><span class="muted">Time this phone for…</span>'+ks.map(function(k){ var on=TM.run && TM.run.pid===p.id && TM.run.k===k; return '<button class="itk'+(on?' run':'')+'" '+(on?'disabled':'')+' onclick="'+NS+'.tmStart(\''+jsq(p.id)+'\',\''+k+'\')">'+(on?'⏱ ':'▶ ')+esc(TNAME[k])+'</button>'; }).join('')+'</div>';
   }
   /* owner: who is timing this phone right now (from the VAs' heartbeats) */
@@ -2355,7 +2380,7 @@ function IGPhones(CFG){
   }
   async function trialUnlocked(aid){
     var a=rowById(aid); if(!a) return;
-    if(dayN(a)<=12){ toast('Trial reels come after the feed-photo days.'); return; }
+    if(dayN(a)<postDay()){ toast(SCH?'Trial reels come after posting starts (day '+SCH.reels+').':'Trial reels come after the feed-photo days.'); return; }
     if(!confirm('Flag '+a.handle+' for trial reels?\n\nOnly when Instagram has actually unlocked trial reels on THIS account. The managers are then asked how many it runs a day.\n\nPicked the wrong account? You can undo it from the ⋯ menu until the managers set a number.')) return;
     if(!(await linkGate(CL(), 'Reporting trial reels'))) return;
     await guarded(aid, function(){ return patchMeta(aid, function(m){ if(m.trial) return false; m.hist=(m.hist||[]).slice(-19); m.hist.push({ at:new Date().toISOString(), by:me(), to:'trial flagged' }); m.trial={ at:new Date().toISOString(), by:me(), allowed:null }; }, null, 'Flagged — the managers decide how many trial reels '+a.handle+' runs. Don\'t start them yet.'); });
@@ -2531,7 +2556,7 @@ function IGPhones(CFG){
       if(rej) issues.push(rej+' pre-flight'+(rej>1?'s':'')+' marked not acceptable');
       if(noMgr) issues.push(noMgr+' pre-flight'+(noMgr>1?'s':'')+' without the manager\'s go-ahead');
       if(stop) issues.push(stop+' STOP (fraud above 3 or a mismatch) — correctly not opened');
-      var miss=Math.max(0, due-done); if(miss) issues.push(miss+' planned step'+(miss>1?'s':'')+' not done (warm-up / feed / reels)');
+      var miss=Math.max(0, due-done); if(miss) issues.push(miss+' planned step'+(miss>1?'s':'')+' not done ('+(SCH?'email / profile picture / reels':'warm-up / feed / reels')+')');
       score-=3*noPf; score-=2*rej; score-=0.5*noMgr; score-=Math.min(3, 0.5*miss);
       score=Math.max(0, Math.min(10, Math.round(score*2)/2));
       return { emp:k, pfDone:pfDone, pfClean:pfClean, phones:Object.keys(w.worked).length, due:due, done:done, tasks:w.tasks, issues:issues, score:score, list:w.pf };
@@ -2557,7 +2582,7 @@ function IGPhones(CFG){
     var rt=0, rd=0; A.forEach(function(a){ plan(a).forEach(function(x){ if(x.k==='reels'||x.k==='trial'){ rt+=x.target; rd+=x.done; } }); });
     var trial=A.filter(function(a){ return a.meta.trial && a.meta.trial.allowed==null; }).length;
     function s(cls,b,l){ return '<div class="istat '+cls+'"><b>'+b+'</b><span>'+l+'</span></div>'; }
-    return s('ph', ready+'<small>/'+P.length+'</small>','Phones ready')+s('pf', open,'Open this shift')+s('wa', warm,'Warm-up')+s('fe', feed,'Feed photos')+s('re', reels,'On reels')+s('rt', rd+'<small>/'+rt+'</small>','Reels today')+(trial?s('tr', trial,'Trial reels to set'):'');
+    return s('ph', ready+'<small>/'+P.length+'</small>','Phones ready')+s('pf', open,'Open this shift')+s('wa', warm,SCH?'Days 1–'+(SCH.reels-1):'Warm-up')+(SCH?'':s('fe', feed,'Feed photos'))+s('re', reels,'On reels')+s('rt', rd+'<small>/'+rt+'</small>','Reels today')+(trial?s('tr', trial,'Trial reels to set'):'');
   }
   function navPills(){
     var v=[['today','Today'],['phones','Phones & setup']]; if(isOwner()) v.push(['qa','QA']);
@@ -2590,7 +2615,7 @@ function IGPhones(CFG){
     var tr=a.meta.trial;
     var trialChip=tr?(tr.allowed==null?chip('warn','Trial reels unlocked · waiting for the managers'):chip('vio','Trial reels · '+tr.allowed+'/day')):'';
     var menu=[];
-    if(!tr && ph.n>12 && !DEAD[a.status]) menu.push(['Trial reels unlocked → tell the managers',NS+".trialUnlocked('"+id+"')"]);
+    if(!tr && ph.n>=postDay() && !DEAD[a.status]) menu.push(['Trial reels unlocked → tell the managers',NS+".trialUnlocked('"+id+"')"]);
     if(isOwner() && tr) menu.push(['Set trial reels a day…',NS+".trialSet('"+id+"')"]);
     if(tr && (tr.allowed==null || isOwner())) menu.push(['Undo trial reels flag (wrong account)',NS+".trialUndo('"+id+"')"]);
     if(a.status!=='active') menu.push(['Back to active',NS+".setStatus('"+id+"','active')"]);
@@ -2606,10 +2631,10 @@ function IGPhones(CFG){
   }
   /* 12-day SOP strip: done / missed / today / ahead */
   function calStrip(a){
-    var n=dayN(a), h='';
-    for(var d=1; d<=12; d++){
+    var n=dayN(a), h='', last=SCH?SCH.reels-1:12;
+    for(var d=1; d<=last; d++){
       var ds=(function(){ var t=dnum(a.meta.start)+d-1, x=new Date(t*864e5); return x.toISOString().slice(0,10); })();
-      var L=(a.meta.log||{})[ds]||{}, did=L.scroll||L.feed||L.pfp||L.create, cls=d<n?(did?'ok':'miss'):(d===n?(did?'ok now':'now'):'');
+      var L=(a.meta.log||{})[ds]||{}, did=L.scroll||L.feed||L.pfp||L.create||L.email, cls=d<n?(did?'ok':'miss'):(d===n?(did?'ok now':'now'):'');
       h+='<i class="'+cls+'" title="Day '+d+' · '+ds+'">'+d+'</i>';
     }
     return h;
@@ -2723,8 +2748,11 @@ function IGPhones(CFG){
     return '<details class="sopbox"><summary>'+CFG.sop+'</summary><div class="sopgrid">'+
       '<div class="sopph"><b>📱 Device setup</b>One phone, one model, three accounts. Finish the setup and all three verifications on one phone before you touch the next. Tick each step in <i>Phones &amp; setup</i> as you do it.</div>'+
       '<div class="sopph"><b>🛫 Before every session</b>Maps · IP · Scamalytics (0–3), a screenshot of each, then the manager\'s go-ahead in the group. Log it here — the phone\'s accounts open for the shift once it\'s logged. Anything off → stop and tell a manager.</div>'+
-      '<div class="sopph"><b>🌱 Warm-up</b>Day 1 create + scroll 15 min · Day 2 profile photo + scroll · Days 3–7 scroll naturally (likes, a few comments, open profiles) · Days 8–12 one feed photo from the model\'s Drive.</div>'+
-      '<div class="sopph"><b>🎬 Reels ramp</b>1 a day for 3 days → 2 a day for 3 days → 3 a day from then on. Trial reels unlocked → flag it; the managers set the number.</div>'+
+      (SCH
+        ?'<div class="sopph"><b>🌱 Days 1–'+(SCH.reels-1)+'</b>Day 1 create the account · Day 2 add the email · Day 3 add the profile picture. No warm-up scroll and no feed photos on '+esc(PROJECT)+'.</div>'+
+         '<div class="sopph"><b>🎬 Posting</b>Day 4 → 1 reel · Day 5 → 2 reels · Day 6 onward → 3 reels a day. Trial reels unlocked → flag it; the managers set the number.</div>'
+        :'<div class="sopph"><b>🌱 Warm-up</b>Day 1 create + scroll 15 min · Day 2 profile photo + scroll · Days 3–7 scroll naturally (likes, a few comments, open profiles) · Days 8–12 one feed photo from the model\'s Drive.</div>'+
+         '<div class="sopph"><b>🎬 Reels ramp</b>1 a day for 3 days → 2 a day for 3 days → 3 a day from then on. Trial reels unlocked → flag it; the managers set the number.</div>')+
       '<div class="sopph"><b>✅ When you\'re done</b>Swipe Instagram closed to clear it.</div></div></details>';
   }
   function body(){
@@ -2761,7 +2789,8 @@ function IGPhones(CFG){
 }
 var IGP=[];
 var IMA=IGPhones({ ns:'IMA', cid:'imperium', project:'Imperium', px:'ima', kp:'ima', phEx:'IMA-07', sop:'SOP-02 — Instagram setup &amp; warm-up (physical phone)' });
-var SLB=IGPhones({ ns:'SLB', cid:'slaybae',  project:'Slaybae',  px:'slb', kp:'slb', phEx:'SLB-01', sop:'Slaybae SOP-01 — Instagram setup &amp; warm-up (physical phone)' });
+var SLB=IGPhones({ ns:'SLB', cid:'slaybae',  project:'Slaybae',  px:'slb', kp:'slb', phEx:'SLB-01', sop:'Slaybae SOP — Instagram setup &amp; posting (physical phone) · updated Oct 20',
+  sched:{ email:2, pfp:3, reels:4, ramp:[1,2,3], from:'2026-10-19', lbl:{ 1:'Creation', 2:'Email', 3:'Profile picture' } } });
 
 /* ═══════════ CLIENT: EMBER (Snapchat VPS Ops) — moved in from ember.html (Oct 9), same board, same data ═══════════
    Every card is one Snapchat account: Stock → Setting up → Live, with Needs fix and Banned / Locked off to the side.
