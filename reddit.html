@@ -2072,6 +2072,35 @@ function tbInfo(){ var o={}; try{ o=tmAll(); }catch(e){}
   var n=Object.keys(o).length; if(n>1) lbl+=' (+'+(n-1)+' more)';
   var td=0; try{ td=timedToday(); }catch(e){}
   return { run_since: best ? new Date(o[best].t).toISOString() : null, run_label: lbl || null, today_secs: td }; }
+/* ═══ THE TOOL DECIDES THE PORTAL TASK (Jeth, Oct 20) ═══
+   A Reddit VA no longer picks the category and task in the portal — this page tells it, through `want` on the
+   tool_beat row: { p: base, m: model, k: 'posting' | 'warmup' | 'creation', v: method, idle, lbl, at }.
+   Mapping approved Oct 20: account creation → Reddit Account Creation · Warming, Comment Farm, NSFW Comments and
+   Spam recovery sessions → Reddit Warmup · Day 1 → Super Strong sessions and DM rounds → Reddit Posting · Vysor adds
+   "Vysor" (Jailbroken and Blaze+ stay plain) · health checks, username fixes and any time with no task timer running
+   → Reddit Warmup, under the model the VA works most. The portal turns base + model into its own project/category. */
+function tcMainModel(){
+  var me=myId(), cnt={}, best='', n=0;
+  try{ (ROWS||[]).forEach(function(r){ if(!r || isParked(r) || isDead(r)) return; if(worksFor(r)!==me) return;
+    var m=String(r.model||'').trim(); if(!m) return; cnt[m]=(cnt[m]||0)+1; if(cnt[m]>n){ n=cnt[m]; best=m; } }); }catch(e){}
+  return best;
+}
+function tcWant(){
+  var o={}; try{ o=tmAll(); }catch(e){}
+  var best=null; Object.keys(o).forEach(function(k){ if(o[k] && o[k].t && (!best || o[k].t<o[best].t)) best=k; });
+  var w={ p:PROJECT, m:tcMainModel(), k:'warmup', v:'', idle:true, lbl:'Reddit Central open', at:new Date().toISOString() };
+  if(!best) return w;
+  var parts=best.split('|'), id=parts[0], key=parts[1]||'';
+  w.idle=false;
+  if(id==='__create'){ w.k='creation'; w.v=String(NA.method||''); w.lbl='Creating an account'; return w; }
+  var r=null; try{ r=rowById(id); }catch(e){}
+  if(!r){ w.lbl='Task'; return w; }
+  w.p=r.project||PROJECT; w.m=String(r.model||'').trim()||w.m; w.v=methodOf(r);
+  if(/^s\d/.test(key)){ var ph=phase(r.status), t=(r.status==='recovery')?'Reddit Warmup':(ph&&ph.task); w.k=(t==='Reddit Posting')?'posting':'warmup'; w.lbl='Session '+key.slice(1)+' · '+(r.handle||''); }
+  else if(key==='dm'){ w.k='posting'; w.lbl='DMs · '+(r.handle||''); }
+  else { w.k='warmup'; w.lbl='Task · '+(r.handle||''); }
+  return w;
+}
 function tbPost(body){
   return fetch(SB_URL+'/rest/v1/tool_beat?on_conflict=employee_id,tool', { method:'POST', keepalive:true,
     headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json', Prefer:'resolution=merge-duplicates,return=minimal' },
@@ -2087,10 +2116,12 @@ function tbSend(force){
     if(!dueAct && !dueOpen) return;
     var body={ employee_id:me, tool:"reddit" };
     if(dueAct){ body.last_active=new Date().toISOString(); TB.sent=now; }
-    if(TB.ext){ var x=tbInfo()||{}; body.open_at=new Date().toISOString(); body.run_since=x.run_since||null; body.run_label=x.run_label||null; body.today_secs=Math.max(0,Math.round(x.today_secs||0)); TB.openSent=now; }
+    if(TB.ext){ var x=tbInfo()||{}; body.open_at=new Date().toISOString(); body.run_since=x.run_since||null; body.run_label=x.run_label||null; body.today_secs=Math.max(0,Math.round(x.today_secs||0)); TB.openSent=now;
+      if(TB.want!==false && !isAdmin()){ try{ body.want=JSON.stringify(tcWant()); }catch(_w){} } }   // Oct 20: the portal's category + task come from here
     if(!body.last_active && !body.open_at) return;
     tbPost(body).then(function(r){
       if(r.status===404){ TB.off=Date.now()+10*60000; return; }
+      if(r.status===400 && body.want!==undefined){ TB.want=false; delete body.want; tbPost(body).catch(function(){}); return; }   // `want` column missing → keep the rest of the link working
       if(r.status===400 && TB.ext){ TB.ext=false; if(body.last_active) tbPost({ employee_id:me, tool:"reddit", last_active:body.last_active }).catch(function(){}); }   // pairing columns not added yet
     }).catch(function(){});
   }catch(e){}
