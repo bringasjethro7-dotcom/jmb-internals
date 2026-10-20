@@ -2009,7 +2009,7 @@ function IGPhones(CFG){
           pfp:'IG Profile Photo', feed:'IG Feed Photo', reels:'IG Reel', trial:'IG Trial Reel', email:'IG Email Added' };
   /* Oct 20 (Jeth — "Slaybae has their own SOP now, and they are not doing feed posts at all"): a client can carry its own
      day plan (CFG.sched). Slaybae, from the client's Airtable views: Day 1 Creation · Day 2 Email · Day 3 Profile Picture ·
-     Day 4 1 reel · Day 5 2 reels · Day 6 onward 3 reels. No warm-up scroll, no feed photos. Accounts already past day 4
+     Day 4 1 reel · Day 5 2 reels · Day 6 onward 3 reels, each posting day with the timed 15-minute scroll. No feed photos. Accounts already past day 4
      move to posting on the next refresh. Imperium has no sched and keeps SOP-02 (7-day warm-up, feed photos, reels day 13). */
   var SCH=CFG.sched||null;
   function postDay(){ return SCH?SCH.reels:13; }
@@ -2084,6 +2084,9 @@ function IGPhones(CFG){
         it('email', n===SCH.email?'Add the email':'Email (missed on day '+SCH.email+')', 1);
       if((n===SCH.pfp && !before('pfp')) || (n>SCH.pfp && n<=12 && !everDone(a,'pfp')))
         it('pfp', n===SCH.pfp?'Add the profile picture':'Profile picture (missed on day '+SCH.pfp+')', 1);
+      /* Oct 21 (Jeth — the VA: "15 minutes scrolling is still required during the Reels post"): every posting day
+         keeps the timed 15-minute scroll on each account, next to its reels. */
+      if(n>=SCH.reels && SCH.scroll) it('scroll', 'Scroll 15 min — like, comment, open profiles', 1);
       if(n>=SCH.reels) it('reels', 'Post reels', reelTarget(n));
       var tr0=a.meta.trial||null;
       if(tr0 && +tr0.allowed>0 && n>=SCH.reels) it('trial', 'Trial reels (set by the managers)', +tr0.allowed);
@@ -2258,7 +2261,7 @@ function IGPhones(CFG){
     if(sd && !open) ks.push('pre');
     if(open){ var due={}; A.forEach(function(a){ plan(a).forEach(function(x){ if(x.done<x.target && x.k!=='scroll') due[x.k]=1; }); });
       ['email','pfp','feed','reels','trial'].forEach(function(k){ if(due[k]) ks.push(k); }); }
-    if(!ks.length) return '<div class="ipick"><span class="muted">Nothing on this phone needs a timer right now'+(open&&!SCH?' — scrolls use ▶ Start 15:00 on the account.':'.')+'</span></div>';
+    if(!ks.length) return '<div class="ipick"><span class="muted">Nothing on this phone needs a timer right now'+(open&&(!SCH||SCH.scroll)?' — scrolls use ▶ Start 15:00 on the account.':'.')+'</span></div>';
     return '<div class="ipick"><span class="muted">Time this phone for…</span>'+ks.map(function(k){ var on=TM.run && TM.run.pid===p.id && TM.run.k===k; return '<button class="itk'+(on?' run':'')+'" '+(on?'disabled':'')+' onclick="'+NS+'.tmStart(\''+jsq(p.id)+'\',\''+k+'\')">'+(on?'⏱ ':'▶ ')+esc(TNAME[k])+'</button>'; }).join('')+'</div>';
   }
   /* owner: who is timing this phone right now (from the VAs' heartbeats) */
@@ -2556,7 +2559,7 @@ function IGPhones(CFG){
       if(rej) issues.push(rej+' pre-flight'+(rej>1?'s':'')+' marked not acceptable');
       if(noMgr) issues.push(noMgr+' pre-flight'+(noMgr>1?'s':'')+' without the manager\'s go-ahead');
       if(stop) issues.push(stop+' STOP (fraud above 3 or a mismatch) — correctly not opened');
-      var miss=Math.max(0, due-done); if(miss) issues.push(miss+' planned step'+(miss>1?'s':'')+' not done ('+(SCH?'email / profile picture / reels':'warm-up / feed / reels')+')');
+      var miss=Math.max(0, due-done); if(miss) issues.push(miss+' planned step'+(miss>1?'s':'')+' not done ('+(SCH?'email / profile picture / scroll / reels':'warm-up / feed / reels')+')');
       score-=3*noPf; score-=2*rej; score-=0.5*noMgr; score-=Math.min(3, 0.5*miss);
       score=Math.max(0, Math.min(10, Math.round(score*2)/2));
       return { emp:k, pfDone:pfDone, pfClean:pfClean, phones:Object.keys(w.worked).length, due:due, done:done, tasks:w.tasks, issues:issues, score:score, list:w.pf };
@@ -2749,8 +2752,8 @@ function IGPhones(CFG){
       '<div class="sopph"><b>📱 Device setup</b>One phone, one model, three accounts. Finish the setup and all three verifications on one phone before you touch the next. Tick each step in <i>Phones &amp; setup</i> as you do it.</div>'+
       '<div class="sopph"><b>🛫 Before every session</b>Maps · IP · Scamalytics (0–3), a screenshot of each, then the manager\'s go-ahead in the group. Log it here — the phone\'s accounts open for the shift once it\'s logged. Anything off → stop and tell a manager.</div>'+
       (SCH
-        ?'<div class="sopph"><b>🌱 Days 1–'+(SCH.reels-1)+'</b>Day 1 create the account · Day 2 add the email · Day 3 add the profile picture. No warm-up scroll and no feed photos on '+esc(PROJECT)+'.</div>'+
-         '<div class="sopph"><b>🎬 Posting</b>Day 4 → 1 reel · Day 5 → 2 reels · Day 6 onward → 3 reels a day. Trial reels unlocked → flag it; the managers set the number.</div>'
+        ?'<div class="sopph"><b>🌱 Days 1–'+(SCH.reels-1)+'</b>Day 1 create the account · Day 2 add the email · Day 3 add the profile picture. No feed photos on '+esc(PROJECT)+'.</div>'+
+         '<div class="sopph"><b>🎬 Posting</b>Day 4 → 1 reel · Day 5 → 2 reels · Day 6 onward → 3 reels a day. Every posting day: scroll 15 min on each account too (likes, a few comments, open profiles). Trial reels unlocked → flag it; the managers set the number.</div>'
         :'<div class="sopph"><b>🌱 Warm-up</b>Day 1 create + scroll 15 min · Day 2 profile photo + scroll · Days 3–7 scroll naturally (likes, a few comments, open profiles) · Days 8–12 one feed photo from the model\'s Drive.</div>'+
          '<div class="sopph"><b>🎬 Reels ramp</b>1 a day for 3 days → 2 a day for 3 days → 3 a day from then on. Trial reels unlocked → flag it; the managers set the number.</div>')+
       '<div class="sopph"><b>✅ When you\'re done</b>Swipe Instagram closed to clear it.</div></div></details>';
@@ -2790,7 +2793,7 @@ function IGPhones(CFG){
 var IGP=[];
 var IMA=IGPhones({ ns:'IMA', cid:'imperium', project:'Imperium', px:'ima', kp:'ima', phEx:'IMA-07', sop:'SOP-02 — Instagram setup &amp; warm-up (physical phone)' });
 var SLB=IGPhones({ ns:'SLB', cid:'slaybae',  project:'Slaybae',  px:'slb', kp:'slb', phEx:'SLB-01', sop:'Slaybae SOP — Instagram setup &amp; posting (physical phone) · updated Oct 20',
-  sched:{ email:2, pfp:3, reels:4, ramp:[1,2,3], from:'2026-10-19', lbl:{ 1:'Creation', 2:'Email', 3:'Profile picture' } } });
+  sched:{ email:2, pfp:3, reels:4, ramp:[1,2,3], scroll:1, from:'2026-10-19', lbl:{ 1:'Creation', 2:'Email', 3:'Profile picture' } } });
 
 /* ═══════════ CLIENT: EMBER (Snapchat VPS Ops) — moved in from ember.html (Oct 9), same board, same data ═══════════
    Every card is one Snapchat account: Stock → Setting up → Live, with Needs fix and Banned / Locked off to the side.
