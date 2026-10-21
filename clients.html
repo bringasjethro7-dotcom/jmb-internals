@@ -92,6 +92,17 @@ body::before{content:'';position:fixed;inset:-20% -10% auto;height:520px;z-index
 .toast.on{opacity:1;transform:translateX(-50%)}
 /* ── Team (owner) ── */
 .tm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+/* Client Hub · Scores (owner, Oct 21) */
+.scx-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 16px;margin-bottom:14px}
+.scx-top select{border:1px solid var(--line,#e2e8f0);border-radius:10px;padding:7px 10px;font:700 13px Inter,sans-serif;background:#fff}
+.scx-c{padding:14px 16px;margin-bottom:14px}
+.scx-h{display:flex;align-items:center;gap:10px;margin-bottom:6px}.scx-h b{font:800 15px Sora,sans-serif}
+.scx-rule{font-size:12px;color:var(--ink3,#64748b);margin:0 0 10px;line-height:1.5}
+.scx-t{width:100%;border-collapse:collapse;font-size:13px}
+.scx-t th{text-align:left;font:800 11px Inter,sans-serif;color:var(--ink3,#64748b);text-transform:uppercase;letter-spacing:.04em;padding:6px 8px;border-bottom:1px solid var(--line,#e2e8f0)}
+.scx-t td{padding:8px;border-bottom:1px solid var(--line,#f1f5f9);vertical-align:top}
+.scx-t td b{font:800 15px Sora,sans-serif}.scx-t td small{display:block;color:var(--ink3,#64748b);font-size:11px;margin-top:2px}
+.scx-t td.na b{color:#94a3b8;font-weight:700}.scx-pub{font-size:11.5px;color:#065f46}.scx-pub.off{color:#94a3b8}
 .tm-c{padding:16px 16px 14px;position:relative;overflow:hidden}
 .tm-c::before{content:'';position:absolute;left:0;top:0;right:0;height:4px;background:var(--g)}
 .tm-h{display:flex;align-items:center;gap:10px;margin-bottom:12px}
@@ -819,6 +830,7 @@ var IC={
   hub:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>',
   shop:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1.2 11.2a1.6 1.6 0 0 1-1.6 1.4H7.8a1.6 1.6 0 0 1-1.6-1.4z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg>',
   reels:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><path d="M3 8.5h18M8 3l3 5.5M13.5 3l3 5.5"/><path d="M10.3 12.2v4.6l4-2.3z" fill="currentColor"/></svg>',
+  score:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><rect x="5.5" y="11" width="3" height="6.5" rx="1"/><rect x="10.5" y="7" width="3" height="10.5" rx="1"/><rect x="15.5" y="4" width="3" height="13.5" rx="1"/></svg>',
   gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M16 19.5v-1a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5v1"/><circle cx="10" cy="8" r="3.5"/><path d="M17.5 8.5v5M15 11h5"/></svg>',
   phone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.6"/><path d="M10.5 18.5h3"/></svg>',
   vps:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3.5" width="18" height="7" rx="2"/><rect x="3" y="13.5" width="18" height="7" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6"/></svg>',
@@ -1976,7 +1988,19 @@ var DS=(function(){
     var ok=await upd(id, { status:'website', meta:JSON.stringify(Object.assign({}, r0.meta||{}, { qc:true, pub:vaKeyOf(USER.id), last:vaKeyOf(USER.id) })) }, 'Published! +1 Shopify Product Upload');
     if(ok) qcClose(); else $('qc-pub').disabled=false;
   }
-  return { id:'design-shopify', S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners,
+  /* ── MONTH SCORES (owner → Client Hub · Scores, Oct 21) ── Results only: cards published this month ÷ (published + still
+     in the pipeline). Productivity and QA aren't measured by this board. */
+  function monthScores(month){
+    var per={};
+    S.rows.forEach(function(r){ var k=ownerOf(r); if(!k) return; var m=r.meta||{}; if(typeof m==='string'){ try{ m=JSON.parse(m); }catch(e){ m={}; } }
+      var o=per[k]=per[k]||{ pub:0, open:0, days:{} }, p=String(m.pub||'');
+      if(p.slice(0,7)===month){ o.pub++; o.days[p.slice(0,10)]=1; }
+      else if(['waiting','editing','drive','shopify'].indexOf(r.status)>=0) o.open++; });
+    return Object.keys(per).filter(function(k){ return OWNER_IDS.indexOf(k.toUpperCase())<0 && per[k].pub+per[k].open>0; }).map(function(k){ var o=per[k];
+      return { emp:k.toUpperCase(), days:Object.keys(o.days).length, prod:null, qa:null, res:hubR1(o.pub/(o.pub+o.open)*100),
+        why:{ prod:'not measured here', qa:'not measured here', res:o.pub+' published this month · '+o.open+' still in the pipeline' } }; });
+  }
+  return { id:'design-shopify', S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners, monthScores:monthScores,
            setFilter:setFilter, setQ:setQ, add:add, move:move, pause:pause, resume:resume, del:del,
            qcOpen:qcOpen, qcTick:qcTick, qcClose:qcClose, qcPublish:qcPublish };
 })();
@@ -2002,6 +2026,23 @@ document.addEventListener('click', function(e){ document.querySelectorAll('detai
    same SOP-02 flow: phones & setup, pre-flight, 7-day warm-up, feed photos, reels ramp, trial reels, QA and the work timer.
    IMA = Imperium, SLB = Slaybae. One running timer across them: starting one stops the other's count-up timer; a running
    15-minute scroll in the other client has to finish (or be stopped) first. */
+/* Oct 21: a daily QA save goes through on the owner's sign-in (portal build 2026-10-21a). The admin password is only
+   asked for if the backend still wants it (older build). */
+async function qaDailySaveCall(qs){
+  var pass=''; try{ pass=sessionStorage.getItem('hub_adm')||''; }catch(e){}
+  var d=await jFetch(API+'?action=qa_daily_save&'+qs+(pass?'&pass='+encodeURIComponent(pass):'')+'&_='+Date.now(), 0);
+  if(d && d.error==='UNAUTHORIZED'){
+    try{ sessionStorage.removeItem('hub_adm'); }catch(e){}
+    pass=prompt('Admin password — to save QA scores to the portal (kept for this tab only):')||''; if(!pass) return d;
+    try{ sessionStorage.setItem('hub_adm', pass); }catch(e){}
+    d=await jFetch(API+'?action=qa_daily_save&'+qs+'&pass='+encodeURIComponent(pass)+'&_='+Date.now(), 0);
+  }
+  return d;
+}
+function hubMonthEnd(month){ var x=new Date(Date.UTC(+month.slice(0,4), +month.slice(5,7), 0)); var e=x.toISOString().slice(0,10), t=today(); return e>t?t:e; }
+function hubDayAdd(d, n){ var t=Date.UTC(+d.slice(0,4), +d.slice(5,7)-1, +d.slice(8,10))+n*864e5; return new Date(t).toISOString().slice(0,10); }
+function hubAvg(a){ return a.length?a.reduce(function(s,x){ return s+x; },0)/a.length:null; }
+function hubR1(x){ return (x===null||x===undefined||isNaN(x))?null:Math.round(x*10)/10; }
 function IGPhones(CFG){
   var CID=CFG.cid, PROJECT=CFG.project, NS=CFG.ns, PX=CFG.px, KP=CFG.kp, SELF=null;
   var CL=function(){ return clientById(CID); };
@@ -2012,7 +2053,10 @@ function IGPhones(CFG){
      Day 4 1 reel · Day 5 2 reels · Day 6 onward 3 reels, each posting day with the timed 15-minute scroll. No feed photos. Accounts already past day 4
      move to posting on the next refresh. Imperium has no sched and keeps SOP-02 (7-day warm-up, feed photos, reels day 13). */
   var SCH=CFG.sched||null;
-  function postDay(){ return SCH?SCH.reels:13; }
+  /* Oct 21: the client's own plan applies from SCH.since; earlier days are judged by the plan that was in force then
+     (so the month's scores and QA don't re-grade old days against a calendar nobody was working to). */
+  function schFor(date){ return (SCH && String(date||today())>=(SCH.since||'')) ? SCH : null; }
+  function postDay(date){ var x=schFor(date); return x?x.reels:13; }
   var SETUP=[
     'Pulled an available proxy from Airtable and assigned it to this phone',
     'Entered that proxy into Shadowrocket and switched it on',
@@ -2054,8 +2098,9 @@ function IGPhones(CFG){
   /* ── the SOP calendar ── */
   function dnum(d){ var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(d||'')); return m?Date.UTC(+m[1],+m[2]-1,+m[3])/864e5:NaN; }
   function dayN(a, date){ var s=dnum(a.meta.start), t=dnum(date||today()); return (isNaN(s)||isNaN(t))?0:(t-s+1); }
-  function reelTarget(n){
-    if(SCH){ var q=n-SCH.reels; return q<0?0:SCH.ramp[Math.min(q, SCH.ramp.length-1)]; }
+  function reelTarget(n, sch){
+    if(sch===undefined) sch=schFor(today());
+    if(sch){ var q=n-sch.reels; return q<0?0:sch.ramp[Math.min(q, sch.ramp.length-1)]; }
     var r=n-12; return r<1?0:(r<=3?1:(r<=6?2:3)); }
   function everDone(a, k){ var lg=a.meta.log||{}; return Object.keys(lg).some(function(d){ return (lg[d]||{})[k]; }); }
   var DEAD={ banned:1, restricted:1, hold:1 };
@@ -2063,22 +2108,24 @@ function IGPhones(CFG){
     var n=dayN(a, date);
     if(DEAD[a.status]) return { k:a.status, t:{ banned:'Banned', restricted:'Restricted', hold:'On hold' }[a.status], n:n };
     if(n<1) return { k:'soon', t:'Starts '+a.meta.start, n:n };
-    if(SCH){
-      if(n<SCH.reels) return { k:'warm', t:'Day '+n+' · '+(SCH.lbl[n]||'Setup'), n:n };
-      var q=n-SCH.reels+1;
-      return { k:'reels', t:'Reels · '+reelTarget(n)+'/day'+(q<SCH.ramp.length?' (day '+n+')':''), n:n };
+    var sch=schFor(date);
+    if(sch){
+      if(n<sch.reels) return { k:'warm', t:'Day '+n+' · '+(sch.lbl[n]||'Setup'), n:n };
+      var q=n-sch.reels+1;
+      return { k:'reels', t:'Reels · '+reelTarget(n, sch)+'/day'+(q<sch.ramp.length?' (day '+n+')':''), n:n };
     }
     if(n<=7) return { k:'warm', t:'Warm-up · day '+n+'/7', n:n };
     if(n<=12) return { k:'feed', t:'Feed photos · day '+n+'/12', n:n };
-    return { k:'reels', t:'Reels · '+reelTarget(n)+'/day'+(n-12<=6?' (ramp day '+(n-12)+')':''), n:n };
+    return { k:'reels', t:'Reels · '+reelTarget(n, null)+'/day'+(n-12<=6?' (ramp day '+(n-12)+')':''), n:n };
   }
   /* what is due on this account on this business day → [{ k, label, target, done }] */
   function plan(a, date){
     date=date||today(); var n=dayN(a, date), lg=(a.meta.log||{})[date]||{}, out=[];
     if(DEAD[a.status] || n<1) return out;
     function it(k, label, target){ out.push({ k:k, label:label, target:target, done:Math.min(target, +lg[k]||0) }); }
-    if(SCH){
-      var st=String(a.meta.start||'');
+    var sch=schFor(date);
+    if(sch){
+      var SCH=sch, st=String(a.meta.start||'');
       var before=function(k){ var L=a.meta.log||{}; return Object.keys(L).some(function(d){ return d<date && (L[d]||{})[k]; }); };   // done on an earlier day (e.g. the old SOP's day-2 photo)
       if(SCH.email && ((n===SCH.email && !before('email')) || (n>SCH.email && n<=12 && st>=SCH.from && !everDone(a,'email'))))
         it('email', n===SCH.email?'Add the email':'Email (missed on day '+SCH.email+')', 1);
@@ -2087,7 +2134,7 @@ function IGPhones(CFG){
       /* Oct 21 (Jeth — the VA: "15 minutes scrolling is still required during the Reels post"): every posting day
          keeps the timed 15-minute scroll on each account, next to its reels. */
       if(n>=SCH.reels && SCH.scroll) it('scroll', 'Scroll 15 min — like, comment, open profiles', 1);
-      if(n>=SCH.reels) it('reels', 'Post reels', reelTarget(n));
+      if(n>=SCH.reels) it('reels', 'Post reels', reelTarget(n, sch));
       var tr0=a.meta.trial||null;
       if(tr0 && +tr0.allowed>0 && n>=SCH.reels) it('trial', 'Trial reels (set by the managers)', +tr0.allowed);
       return out;
@@ -2095,7 +2142,7 @@ function IGPhones(CFG){
     if(n===2 || (n>2 && n<=12 && !everDone(a,'pfp'))) it('pfp', n===2?'Add the profile picture':'Profile picture (missed on day 2)', 1);
     if(n<=7) it('scroll', n<=2?'Scroll 15 min':'Scroll 15 min — like, comment, open profiles', 1);
     else if(n<=12) it('feed', 'Post 1 feed photo (from the model\'s Drive)', 1);
-    else it('reels', 'Post reels', reelTarget(n));
+    else it('reels', 'Post reels', reelTarget(n, null));
     var tr=a.meta.trial||null;
     if(tr && +tr.allowed>0 && n>12) it('trial', 'Trial reels (set by the managers)', +tr.allowed);
     return out;
@@ -2569,11 +2616,10 @@ function IGPhones(CFG){
   async function qaSave(emp, date){
     var v=($(''+PX+'-qs-'+emp)||{}).value, note=(($(''+PX+'-qn-'+emp)||{}).value||'').trim();
     var sc=parseFloat(v); if(isNaN(sc)||sc<0||sc>10){ toast('Score is 0 to 10.'); return; }
-    var pass=admPass(); if(!pass) return;
     try{
-      var d=await jFetch(API+'?action=qa_daily_save&employee_id='+encodeURIComponent(emp)+'&date='+encodeURIComponent(date)+'&score='+sc+'&note='+encodeURIComponent((PROJECT+' · '+note).slice(0,300))+'&pass='+encodeURIComponent(pass)+'&_='+Date.now(), 0);
+      var d=await qaDailySaveCall('employee_id='+encodeURIComponent(emp)+'&date='+encodeURIComponent(date)+'&score='+sc+'&note='+encodeURIComponent((PROJECT+' · '+note).slice(0,300)));
       if(d&&d.ok){ toast('Saved to the portal QA — '+vaName(emp)+' · '+date+' · '+sc+'/10'); var s=JSON.parse(sessionStorage.getItem(KP+'_qa_saved')||'{}'); s[emp+'|'+date]=sc; sessionStorage.setItem(KP+'_qa_saved', JSON.stringify(s)); paint(); }
-      else if(d&&d.error==='UNAUTHORIZED'){ try{ sessionStorage.removeItem('hub_adm'); }catch(e){} toast('Wrong admin password — try again.'); }
+      else if(d&&d.error==='UNAUTHORIZED'){ toast('Not saved — the owner sign-in or the admin password is needed.'); }
       else toast((d&&(d.message||d.error))||'Could not save.');
     }catch(e){ toast('Connection error.'); }
   }
@@ -2634,7 +2680,7 @@ function IGPhones(CFG){
   }
   /* 12-day SOP strip: done / missed / today / ahead */
   function calStrip(a){
-    var n=dayN(a), h='', last=SCH?SCH.reels-1:12;
+    var n=dayN(a), h='', _s=schFor(today()), last=_s?_s.reels-1:12;
     for(var d=1; d<=last; d++){
       var ds=(function(){ var t=dnum(a.meta.start)+d-1, x=new Date(t*864e5); return x.toISOString().slice(0,10); })();
       var L=(a.meta.log||{})[ds]||{}, did=L.scroll||L.feed||L.pfp||L.create||L.email, cls=d<n?(did?'ok':'miss'):(d===n?(did?'ok now':'now'):'');
@@ -2781,7 +2827,24 @@ function IGPhones(CFG){
   function qaDateSet(v){ S.qaDate=String(v||'').slice(0,10); paint(); }
   function qaShift(n){ var t=dnum(S.qaDate||today())+n, d=new Date(t*864e5).toISOString().slice(0,10); if(d>today()) return; S.qaDate=d; paint(); }
   if(!S.who) S.who='all';
-  var api={ id:CID, ns:NS, px:PX, name:PROJECT, tmQuiet:tmQuiet, S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners,
+  /* ── MONTH SCORES (owner → Client Hub · Scores, Oct 21) ──
+     Productivity = plan steps done ÷ due on the phones each VA opened (the QA tab's own numbers), over the month.
+     QA = the QA tab's day score ×10, averaged over the days they worked. Results = account survival: of the accounts on
+     their phones that existed this month, the share not banned or restricted (at least 3 accounts). */
+  function monthScores(month){
+    var from=month+'-01', end=hubMonthEnd(month), per={};
+    for(var d=from; d<=end; d=hubDayAdd(d,1)){
+      qaRows(d).forEach(function(r){ var o=per[r.emp]=per[r.emp]||{ days:0, due:0, done:0, qa:[] }; o.days++; o.due+=r.due; o.done+=r.done; o.qa.push(r.score); });
+    }
+    return Object.keys(per).map(function(k){
+      var o=per[k], lc=k.toLowerCase();
+      var mine=accts().filter(function(a){ var p=rowById(a.meta.phone); return (ownerOf(a)===lc || (p && ownerOf(p)===lc)) && String(a.meta.start||'')<=end; });
+      var alive=mine.filter(function(a){ return a.status!=='banned' && a.status!=='restricted'; }).length, q=hubAvg(o.qa);
+      return { emp:k, days:o.days, prod:o.due?hubR1(Math.min(100, o.done/o.due*100)):null, qa:q===null?null:hubR1(q*10), res:mine.length>=3?hubR1(alive/mine.length*100):null,
+        why:{ prod:o.done+' of '+o.due+' planned steps', qa:o.qa.length+' day'+(o.qa.length===1?'':'s')+' scored by the QA rules', res:alive+' of '+mine.length+' accounts still up' } };
+    });
+  }
+  var api={ id:CID, ns:NS, px:PX, name:PROJECT, tmQuiet:tmQuiet, S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners, monthScores:monthScores,
     setView:setView, setWho:setWho, toggleAddPhone:toggleAddPhone, addPhone:addPhone, setupTick:setupTick, phoneNote:phoneNote,
     addAcct:addAcct, createStart:createStart, log:logTask, setStatus:setStatus, trialUnlocked:trialUnlocked, trialSet:trialSet, trialUndo:trialUndo, history:history, reassign:reassign, del:del,
     preflight:preflightOpen, pfClose:pfClose, pfPick:pfPick, pfClear:pfClear, pfAttach:pfAttach, pfCap:pfCap, pfRule:pfRule, pfSave:pfSave, pfReview:pfReview,
@@ -2793,7 +2856,7 @@ function IGPhones(CFG){
 var IGP=[];
 var IMA=IGPhones({ ns:'IMA', cid:'imperium', project:'Imperium', px:'ima', kp:'ima', phEx:'IMA-07', sop:'SOP-02 — Instagram setup &amp; warm-up (physical phone)' });
 var SLB=IGPhones({ ns:'SLB', cid:'slaybae',  project:'Slaybae',  px:'slb', kp:'slb', phEx:'SLB-01', sop:'Slaybae SOP — Instagram setup &amp; posting (physical phone) · updated Oct 20',
-  sched:{ email:2, pfp:3, reels:4, ramp:[1,2,3], scroll:1, from:'2026-10-19', lbl:{ 1:'Creation', 2:'Email', 3:'Profile picture' } } });
+  sched:{ since:'2026-10-20', email:2, pfp:3, reels:4, ramp:[1,2,3], scroll:1, from:'2026-10-19', lbl:{ 1:'Creation', 2:'Email', 3:'Profile picture' } } });
 
 /* ═══════════ CLIENT: EMBER (Snapchat VPS Ops) — moved in from ember.html (Oct 9), same board, same data ═══════════
    Every card is one Snapchat account: Stock → Setting up → Live, with Needs fix and Banned / Locked off to the side.
@@ -3010,7 +3073,18 @@ var EM=(function(){
       else toast('Could not delete: '+((d&&d.error)||'error'));
     }catch(e){ toast('Connection error.'); }
   }
-  return { id:'ember', S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners,
+  /* ── MONTH SCORES (owner → Client Hub · Scores, Oct 21) ── Results only: of the accounts each VA created this month,
+     the share still running (not banned), at least 3. Productivity and QA aren't measured by this board. */
+  function monthScores(month){
+    var per={};
+    S.rows.forEach(function(r){ var k=ownerOf(r); if(!k) return; var m=r.meta||{}; if(typeof m==='string'){ try{ m=JSON.parse(m); }catch(e){ m={}; } }
+      if(String(m.cdate||'').slice(0,7)!==month) return;
+      var o=per[k]=per[k]||{ made:0, up:0 }; o.made++; if(r.status!=='banned') o.up++; });
+    return Object.keys(per).filter(function(k){ return OWNER_IDS.indexOf(k.toUpperCase())<0; }).map(function(k){ var o=per[k];
+      return { emp:k.toUpperCase(), days:null, prod:null, qa:null, res:o.made>=3?hubR1(o.up/o.made*100):null,
+        why:{ prod:'not measured here', qa:'not measured here', res:o.up+' of '+o.made+' accounts made this month still running' } }; });
+  }
+  return { id:'ember', S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners, monthScores:monthScores,
            setFilter:setFilter, setQ:setQ, add:add, move:move, verify:verify, proof:proof, del:del };
 })();
 
@@ -3786,13 +3860,29 @@ var P2=(function(){
   async function qaSave(emp, date){
     var v=($('p2-qs-'+emp)||{}).value, note=(($('p2-qn-'+emp)||{}).value||'').trim();
     var sc=parseFloat(v); if(isNaN(sc)||sc<0||sc>10){ toast('Score is 0 to 10.'); return; }
-    var pass=admPass(); if(!pass) return;
     try{
-      var d=await jFetch(API+'?action=qa_daily_save&employee_id='+encodeURIComponent(emp)+'&date='+encodeURIComponent(date)+'&score='+sc+'&note='+encodeURIComponent(('Project 2 · '+note).slice(0,300))+'&pass='+encodeURIComponent(pass)+'&_='+Date.now(), 0);
+      var d=await qaDailySaveCall('employee_id='+encodeURIComponent(emp)+'&date='+encodeURIComponent(date)+'&score='+sc+'&note='+encodeURIComponent(('Project 2 · '+note).slice(0,300)));
       if(d&&d.ok){ toast('Saved to the portal QA — '+vaName(emp)+' · '+date+' · '+sc+'/10'); var s={}; try{ s=JSON.parse(sessionStorage.getItem('p2_qa_saved')||'{}'); }catch(_e){} s[emp+'|'+date]=sc; try{ sessionStorage.setItem('p2_qa_saved', JSON.stringify(s)); }catch(_e){} paint(); }
-      else if(d&&d.error==='UNAUTHORIZED'){ try{ sessionStorage.removeItem('hub_adm'); }catch(e){} toast('Wrong admin password — try again.'); }
+      else if(d&&d.error==='UNAUTHORIZED'){ toast('Not saved — the owner sign-in or the admin password is needed.'); }
       else toast((d&&(d.message||d.error))||'Could not save.');
     }catch(e){ toast('Connection error.'); }
+  }
+  /* ── MONTH SCORES (owner → Client Hub · Scores, Oct 21) ── the days kept on the board (the last 10).
+     Productivity = plan steps done each day ÷ 7. QA = the QA tab's day score ×10, averaged. Results = approved days that
+     were posted and verified, plus the share of their accounts still active (average of the two). */
+  function monthScores(month){
+    var from=month+'-01', end=hubMonthEnd(month), per={};
+    for(var d=from; d<=end; d=hubDayAdd(d,1)){
+      qaRows(d).forEach(function(r){ var o=per[r.emp]=per[r.emp]||{ days:0, plan:0, qa:[], ap:0, posted:0 };
+        o.days++; o.plan+=r.plan; o.qa.push(r.score);
+        if(approved(r.emp, d)){ o.ap++; if(stepDone(r.emp, 'post', d) && r.po && r.po.all>0) o.posted++; } });
+    }
+    return Object.keys(per).map(function(k){
+      var o=per[k], A=acctsOf(k), act=A.filter(live).length, parts=[], q=hubAvg(o.qa);
+      if(o.ap) parts.push(o.posted/o.ap*100); if(A.length) parts.push(act/A.length*100);
+      return { emp:k, days:o.days, prod:o.days?hubR1(o.plan/(o.days*PLAN.length)*100):null, qa:q===null?null:hubR1(q*10), res:parts.length?hubR1(hubAvg(parts)):null,
+        why:{ prod:o.plan+' of '+(o.days*PLAN.length)+' plan steps', qa:o.qa.length+' day'+(o.qa.length===1?'':'s')+' scored by the QA rules', res:o.posted+' of '+o.ap+' approved days posted · '+act+' of '+A.length+' accounts active' } };
+    });
   }
 
   /* ════════ render ════════ */
@@ -4004,7 +4094,7 @@ var P2=(function(){
   function setView(v){ S.view=v; try{ sessionStorage.setItem('p2_view', v); }catch(e){} paint(); }
   function qaDateSet(v){ S.qaDate=String(v||'').slice(0,10); paint(); }
   function qaShift(n){ var t=dnum(S.qaDate||today())+n, d=new Date(t*864e5).toISOString().slice(0,10); if(d>today()) return; S.qaDate=d; paint(); }
-  return { id:CID, S:S, T:T, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners,
+  return { id:CID, S:S, T:T, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners, monthScores:monthScores,
     setView:setView, addAcct:addAcct, setStatus:setStatus, reassign:reassign, del:del,
     start:start, engStart:engStart, stopEng:stopEng, pause:pause, finish:finish, moreTime:moreTime, setCheck:setCheck, setGc:setGc, post:post,
     eosTick:eosTick, eosSubmit:eosSubmit, qaSave:qaSave, qaDate:qaDateSet, qaShift:qaShift,
@@ -4458,7 +4548,26 @@ var THR=(function(){
     snap();
   }
   function paintList(){ var l=$('thr-list'); if(l) l.innerHTML=listHtml(); else paint(); }
-  return { id:CID, S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners, timerInfo:timerInfo, timerOn:timerOn,
+  /* ── MONTH SCORES (owner → Client Hub · Scores, Oct 21) ── days with any Threads work on the board.
+     Productivity = waves posted ÷ due (2 a day on each postable account; "can't post" is not posted). QA = the shift
+     checklist (clock-in, instructions, wave 1, wave 2, told Altz, clock-out confirmed) done, averaged. Results = the share
+     of their accounts still postable (active or spam-flagged), at least 3 accounts. */
+  function monthScores(month){
+    var from=month+'-01', end=hubMonthEnd(month);
+    return owners().filter(function(e){ return OWNER_IDS.indexOf(e.toUpperCase())<0; }).map(function(emp){
+      var days=0, due=0, done=0, ck=[];
+      for(var d=from; d<=end; d=hubDayAdd(d,1)){
+        var o=vaDay(emp, d), any=(o.w1+o.w1s+o.w2+o.w2s)>0 || Object.keys(o.sd||{}).length>0; if(!any) continue;
+        days++; due+=2*o.post; done+=o.w1+o.w2;
+        ck.push(STEPS.filter(function(x){ return stepDone(x[0], o); }).length/STEPS.length);
+      }
+      if(!days) return null;
+      var A=accts().filter(function(r){ return ownerOf(r)===emp; }), up=A.filter(postable).length, q=hubAvg(ck);
+      return { emp:emp.toUpperCase(), days:days, prod:due?hubR1(Math.min(100, done/due*100)):null, qa:q===null?null:hubR1(q*100), res:A.length>=3?hubR1(up/A.length*100):null,
+        why:{ prod:done+' of '+due+' posts', qa:days+' shift'+(days===1?'':'s')+' · checklist', res:up+' of '+A.length+' accounts postable' } };
+    }).filter(Boolean);
+  }
+  return { id:CID, S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners, timerInfo:timerInfo, timerOn:timerOn, monthScores:monthScores,
            step:step, saveNote:saveNote, setPool:setPool, pause:pause, resume:resume, still:still, roll:roll, cs:cs, post:post, skip:skip, undo:undo,
            report:report, repSet:repSet, repSave:repSave, setStatus:setStatus, add:add, moveTo:moveTo, del:del, setView:setView, setDay:setDay, setFilter:setFilter,
            _t:{ vaDay:vaDay, standbyMs:standbyMs, openPause:openPause, logOf:logOf } };
@@ -4474,7 +4583,7 @@ var HUB=(function(){
      own project list (anything matching the client), so "Imperium IG Reels" counts for Imperium. Also on the client:
      whoever owns cards on its board, and whoever's portal timer is running on it right now (a brand-new VA). */
   var WL_DAYS=60;
-  var S={ view:'', ready:false, wl:{}, wlProj:{}, wlLoaded:false, wlAt:0, man:{}, manOk:false };
+  var S={ view:'', ready:false, wl:{}, wlProj:{}, wlLoaded:false, wlAt:0, man:{}, manOk:false, scMonth:'', scPub:{}, scBusy:false };
   function norm(id){ return String(id||'').trim().toUpperCase(); }
   function wlList(cid){ return (S.wl[cid]||[]).slice(); }
   function autoList(cid){ var m=MODS[cid]; return (m && m.owners)?m.owners().map(norm):[]; }
@@ -4516,7 +4625,7 @@ var HUB=(function(){
     return CLIENTS.filter(function(c){ return membersOf(c.id).indexOf(me)>=0 || (t && t.id===c.id); });
   }
   function cur(){ return clientById(S.view); }
-  function canSee(id){ if(id==='team') return isOwner(); return myClients().some(function(c){ return c.id===id; }); }
+  function canSee(id){ if(id==='team' || id==='scores') return isOwner(); return myClients().some(function(c){ return c.id===id; }); }
   function pick(id, quiet){
     if(!canSee(id)) return;
     S.view=id;
@@ -4548,6 +4657,7 @@ var HUB=(function(){
         '<span class="ic">'+IC[c.icon]+'</span><span class="tx"><b>'+esc(c.name)+'</b><small>'+esc(c.kind)+(isOwner()&&n?' · '+n+' VA'+(n===1?'':'s'):'')+'</small></span>'+(c.live?'':'<span class="soon">Soon</span>')+'</button>';
     }).join('');
     if(isOwner()) h+='<button class="ct gear'+(S.view==='team'?' on':'')+'" style="--g:linear-gradient(135deg,#64748b,#334155);--c:#475569" onclick="HUB.pick(\'team\')"><span class="ic">'+IC.gear+'</span><span class="tx"><b>Team</b><small>who is on which client</small></span></button>';
+    if(isOwner()) h+='<button class="ct gear'+(S.view==='scores'?' on':'')+'" style="--g:linear-gradient(135deg,#0f766e,#115e59);--c:#0f766e" onclick="HUB.pick(\'scores\')"><span class="ic">'+IC.score+'</span><span class="tx"><b>Scores</b><small>month scorecard → portal</small></span></button>';
     nav.innerHTML=h;
   }
   function memberChips(cid){
@@ -4560,6 +4670,7 @@ var HUB=(function(){
     var main=$('main'); if(!main) return;
     if(!S.ready){ main.innerHTML='<div class="card empty"><div class="big" style="--g:var(--grad)">'+IC.hub+'</div><h3>Opening your client…</h3><p>Loading the boards and your access.</p></div>'; return; }
     if(S.view==='team') return renderTeam(main);
+    if(S.view==='scores') return renderScores(main);
     var c=cur();
     if(!c){
       main.innerHTML='<div class="card empty"><div class="big" style="--g:var(--grad)">'+IC.hub+'</div><h3>You\'re not on a client here yet</h3>'+
@@ -4614,6 +4725,71 @@ var HUB=(function(){
       try{ sessionStorage.setItem('hub_wl', JSON.stringify({ at:S.wlAt, wl:wl, proj:proj })); }catch(e){}
     }catch(e){}
   }
+  /* ═══ SCORES (owner, Oct 21 — Jeth: "pull out from their tools and do whatever you can do, enable for us to give them
+     score") — each client's board works out its VAs' Productivity · QA · Results for the month (rules shown on each card)
+     and Publish sends them to the portal scorecard (sc_ext_save), the way Reddit Central and ALTR Studio already do. The
+     portal blends each client by the VA's hours on it. A number a board can't measure stays blank, so the portal keeps
+     its own for that part. ═══ */
+  var SCX={ imperium:'imperium', slaybae:'slaybae', project2:'p2', threads:'threads', ember:'ember', 'design-shopify':'torchlight' };
+  var SCX_RULE={
+    imperium:'Productivity: plan steps done ÷ due on the phones they opened. QA: the QA tab\'s day score, averaged. Results: share of their accounts not banned or restricted.',
+    slaybae:'Productivity: plan steps done ÷ due on the phones they opened. QA: the QA tab\'s day score, averaged. Results: share of their accounts not banned or restricted.',
+    project2:'Productivity: the 7 plan steps done each day. QA: the QA tab\'s day score, averaged. Results: approved days that were posted, and accounts still active. The board keeps the last 10 days.',
+    threads:'Productivity: waves posted ÷ due (2 a day per postable account). QA: the shift checklist done. Results: share of their accounts still postable.',
+    ember:'Results: accounts made this month that are still running. Productivity and QA aren\'t measured on this board, so the portal\'s own numbers stay.',
+    'design-shopify':'Results: this month\'s cards published ÷ published + still in the pipeline. Productivity and QA aren\'t measured on this board, so the portal\'s own numbers stay.'
+  };
+  function scMonths(){ var t=today(), y=+t.slice(0,4), m=+t.slice(5,7), out=[]; for(var i=0;i<3;i++){ var mm=m-i, yy=y; while(mm<1){ mm+=12; yy--; } var k=yy+'-'+(mm<10?'0':'')+mm; if(k>='2026-10') out.push(k); } return out; }
+  function scRows(cid, month){ var m=MODS[cid]; if(!m || !m.monthScores) return [];
+    try{ return (m.monthScores(month)||[]).filter(function(r){ return r && r.emp && OWNER_IDS.indexOf(String(r.emp).toUpperCase())<0 && (r.prod!==null || r.qa!==null || r.res!==null); }); }catch(e){ return []; } }
+  async function scLoadPub(month, force){
+    if(S.scPub[month] && !force) return;
+    try{ var d=await jFetch(API+'?action=sc_ext_get&month='+encodeURIComponent(month)+'&_='+Date.now(), 1);
+      if(d && d.ok){ var m={}; (d.rows||[]).forEach(function(r){ m[String(r.employee_id).toUpperCase()+'|'+r.source]=r; }); S.scPub[month]=m; }
+      else S.scPub[month]={ _err:(d&&d.error)||'x' }; }catch(e){ S.scPub[month]={ _err:'net' }; }
+  }
+  function scCell(v, why){ return v===null||v===undefined?'<td class="na"><b>—</b><small>'+esc(why||'not measured')+'</small></td>':'<td><b>'+v+'</b><small>'+esc(why||'')+'</small></td>'; }
+  function renderScores(main){
+    var mo=S.scMonth||today().slice(0,7), pub=S.scPub[mo];
+    if(!pub){ scLoadPub(mo).then(function(){ if(S.view==='scores') renderScores($('main')); }); }
+    var old=pub && pub._err;
+    var cards=Object.keys(SCX).filter(function(k){ return MODS[k] && clientById(k); }).map(function(cid){
+      var c=clientById(cid), rows=scRows(cid, mo), src=SCX[cid];
+      var body=rows.length?'<table class="scx-t"><thead><tr><th>VA</th><th>Days</th><th>Productivity</th><th>QA</th><th>Results</th><th>In the portal</th></tr></thead><tbody>'+rows.map(function(r){
+          var p=pub && !old ? pub[String(r.emp).toUpperCase()+'|'+src] : null;
+          var f=function(x){ return (x===''||x===null||x===undefined)?'—':x; };
+          var inPortal=p?'<span class="scx-pub">'+f(p.productivity)+' · '+f(p.quality)+' · '+f(p.results)+'<br><small>'+esc(p.updated_at||'')+'</small></span>':'<span class="scx-pub off">not published</span>';
+          return '<tr><td>'+avatar(String(r.emp).toLowerCase(),'a')+' <b style="font-size:13px">'+esc(vaName(r.emp))+'</b><small>'+esc(r.emp)+'</small></td><td>'+(r.days===null||r.days===undefined?'—':r.days)+'</td>'+
+            scCell(r.prod, r.why&&r.why.prod)+scCell(r.qa, r.why&&r.why.qa)+scCell(r.res, r.why&&r.why.res)+'<td>'+inPortal+'</td></tr>';
+        }).join('')+'</tbody></table>':'<p class="muted" style="margin:6px 0 0">Nothing on this board for '+esc(mo)+' yet.</p>';
+      return '<div class="card scx-c" style="--g:'+c.g+'"><div class="scx-h"><span class="ic" style="width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:'+c.g+';color:#fff">'+IC[c.icon]+'</span><b>'+esc(c.name)+'</b><span class="sp" style="flex:1"></span>'+
+        (rows.length?'<button class="btn sm" '+(S.scBusy?'disabled':'')+' onclick="HUB.scPublish(\''+cid+'\')">Publish '+esc(c.name)+'</button>':'')+'</div><p class="scx-rule">'+esc(SCX_RULE[cid]||'')+'</p>'+body+'</div>';
+    }).join('');
+    main.innerHTML='<div class="pane" style="--g:linear-gradient(135deg,#0f766e,#115e59);--c:#0f766e">'+
+      '<div class="phead"><div><h2><em>Scores</em></h2><div class="chips"><span class="chip">Productivity · QA · Results from each client\'s board</span><span class="chip">Publish → the portal scorecard, blended by hours on that client</span></div></div></div>'+
+      '<div class="card scx-top"><b style="font-size:13.5px">Month</b><select onchange="HUB.scSetMonth(this.value)">'+scMonths().map(function(m){ return '<option value="'+m+'"'+(m===mo?' selected':'')+'>'+m+'</option>'; }).join('')+'</select>'+
+        '<span class="muted" style="flex:1;min-width:220px">'+(old?'The portal backend needs build 2026-10-21a to publish — the numbers below are worked out live from the boards.':'Published numbers count on the scorecard straight away; publish again any time to refresh them.')+'</span>'+
+        '<button class="btn sm sec" onclick="HUB.scRefresh()">Refresh</button><button class="btn sm" '+(S.scBusy?'disabled':'')+' onclick="HUB.scPublish(\'\')">Publish all</button></div>'+
+      cards+'</div>';
+  }
+  async function scPublish(cid){
+    if(!isOwner() || S.scBusy) return;
+    var mo=S.scMonth||today().slice(0,7), list=cid?[cid]:Object.keys(SCX).filter(function(k){ return MODS[k] && clientById(k); }), rows=[];
+    list.forEach(function(k){ scRows(k, mo).forEach(function(r){ rows.push({ employee_id:String(r.emp).toUpperCase(), month:mo, source:SCX[k], productivity:r.prod, quality:r.qa, results:r.res, detail:{ days:r.days, why:r.why, from:'Client Hub' } }); }); });
+    if(!rows.length){ toast('Nothing to publish for '+mo+'.'); return; }
+    if(!confirm('Publish '+rows.length+' score row'+(rows.length===1?'':'s')+' for '+mo+' to the portal scorecard?\n\nEach VA is blended by their hours on that client. A blank number leaves the portal\'s own one in place.')) return;
+    S.scBusy=true; renderScores($('main'));
+    try{
+      var d=await jFetch(API+'?action=sc_ext_save&month='+encodeURIComponent(mo)+'&by=client-hub&rows='+encodeURIComponent(JSON.stringify(rows))+'&_='+Date.now(), 0);
+      if(d && d.ok){ toast('Published '+(d.saved||[]).length+' row'+((d.saved||[]).length===1?'':'s')+' to the portal scorecard'+((d.errors||[]).length?' · '+d.errors.length+' skipped':'')+'.'); await scLoadPub(mo, true); }
+      else if(d && d.error==='UNAUTHORIZED') toast('Only the owner can publish — sign in here as the owner.');
+      else if(d && /unknown/i.test(String(d.error||''))) toast('The portal backend needs build 2026-10-21a before scores can be published.');
+      else toast((d&&(d.message||d.error))||'Could not publish.');
+    }catch(e){ toast('Connection error.'); }
+    S.scBusy=false; if(S.view==='scores') renderScores($('main'));
+  }
+  function scSetMonth(m){ S.scMonth=m; renderScores($('main')); }
+  async function scRefresh(){ toast('Reading the boards…'); loadAll(); await scLoadPub(S.scMonth||today().slice(0,7), true); setTimeout(function(){ if(S.view==='scores') renderScores($('main')); }, 2500); }
   function renderTeam(main){
     var link='https://internals.jmbvirtuals.com/clients.html';
     main.innerHTML='<div class="pane" style="--g:linear-gradient(135deg,#64748b,#334155);--c:#475569">'+
@@ -4665,7 +4841,8 @@ var HUB=(function(){
     }catch(e){ _wt=0; }
   }, 5000);
   return { S:S, loadAll:loadAll, pick:pick, cur:cur, myClients:myClients, membersOf:membersOf, repaint:repaint, repaintLink:repaintLink, onData:onData, boot:boot,
-           refreshTeams:refreshTeams, copyLink:copyLink, renderMe:renderMe, loadTeams:loadTeams, teamSet:teamSet, loadMan:loadMan };
+           refreshTeams:refreshTeams, copyLink:copyLink, renderMe:renderMe, loadTeams:loadTeams, teamSet:teamSet, loadMan:loadMan,
+           scPublish:scPublish, scSetMonth:scSetMonth, scRefresh:scRefresh, _sc:{ scRows:scRows, SCX:SCX } };
 })();
 
 /* ── sign in ── */
