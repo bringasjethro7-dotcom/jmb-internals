@@ -1221,7 +1221,7 @@ function vToday(){
   if(admin) h+=hcBanner()+hcMissBanner();
   if(admin){ var _dq=delReqs(); if(_dq.length) h+='<div class="banner bad">'+IC.trash+'<div style="flex:1"><b>'+_dq.length+' deletion request'+(_dq.length===1?'':'s')+'</b> waiting for you — VAs can\'t delete a recorded account without your approval.</div><button class="btn sm dark" onclick="delReview()">Review</button></div>'; }
   try{ if(!localStorage.getItem('sop_seen_2026-10-05')) h+='<div class="banner" style="background:#ecfeff;border-color:#a5f3fc">'+IC.doc+'<div style="flex:1"><b>SOP update · 5 Oct:</b> the phase plans changed — warming, comment farming, NSFW comments, early posting, DMs, Strong / Super Strong and spam-filter recovery. Each account card shows its new plan.</div><a class="btn sm dark" href="huddle-reddit-sop.html" target="_blank" rel="noopener">What changed</a><button class="btn sm" onclick="localStorage.setItem(\'sop_seen_2026-10-05\',\'1\');renderView()">Got it</button></div>'; }catch(_sb){}
-  try{ var _ml=ccMineLeft(); if(_ml.length) h+='<div class="banner warn">'+IC.search+'<div style="flex:1"><b>Daily health check:</b> '+_ml.length+' teammate account'+(_ml.length===1?'':'s')+' to check (about '+Math.max(1,Math.ceil(_ml.length*4/60))+' min). <b>Due by '+hcDueLbl(hcShiftOf(me))+'</b> — the end of your shift. Not finished: the owner is told and your QA drops by 1 (by 2 if you never start).</div><button class="btn sm dark" onclick="go(\'health\')">Start check</button></div>'; }catch(_hc){}
+  try{ var _ml=ccMineLeft(); if(_ml.length) h+='<div class="banner warn">'+IC.search+'<div style="flex:1"><b>Daily health check:</b> '+_ml.length+' teammate account'+(_ml.length===1?'':'s')+' to check (time limit <b>'+fmtMS(hcCapTotal())+'</b> — '+hcPerSecs()+' s per account). <b>Due by '+hcDueLbl(hcShiftOf(me))+'</b> — the end of your shift. Not finished: the owner is told and your QA drops by 1 (by 2 if you never start).</div><button class="btn sm dark" onclick="go(\'health\')">Start check</button></div>'; }catch(_hc){}
   try{ if(!admin && ROWS.some(function(r){ return worksFor(r)===me && isPostingStage(r.status) && !isParked(r); })){ var _av=subAvoidAll(); if(_av.length) h+='<div class="banner bad">'+IC.ban+'<div style="flex:1"><b>Don\'t post in:</b> '+_av.slice(0,12).map(function(x){ return esc(x.name); }).join(', ')+(_av.length>12?' …':'')+' — they keep removing our posts. <a href="#" onclick="go(\'subs\');return false" style="color:inherit;font-weight:800">See the subreddit report</a></div></div>'; } }catch(_sb){}
   var covering=mineWork.filter(function(r){ return owner(r)!==me; });
   if(covering.length){
@@ -1631,8 +1631,9 @@ function tmCapOf(key){
 }
 function tmCapCheck(){
   try{ if(!USER || !tmOn()) return; }catch(e){ return; }
+  try{ hcCheck(); }catch(_hc){}   // the health check has its own limit (accounts × max per account)
   var o=tmAll(), now=Date.now(), hit=[];
-  Object.keys(o).forEach(function(key){ var x=o[key]; if(!x || !x.t) return; var c=tmCapOf(key); if((now-x.t)/1000>=c.secs) hit.push({ key:key, x:x, c:c }); });
+  Object.keys(o).forEach(function(key){ var x=o[key]; if(!x || !x.t || key.indexOf('__hc|')===0) return; var c=tmCapOf(key); if((now-x.t)/1000>=c.secs) hit.push({ key:key, x:x, c:c }); });
   if(!hit.length) return;
   hit.forEach(function(h){
     var o2=tmAll(); delete o2[h.key]; tmPut(o2);
@@ -1656,9 +1657,74 @@ async function tmCapsPublish(){
   Object.keys(auto).forEach(function(k){ if(auto[k] && auto[k].secs && !/^healthcheck/.test(k)) caps[k]=tmCapFrom(auto[k].secs); });
   Object.keys(own).forEach(function(k){ var v=parseFloat(own[k]); if(!isNaN(v) && v>0 && !/^healthcheck/.test(k)) caps[k]=tmCapFrom(v); });
   var cur=CFG.task_caps||{};
-  if(JSON.stringify(Object.keys(caps).sort().map(function(k){ return k+'='+caps[k]; }))===JSON.stringify(Object.keys(cur).sort().map(function(k){ return k+'='+cur[k]; }))) return;
-  var cfg=JSON.parse(JSON.stringify(CFG)); cfg.task_caps=caps;
+  /* Oct 22: the health check's limit per account goes out with the task limits (cfg.hc_per, backend rc-2026-10-22a) */
+  var hcT=(function(){ var k='healthcheck||(none)', v=parseFloat(own[k]); if(!isNaN(v) && v>0) return v; return (auto[k]&&auto[k].secs)?+auto[k].secs:0; })();
+  var hcP=hcT?hcPerFrom(hcT):null, hcCur=(CFG.hc_per==null?null:+CFG.hc_per);
+  if(JSON.stringify(Object.keys(caps).sort().map(function(k){ return k+'='+caps[k]; }))===JSON.stringify(Object.keys(cur).sort().map(function(k){ return k+'='+cur[k]; })) && hcP===hcCur) return;
+  var cfg=JSON.parse(JSON.stringify(CFG)); cfg.task_caps=caps; if(hcP) cfg.hc_per=hcP; else delete cfg.hc_per;
   try{ var r=await fetch(API, { method:'POST', body:JSON.stringify({ action:'rc_cfg_set', by:USER.id, cfg:cfg }) }); var d=await r.json(); if(d && d.ok && d.cfg) CFG=d.cfg; }catch(e){}
+}
+/* ══════════ HEALTH CHECK TIME LIMIT (Jeth, Oct 22) ══════════
+   "There is no limit on the health check." The daily check now runs its own task timer ("Health check" — the portal
+   files it under Reddit Warmup like before), and the time it may count is set by the size of the VA's list:
+     limit for the day = max seconds per account × accounts on their list today   (never less than 1 minute)
+   Max per account = 2.5 × the team's time per account (Productivity & QA → Task times → "Health check · per account",
+   learned or typed by the owner), at least 10 s and at most 90 s; the owner's page publishes it as cfg.hc_per.
+   Until there is a team time it is 15 s. The limit is for the whole day — pausing and resuming draws on the same
+   allowance; the timer also pauses itself after 3 minutes with no answer. When the allowance is used up the timer
+   stops: the check still has to be finished (QA), but the extra time is not tool time, and key presses in the health
+   check stop keeping the portal timer alive — the portal's 10-minute rule takes over. */
+var HC_DEF_PER=15, HC_MIN_TOTAL=60, HC_IDLE=3*60000;
+function hcPerFrom(T){ T=+T||0; return Math.round(Math.min(90, Math.max(10, T*2.5))); }
+function hcPerSecs(){
+  var v=+((CFG&&CFG.hc_per)||0); if(v>0) return Math.round(v);
+  var t=parseFloat(((CFG&&CFG.targets)||{})['healthcheck||(none)']); if(!isNaN(t) && t>0) return hcPerFrom(t);
+  return HC_DEF_PER;
+}
+function hcListN(){ try{ return ccMine().length; }catch(e){ return 0; } }
+function hcCapTotal(n){ if(n==null) n=hcListN(); return n>0?Math.max(HC_MIN_TOTAL, Math.round(n*hcPerSecs())):0; }
+function hcKey(k){ return 'rc_hc'+k+'_'+myId()+'_'+today(); }
+function hcNum(k){ try{ return +localStorage.getItem(hcKey(k))||0; }catch(e){ return 0; } }
+function hcSetNum(k,v){ try{ localStorage.setItem(hcKey(k), String(Math.round(v))); }catch(e){} }
+function hcUsed(){ return hcNum('used'); }                 // counted seconds today (never more than the limit)
+function hcTimer(){ return tmGet('__hc','hc'); }
+function hcSpent(){ var x=hcTimer(); return hcUsed()+(x&&x.t?Math.round((Date.now()-x.t)/1000):0); }
+function hcOut(){ var cap=hcCapTotal(); return cap>0 && hcUsed()>=cap; }
+function hcLastAt(){ return Math.max(hcNum('last'), (hcTimer()||{}).t||0); }
+/* every health-check action calls this: (re)starts the timer while there is allowance left */
+function hcTouch(){
+  if(!USER || isAdmin() || !tmOn()) return;
+  hcSetNum('last', Date.now());
+  if(hcTimer() || !hcListN()) return;
+  if(hcOut()){ hcOutNote(); return; }
+  tmStart('__hc','hc');
+}
+/* stop the timer: what is inside the allowance is counted, the rest is not */
+function hcStop(why, endAt){
+  var o=tmAll(), x=o['__hc|hc']; if(!x) return 0; delete o['__hc|hc']; tmPut(o);
+  var end=Math.min(Date.now(), endAt||Date.now()), raw=Math.max(0, Math.round((end-x.t)/1000));
+  var secs=Math.min(raw, Math.max(0, hcCapTotal()-hcUsed()));
+  hcSetNum('used', hcUsed()+secs); hcSetNum('raw', hcNum('raw')+raw);
+  if(secs>=20) tmLog(null,'hcrun',{ secs:secs, start:x.t, parallel:x.p||0 },{ source:String(why||'stop').slice(0,30)+(raw>secs?' · '+(raw-secs)+'s over':'') });
+  return secs;
+}
+var _hcOutSaid='';
+function hcOutNote(){ var k=today(); if(_hcOutSaid===k) return; _hcOutSaid=k;
+  tmCapNote('Your health-check time is used up for today ('+hcLimitLbl()+'). Finish the check — it still counts for QA — but the extra time is not counted.'); }
+function hcLimitLbl(n){ if(n==null) n=hcListN(); return fmtMS(hcCapTotal(n))+' = '+n+' account'+(n===1?'':'s')+' × '+hcPerSecs()+' s'; }
+function fmtMS(s){ s=Math.max(0,Math.round(s||0)); var m=Math.floor(s/60), x=s%60; return m+':'+(x<10?'0':'')+x; }
+/* called by tmCapCheck every 15 s */
+function hcCheck(){
+  var x=hcTimer(); if(!x) return;
+  if(hcSpent()>=hcCapTotal()){ hcStop('cap'); hcOutNote(); try{ renderView(); }catch(e){} return; }
+  var last=hcLastAt(); if(Date.now()-last>HC_IDLE){ hcStop('idle', last+30000); try{ toast('⏱ Health check paused — no answer for 3 minutes. Press Start / Resume to carry on.'); renderView(); }catch(e){} }
+}
+function qrPause(){ QR.on=false; hcStop('pause'); renderView(); }
+function hcClockChip(){
+  if(isAdmin()) return '';
+  var cap=hcCapTotal(), sp=Math.min(hcSpent(), cap), run=!!hcTimer(), out=hcOut();
+  var col=out?'#b91c1c':(sp>cap*0.8?'#b45309':'var(--ink3)');
+  return '<span class="muted" style="font-size:12px;font-weight:800;color:'+col+'" title="Health-check time counted today · your limit is '+esc(hcLimitLbl())+'">⏱ '+(run?'<span data-tm="'+(Date.now()-sp*1000)+'">'+fmtMS(sp)+'</span>':fmtMS(sp))+' / '+fmtMS(cap)+(out?' · limit reached':(run?'':' · paused'))+'</span>';
 }
 /* VA: how far the portal is ahead of this tool's timers today (the portal stops at 30 minutes) */
 function gapBanner(){
@@ -2064,11 +2130,14 @@ function linkIsReddit(task){ return /reddit/i.test(String(task||'')); }
    tab — the work often happens on the phone screen, not in this tab). Missing table → it goes quiet and retries later. */
 var TB={ act:Date.now(), sent:0, off:0, ext:true, openSent:0 };
 ['click','keydown','pointerdown','touchstart','scroll','wheel'].forEach(function(ev){ try{ document.addEventListener(ev, function(){ var was=TB.act; TB.act=Date.now(); if(Date.now()-was>60000) tbSend(false); }, { passive:true, capture:true }); }catch(e){} });
-function tbActive(){ try{ if(Object.keys(tmAll()).length>0) return true; }catch(e){} return !document.hidden && (Date.now()-TB.act)<90000; }
+function tbActive(){ try{ if(Object.keys(tmAll()).length>0) return true; }catch(e){}
+  /* Oct 22: once today's health-check time is used up, answering in the health check no longer keeps the portal alive */
+  try{ if(VIEW==='health' && !isAdmin() && hcOut()) return false; }catch(_h){}
+  return !document.hidden && (Date.now()-TB.act)<90000; }
 function tbInfo(){ var o={}; try{ o=tmAll(); }catch(e){}
   var best=null; Object.keys(o).forEach(function(k){ if(o[k] && o[k].t && (!best || o[k].t<o[best].t)) best=k; });
   var lbl=''; if(best){ var parts=best.split('|'), id=parts[0], k=parts[1]||'', r=null; try{ r=rowById(id); }catch(e){}
-    lbl = id==='__create' ? 'Creating an account' : ((/^s\d/.test(k) ? 'Session '+k.slice(1) : (k==='c' ? 'Creation' : 'Task'))+(r&&r.handle?' · '+r.handle:'')); }
+    lbl = id==='__create' ? 'Creating an account' : id==='__hc' ? 'Health check' : ((/^s\d/.test(k) ? 'Session '+k.slice(1) : (k==='c' ? 'Creation' : 'Task'))+(r&&r.handle?' · '+r.handle:'')); }
   var n=Object.keys(o).length; if(n>1) lbl+=' (+'+(n-1)+' more)';
   var td=0; try{ td=timedToday(); }catch(e){}
   return { run_since: best ? new Date(o[best].t).toISOString() : null, run_label: lbl || null, today_secs: td }; }
@@ -2093,6 +2162,7 @@ function tcWant(){
   var parts=best.split('|'), id=parts[0], key=parts[1]||'';
   w.idle=false;
   if(id==='__create'){ w.k='creation'; w.v=String(NA.method||''); w.lbl='Creating an account'; return w; }
+  if(id==='__hc'){ w.k='warmup'; w.lbl='Health check'; return w; }   // Oct 22: the daily check runs its own timer (Reddit Warmup, main model)
   var r=null; try{ r=rowById(id); }catch(e){}
   if(!r){ w.lbl='Task'; return w; }
   w.p=r.project||PROJECT; w.m=String(r.model||'').trim()||w.m; w.v=methodOf(r);
@@ -4365,9 +4435,9 @@ function qrPanel(rows){
   return '<div class="card pad" style="margin-bottom:12px;border:2px solid #c4b5fd;position:sticky;top:110px;z-index:20">'+
     '<div class="row" style="gap:10px;flex-wrap:wrap"><span class="muted" style="font-weight:800;font-size:12px">'+(QR.i+1)+' / '+QR.list.length+'</span>'+
       '<div class="prog" style="flex:1;max-width:260px"><i style="width:'+Math.round(QR.i/Math.max(1,QR.list.length)*100)+'%"></i></div><div class="sp"></div>'+
-      (QR.t0?'<span class="muted" style="font-size:12px;font-weight:700">'+Math.floor((Date.now()-QR.t0)/60000)+':'+('0'+Math.floor((Date.now()-QR.t0)/1000)%60).slice(-2)+' elapsed</span>':'')+
+      (isAdmin()?(QR.t0?'<span class="muted" style="font-size:12px;font-weight:700">'+Math.floor((Date.now()-QR.t0)/60000)+':'+('0'+Math.floor((Date.now()-QR.t0)/1000)%60).slice(-2)+' elapsed</span>':''):hcClockChip())+
       (c.all?'<button class="btn sm sec" onclick="qrToReview()">Review '+c.all+' answer'+(c.all===1?'':'s')+'</button>':'')+
-      '<button class="btn sm sec" onclick="QR.on=false;renderView()" title="Your answers stay as a draft — resume any time today">Pause</button></div>'+
+      '<button class="btn sm sec" onclick="qrPause()" title="Your answers stay as a draft — resume any time today. The health-check timer pauses too.">Pause</button></div>'+
     (prevR?'<div class="muted" style="font-size:12px;margin-top:6px">Last: <b>'+esc(prevR.handle)+'</b> → <b style="color:'+(prev==='b'||prev==='n'?'#b91c1c':'inherit')+'">'+esc(QR_LBL[prev]||'')+'</b> · wrong key? press <b>U</b> to go back</div>':'')+
     '<div class="row" style="margin-top:10px;gap:14px;align-items:center;flex-wrap:wrap">'+
       '<div style="flex:1;min-width:220px"><div class="h-d" style="font-size:20px;font-weight:800">'+esc(r.handle)+'</div>'+
@@ -4401,7 +4471,7 @@ function qrReviewPanel(){
     (left?'<button class="btn sec" '+(send?'disabled ':'')+'onclick="qrContinue()">◀ Continue checking ('+left+' left)</button>':'<button class="btn sec" '+(send?'disabled ':'')+'onclick="qrBack()">◀ Back to the last profile</button>')+
     '<div class="sp"></div>'+
     (send?'<span class="muted" style="font-weight:700">Saving '+send.done+' / '+send.total+'…</span>':
-      '<button class="btn sec" onclick="QR.on=false;renderView()">Later</button><button class="btn pri" '+(nsub?'':'disabled ')+'onclick="qrSubmit()">Submit '+nsub+' answer'+(nsub===1?'':'s')+(left?' (and check the rest later)':'')+'</button>')+
+      '<button class="btn sec" onclick="qrPause()">Later</button><button class="btn pri" '+(nsub?'':'disabled ')+'onclick="qrSubmit()">Submit '+nsub+' answer'+(nsub===1?'':'s')+(left?' (and check the rest later)':'')+'</button>')+
     '</div></div>';
   return h;
 }
@@ -4414,13 +4484,14 @@ function qrStart(list){
   if(dr){
     var ids=(list&&list.length)?list:qrQueue(); dr.list=dr.list.concat(ids.filter(function(x){ return dr.list.indexOf(x)<0; }));   // anything new since the draft goes at the end
     QR={ on:true, list:dr.list, i:Math.min(dr.i||0, dr.list.length), done:0, prio:true, t0:dr.t0||Date.now(), ans:dr.ans, review:!!dr.review || (dr.i||0)>=dr.list.length, sending:null, fail:{} };
-    toast('Picked up your unsubmitted check — nothing was sent yet.'); renderView(); if(!QR.review) qrOpen(); return;
+    hcTouch(); toast('Picked up your unsubmitted check — nothing was sent yet.'); renderView(); if(!QR.review) qrOpen(); return;
   }
-  QR={ on:true, list:(list&&list.length)?list:qrQueue(), i:0, done:0, prio:true, t0:Date.now(), ans:{}, review:false, sending:null, fail:{} }; qrSave(); renderView(); qrOpen();
+  QR={ on:true, list:(list&&list.length)?list:qrQueue(), i:0, done:0, prio:true, t0:Date.now(), ans:{}, review:false, sending:null, fail:{} }; qrSave(); hcTouch(); renderView(); qrOpen();
 }
 function qrAnswer(k){
   if(!QR.on || QR.review || QR.sending) return;
   var id=QR.list[QR.i]; if(!id || !rowById(id)) return;
+  hcTouch();
   if(!Object.keys(QR.ans).length && !isAdmin()) hcProgress(false);   // first answer of the day = the start time (QA "late" rule)
   QR.ans[id]=k;
   var nx=-1; for(var j=QR.i+1;j<QR.list.length;j++){ if(!QR.ans[QR.list[j]] && rowById(QR.list[j])){ nx=j; break; } }   // next one still unanswered
@@ -4428,9 +4499,9 @@ function qrAnswer(k){
   QR.i=nx;
   qrSave(); renderView(); qrOpen();                                    // next profile opens at once (same tab)
 }
-function qrBack(){ if(QR.sending) return; if(QR.review){ QR.review=false; QR.i=Math.max(0, QR.list.length-1); } else if(QR.i>0) QR.i--; qrSave(); renderView(); qrOpen(); }
+function qrBack(){ if(QR.sending) return; hcTouch(); if(QR.review){ QR.review=false; QR.i=Math.max(0, QR.list.length-1); } else if(QR.i>0) QR.i--; qrSave(); renderView(); qrOpen(); }
 function qrToReview(){ QR.review=true; qrSave(); renderView(); }
-function qrContinue(){ var i=QR.list.findIndex(function(id){ return !QR.ans[id] && rowById(id); }); QR.review=false; QR.i=i<0?QR.list.length:i; qrSave(); renderView(); if(i>=0) qrOpen(); }
+function qrContinue(){ hcTouch(); var i=QR.list.findIndex(function(id){ return !QR.ans[id] && rowById(id); }); QR.review=false; QR.i=i<0?QR.list.length:i; qrSave(); renderView(); if(i>=0) qrOpen(); }
 function qrSet(id, k){ if(QR.sending) return; if(k) QR.ans[id]=k; else delete QR.ans[id]; delete QR.fail[id]; qrSave(); renderView(); }
 async function qrSaveOne(r, k){
   if(k==='a') return await saveMeta(r,{ hcok:today(), hcby:USER.id, hcrep:null });
@@ -4460,7 +4531,7 @@ async function qrSubmit(){
   var fails=Object.keys(QR.fail).length, skipped=QR.list.filter(function(id){ return QR.ans[id]==='s'; }).length, left=QR.list.filter(function(id){ return !QR.ans[id] && rowById(id) && !QR.fail[id]; }).length;
   QR.done=(QR.done||0)+sent; QR.sending=null;
   if(fails){ qrSave(); toast(sent+' saved · '+fails+' could not be saved — press Submit again'); renderView(); return; }
-  if(!isAdmin()){ var finished=!ccMineLeft().length; hcProgress(finished, true); }
+  if(!isAdmin()){ var finished=!ccMineLeft().length; hcStop(finished?'done':'submit'); hcProgress(finished, true); }
   Object.keys(QR.ans).forEach(function(id){ if(QR.ans[id]==='s') delete QR.ans[id]; });
   qrClear(); QR.on=false; QR.review=false;
   toast('Submitted ✓ '+sent+' answer'+(sent===1?'':'s')+(skipped?' · '+skipped+' skipped — check them later':'')+(dead.length&&!isAdmin()?' · banned ones go to the admin, not-found ones straight to their creator':''));
@@ -4524,7 +4595,7 @@ async function hcBanAll(){
    tagged gets caught by someone else. The list is shuffled every day (same result on every screen,
    seeded by the date). VA answers: A alive · B/N report (the owner confirms before anything is banned —
    so no VA can ban a teammate's live account) · S skip. Owner names are hidden from the checker. */
-var CC_SEC=4, CC_MAX=10;   // ~4 seconds per account; hard limit 10 minutes
+var CC_SEC=4, CC_MAX=10;   // legacy estimate (est. minutes in the VA view); the real limit is hcCapTotal() — HEALTH CHECK TIME LIMIT, Oct 22
 function hcH(s){ var h=2166136261>>>0; s=String(s); for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619)>>>0; } return h; }
 var _CC=null, _CCK='';
 function ccLive(){ var out=[]; BASES.forEach(function(b){ (ALL[b.id]||[]).forEach(function(r){ if(!isDead(r) && !isParked(r)) out.push(r); }); }); return out; }   // parked accounts (on hold / archived) are nobody's work — not checked (Oct 6)
@@ -4547,7 +4618,7 @@ function ccGuide(open){
   return '<details class="card pad"'+(open?' open':'')+' style="margin-bottom:14px"><summary style="cursor:pointer;font-weight:800;font-size:14px">How the daily health check works</summary>'+
     '<div class="f2" style="margin-top:12px;gap:16px">'+
       '<div><div class="lbl" style="margin-bottom:5px">When</div><div style="font-size:13px;line-height:1.55">Every working day — start <b>first thing in your shift</b>, and <b>finish before your shift ends</b>.<br>☀ Morning shift: due by <b>5:00 PM</b> · 🌙 Night shift: due by <b>5:00 AM</b></div></div>'+
-      '<div><div class="lbl" style="margin-bottom:5px">How long</div><div style="font-size:13px;line-height:1.55">About <b>'+CC_SEC+' seconds per account</b> — most lists take 2–3 minutes.<br><b>Maximum '+CC_MAX+' minutes.</b> If it takes longer, tell the admin.</div></div>'+
+      '<div><div class="lbl" style="margin-bottom:5px">How long</div><div style="font-size:13px;line-height:1.55">Your time limit = <b>'+hcPerSecs()+' seconds × the accounts on your list</b>'+(isAdmin()?'':' — <b>'+esc(hcLimitLbl())+'</b> today')+'.<br>The check runs its own timer (it pauses when you press Pause, or after 3 minutes with no answer). Time past the limit is <b>not counted</b> — and stops keeping your portal timer going — so finish inside it. If your list really needs longer, tell the admin.</div></div>'+
     '</div>'+
     '<div class="lbl" style="margin:14px 0 6px">How</div><ol style="font-size:13px;line-height:1.7;padding-left:20px">'+
       '<li>Put this window on one side of the screen and press <b>Start check</b>. The first Reddit profile opens in a tab on the other side.</li>'+
@@ -4568,7 +4639,7 @@ function vHealthVA(){
   h+=ccGuide(!done);
   if(!mine.length) return h+'<div class="card empty">'+(allRows().length?hcEmptyMsg():'Loading today\'s list…')+'</div>';
   h+=hcVaBanner(mine.length, left.length);
-  h+='<div class="kpis">'+kpi('Your list today',mine.length,'teammates\' accounts','#a855f7')+kpi('Checked',done,left.length?left.length+' to go':'all done ✓',done===mine.length?'#10b981':'#f59e0b')+kpi('Time needed','~'+est+' min','max '+CC_MAX+' minutes','#0ea5e9')+'</div>';
+  h+='<div class="kpis">'+kpi('Your list today',mine.length,'teammates\' accounts','#a855f7')+kpi('Checked',done,left.length?left.length+' to go':'all done ✓',done===mine.length?'#10b981':'#f59e0b')+kpi('Time limit',fmtMS(hcCapTotal(mine.length)),mine.length+' account'+(mine.length===1?'':'s')+' × '+hcPerSecs()+' s · used '+fmtMS(Math.min(hcSpent(),hcCapTotal(mine.length))),hcOut()?'#ef4444':'#0ea5e9')+'</div>';
   if(QR.on || qrDraft()) h+=qrPanel(mine);
   else if(!left.length) h+='<div class="banner info" style="background:#ecfdf5;border-color:#a7f3d0;color:#065f46">'+IC.check+'<div><b>All done for today ✓</b> Thank you — you can start your sessions.</div></div>';
   h+='<div class="tbl-w" style="max-height:none;margin-top:10px"><table class="db"><thead><tr><th class="c1">Account</th><th>Stage</th><th>Method</th><th>Today</th><th></th></tr></thead><tbody>'+
@@ -4590,13 +4661,15 @@ function hcProgress(finished, exact){
     if(seen!==d){ try{ localStorage.setItem(kF,d); }catch(e){} daySnap({ hc_assigned:mine.length, hc_done:dn, hc_first_at:phtStamp() }); }
     if(finished){
       daySnap({ hc_assigned:mine.length, hc_done:dn });
-      if(QR.t0 && QR.done) tmLog(null,'healthcheck',{ secs:Math.round((Date.now()-QR.t0)/1000/QR.done), start:QR.t0, parallel:0 },{ source:'n='+QR.done });
+      var _raw=hcNum('raw'), _n=Math.max(1, dn);   // Oct 22: timed health-check seconds (pauses excluded) ÷ accounts checked
+      if(_raw>0) tmLog(null,'healthcheck',{ secs:Math.round(_raw/_n), start:QR.t0||Date.now(), parallel:0 },{ source:'n='+_n+' · timed' });
+      else if(QR.t0 && QR.done) tmLog(null,'healthcheck',{ secs:Math.round((Date.now()-QR.t0)/1000/QR.done), start:QR.t0, parallel:0 },{ source:'n='+QR.done });
     }
   }catch(e){}
 }
 async function ccMark(id,k){
   var r=rowById(id); if(!r) return;
-  if(!isAdmin()) hcProgress(false);
+  if(!isAdmin()){ hcTouch(); hcProgress(false); setTimeout(function(){ try{ if(!ccMineLeft().length) hcStop('done'); }catch(e){} }, 1500); }
   if(k==='a'){ if(await saveMeta(r,{ hcok:today(), hcby:USER.id })){ toast(r.handle+' — alive ✓'); renderView(); } return; }
   if(k==='n'){ var fq=fixReq(r,'health check · '+vaName(USER.id)); if(await saveMeta(r,{ hcrep:{ by:USER.id, res:'n', at:phtStamp(), day:today(), fix:1 }, fix:fq })){ toast(r.handle+' — sent to '+vaName(fq.to)+' to fix the username'); renderView(); } return; }
   if(await saveMeta(r,{ hcrep:{ by:USER.id, res:k, at:phtStamp(), day:today() } })){ toast('Reported — the admin will confirm'); renderView(); }
@@ -4791,7 +4864,7 @@ function pqTasks(){
   PH.forEach(function(p){ if(p.task) t.push({ kind:'session', stage:p.k, n:'Session · '+p.n, s:p.plan }); });
   t.push({ kind:'session', stage:'recovery', n:'Session · Spam recovery', s:'10 min browsing · replies · no upvotes' });
   PH.forEach(function(p){ if(p.dms) t.push({ kind:'dms', stage:p.k, n:'DMs · '+p.n, s:'one DM round' }); });
-  t.push({ kind:'healthcheck', stage:'', n:'Health check · per account', s:'one profile look in the daily check', one:true });
+  t.push({ kind:'healthcheck', stage:'', n:'Health check · per account', s:'one profile look · the daily limit is 2.5× this per account × each VA\'s list (now '+hcPerSecs()+' s per account)', one:true });
   return t;
 }
 function pqKey(t, meth){ return t.kind+'|'+((t.kind==='creation'||t.kind==='healthcheck')?'':t.stage)+'|'+meth; }
