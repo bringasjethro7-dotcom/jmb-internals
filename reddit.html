@@ -887,7 +887,10 @@ async function loadNames(){
   }catch(e){ setTimeout(loadNames, 15000); }
 }
 async function loadCfg(){
-  try{ var d=await jget(API+'?action=rc_cfg_get&_='+Date.now(), 30000); if(d && d.cfg){ CFG=d.cfg; if(!CFG.models) CFG.models={}; if(!CFG.phones) CFG.phones=[]; if(!CFG.niches) CFG.niches=[]; if(!CFG.methods||!CFG.methods.length) CFG.methods=['Vysor','Jailbroken','Blaze+']; CFG_READY=true; if(SET && JSON.stringify(SET)===SET_SNAP) SET=null; if(VIEW==='settings') renderView(); } }catch(e){}
+  if(CFG_LOADING) return; CFG_LOADING=true;
+  try{ var fr=''; try{ fr=isAdmin()?'&fresh=1':''; }catch(_a){} var d=await jget(API+'?action=rc_cfg_get'+fr+'&_='+Date.now(), 30000); if(d && d.cfg){ CFG=d.cfg; if(!CFG.models) CFG.models={}; if(!CFG.phones) CFG.phones=[]; if(!CFG.niches) CFG.niches=[]; if(!CFG.methods||!CFG.methods.length) CFG.methods=['Vysor','Jailbroken','Blaze+']; CFG_READY=true; if(SET && JSON.stringify(SET)===SET_SNAP) SET=null; if(VIEW==='settings') renderView(); } }catch(e){}
+  CFG_LOADING=false;
+  if(!CFG_READY) setTimeout(loadCfg, 6000);   // keep trying until the real settings are in
 }
 
 /* ── data ── */
@@ -5528,7 +5531,18 @@ async function xferRun(groups, reason, restore){
 }
 
 /* ═══════════ SETTINGS — owner only ═══════════ */
-var SET=null, SET_SNAP='', CFG_READY=false;   // SET_SNAP = the draft as created, so an untouched draft can be replaced when the real config lands
+var SET=null, SET_SNAP='', CFG_READY=false, CFG_LOADING=false;
+/* the Settings draft, with every default the screen fills in already applied — so SET_SNAP is exactly what the screen
+   starts from, and a save can tell which lists were really edited (only those are written) */
+function setDraft(){
+  var s=JSON.parse(JSON.stringify(CFG));
+  if(!Array.isArray(s.sop_changes)) s.sop_changes=sopList();
+  if(!s.models) s.models={}; if(!Array.isArray(s.phones)) s.phones=[]; if(!s.niches) s.niches=[];
+  if(!s.methods || !s.methods.length) s.methods=['Vysor','Jailbroken','Blaze+'];
+  if(!s.sc_weights) s.sc_weights={ p:20, q:20, r:10 };
+  if(!s.rest_days) s.rest_days={};
+  return s;
+}   // SET_SNAP = the draft as created, so an untouched draft can be replaced when the real config lands
 function vSettings(){
   if(!isAdmin()) return '<div class="card empty">Owner only.</div>';
   var unc=(OFF&&OFF.uncovered)||0;
@@ -5537,7 +5551,10 @@ function vSettings(){
   return sub+vSettingsLists();
 }
 function vSettingsLists(){
-  if(!SET){ SET=JSON.parse(JSON.stringify(CFG)); if(!Array.isArray(SET.sop_changes)) SET.sop_changes=sopList(); SET_SNAP=JSON.stringify(SET); }
+  /* Oct 24: never build the draft from the page's empty starting settings — that showed "No phones yet" and an empty
+     model list until a reload, and a save from that screen could wipe the real lists. Wait for the real settings. */
+  if(!CFG_READY && !SET){ if(!CFG_LOADING) loadCfg(); return '<div class="card pad"><div class="muted">Loading the current settings…</div></div>'; }
+  if(!SET){ SET=setDraft(); SET_SNAP=JSON.stringify(SET); }
   if(!SET.models) SET.models={};
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Settings</h2><p>The pick-lists VAs choose from when they log an account.</p></div><button class="btn sec" onclick="SET=null;renderView()">Discard changes</button><button class="btn pri" id="set-go" onclick="setSave()">Save settings</button></div>';
   h+='<div class="ig">'+(isAdmin()?qzAdminCard():'')+'<div class="card pad s6"><div class="ch-h"><b>Company iPhones</b><span>every account traces back to one phone · each phone belongs to one base — Altz only for now</span></div>'+
@@ -5664,8 +5681,12 @@ async function setSave(){
   var b=$('set-go'); b.disabled=true; b.textContent='Saving…';
   SET.phones=SET.phones.filter(function(p){ return p.label && p.label.trim(); }).map(function(p){ return { label:p.label.trim(), model:p.model||'Other', base:phoneBase(p), active:p.active!==false }; });
   try{
-    var mine=JSON.parse(JSON.stringify(SET));
-    var d=await cfgWrite(function(c){ CFG_PAGE_KEYS.forEach(function(k){ if(mine[k]!==undefined) c[k]=mine[k]; }); });   // Oct 24: only this page's keys
+    var mine=JSON.parse(JSON.stringify(SET)), snap={}; try{ snap=JSON.parse(SET_SNAP||'{}')||{}; }catch(_s){ snap={}; }
+    snap.phones=(snap.phones||[]).filter(function(p){ return p.label && String(p.label).trim(); }).map(function(p){ return { label:String(p.label).trim(), model:p.model||'Other', base:phoneBase(p), active:p.active!==false }; });
+    // Oct 24: write ONLY the lists edited on this screen, on top of the latest stored settings — an older open
+    // Settings screen can no longer put back an old phone list just because something else was saved from it
+    var changed=CFG_PAGE_KEYS.filter(function(k){ return mine[k]!==undefined && JSON.stringify(mine[k])!==JSON.stringify(snap[k]); });
+    var d=await cfgWrite(function(c){ changed.forEach(function(k){ c[k]=mine[k]; }); });
     if(d&&d.ok){ SET=null; toast('Settings saved — '+((CFG.phones||[]).length)+' iPhone'+((CFG.phones||[]).length===1?'':'s')+' on the list.'); renderView(); }
     else { b.disabled=false; b.textContent='Save settings'; toast('Could not save: '+((d&&d.error)||'unknown')); }
   }catch(e){ b.disabled=false; b.textContent='Save settings'; toast('Connection error.'); }
