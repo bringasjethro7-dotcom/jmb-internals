@@ -1661,8 +1661,7 @@ async function tmCapsPublish(){
   var hcT=(function(){ var k='healthcheck||(none)', v=parseFloat(own[k]); if(!isNaN(v) && v>0) return v; return (auto[k]&&auto[k].secs)?+auto[k].secs:0; })();
   var hcP=hcT?hcPerFrom(hcT):null, hcCur=(CFG.hc_per==null?null:+CFG.hc_per);
   if(JSON.stringify(Object.keys(caps).sort().map(function(k){ return k+'='+caps[k]; }))===JSON.stringify(Object.keys(cur).sort().map(function(k){ return k+'='+cur[k]; })) && hcP===hcCur) return;
-  var cfg=JSON.parse(JSON.stringify(CFG)); cfg.task_caps=caps; if(hcP) cfg.hc_per=hcP; else delete cfg.hc_per;
-  try{ var r=await fetch(API, { method:'POST', body:JSON.stringify({ action:'rc_cfg_set', by:USER.id, cfg:cfg }) }); var d=await r.json(); if(d && d.ok && d.cfg) CFG=d.cfg; }catch(e){}
+  try{ await cfgWrite(function(c){ c.task_caps=caps; if(hcP) c.hc_per=hcP; else delete c.hc_per; }); }catch(e){}   // Oct 24: fresh read first — never re-posts this page's old phone list
 }
 /* ══════════ HEALTH CHECK TIME LIMIT (Jeth, Oct 22) ══════════
    "There is no limit on the health check." The daily check now runs its own task timer ("Health check" — the portal
@@ -2701,12 +2700,10 @@ function postsSection(r){
 async function subAvoidSet(k, on){
   if(!isAdmin()) return; k=subKey(k); if(!k) return;
   var cur=subAvoidList().filter(function(x){ return x!==k; }); if(on) cur.push(k);
-  var cfg=JSON.parse(JSON.stringify(CFG)); cfg.sub_avoid=cur;
   try{
-    var r=await fetch(API, { method:'POST', body:JSON.stringify({ action:'rc_cfg_set', by:USER.id, cfg:cfg }) }); var d=await r.json();
-    if(!(d&&d.ok)) d=await api({ action:'rc_cfg_set', by:USER.id, cfg:JSON.stringify(cfg) });
+    var d=await cfgWrite(function(c){ c.sub_avoid=cur; });   // Oct 24: fresh read first, only the avoid list changes
     if(d && d.ok && d.cfg){
-      var kept=Array.isArray(d.cfg.sub_avoid); CFG=d.cfg; if(!kept) CFG.sub_avoid=cur;
+      var kept=Array.isArray(d.cfg.sub_avoid); if(!kept) CFG.sub_avoid=cur;
       toast(kept?(k+(on?' added to':' removed from')+' the avoid list'):'Saved for now — the Reddit backend needs the rc-2026-10-13b update to keep the avoid list.');
       renderView();
     } else toast('Could not save: '+((d&&d.error)||'unknown'));
@@ -4885,12 +4882,10 @@ function pqCell(task, meth){
 function pqTarget(inp){ var k=inp.getAttribute('data-k'), v=parseSecs(inp.value); if(typeof v==='number' && isNaN(v)){ toast('Type the time as m:ss (6:30) or minutes (6.5).'); return; } PQ.tg[k]=v; renderView(); }
 async function pqSaveTargets(){
   var n=Object.keys(PQ.tg).length; if(!n) return;
-  var cfg=JSON.parse(JSON.stringify(CFG)); cfg.targets=cfg.targets||{};
-  Object.keys(PQ.tg).forEach(function(k){ if(PQ.tg[k]==null) delete cfg.targets[k]; else cfg.targets[k]=PQ.tg[k]; });
+  var tg=JSON.parse(JSON.stringify(PQ.tg)), sent=null;
   try{
-    var r=await fetch(API, { method:'POST', body:JSON.stringify({ action:'rc_cfg_set', by:USER.id, cfg:cfg }) }); var d=await r.json();
-    if(!(d&&d.ok)) d=await api({ action:'rc_cfg_set', by:USER.id, cfg:JSON.stringify(cfg) });
-    if(d&&d.ok&&d.cfg){ CFG=d.cfg; if(!CFG.targets) CFG.targets=cfg.targets; PQ.tg={}; PQ.sc=null; toast(n+' team time'+(n===1?'':'s')+' saved.'); renderView(); }
+    var d=await cfgWrite(function(c){ c.targets=c.targets||{}; Object.keys(tg).forEach(function(k){ if(tg[k]==null) delete c.targets[k]; else c.targets[k]=tg[k]; }); sent=c.targets; });   // Oct 24: fresh read first
+    if(d&&d.ok&&d.cfg){ if(!CFG.targets) CFG.targets=sent||{}; PQ.tg={}; PQ.sc=null; toast(n+' team time'+(n===1?'':'s')+' saved.'); renderView(); }
     else toast('Could not save: '+((d&&d.error)||'unknown'));
   }catch(e){ toast('Connection error.'); }
 }
@@ -5641,15 +5636,34 @@ async function cleanGo(which){
     else toast('Could not archive: '+((d&&d.error)||'unknown'));
   }catch(e){ toast('Connection error — nothing was changed if this shows twice.'); }
 }
+/* ═══ SETTINGS WRITES — read fresh, change only your own keys (Jeth, Oct 24) ═══
+   "I added 6 iPhones … it's not saving consistently." Every settings write used to post this page's WHOLE copy of the
+   settings. The automatic task-limit publish (and the subreddit-avoid and team-time saves) on a page that was opened
+   earlier — or on another device — therefore wrote that page's OLD phone list back over the one just saved. Now every
+   write reads the latest settings from the server first and changes only the keys it owns. */
+var CFG_PAGE_KEYS=['phones','models','niches','methods','process_start','sop_changes','sc_weights','rest_days','auto_purge_days'];
+async function cfgFresh(){
+  try{ var d=await jget(API+'?action=rc_cfg_get&fresh=1&_='+Date.now(), 0);
+    if(d && d.cfg && typeof d.cfg==='object'){ var c=d.cfg; if(!c.models) c.models={}; if(!Array.isArray(c.phones)) c.phones=[]; if(!c.niches) c.niches=[]; return c; } }catch(e){}
+  return null;
+}
+async function cfgWrite(apply){
+  var base=await cfgFresh(); if(!base) return { ok:false, error:'could not read the current settings — try again' };
+  var cfg=JSON.parse(JSON.stringify(base)); apply(cfg);
+  var d=null;
+  try{ var r=await fetch(API, { method:'POST', body:JSON.stringify({ action:'rc_cfg_set', by:USER.id, cfg:cfg }) }); d=await r.json(); }catch(e){ d=null; }
+  if(!(d&&d.ok)){ try{ d=await api({ action:'rc_cfg_set', by:USER.id, cfg:JSON.stringify(cfg) }); }catch(e){ d=d||{ ok:false, error:'connection error' }; } }
+  if(d && d.ok && d.cfg){ CFG=d.cfg; if(!CFG.models) CFG.models={}; if(!CFG.phones) CFG.phones=[]; if(!CFG.niches) CFG.niches=[]; if(!CFG.methods||!CFG.methods.length) CFG.methods=['Vysor','Jailbroken','Blaze+']; CFG_READY=true; }
+  return d||{ ok:false };
+}
 async function setSave(){
   if(!CFG_READY){ toast('The current settings have not loaded yet — wait a moment, then save.'); return; }
   var b=$('set-go'); b.disabled=true; b.textContent='Saving…';
   SET.phones=SET.phones.filter(function(p){ return p.label && p.label.trim(); }).map(function(p){ return { label:p.label.trim(), model:p.model||'Other', base:phoneBase(p), active:p.active!==false }; });
   try{
-    var r=await fetch(API, { method:'POST', body:JSON.stringify({ action:'rc_cfg_set', by:USER.id, cfg:SET }) });
-    var d=await r.json();
-    if(!(d&&d.ok)) d=await api({ action:'rc_cfg_set', by:USER.id, cfg:JSON.stringify(SET) });
-    if(d&&d.ok){ CFG=d.cfg; SET=null; toast('Settings saved.'); renderView(); }
+    var mine=JSON.parse(JSON.stringify(SET));
+    var d=await cfgWrite(function(c){ CFG_PAGE_KEYS.forEach(function(k){ if(mine[k]!==undefined) c[k]=mine[k]; }); });   // Oct 24: only this page's keys
+    if(d&&d.ok){ SET=null; toast('Settings saved — '+((CFG.phones||[]).length)+' iPhone'+((CFG.phones||[]).length===1?'':'s')+' on the list.'); renderView(); }
     else { b.disabled=false; b.textContent='Save settings'; toast('Could not save: '+((d&&d.error)||'unknown')); }
   }catch(e){ b.disabled=false; b.textContent='Save settings'; toast('Connection error.'); }
 }
