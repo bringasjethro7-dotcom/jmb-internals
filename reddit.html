@@ -5651,8 +5651,8 @@ async function cfgWrite(apply){
   var base=await cfgFresh(); if(!base) return { ok:false, error:'could not read the current settings — try again' };
   var cfg=JSON.parse(JSON.stringify(base)); apply(cfg);
   var d=null;
-  try{ var r=await fetch(API, { method:'POST', body:JSON.stringify({ action:'rc_cfg_set', by:USER.id, cfg:cfg }) }); d=await r.json(); }catch(e){ d=null; }
-  if(!(d&&d.ok)){ try{ d=await api({ action:'rc_cfg_set', by:USER.id, cfg:JSON.stringify(cfg) }); }catch(e){ d=d||{ ok:false, error:'connection error' }; } }
+  try{ var r=await fetch(API, { method:'POST', body:JSON.stringify({ action:'rc_cfg_set', by:USER.id, pv:'merge1', cfg:cfg }) }); d=await r.json(); }catch(e){ d=null; }
+  if(!(d&&d.ok)){ try{ d=await api({ action:'rc_cfg_set', by:USER.id, pv:'merge1', cfg:JSON.stringify(cfg) }); }catch(e){ d=d||{ ok:false, error:'connection error' }; } }
   if(d && d.ok && d.cfg){ CFG=d.cfg; if(!CFG.models) CFG.models={}; if(!CFG.phones) CFG.phones=[]; if(!CFG.niches) CFG.niches=[]; if(!CFG.methods||!CFG.methods.length) CFG.methods=['Vysor','Jailbroken','Blaze+']; CFG_READY=true; }
   return d||{ ok:false };
 }
