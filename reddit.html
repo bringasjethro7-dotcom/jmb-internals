@@ -605,13 +605,34 @@ var EXTRA=[
  {k:'archived',        n:'Archived',         c:'#475569'},   // retired — off the board, kept in the data (Oct 5)
  {k:'banned',          n:'Banned',           c:'#64748b'}
 ];
-var ORDER=['new','creation','creationstandby','warming','comment','nsfw','day1','early','earlydm','medium','strong','superstrong','recovery','tempban','onhold','archived','banned'];
+/* ══ SUICIDAL OPERATION (Jeth + client, Oct 25) — a second, faster SOP next to the ladder ══
+   Day 1 the account is created (Newly created — the same creation credit as always). Day 2 — or day 3 at the latest — it is
+   warmed up. From day 3 it posts, the way the client assigned it (Location posting…; the owner records the assignment).
+   It never climbs the ladder and its numbers are kept apart: every account on it carries meta.sop="sx" for life, the
+   ladder's Pipeline / Insights / Results leave it out, and it has its own views. Its sessions and creations still count as work. */
+var SXPH=[
+ {k:'sxwarm', n:'Suicidal · Warm-up', c:'#14b8a6', sx:true, from:2, plan:'Day 2 (or day 3 at the latest) · 8–12 min browsing · search 2–4 topics and read them · no upvotes · no joining · no posting yet. Posting opens on day 3.', task:'Reddit Warmup'},
+ {k:'sxpost', n:'Suicidal · Posting', c:'#0f766e', sx:true, from:3, plan:'Day 3 onward · post the way the client assigned this account (its assignment is on the card — e.g. Location posting). No assignment yet? Ask the admin before you post. Log every post at the end of the session.', task:'Reddit Posting'}
+];
+var SX_STAGES=['sxwarm','sxpost'];
+var SX_OK=['new','sxwarm','sxpost','recovery','tempban','onhold','archived','banned'];   // where a Suicidal Operation account can be
+var SX_C='#0f766e';
+function isSX(r){ return !!r && ((r.meta&&r.meta.sop==='sx') || SX_STAGES.indexOf(r.status)>=0); }
+function sopOf(r){ return isSX(r)?'sx':'std'; }
+function sxDay(r){ var cd=cdateOf(r); if(!/^\d{4}-\d{2}-\d{2}$/.test(cd)) return 0; return Math.round((Date.parse(today()+'T00:00:00Z')-Date.parse(cd+'T00:00:00Z'))/86400000)+1; }   // creation day = day 1
+function sxAssign(r){ return String(((r&&r.meta)||{}).sxa||'').trim(); }
+function sxAssignList(){ return (Array.isArray(CFG.sx_assign)&&CFG.sx_assign.length)?CFG.sx_assign.slice():['Location posting']; }
+function sxBadge(small){ return '<span class="pill" style="background:'+SX_C+'14;color:'+SX_C+(small?';font-size:10.5px;padding:2px 8px':'')+'" title="Suicidal Operation — its own SOP: day 1 created · day 2–3 warm-up · day 3+ posting as the client assigns">Suicidal Op</span>'; }
+function sxPosted(r){ return r.status==='sxpost' || ((r.meta||{}).prev==='sxpost'); }
+var ERR_TXT={ SX_DAY3:'Posting opens on day 3 of the account (Suicidal Operation).', SX_LADDER:'A Suicidal Operation account can\'t go onto the ladder — ask the admin.', SX_OWNER_ONLY:'Only the admin can move an account onto the Suicidal Operation.', OWNER_ONLY:'Only the owner can do that.' };
+var ORDER=['new','creation','creationstandby','warming','comment','nsfw','day1','early','earlydm','medium','strong','superstrong','sxwarm','sxpost','recovery','tempban','onhold','archived','banned'];
 var GROUPS=[
  {k:'new',  n:'New',       c:'#ff6b1a', st:['new']},
  {k:'cre',  n:'Creation',  c:'#f59e0b', st:['creation','creationstandby']},
  {k:'warm', n:'Warm-up',   c:'#f97316', st:['warming','comment','nsfw']},
  {k:'post', n:'Posting',   c:'#ec4899', st:['day1','early','earlydm','medium']},
  {k:'str',  n:'Strong',    c:'#8b5cf6', st:['strong','superstrong']},
+ {k:'sx',   n:'Suicidal Op', c:'#0f766e', st:['sxwarm','sxpost']},
  {k:'rec',  n:'Recovery',  c:'#0ea5e9', st:['recovery']},
  {k:'tb',   n:'Temp ban',  c:'#d97706', st:['tempban']},
  {k:'hold', n:'On hold',   c:'#0891b2', st:['onhold']},
@@ -621,14 +642,14 @@ var GROUPS=[
 var END_REASONS=['Permanently suspended','Shadowbanned','Locked — could not recover','Other'];
 /* Stage typed into the sheet as its display name ("Medium + DMs", "Spam Recovery")? Map it to the key
    so the card gets its colour, plan and session buttons. The backend does the same from rc-2026-10-04e. */
-var ST_ALIAS={ newlycreated:'new', newcreated:'new', creationstage:'creation', standby:'creationstandby', warmup:'warming', warmingup:'warming',
+var ST_ALIAS={ sxwarmup:'sxwarm', sxwarming:'sxwarm', suicidalwarmup:'sxwarm', suicidalwarm:'sxwarm', suicidewarmup:'sxwarm', suicidalwarming:'sxwarm', sxposting:'sxpost', suicidalposting:'sxpost', suicidalpost:'sxpost', suicideposting:'sxpost', newlycreated:'new', newcreated:'new', creationstage:'creation', standby:'creationstandby', warmup:'warming', warmingup:'warming',
   commentfarm:'comment', commentfarming:'comment', comments:'comment', nsfwcomment:'nsfw', nsfwcomments:'nsfw', day1posting:'day1', dayone:'day1', dayoneposting:'day1',
   earlyposting:'early', earlydms:'earlydm', earlyplusdms:'earlydm', earlywithdms:'earlydm', mediumdm:'medium', mediumdms:'medium', mediumplusdms:'medium',
   spamrecovery:'recovery', spamfilter:'recovery', spamfilterrecovery:'recovery', spam:'recovery', tempbanned:'tempban', temporaryban:'tempban', temporarybanned:'tempban',
   temporarilybanned:'tempban', hold:'onhold', onhold:'onhold', paused:'onhold', archive:'archived', archived:'archived', retired:'archived', ban:'banned', permanentlybanned:'banned', permaban:'banned', suspended:'banned', dead:'banned' };
 function statusKey(v){ var raw=String(v==null?'':v).trim(), k=raw.toLowerCase().replace(/[^a-z0-9]/g,''); if(!k) return ''; if(ORDER.indexOf(k)>=0) return k; return ST_ALIAS[k]||raw.toLowerCase(); }
 function normRows(rows){ (rows||[]).forEach(function(r){ r.status=statusKey(r.status); }); return rows; }
-function phase(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return PH[i]; return null; }
+function phase(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return PH[i]; for(var j=0;j<SXPH.length;j++) if(SXPH[j].k===k) return SXPH[j]; return null; }
 function phaseIx(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return i; return -1; }
 function stageMeta(k){
   var p=phase(k); if(p) return {k:k,n:p.n,c:p.c};
@@ -968,7 +989,7 @@ function autoGraduate(){
     var m=M(r), wk=worksFor(r), ow=owner(r);
     if(markOkAny(m.cstamp,wk,ow) || markOkAny(m.added,wk,ow)) return;   // its shift is still running (night VAs cross midnight) — graduate after it ends
     _grad[r.id]=1;
-    upd(r.id,{ status:'creation', by:'auto' }).catch(function(){});
+    upd(r.id, isSX(r)?{ status:'sxwarm', by:'auto', meta_patch:JSON.stringify({ pstart:today() }) }:{ status:'creation', by:'auto' }).catch(function(){});   // Suicidal Operation: day 2 = warm-up (Oct 25)
   });
 }
 /* SELF-REFRESH (Oct 7): the page watches its own ETag on Netlify. When a new reddit.html is published, every open
@@ -1421,7 +1442,7 @@ function rowHtml(r){
     if(admin) act='<button class="ses ok2" onclick="resumeAcct(\''+id+'\')">'+IC.up+' Resume → '+esc(stageMeta(m.prev&&!/^(onhold|archived)$/.test(m.prev)?m.prev:'creation').n)+'</button>';
   } else if(st==='new'){
     var ok3=!!(m.setup||{}).cred;
-    if(m.cdone) prog='<span class="note g">'+IC.check+' Counted · to Creation tomorrow</span>';
+    if(m.cdone) prog='<span class="note g">'+IC.check+' Counted · to '+(isSX(r)?'Suicidal warm-up':'Creation')+' tomorrow</span>';
     else { prog='<span class="note w">Save the login in the credential store, then count it</span>';
       act=setupBtn(r,'cred','Login saved')+'<button class="ses up" '+(ok3?'onclick="finishCreation(\''+id+'\',this)"':'disabled title="Tick Login saved first"')+'>'+IC.check+' Mark created (+1)</button>'; }
   } else if(st==='creation'||st==='creationstandby'){
@@ -1430,13 +1451,18 @@ function rowHtml(r){
     act=ready?'<button class="ses up" onclick="promote(\''+id+'\',\'warming\')">'+IC.up+' Move to Warming</button>':'<span class="muted" style="font-size:11px">Standby — no sessions</span>';
   } else if(st==='tempban'){
     prog='<span class="note w">Temp ban — check daily</span>';
-    act='<button class="ses ok2" onclick="liftBack(\''+id+'\')">'+IC.check+' Lifted → '+esc(stageMeta(m.prev||'warming').n)+'</button>';
+    act='<button class="ses ok2" onclick="liftBack(\''+id+'\')">'+IC.check+' Lifted → '+esc(stageMeta(m.prev||(isSX(r)?'sxwarm':'warming')).n)+'</button>';
   } else if(st==='banned'){
     var e=endedAt(r);
     prog='<span class="note b" title="'+esc(r.end_reason||'')+'">'+IC.ban+' Banned'+(e?' '+esc(fmtD(e)):'')+(r.end_reason?' · '+esc(String(r.end_reason).split(':')[0]):'')+'</span>';
   } else if(st==='recovery'){
     prog='<span class="note i" title="10 min browsing · reply to 2–3 comments · no upvotes. Nothing left to reply to? Comment in the location subreddits. No posting until clear.">Recovery — browse and reply only (no upvotes)</span>';
     act=held?'':sesBtn(r,1)+sesBtn(r,2)+'<button class="ses ok2" onclick="liftBack(\''+id+'\')">'+IC.check+' Cleared</button>';
+  } else if(p && p.sx){   // Suicidal Operation (Oct 25)
+    var sd=sxDay(r), asg=sxAssign(r), canPost=sd>=3;
+    if(st==='sxwarm') prog='<div class="gate" title="'+esc(p.plan)+'"><b style="color:'+(canPost?'#047857':'var(--ink2)')+'">Day '+sd+' · warm-up'+(canPost?' · posting open ✓':' · posting from day 3')+'</b><div class="prog"><i style="width:'+Math.min(100,sd/3*100)+'%;background:'+SX_C+'"></i></div></div>';
+    else prog='<span class="muted" title="'+esc(p.plan)+'" style="font-size:11.5px;font-weight:600">Day '+sd+' · '+(asg?esc(asg):'<b style="color:#b45309">no assignment yet</b>')+'</span>';
+    if(!held) act=sesBtn(r,1)+sesBtn(r,2)+(st==='sxwarm'&&canPost?'<button class="ses up" onclick="promote(\''+id+'\',\'sxpost\')" title="Start posting (day 3+)">'+IC.up+' Posting</button>':'');
   } else if(p){
     var ix=phaseIx(st), next=PH[ix+1], km=karmaOf(r), can=true;
     if(p.dur){ can=din>=p.dur; prog='<div class="gate" title="'+esc(p.plan)+'"><b style="color:'+(can?'#047857':'var(--ink2)')+'">Day '+Math.min(din+1,p.dur)+'/'+p.dur+(can?' · ready ✓':'')+'</b><div class="prog"><i style="width:'+Math.min(100,(din+1)/p.dur*100)+'%"></i></div></div>'; }
@@ -1456,7 +1482,7 @@ function rowHtml(r){
   else if(m.hcrep && !isDead(r)) prog='<span class="note b" title="A teammate found this profile '+(m.hcrep.res==='n'?'missing':'banned')+' on Reddit during the daily check">'+IC.ban+' Reported '+(m.hcrep.res==='n'?'not found':'banned')+' — admin will confirm</span>';
   if(held){ prog='<span class="note i">'+IC.pause+' On hold today</span>'; act=''; }
   return '<div class="lr'+(isDead(r)?' dim':'')+'" data-rid="'+esc(r.id)+'" style="--sc:'+sm.c+'">'+
-    '<div class="cell c-acc"><div class="an" onclick="openRec(\''+id+'\')" title="Open record">'+esc(r.handle)+'</div><div class="sub"><span class="msub" style="color:'+methodColor(methodOf(r))+';font-weight:800">'+esc(methodOf(r)||'no method')+' · </span>'+(sub||'<span style="opacity:.6">—</span>')+tag+'</div></div>'+
+    '<div class="cell c-acc"><div class="an" onclick="openRec(\''+id+'\')" title="Open record">'+esc(r.handle)+'</div><div class="sub"><span class="msub" style="color:'+methodColor(methodOf(r))+';font-weight:800">'+esc(methodOf(r)||'no method')+' · </span>'+(isSX(r)?'<b style="color:'+SX_C+'">Suicidal Op'+(sxAssign(r)?' · '+esc(sxAssign(r)):'')+'</b> · ':'')+(sub||'<span style="opacity:.6">—</span>')+tag+'</div></div>'+
     '<div class="cell c-stg">'+stageSelect(r)+'</div>'+
     '<div class="cell c-meth">'+(methodOf(r)?methodPill(methodOf(r),true):'<span class="chip" style="background:#fff8eb;color:#92400e;cursor:pointer;font-size:10.5px" onclick="editRec(\''+id+'\')">set method</span>')+'</div>'+
     '<div class="cell c-va">'+(admin?esc(firstName(ow)):esc(r.model||'—'))+'</div>'+
@@ -1480,7 +1506,9 @@ function allVaIds(){
 /* ── one account card ── */
 function stageSelect(r, cls){
   var cur=r.status, sm=stageMeta(cur);
-  var opts=ORDER.filter(function(k){ return (k!=='creationstandby' || cur==='creationstandby') && (isAdmin() || (k!=='onhold' && k!=='archived') || k===cur); }).map(function(k){ return '<option value="'+k+'"'+(k===cur?' selected':'')+'>'+esc(stageMeta(k).n)+'</option>'; }).join('');
+  var sx=isSX(r);
+  var opts=ORDER.filter(function(k){ if(k!==cur && (sx ? SX_OK.indexOf(k)<0 : SX_STAGES.indexOf(k)>=0)) return false;   // Suicidal accounts: their own stages only; ladder accounts: no Suicidal stages (Oct 25)
+    return (k!=='creationstandby' || cur==='creationstandby') && (isAdmin() || (k!=='onhold' && k!=='archived') || k===cur); }).map(function(k){ return '<option value="'+k+'"'+(k===cur?' selected':'')+'>'+esc(stageMeta(k).n)+'</option>'; }).join('');
   if(ORDER.indexOf(cur)<0) opts='<option value="'+esc(cur)+'" selected>'+esc(cur)+'</option>'+opts;
   return '<select class="stg '+(cls||'')+'" onchange="changeStage(\''+jsq(r.id)+'\',this)" data-prev="'+esc(cur)+'" title="Move this account to another stage — when the client says so you can move it ahead (e.g. Warm-up → Early + DMs or Posting) without going through each stage; no QA deduction" '+
     'style="color:'+sm.c+';border-color:'+sm.c+'40;background-color:'+sm.c+'12">'+opts+'</select>';
@@ -1488,6 +1516,7 @@ function stageSelect(r, cls){
 function chipsHtml(r, withVa){
   var c=[];
   c.push(methodOf(r)?methodPill(methodOf(r),true):'<span class="chip" style="background:#fff8eb;color:#92400e;cursor:pointer" onclick="editRec(\''+jsq(r.id)+'\')" title="Tag the method">'+IC.tag+' set method</span>');
+  if(isSX(r)){ c.push(sxBadge(true)); if(sxAssign(r)) c.push('<span class="chip" style="background:'+SX_C+'10;color:'+SX_C+'" title="Posting assignment — from the client">'+IC.tag+' '+esc(sxAssign(r))+'</span>'); }
   if(r.model) c.push('<span class="chip" title="Model">'+IC.user+' '+esc(r.model)+'</span>');
   if(r.device) c.push('<span class="chip" title="Created on">'+IC.phone+' '+esc(r.device)+'</span>');
   if(r.niche) c.push('<span class="chip" title="Persona niche">'+IC.tag+' '+esc(r.niche)+'</span>');
@@ -1504,6 +1533,10 @@ function menuItems(r){
     if(isParked(r)) it.push(['Resume → '+stageMeta(M(r).prev&&!/^(onhold|archived)$/.test(M(r).prev)?M(r).prev:'creation').n,"resumeAcct('"+jsq(r.id)+"')",IC.up]);
     if(r.status!=='onhold') it.push(['Put on hold…',"parkAcct('"+jsq(r.id)+"','onhold')",IC.pause]);
     if(r.status!=='archived') it.push(['Archive…',"parkAcct('"+jsq(r.id)+"','archived')",IC.doc]);
+  }
+  if(isAdmin() && !isDead(r) && !isParked(r)){   // Suicidal Operation (Oct 25)
+    if(isSX(r)){ it.push(['Posting assignment…',"sxAssignAsk('"+jsq(r.id)+"')",IC.tag]); it.push(['Back to the original SOP…',"sxConvert('"+jsq(r.id)+"',false)",IC.swap]); }
+    else it.push(['Move to Suicidal Operation…',"sxConvert('"+jsq(r.id)+"',true)",IC.swap]);
   }
   if(!isDead(r)){
     it.push(['Update karma',"setKarma('"+jsq(r.id)+"')",IC.star]);
@@ -1552,7 +1585,7 @@ function cardHtml(r){
   if(st==='new'){
     var su=m.setup||{}, ok3=!!su.cred;   // only the credentials step — avatar/bio are NOT part of creation (owner, Oct 4)
     body=m.cdone
-      ? '<div class="note g">'+IC.check+' Setup finished · counted as +1 creation. Moves to Creation standby tomorrow.</div>'
+      ? '<div class="note g">'+IC.check+' Setup finished · counted as +1 creation. '+(isSX(r)?'Suicidal Operation: warm-up tomorrow (day 2), posting from day 3.':'Moves to Creation standby tomorrow.')+'</div>'
       : '<div class="note w">Save the login in the credential store, then count this creation.</div>'+
         '<div class="acts">'+setupBtn(r,'cred','Login saved')+
         '<button class="ses up" '+(ok3?'onclick="finishCreation(\''+jsq(r.id)+'\',this)"':'disabled title="Tick Login saved first"')+'>'+IC.check+' Mark created (+1)</button></div>';
@@ -1562,7 +1595,7 @@ function cardHtml(r){
       '<div class="note g">Standby — no daily sessions, no effect on your progress. '+(ready?'Aged 4 days: ready to replace a banned account.':'Ages to day 4, then waits as replacement stock.')+'</div>'+
       (ready?'<div class="acts"><button class="ses up" onclick="promote(\''+jsq(r.id)+'\',\'warming\')">'+IC.up+' Move to Warming</button></div>':'');
   } else if(st==='tempban'){
-    var back=stageMeta(m.prev||'warming').n;
+    var back=stageMeta(m.prev||(isSX(r)?'sxwarm':'warming')).n;
     body='<div class="note w">Sitting out a temporary ban — no sessions until it lifts. Check it daily.</div>'+
       '<div class="acts"><button class="ses ok2" onclick="liftBack(\''+jsq(r.id)+'\')">'+IC.check+' Ban lifted → back to '+esc(back)+'</button></div>';
   } else if(st==='banned'){
@@ -1570,7 +1603,17 @@ function cardHtml(r){
     body='<div class="note b">'+IC.ban+' Banned'+(e?' '+esc(fmtD(e)):'')+(r.end_reason?' · '+esc(r.end_reason):'')+(ageDays(r)!=null?' · lived '+ageDays(r)+' days':'')+'</div>';
   } else if(st==='recovery'){
     body='<details class="plan"><summary>'+IC.doc+' Recovery plan</summary><div>10 min browsing · reply to 2–3 comments · <b>no upvotes</b>. If nothing is left to reply to, comment in the location subreddits. No posting until clear.</div></details>'+
-      (held?'':'<div class="acts">'+sesBtn(r,1)+sesBtn(r,2)+'<button class="ses ok2" onclick="liftBack(\''+jsq(r.id)+'\')">'+IC.check+' Cleared → '+esc(stageMeta(m.prev||'warming').n)+'</button></div>');
+      (held?'':'<div class="acts">'+sesBtn(r,1)+sesBtn(r,2)+'<button class="ses ok2" onclick="liftBack(\''+jsq(r.id)+'\')">'+IC.check+' Cleared → '+esc(stageMeta(m.prev||(isSX(r)?'sxwarm':'warming')).n)+'</button></div>');
+  } else if(p && p.sx){   // Suicidal Operation (Oct 25)
+    var sd2=sxDay(r), asg2=sxAssign(r), canPost2=sd2>=3;
+    var gate2=st==='sxwarm'
+      ? '<b style="color:'+(canPost2?'#047857':'var(--ink2)')+'">Day '+sd2+' · warm-up'+(canPost2?' · posting open ✓':' · posting opens on day 3')+'</b><div class="prog"><i style="width:'+Math.min(100,sd2/3*100)+'%;background:'+SX_C+'"></i></div>'
+      : '<span>Day <b>'+sd2+'</b> · posting'+(asg2?' · <b style="color:'+SX_C+'">'+esc(asg2)+'</b>':'')+'</span>';
+    body='<div class="gate">'+gate2+'</div>'+
+      (st==='sxpost' && !asg2?'<div class="note w">No posting assignment yet — the client decides it (e.g. Location posting). Ask the admin before you post.</div>':'')+
+      '<details class="plan"><summary>'+IC.doc+' Today\'s plan · Suicidal Operation</summary><div>'+esc(p.plan)+'</div></details>'+
+      (held?'':'<div class="acts">'+sesBtn(r,1)+sesBtn(r,2)+(st==='sxwarm'&&canPost2?'<button class="ses up" onclick="promote(\''+jsq(r.id)+'\',\'sxpost\')">'+IC.up+' Start posting</button>':'')+'</div>')+
+      (!held && isPostingStage(st)?postsStrip(r):'');
   } else if(p){
     var ix=phaseIx(st), next=PH[ix+1], din2=daysIn(r), km=karmaOf(r), can=true, gate='';
     if(p.dur){ can=din2>=p.dur; gate='<b style="color:'+(can?'#047857':'var(--ink2)')+'">Day '+Math.min(din2+1,p.dur)+'/'+p.dur+(can?' · ready ✓':'')+'</b><div class="prog"><i style="width:'+Math.min(100,(din2+1)/p.dur*100)+'%"></i></div>'; }
@@ -2577,7 +2620,7 @@ async function karmaGate(r){
    x: 1 once removed, xt/xb: when/who tagged it }. The newest 150 per account are kept. The client portal
    never receives this key (its meta whitelist). */
 var PPS={ day1:1, early:2, earlydm:2, medium:3, strong:5, superstrong:7 };   // posts per session, from the SOP plans
-var SUBS={ range:30, base:'all', q:'', sort:'posts' };
+var SUBS={ range:30, base:'all', q:'', sort:'posts', sop:'std' };
 function subNorm(raw){
   var s=String(raw==null?'':raw).trim().replace(/\s+/g,''); if(!s) return null;
   s=s.replace(/^https?:\/\//i,'').replace(/^([a-z]+\.)?reddit\.com/i,'').replace(/^\/+/,'');
@@ -2595,10 +2638,11 @@ function subAvoidList(){ return (Array.isArray(CFG.sub_avoid)?CFG.sub_avoid:[]).
 function fmtDay(d){ var t=parseTs(String(d||'')); return t?fmtD(t):String(d||''); }
 function subDayDiff(a,b){ var x=Date.parse(a+'T00:00:00Z'), y=Date.parse(b+'T00:00:00Z'); return (isNaN(x)||isNaN(y))?999:Math.round((y-x)/86400000); }
 function subRows(base){ var out=[]; BASES.forEach(function(b){ if(base && base!=='all' && b.id!==base) return; (ALL[b.id]||[]).forEach(function(r){ out.push(r); }); }); if(!out.length) out=ROWS.slice(); return out; }
-function subStats(range, base){
+function subStats(range, base, sop){
   var start=range?phtDate(new Date(Date.now()-8*3600000-(range-1)*86400000)):'';
   var by={}, tot={ posts:0, removed:0, spam:0, accts:{} }, removed=[];
   subRows(base).forEach(function(r){
+    if(sop && sopOf(r)!==sop) return;   // the report shows one SOP at a time (Oct 25); the avoid hints use every post
     var be=isDead(r)?endedAt(r):null, bd=be?phtDate(be):'';
     postsOf(r).forEach(function(p,i){
       if(!p || !p.r) return; var d=String(p.d||''); if(start && d<start) return;
@@ -2717,12 +2761,14 @@ async function subAvoidSet(k, on){
 }
 function subAvoidAdd(){ var i=$('sub-av-in'); var n=subNorm(i&&i.value); if(!n){ toast('Type a subreddit like r/AskReddit.'); return; } subAvoidSet(n, true); }
 function vSubs(){
-  var admin=isAdmin(), S=subStats(SUBS.range, admin?SUBS.base:'all'), q=String(SUBS.q||'').trim().toLowerCase();
+  var nSXs=subRows(isAdmin()?SUBS.base:'all').filter(function(r){ return isSX(r) && postsOf(r).length; }).length; if(!nSXs && SUBS.sop==='sx') SUBS.sop='std';
+  var admin=isAdmin(), S=subStats(SUBS.range, admin?SUBS.base:'all', SUBS.sop), q=String(SUBS.q||'').trim().toLowerCase();
   window._SUBIX=subIndex();
   var rl=SUBS.range?('last '+SUBS.range+' days'):'all time';
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Sub<span class="gtxt">reddits</span></h2><p>Every post logged at the end of a posting session, and every post the moderators or a spam filter took down. Keep posting where our content stays up — drop the subreddits that keep removing it. The client sees the same numbers (no names) in their portal.</p></div>'+
     (admin?'<select class="sel" onchange="SUBS.base=this.value;renderView()"><option value="all">All bases</option>'+BASES.map(function(b){ return '<option value="'+esc(b.id)+'"'+(SUBS.base===b.id?' selected':'')+'>'+esc(b.n)+'</option>'; }).join('')+'</select>':'')+
-    '<div class="seg" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(SUBS.range===x[0]?'on':'')+'" onclick="SUBS.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div></div>';
+    '<div class="seg" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(SUBS.range===x[0]?'on':'')+'" onclick="SUBS.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div>'+
+    (nSXs?'<div class="seg" style="width:auto"><button class="'+(SUBS.sop!=='sx'?'on':'')+'" onclick="SUBS.sop=\'std\';renderView()">Original SOP</button><button class="'+(SUBS.sop==='sx'?'on':'')+'" onclick="SUBS.sop=\'sx\';renderView()" style="color:'+SX_C+'">Suicidal Operation</button></div>':'')+'</div>';
   var rate=S.tot.posts?Math.round(S.tot.removed/S.tot.posts*100):0;
   h+='<div class="kpis" style="margin-top:12px">'+kpi('Posts logged',S.tot.posts,rl,'#ec4899')+kpi('Subreddits',S.list.length,'used · '+rl,'#a855f7')+
     kpi('Stayed up',S.tot.posts-S.tot.removed,S.tot.posts?(100-rate)+'% of posts':'—','#10b981')+kpi('Removed by mods',S.tot.removed-S.tot.spam,S.tot.posts?rate+'% removal rate (both kinds)':'—','#ef4444')+kpi('Spam filter',S.tot.spam,S.tot.posts?Math.round(S.tot.spam/S.tot.posts*100)+'% of posts':'—','#f59e0b')+kpi('Accounts posting',S.tot.accts,'with at least one post','#0ea5e9')+'</div>';
@@ -3027,7 +3073,7 @@ async function moveTo(r, next, extra, msg){
   }
   patchLocal(r.id, prev); for(var k2 in prev) r[k2]=prev[k2];
   _movedId=r.id; renderView(); if(drawerOn) openRec(r.id);
-  toast('Could not save — moved back. '+((d&&d.error)||'Connection error'));
+  toast('Could not save — moved back. '+((d&&ERR_TXT[d.error])||(d&&d.error)||'Connection error'));
   return false;
 }
 async function changeStage(id, sel){
@@ -3037,12 +3083,59 @@ async function changeStage(id, sel){
   if(next==='onhold'||next==='archived'){ sel.value=prev; if(!isAdmin()){ toast('Only the owner can put accounts on hold or archive them.'); return; } return parkAcct(id, next); }
   if((prev==='onhold'||prev==='archived') && !isAdmin()){ sel.value=prev; toast('Only the owner can take an account off hold.'); return; }
   if(next==='tempban'||next==='recovery'){ sel.value=prev; return next==='tempban'?toTempBan(id):toRecovery(id); }
+  if(next==='sxpost' && sxDay(r)<3){   // Suicidal Operation: posting opens on day 3 (Oct 25)
+    if(!isAdmin()){ sel.value=prev; toast('Posting opens on day 3 of the account — this is day '+sxDay(r)+'.'); return; }
+    if(!(await confirmBox('Post before day 3?', 'The Suicidal Operation opens posting on day 3 — '+esc(r.handle)+' is on day '+sxDay(r)+'. Move it anyway (owner override)?', 'Move anyway'))){ sel.value=prev; return; }
+  }
   var extra={};
   if(phase(next)){ extra.meta=JSON.stringify(Object.assign({}, M(r), { pstart:today() })); }
   await moveTo(r, next, extra);
 }
+/* ── Suicidal Operation: owner actions (Oct 25) ── */
+async function sxConvert(id, on){
+  var r=rowById(id); if(!r || !isAdmin()) return;
+  if(on){
+    var to=sxDay(r)>=3?'sxpost':'sxwarm';
+    if(!(await confirmBox('Move '+esc(r.handle)+' to the Suicidal Operation?', 'It leaves the ladder and follows the short SOP — warm-up, then posting from day 3 (it is on day '+sxDay(r)+' → <b>'+esc(stageMeta(to).n)+'</b>). From now on it is kept out of the ladder\'s Pipeline, Insights and Results.', 'Move it'))) return;
+    await moveTo(r, to, { meta:JSON.stringify(Object.assign({}, M(r), { sop:'sx', pstart:today() })) }, 'Now on the Suicidal Operation · '+stageMeta(to).n);
+    return;
+  }
+  if(!(await confirmBox('Put '+esc(r.handle)+' back on the original SOP?', 'It goes to Warming on the ladder and counts in the ladder\'s numbers again. Its posting assignment is cleared.', 'Back to the ladder'))) return;
+  var m=Object.assign({}, M(r), { pstart:today() }); delete m.sop; delete m.sxa;
+  await moveTo(r, 'warming', { meta:JSON.stringify(m) }, 'Back on the original SOP — Warming');
+}
+function sxAssignOpts(cur){ var L=sxAssignList(); if(cur && L.indexOf(cur)<0) L.unshift(cur); return '<option value="">— not assigned yet —</option>'+L.map(function(x){ return '<option'+(x===cur?' selected':'')+'>'+esc(x)+'</option>'; }).join(''); }
+function sxAssignAsk(id){
+  var r=rowById(id); if(!r || !isAdmin()) return;
+  openModal('<div class="md-h"><h3>Posting assignment · '+esc(r.handle)+'</h3><p>What the client assigned this Suicidal Operation account to post. The VA sees it on the card; the client sees it in their portal.</p></div><div class="md-b">'+
+    '<div class="fld"><label>Assignment</label><select class="sel" id="sxa-v">'+sxAssignOpts(sxAssign(r))+'</select><div class="hint">The list is in Settings → Suicidal Operation.</div></div></div>'+
+    '<div class="md-f"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn pri" id="sxa-go" onclick="sxAssignSave(\''+jsq(id)+'\')">Save</button></div>');
+}
+async function sxAssignSave(id){
+  var r=rowById(id); if(!r) return; var v=($('sxa-v').value||'').trim(); if(v===sxAssign(r)){ closeModal(); return; }
+  $('sxa-go').disabled=true;
+  var d=null; try{ d=await upd(id,{ meta_patch:JSON.stringify({ sxa:v||null }) }); }catch(e){}
+  if(d&&d.ok){ var m=Object.assign({}, M(r)); if(v) m.sxa=v; else delete m.sxa; patchLocal(id,{ meta:m }); closeModal(); toast(v?('Assignment: '+v):'Assignment cleared'); renderView(); if($('drawer').classList.contains('on')) openRec(id); }
+  else { $('sxa-go').disabled=false; toast('Could not save: '+((d&&d.error)||'connection error')); }
+}
+async function sxBulkAssign(){
+  var v=($('sxa-bulk').value||'').trim(), ids=dbRows().filter(function(r){ return isSX(r) && !isDead(r) && sxAssign(r)!==v; }).map(function(r){ return r.id; });
+  if(!ids.length){ toast('Nothing to change.'); return; }
+  if(!(await confirmBox((v?'Assign '+esc(v):'Clear the assignment')+' on '+ids.length+' account(s)?', 'Only the live Suicidal Operation accounts in the current filter.', v?'Assign':'Clear'))) return;
+  var ok=0, fail=0; toast('Saving '+ids.length+'…');
+  for(var i=0;i<ids.length;i+=5){
+    await Promise.all(ids.slice(i,i+5).map(async function(id){ try{ var d=await upd(id,{ meta_patch:JSON.stringify({ sxa:v||null }) }); if(d&&d.ok){ ok++; var r=rowById(id), m=Object.assign({}, M(r)); if(v) m.sxa=v; else delete m.sxa; patchLocal(id,{ meta:m }); } else fail++; }catch(e){ fail++; } }));
+  }
+  toast(ok+' updated'+(fail?' · '+fail+' failed — retry':'')); renderView();
+}
 async function promote(id, nextk){
   var r=rowById(id); if(!r) return;
+  if(nextk==='sxpost'){   // Suicidal Operation (Oct 25)
+    if(sxDay(r)<3 && !isAdmin()){ toast('Posting opens on day 3 of the account — this is day '+sxDay(r)+'.'); return; }
+    if(!(await confirmBox('Start posting with '+esc(r.handle)+'?', 'Suicidal Operation · day '+sxDay(r)+'. Post the way the client assigned it'+(sxAssign(r)?': <b>'+esc(sxAssign(r))+'</b>.':' — <b>no assignment yet</b>, ask the admin first.'), 'Start posting'))) return;
+    await moveTo(r, 'sxpost', { meta:JSON.stringify(Object.assign({}, M(r), { pstart:today() })) }, 'Posting · '+(sxAssign(r)||'no assignment yet'));
+    return;
+  }
   if(!(await confirmBox('Promote to '+stageMeta(nextk).n+'?', 'Only when the profile check is clean — no mod messages or warnings, no "Unable to post", no removed posts, no spam-filter flags, and the avatar is still there (a missing avatar is a shadowban sign).', 'Promote'))) return;
   await moveTo(r, nextk, { meta:JSON.stringify(Object.assign({}, M(r), { pstart:today() })) }, 'Promoted → '+stageMeta(nextk).n);
 }
@@ -3057,13 +3150,14 @@ async function toTempBan(id){
   await moveTo(r, 'tempban', { meta:JSON.stringify(Object.assign({}, M(r), { prev:r.status })) }, 'Temp banned — check it daily.');
 }
 async function liftBack(id){
-  var r=rowById(id); if(!r) return; var back=M(r).prev||'warming';
+  var r=rowById(id); if(!r) return; var back=M(r).prev||(isSX(r)?'sxwarm':'warming');
   await moveTo(r, back, {}, 'Back to '+stageMeta(back).n);
 }
 async function reinstate(id){
   var r=rowById(id); if(!r) return;
-  if(!(await confirmBox('Reinstate '+r.handle+'?', 'Only if Reddit actually restored the account. It goes back to Warming and the ban stays in its history.', 'Reinstate'))) return;
-  await moveTo(r, 'warming', { meta:JSON.stringify(Object.assign({}, M(r), { pstart:today() })) });
+  var rb=isSX(r)?(sxDay(r)>=3?'sxpost':'sxwarm'):'warming';
+  if(!(await confirmBox('Reinstate '+r.handle+'?', 'Only if Reddit actually restored the account. It goes back to '+esc(stageMeta(rb).n)+' and the ban stays in its history.', 'Reinstate'))) return;
+  await moveTo(r, rb, { meta:JSON.stringify(Object.assign({}, M(r), { pstart:today() })) });
 }
 function banAcct(id){
   var r=rowById(id); if(!r) return;
@@ -3198,12 +3292,13 @@ document.addEventListener('keydown', function(e){
 /* ── LOG A NEW ACCOUNT — the SOP's Phase 0 in one form ── */
 var NA={ seed:false };
 function newAccount(){
-  NA={ seed:false };
+  NA={ seed:false, sop:'std' };
   var admin=isAdmin(), models=modelsAllowed(PROJECT), phones=phoneList(true, PROJECT);   // everyone: only this base's models from Settings (owner, Oct 5)   // VAs: only the owner's model list
   var nowLocal=phtStamp().replace(' ','T').slice(0,16);
   openModal('<div class="md-h"><h3>Log new account</h3><p>Do this the moment the account exists on the phone. Creation date and time are stamped automatically.</p></div>'+
     '<div class="md-b">'+
       '<div class="seg" style="margin-bottom:14px"><button id="na-s0" class="on" onclick="naSeed(false)">Just created</button><button id="na-s1" onclick="naSeed(true)">Already existing account</button></div>'+
+      '<div class="fld"><label>SOP</label><div class="seg" id="na-sop"><button type="button" class="on" data-s="std" onclick="naSop(this)">Original SOP (ladder)</button><button type="button" data-s="sx" onclick="naSop(this)" style="color:'+SX_C+'">Suicidal Operation</button></div><div class="hint" id="na-sop-h">'+esc(naSopHint('std'))+'</div></div>'+
       '<div class="fld"><label>Reddit username</label><input class="inp" id="na-u" placeholder="u/username" autocomplete="off"></div>'+
       '<div class="fld"><label>Method — how this account is run</label><div class="seg" id="na-meth">'+methodsList().map(function(m){ return '<button type="button" data-m="'+esc(m)+'" onclick="naMeth(this)" style="color:'+methodColor(m)+'">'+esc(m)+'</button>'; }).join('')+'</div></div>'+
       '<div class="f2"><div class="fld"><label>Model</label>'+
@@ -3215,13 +3310,16 @@ function newAccount(){
       '</div>'+
       '<div class="fld"><label>Persona niche</label><input class="inp" id="na-n" list="na-nl" placeholder="traveller, food, fitness…"><datalist id="na-nl">'+(CFG.niches||[]).map(function(x){ return '<option value="'+esc(x)+'">'; }).join('')+'</datalist></div>'+
       '<div id="na-seed" style="display:none"><div class="f2"><div class="fld"><label>Created on</label><input class="inp" type="date" id="na-cd" value="'+today()+'"></div>'+
-        '<div class="fld"><label>Current stage</label><select class="sel" id="na-st">'+ORDER.filter(function(k){ return k!=='new'&&k!=='creationstandby'&&k!=='banned'; }).map(function(k){ return '<option value="'+k+'">'+esc(stageMeta(k).n)+'</option>'; }).join('')+'</select></div></div></div>'+
+        '<div class="fld"><label>Current stage</label><select class="sel" id="na-st">'+naStageOpts('std')+'</select></div></div></div>'+
       '<div id="na-chk"><label class="chk"><input type="checkbox" id="na-c1" checked> Login saved in the credential store — counts the creation now</label></div>'+
       '<div class="hint" style="margin-top:6px">Stamped as '+esc(fmtDT(parseTs(phtStamp())))+' PHT · logged by '+esc(vaName(myId()))+(isAdmin()?'':'')+'</div>'+
     '</div>'+
     '<div class="md-f"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn pri" id="na-go" onclick="naSave()">'+IC.plus+' Save account</button></div>');
   naModel();
 }
+function naSopHint(k){ return k==='sx'?'Day 1 created · day 2 (or 3) warm-up · posting from day 3, the way the client assigns. Kept out of the ladder\'s numbers.':'The usual ladder: creation standby → warming → comment farm → NSFW → posting.'; }
+function naStageOpts(k){ var L=k==='sx'?['sxwarm','sxpost','recovery','tempban']:ORDER.filter(function(x){ return x!=='new'&&x!=='creationstandby'&&x!=='banned'&&SX_STAGES.indexOf(x)<0; }); return L.map(function(x){ return '<option value="'+x+'">'+esc(stageMeta(x).n)+'</option>'; }).join(''); }
+function naSop(b){ NA.sop=b.getAttribute('data-s'); document.querySelectorAll('#na-sop button').forEach(function(x){ x.classList.toggle('on', x===b); }); var h=$('na-sop-h'); if(h) h.textContent=naSopHint(NA.sop); var s=$('na-st'); if(s) s.innerHTML=naStageOpts(NA.sop); }
 function naMeth(b){ NA.method=b.getAttribute('data-m'); document.querySelectorAll('#na-meth button').forEach(function(x){ x.classList.toggle('on', x===b); }); }
 function naSeed(on){ NA.seed=on; $('na-s0').classList.toggle('on',!on); $('na-s1').classList.toggle('on',on); $('na-seed').style.display=on?'block':'none'; $('na-chk').style.display=on?'none':'block'; }
 function naModelVal(){ var s=$('na-m'); if(!s) return ''; if(s.value==='__new'){ $('na-m2').style.display='block'; return ($('na-m2').value||'').trim(); } $('na-m2').style.display='none'; return s.value; }
@@ -3234,11 +3332,12 @@ async function naSave(){
   if(!model){ toast('Pick the model this account is for.'); return; }
   if(!dev && !NA.seed && phoneList(true, PROJECT).length){ toast('Pick the iPhone it was created on.'); return; }
   var st='new', cd=today(), ctime=phtStamp().slice(11,16), setup={};
-  if(NA.seed){ st=$('na-st').value||'creation'; cd=$('na-cd').value||today(); ctime=''; }
+  if(NA.seed){ st=$('na-st').value||(NA.sop==='sx'?'sxwarm':'creation'); cd=$('na-cd').value||today(); ctime=''; }
   else setup={ cred:$('na-c1').checked };
   var full=!NA.seed && setup.cred;
   var meta={ cdate:cd, pstart:(st==='new'||st==='creation')?cd:today(), added:vaKeyOf(USER.id) };
   if(ctime) meta.ctime=ctime;
+  if(NA.sop==='sx') meta.sop='sx';   // Suicidal Operation (Oct 25) — for life
   if(!NA.seed){ meta.setup=setup; if(full){ meta.cdone=1; meta.cstamp=vaKeyOf(USER.id); meta.cdoneAt=phtStamp(); } }
   var cgo=(!NA.seed && tmOn())?(crGet()||{}).t:null; if(cgo) meta.cgo=cgo;   // creation timer → finished when it is counted
   var b=$('na-go'); b.disabled=true; b.textContent='Saving…';
@@ -3248,7 +3347,7 @@ async function naSave(){
       if(cgo){ crTake(); if(full) tmLog({ id:d.id||'', handle:u, project:PROJECT, method:NA.method, device:dev, status:'new' },'creation',{ secs:Math.round((Date.now()-cgo)/1000), start:cgo, parallel:0 }); }
       if(full) await bump('Reddit Account Creation',1);
       closeModal();
-      toast(full?'Saved · +1 Reddit Account Creation counted':(NA.seed?'Saved → '+stageMeta(st).n:'Saved to Newly created — tick Login saved to count it'));
+      toast((NA.sop==='sx'?'Suicidal Operation · ':'')+(full?'Saved · +1 Reddit Account Creation counted':(NA.seed?'Saved → '+stageMeta(st).n:'Saved to Newly created — tick Login saved to count it')));
       if(model && !modelsFor(PROJECT).some(function(x){ return x.toLowerCase()===model.toLowerCase(); })){ (CFG.models[PROJECT]=CFG.models[PROJECT]||[]).push(model); }
       load();
     } else {
@@ -3260,11 +3359,12 @@ async function naSave(){
 }
 
 /* ═══════════ ACCOUNTS — the database (Airtable-style grid) ═══════════ */
-var DB={ q:'', life:'alive', grp:'', model:'', phone:'', va:'all', all:false, sort:'created', dir:-1, groupBy:'stage', meth:'all' };   // stage by default (owner, Oct 4)
+var DB={ q:'', life:'alive', grp:'', model:'', phone:'', va:'all', all:false, sort:'created', dir:-1, groupBy:'stage', meth:'all', sop:'all' };   // stage by default (owner, Oct 4)
 var COLS=[
   {k:'handle',  n:'Account',     v:function(r){ return String(r.handle||'').toLowerCase(); }, h:function(r){ return esc(r.handle); }, c1:true},
   {k:'stage',   n:'Stage',       v:function(r){ return stageOrd(r.status); }, h:function(r){ var s=stageMeta(r.status); return '<span class="pill" style="background:'+s.c+'18;color:'+s.c+'"><i style="width:7px;height:7px;border-radius:50%;background:'+s.c+';display:inline-block"></i>'+esc(s.n)+'</span>'+(isHeld(r)?' <span class="chip" style="font-size:10px">hold</span>':''); }},
   {k:'method',  n:'Method',      v:function(r){ var m=methodOf(r); var i=methodsList().indexOf(m); return m?(i<0?50:i):99; }, h:function(r){ return methodPill(methodOf(r),true); }},
+  {k:'sop',     n:'SOP',         sx:true, v:function(r){ return (isSX(r)?'1':'0')+sxAssign(r).toLowerCase(); }, h:function(r){ return isSX(r)?sxBadge(true)+(sxAssign(r)?' <span class="muted" style="font-size:11.5px">'+esc(sxAssign(r))+'</span>':(isDead(r)?'':' <span style="color:#b45309;font-size:11.5px;font-weight:700">no assignment</span>')):'<span class="muted" style="font-size:11.5px">Original</span>'; }},
   {k:'base',    n:'Base',        all:true, v:function(r){ return baseOf(r.project).n; }, h:function(r){ var b=baseOf(r.project); return '<span class="pill" style="background:'+b.c+'14;color:'+b.c+'">'+esc(b.n)+'</span>'; }},
   {k:'model',   n:'Model',       v:function(r){ return String(r.model||'').toLowerCase(); }, h:function(r){ return esc(r.model||'—'); }},
   {k:'device',  n:'Phone',       v:function(r){ return String(r.device||'').toLowerCase(); }, h:function(r){ return esc(r.device||'—'); }},
@@ -3289,6 +3389,7 @@ function dbRows(){
     if(DB.life==='arch' && !isArchived(r)) return false;
     if(DB.grp && groupOf(r.status).k!==DB.grp) return false;
     if(DB.meth!=='all' && methodOf(r)!==DB.meth) return false;
+    if(DB.sop!=='all' && sopOf(r)!==DB.sop) return false;
     if(DB.model && String(r.model||'')!==DB.model) return false;
     if(DB.phone && String(r.device||'')!==DB.phone) return false;
     if(isAdmin() && DB.va!=='all' && owner(r)!==DB.va) return false;
@@ -3303,7 +3404,8 @@ function vAccounts(){
   var rows=dbRows();
   var col=COLS.filter(function(c){ return c.k===DB.sort; })[0]||COLS[8];
   rows.sort(function(a,b){ var x=col.v(a), y=col.v(b); return (x<y?-1:x>y?1:0)*DB.dir || String(a.handle).localeCompare(String(b.handle)); });
-  var cols=COLS.filter(function(c){ return (!c.admin || admin) && (!c.all || (admin && DB.all)) && (!c.hold || DB.life==='hold' || DB.life==='arch'); });
+  var anySX=src.some(isSX);
+  var cols=COLS.filter(function(c){ return (!c.admin || admin) && (!c.all || (admin && DB.all)) && (!c.hold || DB.life==='hold' || DB.life==='arch') && (!c.sx || anySX); });
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Accounts</h2><p>'+(admin?'Every account, every stage, from creation to ban — click a row for its full history.':'Your accounts — click a row for its full history.')+'</p></div>'+
     (admin?'<button class="btn sec" onclick="exportCsv()">'+IC.dl+' Export CSV</button>':'')+
     '<button class="btn pri" onclick="newAccount()">'+IC.plus+' Log new account</button></div>';
@@ -3312,10 +3414,11 @@ function vAccounts(){
     '<div class="seg" style="width:auto">'+[['alive','Alive'],['hold','On hold'],['arch','Archived'],['dead','Banned'],['all','All']].map(function(x){ return '<button class="'+(DB.life===x[0]?'on':'')+'" onclick="DB.life=\''+x[0]+'\';'+((x[0]==='hold'||x[0]==='arch')?'if(!DB.groupBy)DB.groupBy=\'client\';':'if(DB.groupBy===\'client\')DB.groupBy=\'\';')+'renderView()">'+x[1]+(x[0]==='hold'||x[0]==='arch'?' <small>'+src.filter(x[0]==='hold'?function(r){ return r.status==='onhold'; }:isArchived).length+'</small>':'')+'</button>'; }).join('')+'</div>'+
     '<select class="sel" onchange="DB.grp=this.value;renderView()"><option value="">All stages</option>'+GROUPS.map(function(g){ return '<option value="'+g.k+'"'+(DB.grp===g.k?' selected':'')+'>'+g.n+'</option>'; }).join('')+'</select>'+
     '<select class="sel" onchange="DB.meth=this.value;renderView()"><option value="all">All methods</option>'+methodsList().map(function(m){ return '<option'+(DB.meth===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'<option value=""'+(DB.meth===''?' selected':'')+'>Not tagged</option></select>'+
+    (anySX||DB.sop!=='all'?'<select class="sel" onchange="DB.sop=this.value;renderView()" title="Which SOP"><option value="all">Both SOPs</option><option value="std"'+(DB.sop==='std'?' selected':'')+'>Original SOP</option><option value="sx"'+(DB.sop==='sx'?' selected':'')+'>Suicidal Operation</option></select>':'')+
     '<select class="sel" onchange="DB.model=this.value;renderView()"><option value="">All models</option>'+models.map(function(m){ return '<option'+(DB.model===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select>'+
     '<select class="sel" onchange="DB.phone=this.value;renderView()"><option value="">All phones</option>'+phones.map(function(m){ return '<option'+(DB.phone===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select>'+
     (admin?'<select class="sel" onchange="DB.va=this.value;renderView()"><option value="all">All VAs</option>'+vaOptions(DB.va,false)+'</select>':'')+
-    '<select class="sel" onchange="DB.groupBy=this.value;renderView()" title="Group rows"><option value="">No grouping</option>'+[['method','Group: Method'],['stage','Group: Stage'],['model','Group: Model'],['device','Group: Phone'],['va','Group: VA'],['niche','Group: Niche'],['client','Group: Client (hold)']].concat(admin&&DB.all?[['base','Group: Base']]:[]).filter(function(x){ return admin||x[0]!=='va'; }).map(function(x){ return '<option value="'+x[0]+'"'+(DB.groupBy===x[0]?' selected':'')+'>'+x[1]+'</option>'; }).join('')+'</select>'+
+    '<select class="sel" onchange="DB.groupBy=this.value;renderView()" title="Group rows"><option value="">No grouping</option>'+[['method','Group: Method'],['stage','Group: Stage'],['model','Group: Model'],['device','Group: Phone'],['va','Group: VA'],['niche','Group: Niche'],['client','Group: Client (hold)']].concat(anySX?[['sop','Group: SOP'],['sxa','Group: Assignment']]:[]).concat(admin&&DB.all?[['base','Group: Base']]:[]).filter(function(x){ return admin||x[0]!=='va'; }).map(function(x){ return '<option value="'+x[0]+'"'+(DB.groupBy===x[0]?' selected':'')+'>'+x[1]+'</option>'; }).join('')+'</select>'+
     (admin?'<label class="chip" style="cursor:pointer;background:var(--s1);border:1px solid var(--line)"><input type="checkbox" '+(DB.all?'checked':'')+' onchange="DB.all=this.checked;if(DB.all)loadAll().then(renderView);renderView()" style="accent-color:var(--o)"> All bases</label>':'')+
     '<div class="sp"></div>'+searchBox('db-q', DB.q, 'Search username, model, phone, VA…', 'DB.q', DB.q.trim()?rows.length:null)+
     '<span class="muted" style="font-weight:700;font-size:12px">'+rows.length+' record'+(rows.length===1?'':'s')+'</span></div>';
@@ -3329,6 +3432,8 @@ function vAccounts(){
       '<button class="btn sm dark" onclick="HOLD.mode=\'paste\';holdOpen(\'onhold\')">📋 Paste a list from the client</button>'+
       '<span class="muted" style="font-size:11.5px">e.g. filter the Jailbroken phone first · parked accounts are out of every number · Ctrl+Z undoes a batch</span></div>';
   }
+  if(admin && DB.sop==='sx'){ var sxLive=rows.filter(function(r){ return isSX(r) && !isDead(r); }).length;
+    if(sxLive) h+='<div class="banner info" style="border-color:'+SX_C+'40">'+IC.tag+'<div style="flex:1"><b>Posting assignment</b> for the '+sxLive+' live Suicidal Operation account'+(sxLive===1?'':'s')+' shown — what the client assigned them.</div><select class="sel" id="sxa-bulk">'+sxAssignOpts('')+'</select><button class="btn sm dark" onclick="sxBulkAssign()">Set for them</button></div>'; }
   var untagged=rows.filter(function(r){ return !methodOf(r); }).length;
   if(admin && untagged) h+='<div class="banner warn">'+IC.tag+'<div style="flex:1"><b>'+untagged+'</b> of these records have no method yet. Tag them so Insights can compare Vysor, Jailbroken and Blaze+.</div>'+
     '<select class="sel" id="bulk-m">'+methodsList().map(function(m){ return '<option>'+esc(m)+'</option>'; }).join('')+'</select><button class="btn sm dark" onclick="bulkMethod()">Tag the '+untagged+' shown</button></div>';
@@ -3339,7 +3444,8 @@ function vAccounts(){
   if(DB.groupBy){
     var gf={ method:function(r){ return methodOf(r)||'Not tagged'; }, stage:function(r){ return stageMeta(r.status).n; }, model:function(r){ return r.model||'(no model)'; }, device:function(r){ return r.device||'(phone not recorded)'; },
              va:function(r){ return vaName(owner(r)); }, niche:function(r){ return r.niche||'(no niche)'; }, base:function(r){ return baseOf(r.project).n; },
-             client:function(r){ return isParked(r)?(parkOf(r).client||'(no client named)'):'Not parked'; } }[DB.groupBy];
+             client:function(r){ return isParked(r)?(parkOf(r).client||'(no client named)'):'Not parked'; },
+             sop:function(r){ return isSX(r)?'Suicidal Operation':'Original SOP'; }, sxa:function(r){ return isSX(r)?(sxAssign(r)||'(no assignment yet)'):'Original SOP'; } }[DB.groupBy]||function(){ return '—'; };
     var g={}, order=[]; rows.forEach(function(r){ var k=gf(r); if(!g[k]){ g[k]=[]; order.push(k); } g[k].push(r); });
     if(DB.groupBy==='stage') order.sort(function(a,b){ return stageOrd(g[a][0].status)-stageOrd(g[b][0].status); });
     else if(DB.groupBy==='method'){ var ml=methodsList(); order.sort(function(a,b){ var ia=ml.indexOf(a), ib=ml.indexOf(b); return (ia<0?(a==='Not tagged'?99:50):ia)-(ib<0?(b==='Not tagged'?99:50):ib); }); }
@@ -3353,10 +3459,10 @@ function vAccounts(){
 }
 function dbSort(k){ if(DB.sort===k) DB.dir=-DB.dir; else { DB.sort=k; DB.dir=(k==='handle'||k==='model'||k==='device'||k==='niche'||k==='va')?1:-1; } renderView(); }
 function exportCsv(){
-  var rows=dbRows(), cols=['base','handle','status','method','model','device','niche','va','created','age_days','stage_since','karma','last_worked','banned_on','ban_reason'];
+  var rows=dbRows(), cols=['base','handle','status','sop','assignment','method','model','device','niche','va','created','age_days','stage_since','karma','last_worked','banned_on','ban_reason'];
   var lines=[cols.join(',')].concat(rows.map(function(r){
     var c=createdAt(r), s=stageSince(r), e=endedAt(r);
-    return [baseOf(r.project).n, r.handle, stageMeta(r.status).n, methodOf(r), r.model, r.device, r.niche, vaName(owner(r)),
+    return [baseOf(r.project).n, r.handle, stageMeta(r.status).n, isSX(r)?'Suicidal Operation':'Original', sxAssign(r), methodOf(r), r.model, r.device, r.niche, vaName(owner(r)),
       c?phtStamp(c):'', ageDays(r), s?phtStamp(s):'', karmaOf(r), lastWorked(r), e?phtStamp(e):'', r.end_reason]
       .map(function(v){ v=(v==null?'':String(v)); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(',');
   }));
@@ -3415,6 +3521,7 @@ function drawRec(r, evs){
       (M(r).delreq?'<div class="banner warn" style="margin-bottom:12px">'+IC.trash+'<div style="flex:1"><b>Deletion requested</b> by '+esc(vaName(M(r).delreq.by))+' · '+esc(fmtDT(parseTs(M(r).delreq.at)))+'<br><q>'+esc(M(r).delreq.reason||'')+'</q>'+(isAdmin()?'':'<br><span class="muted">Waiting for the admin — the account stays until then.</span>')+'</div>'+
         (isAdmin()?'<button class="btn sm dark" onclick="delDecide(\''+jsq(r.id)+'\',\'approve\')">Approve delete</button><button class="btn sm sec" onclick="delDecide(\''+jsq(r.id)+'\',\'decline\')">Decline</button>':'')+'</div>':'')+
       '<div class="facts">'+
+        (isSX(r)?f('SOP', sxBadge(true)+' <span class="muted">· day '+sxDay(r)+'</span>')+f('Posting assignment', sxAssign(r)?'<b style="color:'+SX_C+'">'+esc(sxAssign(r))+'</b>':'<span style="color:#b45309;font-weight:700">not assigned yet</span>'):'')+
         f('Model', esc(r.model||'—'))+f('Created on', esc(r.device||'—'))+
         f('Niche', esc(r.niche||'—'))+
         f('VA', esc(vaName(owner(r)))+(coverOf(r)&&!isHeld(r)?' <span class="muted">→ '+esc(firstName(coverOf(r)))+' today</span>':''))+f('Logged by', esc(vaName(r.created_by)))+(isDead(r) && respOwner(r)!==owner(r)?f('Ban counts for', esc(vaName(respOwner(r)))+' <span class="muted">· held it on the ban date</span>'):'')+
@@ -3427,6 +3534,7 @@ function drawRec(r, evs){
       '<div class="row" style="margin-bottom:16px">'+(canEdit?'<button class="btn sm sec" onclick="editRec(\''+jsq(r.id)+'\')">'+IC.edit+' Edit details</button>':'')+
         (!isDead(r)&&canEdit?'<button class="btn sm sec" onclick="banAcct(\''+jsq(r.id)+'\')">'+IC.ban+' Banned…</button>':'')+
         (isAdmin()?'<button class="btn sm sec" onclick="xferOpen(null,[\''+jsq(r.id)+'\'])">'+IC.swap+' Transfer…</button>':'')+
+        (isAdmin()&&isSX(r)&&!isDead(r)?'<button class="btn sm sec" style="color:'+SX_C+'" onclick="sxAssignAsk(\''+jsq(r.id)+'\')">'+IC.tag+' Posting assignment…</button>':'')+
         (canEdit?'<button class="btn sm sec" style="color:#b91c1c" onclick="delAcct(\''+jsq(r.id)+'\')">'+IC.trash+' Delete</button>':'')+'</div>'+
       postsSection(r)+
       '<div class="sec-h" style="margin-top:4px"><b>History</b><span>'+(evs===null?'loading…':tl.length+' event'+(tl.length===1?'':'s'))+'</span><hr></div>'+
@@ -3492,7 +3600,7 @@ async function bulkMethod(){
         The fastest method through each progression stage is marked green, the slowest amber.
      2. The pipelines — one swimlane per method with the same stage columns lined up underneath each
         other, so the three flows can be read against each other card by card. */
-var PL={ all:false, meth:'all' };   // follows the Altz / Casey switcher; 'All bases' is opt-in
+var PL={ all:false, meth:'all', sop:'std' };   // follows the Altz / Casey switcher; 'All bases' is opt-in · sop: the ladder or the Suicidal Operation (Oct 25)
 var PL_PROGRESS=['warming','comment','nsfw','day1','early','earlydm','medium','recovery','tempban'];   // shorter = better
 function plStageRows(rows, k){
   var list=rows.filter(function(r){ return r.status===k || (k==='creation'&&r.status==='creationstandby'); });
@@ -3506,24 +3614,26 @@ function plSummary(rows){
   var b7=rows.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<7; }).length;
   var s30=addDays(today(),-29), b30=rows.filter(function(r){ var e=endedAt(r); return e && phtDate(e)>=s30; }).length;
   var ex=rows.filter(function(r){ var e=endedAt(r); return !e || phtDate(e)>=s30; }).length;
-  var P1=phaseIx('day1'), post=rows.filter(function(r){ return phaseIx(r.status)>=P1 || phaseIx(M(r).prev)>=P1; }).length;
+  var P1=phaseIx('day1'), post=rows.filter(function(r){ return isSX(r)?sxPosted(r):(phaseIx(r.status)>=P1 || phaseIx(M(r).prev)>=P1); }).length;
   return { n:rows.length, alive:alive, c7:c7, b7:b7, net:c7-b7, rate30:ex?b30/ex:null, post:rows.length?post/rows.length:null };
 }
 function vPipeline(){
-  var src=PL.all?allRows():(ALL[PROJECT]||ROWS);
-  if(!src.length) return '<div class="card empty">Loading accounts…</div>';
+  var srcAll=PL.all?allRows():(ALL[PROJECT]||ROWS);
+  if(!srcAll.length) return '<div class="card empty">Loading accounts…</div>';
+  var nSX=srcAll.filter(function(r){ return isSX(r) && !isParked(r); }).length; if(!nSX && PL.sop==='sx') PL.sop='std';
+  var src=srcAll.filter(function(r){ return sopOf(r)===PL.sop; });   // the two SOPs are never mixed on the board (Oct 25)
   /* The pipeline compares METHODS — accounts without a method are not part of it (owner, Oct 5). */
   var all=src.filter(function(r){ return !!methodOf(r) && !isParked(r); });   // parked accounts are out of every report (Oct 6)
   var ml=methodsList(), lanes=ml.slice();
   all.forEach(function(r){ var m=methodOf(r); if(m && lanes.indexOf(m)<0) lanes.push(m); });
   var byM={}; lanes.forEach(function(m){ byM[m]=all.filter(function(r){ return methodOf(r)===m; }); });
   var show=PL.meth==='all'?lanes:lanes.filter(function(m){ return m===PL.meth; });
-  var cols=ORDER.filter(function(k){ return k!=='creationstandby'; });
+  var cols=PL.sop==='sx'?['new','sxwarm','sxpost','recovery','tempban','banned']:ORDER.filter(function(k){ return k!=='creationstandby' && SX_STAGES.indexOf(k)<0; });
   var S={}; lanes.forEach(function(m){ S[m]=plSummary(byM[m]); });
 
   // fastest / slowest per progression stage (methods with 2+ accounts in the stage)
   var mark={};
-  PL_PROGRESS.forEach(function(k){
+  (PL.sop==='sx'?['sxwarm','recovery','tempban']:PL_PROGRESS).forEach(function(k){
     var v=ml.map(function(m){ var l=plStageRows(byM[m]||[],k); return { m:m, a:l.length>=2?plAvg(l):null }; }).filter(function(x){ return x.a!=null; });
     if(v.length<2) return;
     var lo=Math.min.apply(null,v.map(function(x){ return x.a; })), hi=Math.max.apply(null,v.map(function(x){ return x.a; }));
@@ -3531,7 +3641,8 @@ function vPipeline(){
     v.forEach(function(x){ if(x.a===lo) mark[k+'|'+x.m]='fast'; else if(x.a===hi) mark[k+'|'+x.m]='slow'; });
   });
 
-  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Pipeline <span class="gtxt">by method</span></h2><p>Same ladder, three approaches — stages down the side, methods across the top, like an Airtable board.</p></div>'+
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Pipeline <span class="gtxt">by method</span>'+(PL.sop==='sx'?' <span class="pill" style="background:'+SX_C+'16;color:'+SX_C+';vertical-align:4px">Suicidal Operation</span>':'')+'</h2><p>'+(PL.sop==='sx'?'The Suicidal Operation on its own — day 1 created, day 2–3 warm-up, posting from day 3. Never mixed with the ladder.':'Same ladder, three approaches — stages down the side, methods across the top, like an Airtable board.')+'</p></div>'+
+    (nSX?'<div class="seg" style="width:auto"><button class="'+(PL.sop==='std'?'on':'')+'" onclick="PL.sop=\'std\';renderView()">Original SOP</button><button class="'+(PL.sop==='sx'?'on':'')+'" onclick="PL.sop=\'sx\';renderView()" style="color:'+SX_C+'">Suicidal Operation <small>'+nSX+'</small></button></div>':'')+
     '<div class="seg" style="width:auto"><button class="'+(!PL.all?'on':'')+'" onclick="PL.all=false;renderView()">'+esc(baseOf(PROJECT).n)+' only</button><button class="'+(PL.all?'on':'')+'" onclick="PL.all=true;renderView()">All bases</button></div></div>';
 
   // method summary cards
@@ -3605,7 +3716,7 @@ function vPipeline(){
    page is open. A failed refresh keeps the last snapshot on screen and says so. On an older backend it falls back
    to the board lists + history log and says what is missing. Nothing is dropped silently: untagged, parked and
    phase-unknown accounts are counted in the data check at the top. */
-var INS={ base:'all', range:30, dim:'method', client:false, cohort:'all' };
+var INS={ base:'all', range:30, dim:'method', client:false, cohort:'all', sop:'std' };   // sop: the ladder (std) or the Suicidal Operation (sx) — never mixed (Oct 25)
 var INSD={ rows:null, ev:null, asg:null, at:0, serverAt:'', mode:'', err:'', errAt:0, loading:false, lastFixed:0, legacyUntil:0, sig:'', dirty:false, arch:0, ms:0 };
 var DIMS=[['method','Method'],['model','Model'],['va','VA'],['device','Phone'],['base','Base'],['niche','Niche'],['process','Process']];
 var PAL=['#ff6b1a','#f43f5e','#a855f7','#0ea5e9','#14b8a6','#f59e0b','#94a3b8'];
@@ -3804,7 +3915,7 @@ function insData(range){
   if(range===undefined) range=INS.range;
   insHist();
   var seen={}, all=[], okBase={}; BASES.forEach(function(b){ okBase[b.id]=1; });
-  insAllRows().forEach(function(r){ if(!r || !r.id || seen[r.id] || !okBase[r.project]) return; seen[r.id]=1; if(INS.base!=='all' && r.project!==INS.base) return; all.push(r); });
+  insAllRows().forEach(function(r){ if(!r || !r.id || seen[r.id] || !okBase[r.project]) return; seen[r.id]=1; if(INS.base!=='all' && r.project!==INS.base) return; if(sopOf(r)!==(INS.sop||'std')) return; all.push(r); });
   var rows=all.filter(function(r){ return !!methodOf(r) && !isParked(r); });
   var end=phtDate(new Date()), start=range?addDays(end,-(range-1)):null;          // calendar day, so a 2 AM ban counts today
   if(!start){ var mn=end; rows.forEach(function(r){ var c=createdAt(r); if(c){ var d=phtDate(c); if(d<mn) mn=d; } }); start=mn; }
@@ -4036,11 +4147,22 @@ function vInsights(){
     return '<div class="card empty">'+(INSD.err?'Could not load Insights ('+esc(INSD.err)+') — retrying every minute. <a href="#" onclick="insRefresh();return false" style="color:var(--ot);font-weight:800">Retry now</a>':'Loading the live snapshot of every base…')+'</div>';
   }
   if(INS.client && (INS.dim==='va'||INS.dim==='device')) INS.dim='method';
+  var nSX=0, seenX={}; insAllRows().forEach(function(r){ if(r && r.id && !seenX[r.id] && isSX(r) && !isParked(r) && (INS.base==='all' || r.project===INS.base)){ seenX[r.id]=1; nSX++; } });
+  if(!nSX && INS.sop==='sx') INS.sop='std';
+  var sopSeg=nSX?'<div class="seg no-print" style="width:auto"><button class="'+(INS.sop!=='sx'?'on':'')+'" onclick="INS.sop=\'std\';renderView()">Original SOP</button><button class="'+(INS.sop==='sx'?'on':'')+'" onclick="INS.sop=\'sx\';renderView()" style="color:'+SX_C+'">Suicidal Operation <small>'+nSX+'</small></button></div>':'';
+  if(INS.sop==='sx'){   // Suicidal Operation: its own page (Oct 25)
+    var hx='<div class="hero"><div style="flex:1;min-width:240px"><h2>Insights <span class="pill" style="background:'+SX_C+'16;color:'+SX_C+';vertical-align:4px">Suicidal Operation</span></h2><p>The fast SOP on its own — day 1 created, day 2–3 warm-up, posting from day 3 as the client assigns. None of these accounts are in the ladder\'s numbers.</p></div>'+sopSeg+
+      '<select class="sel no-print" onchange="INS.base=this.value;renderView()"><option value="all">All bases</option>'+BASES.map(function(b){ return '<option value="'+esc(b.id)+'"'+(INS.base===b.id?' selected':'')+'>'+esc(b.n)+'</option>'; }).join('')+'</select>'+
+      '<div class="seg no-print" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(INS.range===x[0]?'on':'')+'" onclick="INS.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div></div>';
+    var sxr=[], sxs={}; insAllRows().forEach(function(r){ if(r && r.id && !sxs[r.id] && (INS.base==='all' || r.project===INS.base)){ sxs[r.id]=1; sxr.push(r); } });
+    return hx+sxInsightsHtml(sxr, INS.range, 'openRec');
+  }
   var D=insData(), A=detect(D), V=insVerdict();
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Insights'+(INS.client?' <span class="vchip" style="background:#ede9fe;color:#6d28d9;vertical-align:4px">Client view</span>':'')+'</h2><p>Which method keeps Reddit accounts alive and posting, where in the ladder each one loses accounts, and whether bans are platform waves or our process — live from every account.</p></div>'+
     '<select class="sel no-print" onchange="INS.base=this.value;renderView()"><option value="all">All bases</option>'+BASES.map(function(b){ return '<option value="'+esc(b.id)+'"'+(INS.base===b.id?' selected':'')+'>'+esc(b.n)+'</option>'; }).join('')+'</select>'+
     '<div class="seg no-print" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(INS.range===x[0]?'on':'')+'" onclick="INS.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div>'+
-    '<label class="chk no-print" style="margin:0" title="Hides VA and phone names — safe to screen-share"><input type="checkbox" '+(INS.client?'checked':'')+' onchange="INS.client=this.checked;renderView()"> Client view</label></div>';
+    '<label class="chk no-print" style="margin:0" title="Hides VA and phone names — safe to screen-share"><input type="checkbox" '+(INS.client?'checked':'')+' onchange="INS.client=this.checked;renderView()"> Client view</label>'+sopSeg+'</div>';
+  if(nSX) h+='<div class="muted" style="font-size:11.5px;margin:-4px 0 8px">The ladder only — '+nSX+' Suicidal Operation account'+(nSX===1?' is':'s are')+' left out of every number here (switch above to see them).</div>';
   h+=insDataCheck(D);
   h+=insBottomLine(V);
   /* KPIs for the chosen range */
@@ -4071,6 +4193,68 @@ function vInsights(){
   if(approx) h+='<p class="muted" style="font-size:11.5px;margin-top:10px">'+approx+' ban date'+(approx===1?' is':'s are')+' approximate — banned before the history log existed, or typed straight into the Google Sheet (dated when the tool found it, within minutes once the new script is in). Bans marked in the tool are stamped exactly.</p>';
   return h;
 }
+/* ══════════ SUICIDAL OPERATION — its own numbers (Jeth + client, Oct 25) ══════════
+   The Suicidal Operation runs fast on purpose (day 1 create · day 2–3 warm-up · day 3+ posting), so its accounts are
+   never mixed into the ladder's numbers. Here they are on their own: how many are live, warming, posting, how long they
+   last before a ban, how many were banned within their first 3 days — overall and by posting assignment, model and method. */
+function sxEvIdx(){
+  var posted={}, banFrom={};
+  (insEv()||[]).forEach(function(e){ if(!e || !e.account_id) return;
+    if(e.to==='sxpost' || e.from==='sxpost') posted[e.account_id]=1;
+    if(e.kind==='ban' && e.from && (!banFrom[e.account_id] || String(e.at)>banFrom[e.account_id].at)) banFrom[e.account_id]={ at:String(e.at), st:e.from }; });
+  return { posted:posted, banFrom:banFrom };
+}
+function sxReached(r, X){ return r.status==='sxpost' || !!X.posted[r.id] || ((r.meta||{}).prev==='sxpost'); }
+function sxBanStage(r, X){ var b=X.banFrom[r.id], k=(b&&b.st)||((r.meta||{}).prev)||''; if(k==='tempban'||k==='recovery') k=((r.meta||{}).prev)||k; return k?stageMeta(k).n:'—'; }
+function sxTable(rows, keyFn, label, X){
+  var g={}; rows.forEach(function(r){ var k=keyFn(r)||'—'; (g[k]=g[k]||[]).push(r); });
+  var keys=Object.keys(g).sort(function(a,b){ return g[b].length-g[a].length || (a<b?-1:1); });
+  if(!keys.length) return '<div class="muted" style="padding:10px 0">No accounts yet.</div>';
+  return '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">'+esc(label)+'</th><th>Accounts</th><th>Live now</th><th>Posting now</th><th>Reached posting</th><th>Banned</th><th>Median life</th><th>Banned by day 3</th></tr></thead><tbody>'+
+    keys.map(function(k){ var L=g[k], live=L.filter(function(r){ return !isDead(r); }), post=live.filter(function(r){ return r.status==='sxpost'; }).length,
+      reached=L.filter(function(r){ return sxReached(r, X); }).length, dead=L.filter(isDead), lives=dead.map(function(r){ return ageDays(r); }).filter(function(x){ return x!=null; }),
+      med=median(lives), d3=lives.filter(function(x){ return x<=2; }).length;
+      return '<tr><td class="c1">'+esc(k)+'</td><td class="num">'+L.length+'</td><td class="num" style="font-weight:800">'+live.length+'</td><td class="num">'+post+'</td><td class="num">'+(L.length?Math.round(reached/L.length*100)+'%':'—')+'</td>'+
+        '<td class="num" style="'+(dead.length?'color:#b91c1c;font-weight:800':'color:var(--ink4)')+'">'+(dead.length||'·')+'</td><td class="num">'+(med==null?'—':med+'d')+'</td><td class="num">'+(dead.length?Math.round(d3/dead.length*100)+'%':'—')+'</td></tr>'; }).join('')+
+    '</tbody></table></div>';
+}
+/* rows = every Suicidal Operation account in scope · range = days (0 = all) · open = the function that opens a record */
+function sxInsightsHtml(rows, range, open){
+  rows=rows.filter(function(r){ return isSX(r) && !isParked(r); });
+  var X=sxEvIdx(), end=phtDate(new Date()), start=range?addDays(end,-(range-1)):'0000-00-00', rl=range?('last '+range+' days'):'all time';
+  var inR=function(d){ return d && phtDate(d)>=start; };
+  var live=rows.filter(function(r){ return !isDead(r); }), warm=live.filter(function(r){ return r.status==='new'||r.status==='sxwarm'; }), post=live.filter(function(r){ return r.status==='sxpost'; });
+  var created=rows.filter(function(r){ return inR(createdAt(r)); }), bans=rows.filter(function(r){ return isDead(r) && inR(endedAt(r)); });
+  var lives=bans.map(function(r){ return ageDays(r); }).filter(function(x){ return x!=null; }), med=median(lives);
+  var reached=created.filter(function(r){ return sxReached(r, X); }).length, noAsg=post.filter(function(r){ return !sxAssign(r); }).length;
+  var h='<div class="kpis" style="margin-top:12px">'+kpi('Live now',live.length,warm.length+' warming up · '+post.length+' posting',SX_C)+kpi('Created',created.length,rl,'#ff6b1a')+
+    kpi('Banned',bans.length,rl,'#ef4444')+kpi('Median life',med==null?'—':med+'d','created → banned · '+rl,'#0ea5e9')+
+    kpi('Reached posting',created.length?Math.round(reached/created.length*100)+'%':'—','of the accounts created · '+rl,'#ec4899')+
+    kpi('Banned by day 3',lives.length?Math.round(lives.filter(function(x){ return x<=2; }).length/lives.length*100)+'%':'—','of the bans · '+rl,'#f59e0b')+'</div>';
+  if(noAsg) h+='<div class="banner warn" style="margin-top:10px"><div style="flex:1"><b>'+noAsg+'</b> posting account'+(noAsg===1?' has':'s have')+' no posting assignment yet.</div></div>';
+  // the last 8 weeks: made vs banned
+  var wk=[], mon=function(d){ var x=new Date(d+'T12:00:00+08:00'), w=(x.getUTCDay()+6)%7; return addDays(d,-w); }, m0=mon(end);
+  for(var i=7;i>=0;i--){ var a=addDays(m0,-7*i), b=addDays(a,6); wk.push({ a:a, b:b, c:rows.filter(function(r){ var d=createdAt(r); d=d&&phtDate(d); return d && d>=a && d<=b; }).length, x:rows.filter(function(r){ var d=isDead(r)&&endedAt(r); d=d&&phtDate(d); return d && d>=a && d<=b; }).length }); }
+  var mx=Math.max(1, Math.max.apply(null, wk.map(function(w){ return Math.max(w.c,w.x); })));
+  h+='<div class="ig" style="margin-top:12px"><div class="card pad s6"><div class="ch-h"><b>Made vs banned — by week</b><span>Monday–Sunday, Philippine time · last 8 weeks</span></div>'+
+    wk.map(function(w){ return '<div style="display:grid;grid-template-columns:92px 1fr 1fr;gap:8px;align-items:center;margin:5px 0;font-size:12px"><span class="muted" style="font-weight:700">'+esc(fmtD(parseTs(w.a)))+'</span>'+
+      '<div title="Created"><i style="display:inline-block;height:9px;border-radius:5px;background:'+SX_C+';width:'+Math.max(w.c?4:0, w.c/mx*100)+'%;vertical-align:middle"></i> <b style="font-size:11.5px">'+(w.c||'')+'</b></div>'+
+      '<div title="Banned"><i style="display:inline-block;height:9px;border-radius:5px;background:#ef4444;width:'+Math.max(w.x?4:0, w.x/mx*100)+'%;vertical-align:middle"></i> <b style="font-size:11.5px;color:#b91c1c">'+(w.x||'')+'</b></div></div>'; }).join('')+
+    '<div class="muted" style="font-size:11px;margin-top:6px"><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:'+SX_C+'"></i> created &nbsp; <i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#ef4444"></i> banned</div></div>';
+  h+='<div class="card pad s6"><div class="ch-h"><b>Where they are now</b><span>live accounts by stage</span></div>'+
+    [['new','Created (day 1)'],['sxwarm','Warm-up (day 2–3)'],['sxpost','Posting (day 3+)'],['recovery','Spam recovery'],['tempban','Temp banned']].map(function(x){ var n=live.filter(function(r){ return r.status===x[0]; }).length, sm=stageMeta(x[0]);
+      return '<div style="display:flex;align-items:center;gap:10px;margin:7px 0"><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+';min-width:150px">'+esc(x[1])+'</span><div style="flex:1;height:9px;border-radius:5px;background:var(--s2,#f1f5f9);overflow:hidden"><i style="display:block;height:100%;background:'+sm.c+';width:'+(live.length?n/live.length*100:0)+'%"></i></div><b style="min-width:26px;text-align:right">'+n+'</b></div>'; }).join('')+'</div>';
+  h+='<div class="card pad"><div class="ch-h"><b>By posting assignment</b><span>every Suicidal Operation account · the assignment comes from the client</span></div>'+sxTable(rows, function(r){ return sxAssign(r)||'(no assignment yet)'; }, 'Assignment', X)+'</div>';
+  h+='<div class="card pad s6"><div class="ch-h"><b>By model</b><span>every Suicidal Operation account</span></div>'+sxTable(rows, function(r){ return r.model||'(no model)'; }, 'Model', X)+'</div>';
+  h+='<div class="card pad s6"><div class="ch-h"><b>By method</b><span>every Suicidal Operation account</span></div>'+sxTable(rows, function(r){ return methodOf(r)||'(not tagged)'; }, 'Method', X)+'</div>';
+  var bl=rows.filter(isDead).sort(function(a,b){ var x=endedAt(a), y=endedAt(b); return (y?y.getTime():0)-(x?x.getTime():0); }).slice(0,25);
+  h+='<div class="card pad"><div class="ch-h"><b>Latest bans</b><span>newest first · up to 25</span></div>'+(bl.length?
+    '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Account</th><th>Model</th><th>Assignment</th><th>Method</th><th>Created</th><th>Banned</th><th>Lived</th><th>Stage at ban</th><th>Reason</th></tr></thead><tbody>'+
+    bl.map(function(r){ var c=createdAt(r), e=endedAt(r), a=ageDays(r); return '<tr class="r dead" onclick="'+open+'(\''+jsq(r.id)+'\')"><td class="c1">'+esc(r.handle)+'</td><td>'+esc(r.model||'—')+'</td><td>'+esc(sxAssign(r)||'—')+'</td><td>'+esc(methodOf(r)||'—')+'</td><td>'+(c?esc(fmtD(c)):'—')+'</td><td>'+(e?esc(fmtD(e)):'—')+'</td><td class="num">'+(a==null?'—':a+'d')+'</td><td>'+esc(sxBanStage(r, X))+'</td><td>'+esc(r.end_reason||'—')+'</td></tr>'; }).join('')+'</tbody></table></div>'
+    :'<div class="muted" style="padding:10px 0">No bans yet.</div>')+'</div></div>';
+  return h;
+}
+
 function afterInsights(){ insPaintLive(); }
 /* ── METHOD COMPARISON — the research view ── */
 function methodCompare(D){
@@ -5541,6 +5725,7 @@ function setDraft(){
   if(!s.methods || !s.methods.length) s.methods=['Vysor','Jailbroken','Blaze+'];
   if(!s.sc_weights) s.sc_weights={ p:20, q:20, r:10 };
   if(!s.rest_days) s.rest_days={};
+  if(!Array.isArray(s.sx_assign) || !s.sx_assign.length) s.sx_assign=['Location posting'];
   return s;
 }   // SET_SNAP = the draft as created, so an untouched draft can be replaced when the real config lands
 function vSettings(){
@@ -5563,10 +5748,20 @@ function vSettingsLists(){
         '<select class="sel" onchange="SET.phones['+i+'].model=this.value">'+['iPhone 12','iPhone 13','Other'].map(function(m){ return '<option'+(p.model===m?' selected':'')+'>'+m+'</option>'; }).join('')+'</select>'+
         '<select class="sel" title="Which base uses this phone" onchange="SET.phones['+i+'].base=this.value">'+BASES.map(function(b){ return '<option value="'+esc(b.id)+'"'+(phoneBase(p)===b.id?' selected':'')+'>'+esc(b.n)+'</option>'; }).join('')+'</select>'+
         '<label class="chip" style="cursor:pointer"><input type="checkbox" '+(p.active!==false?'checked':'')+' onchange="SET.phones['+i+'].active=this.checked" style="accent-color:var(--o)"> in use</label>'+
-        '<button class="ghost" title="Remove" onclick="SET.phones.splice('+i+',1);renderView()">'+IC.x+'</button></div>'; }).join('')
+        '<button class="ghost" title="Remove" onclick="SET.phones.splice('+i+',1);renderView()">'+IC.x+'</button></div>'+
+        '<div class="row" style="gap:6px;margin:-2px 0 12px;flex-wrap:wrap;align-items:center"><span class="lbl" style="margin:0;color:#ff6b1a" title="The iCloud account(s) signed in on this iPhone — Blaze+ runs on them. The client sees this list in their portal.">iCloud · Blaze+</span>'+
+          (Array.isArray(p.icloud)?p.icloud:[]).map(function(x,j){ return '<span class="chip">'+esc(x)+' <a href="#" onclick="phIcDel('+i+','+j+');return false" style="color:var(--ink3);text-decoration:none">×</a></span>'; }).join('')+
+          '<input class="inp" style="flex:1;min-width:190px;padding:4px 9px;font-size:12px" placeholder="+ add iCloud address (Enter)" onkeydown="if(event.key===\'Enter\'&&this.value.trim()){phIcAdd('+i+',this.value);}" onblur="if(this.value.trim())phIcAdd('+i+',this.value)"></div>'; }).join('')
       :'<div class="muted" style="margin-bottom:10px">No phones yet. Add each company iPhone once — VAs pick from this list.</div>')+
     '<div class="row"><button class="btn sm sec" onclick="SET.phones.push({label:\'iPhone 12 · #'+(SET.phones.length+1)+'\',model:\'iPhone 12\',base:\'Reddit\',active:true});renderView()">'+IC.plus+' iPhone 12</button>'+
-    '<button class="btn sm sec" onclick="SET.phones.push({label:\'iPhone 13 · #'+(SET.phones.length+1)+'\',model:\'iPhone 13\',base:\'Reddit\',active:true});renderView()">'+IC.plus+' iPhone 13</button></div></div>';
+    '<button class="btn sm sec" onclick="SET.phones.push({label:\'iPhone 13 · #'+(SET.phones.length+1)+'\',model:\'iPhone 13\',base:\'Reddit\',active:true});renderView()">'+IC.plus+' iPhone 13</button></div>'+
+    '<div class="hint muted" style="font-size:11px;margin-top:8px">iCloud addresses (Blaze+) show to the client in their portal → Settings → iPhones &amp; iClouds. Addresses only — never put a password here.</div></div>';
+  h+='<div class="card pad s6"><div class="ch-h"><b>Suicidal Operation</b><span>its own SOP — kept out of the ladder\'s numbers</span></div>'+
+    '<div class="note g" style="margin-bottom:10px">Day 1 the account is created · day 2 (or day 3 at the latest) warm-up · from day 3 it posts, the way the client assigns it. VAs pick it when they log a new account; the owner can move an existing account onto it from its ⋯ menu.</div>'+
+    '<div class="lbl" style="margin-bottom:6px">Posting assignments the client can give</div><div class="chips">'+
+    SET.sx_assign.map(function(x,i){ return '<span class="chip" style="background:'+SX_C+'12;color:'+SX_C+'">'+esc(x)+(SET.sx_assign.length>1?' <a href="#" onclick="SET.sx_assign.splice('+i+',1);renderView();return false" style="color:inherit;text-decoration:none;opacity:.6">×</a>':'')+'</span>'; }).join('')+
+    '<input class="inp" style="width:170px;padding:4px 9px;font-size:12px" placeholder="+ add assignment" onkeydown="if(event.key===\'Enter\'&&this.value.trim()){SET.sx_assign.push(this.value.trim().slice(0,60));renderView();}"></div>'+
+    '<div class="hint muted" style="font-size:11px;margin-top:6px">Set an account\'s assignment from its ⋯ menu → Posting assignment, or for many at once in Accounts → SOP: Suicidal Operation.</div></div>';
   h+='<div class="card pad s6"><div class="ch-h"><b>Models per base</b><span>who each account is for</span></div>'+BASES.map(function(b){
     var list=SET.models[b.id]||[];
     return '<div style="margin-bottom:12px"><div class="lbl" style="color:'+b.c+';margin-bottom:6px">'+esc(b.n)+'</div><div class="chips">'+
@@ -5661,7 +5856,13 @@ async function cleanGo(which){
    settings. The automatic task-limit publish (and the subreddit-avoid and team-time saves) on a page that was opened
    earlier — or on another device — therefore wrote that page's OLD phone list back over the one just saved. Now every
    write reads the latest settings from the server first and changes only the keys it owns. */
-var CFG_PAGE_KEYS=['phones','models','niches','methods','process_start','sop_changes','sc_weights','rest_days','auto_purge_days'];
+var CFG_PAGE_KEYS=['phones','models','niches','methods','process_start','sop_changes','sc_weights','rest_days','auto_purge_days','sx_assign'];
+/* one company phone as it is saved — the iCloud list (Blaze+) rides along (Oct 25) */
+function phNorm(p){ var o={ label:String(p.label||'').trim(), model:p.model||'Other', base:phoneBase(p), active:p.active!==false }; var ic=Array.isArray(p.icloud)?p.icloud.map(function(x){ return String(x||'').trim(); }).filter(Boolean):[]; if(ic.length) o.icloud=ic; return o; }
+function phIcAdd(i, v){ var L=String(v||'').split(/[\s,;]+/).map(function(x){ return x.trim(); }).filter(Boolean); if(!L.length) return; var p=SET.phones[i]; if(!p) return; p.icloud=Array.isArray(p.icloud)?p.icloud:[];
+  var bad=L.filter(function(x){ return !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x); }); if(bad.length){ toast('That doesn\'t look like an iCloud address: '+bad[0]); return; }
+  L.forEach(function(x){ if(!p.icloud.some(function(y){ return y.toLowerCase()===x.toLowerCase(); })) p.icloud.push(x); }); renderView(); }
+function phIcDel(i, j){ var p=SET.phones[i]; if(p && Array.isArray(p.icloud)){ p.icloud.splice(j,1); renderView(); } }
 async function cfgFresh(){
   try{ var d=await jget(API+'?action=rc_cfg_get&fresh=1&_='+Date.now(), 0);
     if(d && d.cfg && typeof d.cfg==='object'){ var c=d.cfg; if(!c.models) c.models={}; if(!Array.isArray(c.phones)) c.phones=[]; if(!c.niches) c.niches=[]; return c; } }catch(e){}
@@ -5679,10 +5880,10 @@ async function cfgWrite(apply){
 async function setSave(){
   if(!CFG_READY){ toast('The current settings have not loaded yet — wait a moment, then save.'); return; }
   var b=$('set-go'); b.disabled=true; b.textContent='Saving…';
-  SET.phones=SET.phones.filter(function(p){ return p.label && p.label.trim(); }).map(function(p){ return { label:p.label.trim(), model:p.model||'Other', base:phoneBase(p), active:p.active!==false }; });
+  SET.phones=SET.phones.filter(function(p){ return p.label && p.label.trim(); }).map(phNorm);
   try{
     var mine=JSON.parse(JSON.stringify(SET)), snap={}; try{ snap=JSON.parse(SET_SNAP||'{}')||{}; }catch(_s){ snap={}; }
-    snap.phones=(snap.phones||[]).filter(function(p){ return p.label && String(p.label).trim(); }).map(function(p){ return { label:String(p.label).trim(), model:p.model||'Other', base:phoneBase(p), active:p.active!==false }; });
+    snap.phones=(snap.phones||[]).filter(function(p){ return p.label && String(p.label).trim(); }).map(phNorm);
     // Oct 24: write ONLY the lists edited on this screen, on top of the latest stored settings — an older open
     // Settings screen can no longer put back an old phone list just because something else was saved from it
     var changed=CFG_PAGE_KEYS.filter(function(k){ return mine[k]!==undefined && JSON.stringify(mine[k])!==JSON.stringify(snap[k]); });
