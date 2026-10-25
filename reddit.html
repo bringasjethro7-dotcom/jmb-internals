@@ -859,7 +859,15 @@ async function jget(url, ttl){
 }
 function qs(o){ return Object.keys(o).filter(function(k){ return o[k]!==undefined && o[k]!==null; }).map(function(k){ return k+'='+encodeURIComponent(o[k]); }).join('&'); }
 async function api(o){ var r=await fetch(API+'?'+qs(o)+'&_='+Date.now()); return await r.json(); }
-async function upd(id, fields){ return api(Object.assign({ action:'pa_update', id:id, by:USER.id }, fields)); }
+async function upd(id, fields){
+  var o=Object.assign({ action:'pa_update', id:id, by:USER.id }, fields);
+  /* Oct 25: a long save (an account's post log with the daily post-check verdicts) goes as a POST body — a URL can't
+     grow past Google's limit. Backend rc-2026-10-25b+; an older backend answers UNKNOWN_ACTION and the GET is used. */
+  if(qs(o).length>6000 && !(BE_BUILD && BE_BUILD<'rc-2026-10-25b')){
+    try{ var d=await apiPost(o); if(d && d.error!=='UNKNOWN_ACTION') return d; }catch(_pp){}
+  }
+  return api(o);
+}
 function rowById(id){
   for(var i=0;i<ROWS.length;i++) if(ROWS[i].id===id) return ROWS[i];
   for(var k in ALL){ var a=ALL[k]||[]; for(var j=0;j<a.length;j++) if(a[j].id===id) return a[j]; }
