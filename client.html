@@ -2849,6 +2849,18 @@ function subFactors(R){
     '<div style="font-size:12.5px;color:var(--ink2);margin:-2px 0 10px;line-height:1.5">'+(flags.length?'Stands out (5+ posts, 10 points above the average): '+flags.join(' · ')+'.':'Nothing stands out yet — no model, stage, method or account age is taken down much more often than the rest (5+ posts needed).')+'</div>'+
     '<div class="row" style="gap:18px;align-items:flex-start">'+panels+'</div></div>';
 }
+/* Oct 25: posts by the day they went up, checked the next day — the daily removal numbers */
+function subDaysC(D){
+  var L=(D && D.dy)||[]; if(!L.length) return '';
+  var td=L[0].d, yd=L[1]?L[1].d:'';
+  return '<div class="card" style="margin-top:12px;padding:14px 16px"><div class="ch-h"><b>Day by day</b><span>posts by the day they went up · every post is checked the next day · taken down = moderators + spam filters, of the checked posts · all models</span></div>'+
+    '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Day</th><th>Posts</th><th>Stayed up</th><th>Moderators</th><th>Spam filter</th><th>Not checked yet</th><th>Taken down</th></tr></thead><tbody>'+
+    L.map(function(x){ var chk=x.u+x.x+x.s, pc=subPct(x.x+x.s, chk), lb=x.d===td?'Today':(x.d===yd?'Yesterday':subDay(x.d));
+      return '<tr><td class="c1"><b>'+esc(lb)+'</b>'+(x.d===td||x.d===yd?' <span class="muted" style="font-size:11px">'+esc(subDay(x.d))+'</span>':'')+'</td><td class="num">'+(x.p||'·')+'</td>'+
+        '<td class="num" style="color:#047857;font-weight:700">'+(x.u||'·')+'</td><td class="num" style="'+(x.x?'color:#b91c1c;font-weight:800':'')+'">'+(x.x||'·')+'</td><td class="num" style="'+(x.s?'color:#b45309;font-weight:800':'')+'">'+(x.s||'·')+'</td>'+
+        '<td class="num" style="'+(x.k?'color:#c2410c;font-weight:700':'')+'">'+(x.k?x.k+(x.d===td?' <small class="muted">checked tomorrow</small>':''):'·')+'</td>'+
+        '<td style="min-width:130px">'+(chk?subBar(pc, subCol(pc)):'<span class="muted">—</span>')+'</td></tr>'; }).join('')+'</tbody></table></div></div>';
+}
 function vSubsC(){
   var D=subsD(); if(!D || !D.r) return '<div class="card empty">The subreddit report is getting ready — check back shortly.</div>';
   var R=D.r[String(SUBC.range)]||D.r['30']||{ tot:{ posts:0, up:0, mod:0, spam:0, acc:0 }, list:[] }, rl=SUBC.range?('last '+SUBC.range+' days'):'all time';
@@ -2859,9 +2871,13 @@ function vSubsC(){
     '<div class="seg no-print" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(SUBC.range===x[0]?'on':'')+'" onclick="SUBC.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div></div>';
   if(models.length>1) h+='<div class="chips no-print" style="margin:-4px 0 12px;align-items:center"><span class="muted" style="font-size:12px;font-weight:700;margin-right:2px">Model</span>'+
     [''].concat(models).map(function(m){ var on=SUBC.model===m; return '<button class="chip" style="cursor:pointer;'+(on?'background:var(--ink);color:#fff;border-color:var(--ink)':'')+'" onclick="SUBC.model=\''+jsq(m)+'\';renderView()">'+esc(m||'All models')+'</button>'; }).join('')+'</div>';
-  h+='<div class="kpis">'+kpi('Posts made',T.posts,rl+ml,'#ec4899')+kpi('Stayed up',T.up,T.posts?subPct(T.up,T.posts)+'% of posts':'—','#10b981')+
-    kpi('Removed by moderators',T.mod,T.posts?subPct(T.mod,T.posts)+'% of posts':'—','#ef4444')+kpi('Caught by spam filters',T.spam,T.posts?subPct(T.spam,T.posts)+'% of posts':'—','#f59e0b')+
+  var unk=(!SUBC.model && T.unk)?T.unk:0, ofc=(unk||D.dy)?'% of checked posts':'% of posts';
+  h+='<div class="kpis">'+kpi('Posts made',T.posts+unk,rl+ml,'#ec4899')+kpi('Stayed up',T.up,T.posts?subPct(T.up,T.posts)+ofc:'—','#10b981')+
+    kpi('Removed by moderators',T.mod,T.posts?subPct(T.mod,T.posts)+ofc:'—','#ef4444')+kpi('Caught by spam filters',T.spam,T.posts?subPct(T.spam,T.posts)+ofc:'—','#f59e0b')+
+    (unk?kpi('Not checked yet',unk,'checked the next day · left out of the %','#f97316'):'')+
     kpi('Subreddits',V.list.length,'posted in · '+rl,'#a855f7')+(T.acc!=null?kpi('Accounts posting',T.acc,'with at least one post','#0ea5e9'):'')+'</div>';
+  h+=subDaysC(D);
+  if(!T.posts && unk) return h+'<div class="card empty" style="margin-top:12px">'+unk+' post'+(unk===1?'':'s')+' made '+(SUBC.range?'in the '+rl:'so far')+' — our team checks each one the next day, then the subreddit numbers show up here.</div>';
   if(!T.posts) return h+'<div class="card empty" style="margin-top:12px">No posts logged '+(SUBC.range?'in the '+rl:'yet')+esc(ml)+'. Every posting session records which subreddits the posts went to — they show up here.</div>';
   var ranked=V.list.filter(function(s){ return s.p>=3; });
   var good=ranked.filter(function(s){ return !avoid[s.n.toLowerCase()] && (s.x+s.s)/s.p<0.25; }).sort(function(a,b){ return (a.x+a.s)/a.p-(b.x+b.s)/b.p || b.p-a.p; }).slice(0,6);
@@ -2893,7 +2909,7 @@ function vSubsC(){
       rm.slice(0,40).map(function(x){ var sm=stageMeta(x.st);
         return '<tr><td class="c1">'+esc(x.n)+'</td><td>'+esc(x.h)+'</td><td>'+esc(x.m?subModelLabel(x.m):'—')+'</td><td><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+'">'+esc(sm.n)+'</span></td><td>'+(x.k==='spam'?'<span class="flag a">Spam filter</span>':'<span class="flag r">Moderators</span>')+'</td><td class="muted">'+esc(subDay(x.d))+'</td></tr>'; }).join('')+'</tbody></table></div>';
   }
-  h+='<div class="muted" style="font-size:11.5px;margin:12px 2px 0;line-height:1.55">Every posting session records the subreddit of each post; our team tags a post when it is taken down. <b>Moderators</b> = removed by a subreddit moderator. <b>Spam filter</b> = removed by Reddit’s or AutoModerator’s filters. <b>Restrictive — every model</b> = every model loses 40%+ of its posts there, so the subreddit itself is the limit (rules, karma or account-age requirements). Tagging started Oct 14 — the picture sharpens as more posts are logged.</div>';
+  h+='<div class="muted" style="font-size:11.5px;margin:12px 2px 0;line-height:1.55">Every posting session records the subreddit of each post. <b>Since 25 October our team checks every post the next day</b>, before the account posts again: stayed up, removed by moderators, or caught by a spam filter. Posts not checked yet are left out of every percentage. <b>Moderators</b> = removed by a subreddit moderator. <b>Spam filter</b> = removed by Reddit’s or AutoModerator’s filters. <b>Restrictive — every model</b> = every model loses 40%+ of its posts there, so the subreddit itself is the limit (rules, karma or account-age requirements). Tagging started Oct 14 — the picture sharpens as more posts are logged.</div>';
   return h;
 }
 

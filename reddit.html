@@ -496,6 +496,18 @@ svg text{font-family:'Inter',sans-serif}
 .pchip small{font-weight:600;color:var(--ink3)}
 .pchip:hover{border-color:#fca5a5;color:#9f1239}
 .pchip.rm{background:#fff1f2;border-color:#fecdd3;color:#9f1239}
+.pchip.up{background:#ecfdf5;border-color:#a7f3d0;color:#047857}
+.pchip.sp{background:#fffbeb;border-color:#fde68a;color:#92400e}
+.pchip.ck{background:#fff7ed;border-color:#fdba74;color:#c2410c;border-style:dashed}
+.pchip.ck.all{border-style:solid;background:#f97316;border-color:#f97316;color:#fff}
+.pk-list{display:grid;gap:8px;max-height:52vh;overflow:auto;padding-right:2px}
+.pk-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid var(--line2);border-radius:12px;padding:9px 11px;background:var(--s1)}
+.pk-row.done{border-color:var(--line);background:var(--s2,#f8fafc)}
+.pk-n{flex:1 1 170px;min-width:0}.pk-n a{font-weight:800;color:var(--ink);text-decoration:none}.pk-n small{display:block;font-size:11px;color:var(--ink3);font-weight:600;margin-top:1px}
+.pk-seg{display:flex;gap:5px;flex-wrap:wrap}
+.pk-b{border:1px solid var(--line2);background:#fff;border-radius:100px;padding:6px 11px;font:700 12px/1 inherit;font-family:inherit;color:var(--ink2);cursor:pointer}
+.pk-b:hover{border-color:var(--ink4)}
+.pk-b.on.g{background:#10b981;border-color:#10b981;color:#fff}.pk-b.on.r{background:#ef4444;border-color:#ef4444;color:#fff}.pk-b.on.a{background:#f59e0b;border-color:#f59e0b;color:#fff}
 </style>
 </head>
 <body>
@@ -1249,6 +1261,8 @@ function vToday(){
   if(admin){ var _dq=delReqs(); if(_dq.length) h+='<div class="banner bad">'+IC.trash+'<div style="flex:1"><b>'+_dq.length+' deletion request'+(_dq.length===1?'':'s')+'</b> waiting for you — VAs can\'t delete a recorded account without your approval.</div><button class="btn sm dark" onclick="delReview()">Review</button></div>'; }
   try{ if(!localStorage.getItem('sop_seen_2026-10-05')) h+='<div class="banner" style="background:#ecfeff;border-color:#a5f3fc">'+IC.doc+'<div style="flex:1"><b>SOP update · 5 Oct:</b> the phase plans changed — warming, comment farming, NSFW comments, early posting, DMs, Strong / Super Strong and spam-filter recovery. Each account card shows its new plan.</div><a class="btn sm dark" href="huddle-reddit-sop.html" target="_blank" rel="noopener">What changed</a><button class="btn sm" onclick="localStorage.setItem(\'sop_seen_2026-10-05\',\'1\');renderView()">Got it</button></div>'; }catch(_sb){}
   try{ var _ml=ccMineLeft(); if(_ml.length) h+='<div class="banner warn">'+IC.search+'<div style="flex:1"><b>Daily health check:</b> '+_ml.length+' teammate account'+(_ml.length===1?'':'s')+' to check (time limit <b>'+fmtMS(hcCapTotal())+'</b> — '+hcPerSecs()+' s per account). <b>Due by '+hcDueLbl(hcShiftOf(me))+'</b> — the end of your shift. Not finished: the owner is told and your QA drops by 1 (by 2 if you never start).</div><button class="btn sm dark" onclick="go(\'health\')">Start check</button></div>'; }catch(_hc){}
+  try{ if(!admin){ var _pk=0, _pa=0; mineWork.forEach(function(r){ if(isHeld(r) || isParked(r)) return; var n0=pchkPending(r).length; if(n0){ _pk+=n0; _pa++; } });   // Oct 25: the post check
+    if(_pk) h+='<div class="banner warn">'+IC.search+'<div style="flex:1"><b>Post check:</b> '+_pk+' earlier post'+(_pk===1?'':'s')+' on '+_pa+' of your account'+(_pa===1?'':'s')+' to mark — <b>stayed up</b>, <b>removed by mods</b> or <b>spam filter</b>. Each account asks for it before its next session; tap the orange <b>“to check”</b> chip on the account to do it now.</div></div>'; } }catch(_pkb){}
   try{ if(!admin && ROWS.some(function(r){ return worksFor(r)===me && isPostingStage(r.status) && !isParked(r); })){ var _av=subAvoidAll(); if(_av.length) h+='<div class="banner bad">'+IC.ban+'<div style="flex:1"><b>Don\'t post in:</b> '+_av.slice(0,12).map(function(x){ return esc(x.name); }).join(', ')+(_av.length>12?' …':'')+' — they keep removing our posts. <a href="#" onclick="go(\'subs\');return false" style="color:inherit;font-weight:800">See the subreddit report</a></div></div>'; } }catch(_sb){}
   var covering=mineWork.filter(function(r){ return owner(r)!==me; });
   if(covering.length){
@@ -1488,7 +1502,7 @@ function rowHtml(r){
     '<div class="cell c-va">'+(admin?esc(firstName(ow)):esc(r.model||'—'))+'</div>'+
     '<div class="cell c-age num" title="'+esc(createdAt(r)?'Created '+fmtDT(createdAt(r)):'')+'">'+(age!=null?age+'d':'—')+'</div>'+
     '<div class="cell c-prog">'+prog+'</div>'+
-    '<div class="cell c-act"><div class="acts">'+act+'</div>'+(!held && isPostingStage(st)?postsStrip(r):'')+'</div>'+
+    '<div class="cell c-act"><div class="acts">'+act+'</div>'+(!held && (isPostingStage(st)||pchkPending(r).length)?postsStrip(r):'')+'</div>'+
     '<div class="cell c-menu">'+menuHtml(r)+'</div></div>';
 }
 function kpi(l,v,s,c){ return '<div class="card kpi"><span class="k-bar" style="background:'+c+'"></span><div class="k-l">'+esc(l)+'</div><div class="k-v">'+v+'</div><div class="k-s">'+esc(s)+'</div></div>'; }
@@ -1576,6 +1590,8 @@ function sesBtn(r, n){
   var t=tmGet(r.id,'s'+n);
   if(t) return '<button class="ses run" onclick="doSession(\''+jsq(r.id)+'\','+n+',this)" title="Press when the session is finished — this timer stops by itself at '+Math.round(tmCapSecs('session',r.status,methodOf(r))/60)+' minutes"><span class="sq"></span>Finish S'+n+' <small data-tm="'+t.t+'">'+tmFmt(Date.now()-t.t)+'</small></button>'+
     '<button class="ses x" onclick="tmCancel(\''+jsq(r.id)+'\',\'s'+n+'\')" title="Cancel this timer (started by mistake)">'+IC.x+'</button>';
+  var pk=pchkPending(r).length;
+  if(pk) return '<button class="ses go" onclick="sesStart(\''+jsq(r.id)+'\','+n+')" title="First mark what happened to the '+pk+' earlier post'+(pk===1?'':'s')+' — then the session starts"><span class="pl"></span>Start S'+n+' <small>check '+pk+' post'+(pk===1?'':'s')+' first</small></button>';
   return '<button class="ses go" onclick="sesStart(\''+jsq(r.id)+'\','+n+')" title="Press when you START this session — press again when it\'s done"><span class="pl"></span>Start S'+n+'</button>';
 }
 function cardHtml(r){
@@ -1603,7 +1619,8 @@ function cardHtml(r){
     body='<div class="note b">'+IC.ban+' Banned'+(e?' '+esc(fmtD(e)):'')+(r.end_reason?' · '+esc(r.end_reason):'')+(ageDays(r)!=null?' · lived '+ageDays(r)+' days':'')+'</div>';
   } else if(st==='recovery'){
     body='<details class="plan"><summary>'+IC.doc+' Recovery plan</summary><div>10 min browsing · reply to 2–3 comments · <b>no upvotes</b>. If nothing is left to reply to, comment in the location subreddits. No posting until clear.</div></details>'+
-      (held?'':'<div class="acts">'+sesBtn(r,1)+sesBtn(r,2)+'<button class="ses ok2" onclick="liftBack(\''+jsq(r.id)+'\')">'+IC.check+' Cleared → '+esc(stageMeta(m.prev||(isSX(r)?'sxwarm':'warming')).n)+'</button></div>');
+      (held?'':'<div class="acts">'+sesBtn(r,1)+sesBtn(r,2)+'<button class="ses ok2" onclick="liftBack(\''+jsq(r.id)+'\')">'+IC.check+' Cleared → '+esc(stageMeta(m.prev||(isSX(r)?'sxwarm':'warming')).n)+'</button></div>')+
+      (!held && pchkPending(r).length?postsStrip(r):'');
   } else if(p && p.sx){   // Suicidal Operation (Oct 25)
     var sd2=sxDay(r), asg2=sxAssign(r), canPost2=sd2>=3;
     var gate2=st==='sxwarm'
@@ -1613,7 +1630,7 @@ function cardHtml(r){
       (st==='sxpost' && !asg2?'<div class="note w">No posting assignment yet — the client decides it (e.g. Location posting). Ask the admin before you post.</div>':'')+
       '<details class="plan"><summary>'+IC.doc+' Today\'s plan · Suicidal Operation</summary><div>'+esc(p.plan)+'</div></details>'+
       (held?'':'<div class="acts">'+sesBtn(r,1)+sesBtn(r,2)+(st==='sxwarm'&&canPost2?'<button class="ses up" onclick="promote(\''+jsq(r.id)+'\',\'sxpost\')">'+IC.up+' Start posting</button>':'')+'</div>')+
-      (!held && isPostingStage(st)?postsStrip(r):'');
+      (!held && (isPostingStage(st)||pchkPending(r).length)?postsStrip(r):'');
   } else if(p){
     var ix=phaseIx(st), next=PH[ix+1], din2=daysIn(r), km=karmaOf(r), can=true, gate='';
     if(p.dur){ can=din2>=p.dur; gate='<b style="color:'+(can?'#047857':'var(--ink2)')+'">Day '+Math.min(din2+1,p.dur)+'/'+p.dur+(can?' · ready ✓':'')+'</b><div class="prog"><i style="width:'+Math.min(100,(din2+1)/p.dur*100)+'%"></i></div>'; }
@@ -1627,7 +1644,7 @@ function cardHtml(r){
         (p.dms?dmBtn(r):'')+
         (p.karma&&!can?'<button class="ses" onclick="setKarma(\''+jsq(r.id)+'\')">'+IC.star+' Karma</button>':'')+
         (next&&can?'<button class="ses up" onclick="promote(\''+jsq(r.id)+'\',\''+next.k+'\')">'+IC.up+' '+esc(upLbl)+'</button>':'')+
-      '</div>')+(!held && isPostingStage(st)?postsStrip(r):'');
+      '</div>')+(!held && (isPostingStage(st)||pchkPending(r).length)?postsStrip(r):'');
   }
   if(held) body+='<div class="note i">'+IC.pause+' On hold today — owner is off and the client approved leaving it untouched.</div>';
   return '<div class="card acct'+(isDead(r)?' dim':'')+'" style="--sc:'+sm.c+'">'+head+chipsHtml(r, isAdmin())+body+'</div>';
@@ -2384,6 +2401,7 @@ async function sesStart(id, n){
   var r=rowById(id); if(!r) return;
   if(!(await fixGate())) return;              // username fixes come first (Oct 13)
   if(!(await linkGate('A session'))) return;  // the portal timer must be running on Reddit (Oct 6)
+  if(!(await pchkGate(r))){ toast('Check the earlier posts first — then the session unlocks.'); return; }   // Oct 25: yesterday's posts get a verdict first
   if(!(await karmaGate(r))) return;          // today's karma first — then the clock starts
   tmStart(id,'s'+n); renderView();
 }
@@ -2639,38 +2657,45 @@ function fmtDay(d){ var t=parseTs(String(d||'')); return t?fmtD(t):String(d||'')
 function subDayDiff(a,b){ var x=Date.parse(a+'T00:00:00Z'), y=Date.parse(b+'T00:00:00Z'); return (isNaN(x)||isNaN(y))?999:Math.round((y-x)/86400000); }
 function subRows(base){ var out=[]; BASES.forEach(function(b){ if(base && base!=='all' && b.id!==base) return; (ALL[b.id]||[]).forEach(function(r){ out.push(r); }); }); if(!out.length) out=ROWS.slice(); return out; }
 function subStats(range, base, sop){
+  /* Oct 25 (post check): every post has a state — up · mod · spam · unk (not checked yet) · old (before checks began,
+     untagged: counted as stayed up like before). Removal rates are taken over the CHECKED posts only (up + removed),
+     so a post nobody looked at never makes a subreddit look better than it is. days = the day-by-day table. */
   var start=range?phtDate(new Date(Date.now()-8*3600000-(range-1)*86400000)):'';
-  var by={}, tot={ posts:0, removed:0, spam:0, accts:{} }, removed=[];
+  var by={}, tot={ posts:0, up:0, removed:0, spam:0, unk:0, old:0, unkToday:0, accts:{} }, removed=[], days={}, td=today();
   subRows(base).forEach(function(r){
     if(sop && sopOf(r)!==sop) return;   // the report shows one SOP at a time (Oct 25); the avoid hints use every post
     var be=isDead(r)?endedAt(r):null, bd=be?phtDate(be):'';
     postsOf(r).forEach(function(p,i){
-      if(!p || !p.r) return; var d=String(p.d||''); if(start && d<start) return;
-      var k=subKey(p.r), s=by[k]||(by[k]={ k:k, name:p.r, posts:0, up:0, removed:0, spam:0, accts:{}, upAccts:{}, banned3:{}, last:'', first:'' });
+      if(!p || !p.r) return; var d=String(p.d||''), st=postState(p);
+      if(d>=PCHK_FROM){ var D=days[d]||(days[d]={ d:d, p:0, up:0, mod:0, spam:0, unk:0, accts:{} }); D.p++; D[st==='old'?'up':st]++; D.accts[r.id]=1; }
+      if(start && d<start) return;
+      var k=subKey(p.r), s=by[k]||(by[k]={ k:k, name:p.r, posts:0, up:0, removed:0, spam:0, unk:0, accts:{}, upAccts:{}, banned3:{}, last:'', first:'' });
       s.posts++; tot.posts++; tot.accts[r.id]=1; s.accts[r.id]=1;
-      if(p.x){ s.removed++; tot.removed++; if(p.xr==='spam'){ s.spam++; tot.spam++; } removed.push({ r:r, p:p, i:i }); } else { s.up++; s.upAccts[r.id]=1; }
+      if(st==='mod' || st==='spam'){ s.removed++; tot.removed++; if(st==='spam'){ s.spam++; tot.spam++; } removed.push({ r:r, p:p, i:i }); }
+      else if(st==='unk'){ s.unk++; tot.unk++; if(d>=td) tot.unkToday++; }
+      else { s.up++; tot.up++; s.upAccts[r.id]=1; if(st==='old') tot.old++; }
       if(d>s.last){ s.last=d; s.name=p.r; } if(!s.first || d<s.first) s.first=d;
       if(bd && d && bd>=d && subDayDiff(d,bd)<=3) s.banned3[r.id]=1;
     });
   });
-  var list=Object.keys(by).map(function(k){ var s=by[k]; s.nAcc=Object.keys(s.accts).length; s.nUp=Object.keys(s.upAccts).length; s.nBan=Object.keys(s.banned3).length; s.rate=s.posts?s.removed/s.posts:0; return s; });
-  removed.sort(function(a,b){ return String(b.p.xt||b.p.t||'')<String(a.p.xt||a.p.t||'')?-1:1; });
-  return { list:list, tot:{ posts:tot.posts, removed:tot.removed, spam:tot.spam, accts:Object.keys(tot.accts).length }, removed:removed };
+  var list=Object.keys(by).map(function(k){ var s=by[k]; s.nAcc=Object.keys(s.accts).length; s.nUp=Object.keys(s.upAccts).length; s.nBan=Object.keys(s.banned3).length; s.chk=s.up+s.removed; s.rate=s.chk?s.removed/s.chk:0; return s; });
+  removed.sort(function(a,b){ return String(b.p.vt||b.p.xt||b.p.t||'')<String(a.p.vt||a.p.xt||a.p.t||'')?-1:1; });
+  return { list:list, tot:{ posts:tot.posts, up:tot.up, removed:tot.removed, spam:tot.spam, unk:tot.unk, old:tot.old, unkToday:tot.unkToday, chk:tot.up+tot.removed, accts:Object.keys(tot.accts).length }, removed:removed, days:days };
 }
 function subIndex(){ var o={}; subStats(90,'all').list.forEach(function(s){ o[s.k]=s; }); return o; }
 function subVerdict(s){
-  var rate=s.posts?s.removed/s.posts:0;
+  var chk=s.up+s.removed, rate=chk?s.removed/chk:0;
   if(subAvoidList().indexOf(s.k)>=0) return { k:'avoid', t:'On the avoid list', c:'#9f1239', bg:'#fff1f2' };
-  if(s.posts>=3 && rate>=0.5) return { k:'bad', t:'Removes often', c:'#b91c1c', bg:'#fef2f2' };
-  if(s.posts>=3 && rate>=0.25) return { k:'watch', t:'Watch', c:'#b45309', bg:'#fffbeb' };
-  if(s.posts>=5 && rate<=0.1) return { k:'good', t:'Works well', c:'#047857', bg:'#ecfdf5' };
-  return { k:'few', t:s.posts<3?'Too few posts yet':'OK', c:'#475569', bg:'#f1f5f9' };
+  if(chk>=3 && rate>=0.5) return { k:'bad', t:'Removes often', c:'#b91c1c', bg:'#fef2f2' };
+  if(chk>=3 && rate>=0.25) return { k:'watch', t:'Watch', c:'#b45309', bg:'#fffbeb' };
+  if(chk>=5 && rate<=0.1) return { k:'good', t:'Works well', c:'#047857', bg:'#ecfdf5' };
+  return { k:'few', t:chk<3?(s.unk?'Waiting for checks':'Too few posts yet'):'OK', c:'#475569', bg:'#f1f5f9' };
 }
-/* subreddits not to post in: the owner's avoid list + any subreddit that removed half or more of 3+ posts (90 days) */
+/* subreddits not to post in: the owner's avoid list + any subreddit that removed half or more of 3+ checked posts (90 days) */
 function subAvoidAll(){
   var out=subAvoidList().map(function(k){ return { k:k, name:k, why:'avoid list' }; }), seen={};
   out.forEach(function(x){ seen[x.k]=1; });
-  subStats(90,'all').list.forEach(function(s){ if(!seen[s.k] && s.posts>=3 && s.rate>=0.5){ out.push({ k:s.k, name:s.name, why:s.removed+' of '+s.posts+' removed' }); seen[s.k]=1; } });
+  subStats(90,'all').list.forEach(function(s){ if(!seen[s.k] && s.chk>=3 && s.rate>=0.5){ out.push({ k:s.k, name:s.name, why:s.removed+' of '+s.chk+' removed' }); seen[s.k]=1; } });
   return out;
 }
 function subAvoidNote(){
@@ -2685,7 +2710,7 @@ function subHint(inp){
   if(subAvoidList().indexOf(subKey(n))>=0){ box.innerHTML='<span style="color:#9f1239;font-weight:800">⚠ '+esc(n)+' is on the avoid list — log it, but don\'t post there again</span>'; return; }
   if(!s){ box.innerHTML='<span class="muted">'+esc(n)+' · new for the team</span>'; return; }
   var vd=subVerdict(s);
-  box.innerHTML='<span style="color:'+vd.c+';font-weight:700">'+esc(n)+' · '+s.up+' of '+s.posts+' stayed up'+(vd.k==='bad'||vd.k==='watch'?' — '+esc(vd.t.toLowerCase()):'')+'</span>';
+  box.innerHTML='<span style="color:'+vd.c+';font-weight:700">'+esc(n)+' · '+(s.chk?s.up+' of '+s.chk+' checked stayed up':'no checked posts yet')+(vd.k==='bad'||vd.k==='watch'?' — '+esc(vd.t.toLowerCase()):'')+'</span>';
 }
 function subField(i){ return '<div class="fld" style="margin-bottom:8px"><input class="inp sub-in" list="sub-dl" autocomplete="off" placeholder="r/subreddit — post '+(i+1)+'" oninput="subHint(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();subSubmit();}" style="width:100%"><div class="sub-h" style="font-size:11.5px;margin-top:3px;min-height:14px"></div></div>'; }
 function subAddField(){ var box=$('sub-fields'); if(!box) return; var n=box.querySelectorAll('.sub-in').length; if(n>=10){ toast('Ten posts at most per session.'); return; } box.insertAdjacentHTML('beforeend', subField(n)); var all=box.querySelectorAll('.sub-in'); try{ all[all.length-1].focus(); }catch(e){} }
@@ -2713,38 +2738,133 @@ function postsWith(r, subs, n){
   subs.forEach(function(s){ arr.push({ d:d, n:n, r:s, b:b, t:t, st:r.status }); });
   return arr.slice(-150);
 }
+/* ═══════════ POST CHECK (Jeth + the client, Oct 25) ═══════════
+   "We want to know how many posts are getting removed every day … before he can post, he should first mark the
+   posts from yesterday." Until now a post nobody tagged counted as stayed up, so removals ran low. From the 25 Oct
+   posts on, every post gets a verdict the next day: Stayed up · Removed by moderators · Spam filter. Before the
+   first session on an account (Start S1 / S2) the VA answers for each post of the last 3 days that has none yet —
+   whoever works the account that day, not only the one who posted. The owner is never gated. A post that nobody
+   checks stays "not checked" and is left out of every removal rate (never counted as stayed up).
+   Stored on the post: v 'up'|'mod'|'spam', vt when, vb who. A removal also keeps x:1 + xr ('mod'|'spam') so the
+   client API and every older reader still read it. Posts before 25 Oct keep the old rule (untagged = stayed up). */
+var PCHK_FROM='2026-10-25', PCHK_DAYS=3;
+var POSTST={ up:'Stayed up', mod:'Removed by mods', spam:'Spam filter', unk:'Not checked', old:'Not tagged' };
+function postState(p){
+  if(!p) return 'unk';
+  if(p.x) return p.xr==='spam'?'spam':'mod';
+  if(p.v==='up') return 'up';
+  return String(p.d||'')<PCHK_FROM?'old':'unk';
+}
+/* indexes of the posts this account must check before its next session: not checked, posted before today, within 3 days */
+function pchkPending(r){
+  var ps=postsOf(r); if(!ps.length) return [];
+  var td=today(), lo=dAdd(td,-PCHK_DAYS), out=[];
+  ps.forEach(function(p,i){ if(!p || !p.r) return; var d=String(p.d||''); if(d>=td || d<lo || d<PCHK_FROM) return; if(postState(p)==='unk') out.push(i); });
+  return out;
+}
+function postSet(p, k){
+  delete p.x; delete p.xr; delete p.xt; delete p.xb; delete p.v; delete p.vt; delete p.vb;
+  if(k==='up' || k==='mod' || k==='spam'){ p.v=k; p.vt=phtStamp(); p.vb=myId(); }
+  if(k==='mod' || k==='spam'){ p.x=1; p.xr=k; }
+  return p;
+}
+function pchkHelp(){
+  return '<div class="muted" style="font-size:12px;margin-top:8px;line-height:1.55;background:var(--s2,#f8fafc);border-radius:10px;padding:8px 10px">'+
+    '<b style="color:#047857">Stayed up</b> — the post is live and shows in the subreddit.<br>'+
+    '<b style="color:#b91c1c">Removed by mods</b> — it says “Removed by moderators”, or a mod left a removal reason / rule.<br>'+
+    '<b style="color:#b45309">Spam filter</b> — it says “removed by Reddit’s filters”, AutoModerator took it, or it shows on the profile but not in the subreddit.</div>';
+}
+var PCHK=null;
+function pchkRow(p, i){
+  var k=(PCHK&&PCHK.ans[i])||'';
+  function b(v,l,c){ return '<button type="button" class="pk-b'+(k===v?' on '+c:'')+'" onclick="pchkPick('+i+',\''+v+'\')">'+l+'</button>'; }
+  return '<div class="pk-row'+(k?' done':'')+'" id="pk-'+i+'"><div class="pk-n"><a href="https://www.reddit.com/'+esc(p.r)+'/new/" target="_blank" rel="noopener">'+esc(p.r)+' ↗</a>'+
+    '<small>'+esc(fmtDay(p.d))+(p.n?' · session '+p.n:'')+(p.st?' · '+esc(stageMeta(p.st).n):'')+(p.b && String(p.b).toLowerCase()!==myId()?' · posted by '+esc(firstName(p.b)):'')+'</small></div>'+
+    '<div class="pk-seg">'+b('up','Stayed up','g')+b('mod','Removed by mods','r')+b('spam','Spam filter','a')+'</div></div>';
+}
+function pchkHtml(r){
+  var ps=postsOf(r), L=PCHK.idx, n=L.length, done=L.filter(function(i){ return PCHK.ans[i]; }).length;
+  return '<div class="md-h"><h3>'+(PCHK.gate?'Before you post: check '+(n===1?'the last post':'the last '+n+' posts'):'Check '+n+' post'+(n===1?'':'s'))+'</h3>'+
+    '<p>Open <b>'+esc(r.handle)+'</b> on its iPhone and look at '+(n===1?'this post':'each post')+'. What happened to it? This is how we count removals every day — <b>a post nobody checks counts as “not checked”, never as stayed up</b>.</p>'+pchkHelp()+'</div>'+
+    '<div class="md-b"><a class="btn sm sec" href="'+esc(qrUrl(r))+'submitted/" target="rc-profile" rel="noopener" style="margin-bottom:10px">Open u/'+esc(r.handle)+' posts on Reddit ↗</a>'+
+    '<div class="pk-list">'+L.map(function(i){ return pchkRow(ps[i], i); }).join('')+'</div></div>'+
+    '<div class="md-f" style="align-items:center"><span class="muted" id="pk-cnt" style="font-size:12px;margin-right:auto">'+done+' of '+n+' answered</span>'+
+    '<button class="btn sec" onclick="closeModal(false)">'+(PCHK.gate?'Not now':'Close')+'</button><button class="btn pri" id="pk-save"'+(done<n?' disabled':'')+' onclick="pchkSave(this)">'+(PCHK.gate?'Save & start':'Save')+'</button></div>';
+}
+/* resolves true when there is nothing to check or every post got its verdict (saved); false when the VA closed it */
+function pchkGate(r, manual){
+  if(!manual && isAdmin()) return Promise.resolve(true);
+  var L=pchkPending(r); if(!L.length) return Promise.resolve(true);
+  PCHK={ id:r.id, idx:L, ans:{}, gate:!manual };
+  return new Promise(function(res){ _mResolve=res; openModal(pchkHtml(r)); }).then(function(v){ PCHK=null; return v===true; });
+}
+async function pchkOpen(id){ var r=rowById(id); if(!r) return; if(await pchkGate(r, true)) renderView(); }
+function pchkPick(i, k){
+  if(!PCHK) return; PCHK.ans[i]=k; var r=rowById(PCHK.id); if(!r) return;
+  var el=$('pk-'+i); if(el) el.outerHTML=pchkRow(postsOf(r)[i], i);
+  var n=PCHK.idx.length, done=PCHK.idx.filter(function(j){ return PCHK.ans[j]; }).length;
+  var c=$('pk-cnt'); if(c) c.textContent=done+' of '+n+' answered';
+  var sv=$('pk-save'); if(sv) sv.disabled=done<n;
+}
+async function pchkSave(btn){
+  if(!PCHK) return; var r=rowById(PCHK.id); if(!r){ closeModal(false); return; }
+  var L=PCHK.idx; if(L.some(function(i){ return !PCHK.ans[i]; })){ toast('Answer every post first.'); return; }
+  var arr=postsOf(r).map(function(p){ return Object.assign({}, p); }), c={ up:0, mod:0, spam:0 };
+  L.forEach(function(i){ var k=PCHK.ans[i]; if(arr[i]){ postSet(arr[i], k); c[k]++; } });
+  var lbl=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  if(await saveMeta(r,{ posts:arr })){
+    toast(r.handle+': '+c.up+' stayed up'+(c.mod?' · '+c.mod+' removed by mods':'')+(c.spam?' · '+c.spam+' spam filter':''));
+    closeModal(true); if($('drawer').classList.contains('on') && $('drawer').getAttribute('data-id')===r.id) openRec(r.id);
+  } else { toast('Could not save — try again.'); if(btn){ btn.disabled=false; btn.textContent=lbl||'Save'; } }
+}
+/* one post, any time: set or change its verdict (chips on the board, the record's Posts list) */
 async function postToggle(id, i){
   var r=rowById(id); if(!r) return; var arr=postsOf(r).map(function(p){ return Object.assign({}, p); }), p=arr[i]; if(!p) return;
-  var on=!p.x, kind='';
-  if(on){   /* Oct 14 (Jeth): removals are split — moderators vs spam filters — so the report (and the client's) shows which is which */
-    kind=await new Promise(function(res){ _mResolve=res;
-      openModal('<div class="md-h"><h3>What took it down?</h3><p><b>'+esc(p.r)+'</b> · posted '+esc(fmtDay(p.d))+' from <b>'+esc(r.handle)+'</b>. It counts against this subreddit in the report.</p>'+
-        '<p class="muted" style="font-size:12.5px;margin-top:6px"><b>Spam filter</b> — the post never showed in the subreddit, or it says “removed by Reddit’s filters” / AutoModerator.<br><b>Moderators</b> — a mod took it down (a removal reason or rule).</p></div>'+
-        '<div class="md-f"><button class="btn sec" onclick="closeModal(false)">Cancel</button><button class="btn dark" onclick="closeModal(\'spam\')">Spam filter</button><button class="btn dark" onclick="closeModal(\'mod\')">Removed by moderators</button></div>'); });
-    if(kind!=='spam' && kind!=='mod') return;
-  } else if(!(await confirmBox('Undo “removed”?', '<b>'+esc(p.r)+'</b> goes back to “stayed up”.', 'Undo', false))) return;
-  if(on){ p.x=1; p.xr=kind; p.xt=phtStamp(); p.xb=myId(); } else { delete p.x; delete p.xr; delete p.xt; delete p.xb; }
-  if(await saveMeta(r,{ posts:arr })){ toast(on?(p.r+' — '+(kind==='spam'?'caught by the spam filter':'removed by the moderators')):(p.r+' — back to stayed up')); renderView(); if($('drawer').classList.contains('on') && $('drawer').getAttribute('data-id')===id) openRec(id); }
+  var cur=postState(p), has=(cur==='up'||cur==='mod'||cur==='spam'), who=p.vb||p.xb||'';
+  function b(v,l){ return '<button class="btn '+(cur===v?'pri':'dark')+'" onclick="closeModal(\''+v+'\')">'+l+(cur===v?' ✓':'')+'</button>'; }
+  var k=await new Promise(function(res){ _mResolve=res;
+    openModal('<div class="md-h"><h3>What happened to this post?</h3><p><b>'+esc(p.r)+'</b> · posted '+esc(fmtDay(p.d))+(p.n?' (session '+p.n+')':'')+' from <b>'+esc(r.handle)+'</b>. '+
+      (has?'Now: <b>'+POSTST[cur]+'</b>'+(who?' — '+esc(firstName(who))+(p.vt||p.xt?', '+esc(fmtDT(parseTs(p.vt||p.xt))):''):'')+'.':(cur==='old'?'Posted before the daily check started (25 Oct) — nobody tagged it.':'Not checked yet.'))+'</p>'+pchkHelp()+'</div>'+
+      '<div class="md-f" style="flex-wrap:wrap">'+(has?'<button class="btn sec" onclick="closeModal(\'clear\')" title="Remove the verdict">Clear</button>':'')+'<span style="flex:1"></span><button class="btn sec" onclick="closeModal(false)">Cancel</button>'+
+      b('up','Stayed up')+b('spam','Spam filter')+b('mod','Removed by mods')+'</div>'); });
+  if(k!=='up' && k!=='mod' && k!=='spam' && k!=='clear') return;
+  if(k===cur) return;
+  postSet(p, k);
+  if(await saveMeta(r,{ posts:arr })){ toast(p.r+' — '+(k==='clear'?'verdict cleared':POSTST[k].toLowerCase())); renderView(); if($('drawer').classList.contains('on') && $('drawer').getAttribute('data-id')===id) openRec(id); }
   else toast('Could not save — try again.');
 }
-/* the last two days' posts as chips under a posting account: tap one when the mods removed it */
+/* under a posting account: "N posts to check" + the last days' posts as chips (tap one to set what happened to it) */
 function postsStrip(r){
   var ps=postsOf(r); if(!ps.length) return '';
-  var y=phtDate(new Date(Date.now()-8*3600000-86400000)), list=[];
-  ps.forEach(function(p,i){ if(p && p.r && String(p.d||'')>=y) list.push([p,i]); });
-  if(!list.length) return '';
-  return '<div class="posts-strip" title="Tap a post if the moderators removed it">'+list.slice(-8).map(function(x){ var p=x[0], rm=!!p.x;
-    return '<button class="pchip'+(rm?' rm':'')+'" onclick="event.stopPropagation();postToggle(\''+jsq(r.id)+'\','+x[1]+')">'+esc(p.r)+(p.d===today()?'':' <small>'+esc(fmtDay(p.d))+'</small>')+(rm?(p.xr==='spam'?' · spam filter':' · removed'):'')+'</button>'; }).join('')+'</div>';
+  var td=today(), lo=dAdd(td,-PCHK_DAYS), pend=pchkPending(r), pset={}, list=[];
+  pend.forEach(function(i){ pset[i]=1; });
+  ps.forEach(function(p,i){ if(p && p.r && String(p.d||'')>=lo && !pset[i]) list.push([p,i]); });
+  if(!list.length && !pend.length) return '';
+  var head=pend.length?'<button class="pchip ck all" onclick="event.stopPropagation();pchkOpen(\''+jsq(r.id)+'\')" title="Mark what happened to each earlier post — the next session asks for this anyway">'+pend.length+' post'+(pend.length===1?'':'s')+' to check</button>':'';
+  return '<div class="posts-strip" title="Tap a post to mark it: stayed up, removed by the moderators, or caught by a spam filter">'+head+list.slice(-8).map(function(x){ var p=x[0], st=postState(p);
+    var cls=st==='up'?' up':(st==='mod'?' rm':(st==='spam'?' sp':'')), lbl=st==='up'?' · up':(st==='mod'?' · removed':(st==='spam'?' · spam filter':''));
+    return '<button class="pchip'+cls+'" onclick="event.stopPropagation();postToggle(\''+jsq(r.id)+'\','+x[1]+')">'+esc(p.r)+(p.d===td?'':' <small>'+esc(fmtDay(p.d))+'</small>')+lbl+'</button>'; }).join('')+'</div>';
+}
+function postFlag(p){
+  var st=postState(p), td=today(), tip=(p.vb||p.xb)?esc('Checked '+(p.vt||p.xt||'')+' by '+vaName(p.vb||p.xb)):'';
+  if(st==='up') return '<span class="flag g" title="'+tip+'">Stayed up</span>';
+  if(st==='mod') return '<span class="flag r" title="'+tip+'">Removed by mods</span>';
+  if(st==='spam') return '<span class="flag a" title="'+tip+'">Spam filter</span>';
+  if(st==='old') return '<span class="flag" style="background:#f1f5f9;color:#64748b" title="Posted before the daily check started (25 Oct) and nobody tagged it — the report counts it as stayed up">Not tagged</span>';
+  if(String(p.d||'')>=td) return '<span class="flag" style="background:#f1f5f9;color:#475569" title="Checked from tomorrow, before the next session">Posted today</span>';
+  return '<span class="flag" style="background:#ffedd5;color:#c2410c">Not checked</span>';
 }
 function postsSection(r){
   var ps=postsOf(r); if(!ps.length && !isPostingStage(r.status)) return '';
   var rows=ps.map(function(p,i){ return [p,i]; }).filter(function(x){ return x[0] && x[0].r; }).reverse();
-  var rm=rows.filter(function(x){ return x[0].x; }).length;
-  return '<div class="sec-h" style="margin-top:4px"><b>Posts</b><span>'+(rows.length?rows.length+' logged · '+rm+' removed':'none logged yet')+'</span><hr></div>'+
-    (rows.length?'<div class="tbl-w" style="max-height:260px;margin-bottom:14px"><table class="db"><tbody>'+rows.slice(0,60).map(function(x){ var p=x[0];
+  var c={ up:0, mod:0, spam:0, unk:0, old:0 }; rows.forEach(function(x){ c[postState(x[0])]++; });
+  var pend=pchkPending(r).length;
+  return '<div class="sec-h" style="margin-top:4px"><b>Posts</b><span>'+(rows.length?rows.length+' logged · '+(c.up+c.old)+' stayed up · '+c.mod+' removed by mods · '+c.spam+' spam filter'+(c.unk?' · '+c.unk+' not checked':''):'none logged yet')+'</span><hr>'+
+    (pend?'<button class="btn sm pri" onclick="pchkOpen(\''+jsq(r.id)+'\')">Check '+pend+' post'+(pend===1?'':'s')+'</button>':'')+'</div>'+
+    (rows.length?'<div class="tbl-w" style="max-height:260px;margin-bottom:14px"><table class="db"><tbody>'+rows.slice(0,60).map(function(x){ var p=x[0], st=postState(p);
       return '<tr><td class="c1">'+esc(p.r)+'</td><td class="muted">'+esc(fmtDay(p.d))+(p.n?' · S'+p.n:'')+'</td><td class="muted">'+esc(firstName(p.b||''))+'</td>'+
-        '<td>'+(p.x?'<span class="flag r" title="'+esc('Tagged '+(p.xt||'')+' by '+vaName(p.xb||''))+'">'+(p.xr==='spam'?'Spam filter':'Removed')+'</span>':'<span class="flag g">Stayed up</span>')+'</td>'+
-        '<td style="white-space:nowrap"><button class="btn sm sec" onclick="postToggle(\''+jsq(r.id)+'\','+x[1]+')">'+(p.x?'Undo':'Removed?')+'</button></td></tr>'; }).join('')+'</tbody></table></div>':
+        '<td>'+postFlag(p)+'</td>'+
+        '<td style="white-space:nowrap"><button class="btn sm sec" onclick="postToggle(\''+jsq(r.id)+'\','+x[1]+')">'+(st==='up'||st==='mod'||st==='spam'?'Change':'Check')+'</button></td></tr>'; }).join('')+'</tbody></table></div>':
       '<div class="muted" style="font-size:12px;margin-bottom:14px">Each posting session asks for the subreddits — they show up here.</div>');
 }
 async function subAvoidSet(k, on){
@@ -2760,18 +2880,38 @@ async function subAvoidSet(k, on){
   }catch(e){ toast('Connection error.'); }
 }
 function subAvoidAdd(){ var i=$('sub-av-in'); var n=subNorm(i&&i.value); if(!n){ toast('Type a subreddit like r/AskReddit.'); return; } subAvoidSet(n, true); }
+/* Oct 25: posts by the day they went up — how many stayed up, were removed by the mods or caught by a spam filter.
+   Each day's posts are checked the next day, so today's row fills in tomorrow. */
+function subDaysCard(S){
+  var td=today(), rows=[];
+  for(var i=0;i<14;i++){ var d=dAdd(td,-i); if(d<PCHK_FROM) break; rows.push(S.days[d]||{ d:d, p:0, up:0, mod:0, spam:0, unk:0, accts:{} }); }
+  if(!rows.length) return '';
+  var yd=dAdd(td,-1);
+  return '<div class="card pad" style="margin-top:12px"><div class="ch-h"><b>Day by day</b><span>posts by the day they went up · every post is checked the next day, before the account posts again · rate = removed ÷ checked</span></div>'+
+    '<div class="tbl-w" style="max-height:none;margin-top:6px"><table class="db"><thead><tr><th class="c1">Day</th><th>Posts</th><th>Stayed up</th><th>Removed by mods</th><th>Spam filter</th><th>Not checked</th><th>Removed</th><th>Accounts</th></tr></thead><tbody>'+
+    rows.map(function(D){ var chk=D.up+D.mod+D.spam, rm=D.mod+D.spam, pcx=chk?Math.round(rm/chk*100):0, lb=D.d===td?'Today':(D.d===yd?'Yesterday':fmtDay(D.d));
+      return '<tr><td class="c1"><b>'+esc(lb)+'</b>'+(D.d===td||D.d===yd?' <span class="muted" style="font-size:11px">'+esc(fmtDay(D.d))+'</span>':'')+'</td><td class="num">'+(D.p||'·')+'</td>'+
+        '<td class="num" style="color:#047857;font-weight:700">'+(D.up||'·')+'</td><td class="num" style="'+(D.mod?'color:#b91c1c;font-weight:800':'')+'">'+(D.mod||'·')+'</td><td class="num" style="'+(D.spam?'color:#b45309;font-weight:800':'')+'">'+(D.spam||'·')+'</td>'+
+        '<td class="num" style="'+(D.unk?'color:#c2410c;font-weight:700':'')+'">'+(D.unk?D.unk+(D.d===td?' <small class="muted">tomorrow</small>':''):'·')+'</td>'+
+        '<td style="min-width:130px">'+(chk?'<div class="row" style="gap:6px"><div style="flex:1;height:6px;border-radius:6px;background:#f1f5f9;overflow:hidden"><i style="display:block;height:100%;width:'+pcx+'%;background:'+(pcx>=50?'#ef4444':(pcx>=25?'#f59e0b':'#10b981'))+'"></i></div><b style="font-size:11.5px;min-width:32px;text-align:right">'+pcx+'%</b></div>':'<span class="muted">—</span>')+'</td>'+
+        '<td class="num">'+(Object.keys(D.accts||{}).length||'·')+'</td></tr>'; }).join('')+'</tbody></table></div></div>';
+}
 function vSubs(){
   var nSXs=subRows(isAdmin()?SUBS.base:'all').filter(function(r){ return isSX(r) && postsOf(r).length; }).length; if(!nSXs && SUBS.sop==='sx') SUBS.sop='std';
   var admin=isAdmin(), S=subStats(SUBS.range, admin?SUBS.base:'all', SUBS.sop), q=String(SUBS.q||'').trim().toLowerCase();
   window._SUBIX=subIndex();
   var rl=SUBS.range?('last '+SUBS.range+' days'):'all time';
-  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Sub<span class="gtxt">reddits</span></h2><p>Every post logged at the end of a posting session, and every post the moderators or a spam filter took down. Keep posting where our content stays up — drop the subreddits that keep removing it. The client sees the same numbers (no names) in their portal.</p></div>'+
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Sub<span class="gtxt">reddits</span></h2><p>Every post logged at the end of a posting session — and, from 25 Oct, checked the next day: stayed up, removed by the moderators, or caught by a spam filter. Keep posting where our content stays up — drop the subreddits that keep removing it. The client sees the same numbers (no names) in their portal.</p></div>'+
     (admin?'<select class="sel" onchange="SUBS.base=this.value;renderView()"><option value="all">All bases</option>'+BASES.map(function(b){ return '<option value="'+esc(b.id)+'"'+(SUBS.base===b.id?' selected':'')+'>'+esc(b.n)+'</option>'; }).join('')+'</select>':'')+
     '<div class="seg" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(SUBS.range===x[0]?'on':'')+'" onclick="SUBS.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div>'+
     (nSXs?'<div class="seg" style="width:auto"><button class="'+(SUBS.sop!=='sx'?'on':'')+'" onclick="SUBS.sop=\'std\';renderView()">Original SOP</button><button class="'+(SUBS.sop==='sx'?'on':'')+'" onclick="SUBS.sop=\'sx\';renderView()" style="color:'+SX_C+'">Suicidal Operation</button></div>':'')+'</div>';
-  var rate=S.tot.posts?Math.round(S.tot.removed/S.tot.posts*100):0;
-  h+='<div class="kpis" style="margin-top:12px">'+kpi('Posts logged',S.tot.posts,rl,'#ec4899')+kpi('Subreddits',S.list.length,'used · '+rl,'#a855f7')+
-    kpi('Stayed up',S.tot.posts-S.tot.removed,S.tot.posts?(100-rate)+'% of posts':'—','#10b981')+kpi('Removed by mods',S.tot.removed-S.tot.spam,S.tot.posts?rate+'% removal rate (both kinds)':'—','#ef4444')+kpi('Spam filter',S.tot.spam,S.tot.posts?Math.round(S.tot.spam/S.tot.posts*100)+'% of posts':'—','#f59e0b')+kpi('Accounts posting',S.tot.accts,'with at least one post','#0ea5e9')+'</div>';
+  var T=S.tot, ck=T.chk, pc=function(a){ return ck?Math.round(a/ck*100)+'%':'—'; };
+  h+='<div class="kpis" style="margin-top:12px">'+kpi('Posts logged',T.posts,rl,'#ec4899')+
+    kpi('Stayed up',T.up,ck?pc(T.up)+' of checked posts':'—','#10b981')+kpi('Removed by mods',T.removed-T.spam,ck?pc(T.removed-T.spam)+' of checked posts':'—','#ef4444')+kpi('Spam filter',T.spam,ck?pc(T.spam)+' of checked posts':'—','#f59e0b')+
+    kpi('Not checked',T.unk,T.unk?(T.unkToday?T.unkToday+' posted today · checked tomorrow':'left out of every rate'):'every post checked','#f97316')+
+    kpi('Subreddits',S.list.length,'used · '+rl,'#a855f7')+kpi('Accounts posting',T.accts,'with at least one post','#0ea5e9')+'</div>';
+  if(T.old) h+='<div class="note i" style="margin-top:10px">Since 25 Oct every post gets a verdict the next day, before the account posts again. The '+T.old+' older post'+(T.old===1?'':'s')+' nobody tagged before then still count as stayed up, so rates that reach back past 25 Oct may run low.</div>';
+  h+=subDaysCard(S);
   var A=subAvoidAll();
   h+='<div class="card pad" style="margin-top:12px"><div class="ch-h"><b>Don\'t post in</b><span>your avoid list + any subreddit that removed half or more of 3+ posts (90 days) · every VA sees this before posting</span></div>'+
     (A.length?'<div class="chips" style="margin-top:8px">'+A.map(function(x){ var man=x.why==='avoid list';
@@ -2782,18 +2922,18 @@ function vSubs(){
   var list=S.list.filter(function(s){ return !q || s.k.indexOf(q)>=0; }).sort(sorters[SUBS.sort]||sorters.posts);
   var th=function(k,l,t){ return '<th style="cursor:pointer" title="'+esc(t||'Sort')+'" onclick="SUBS.sort=\''+k+'\';renderView()">'+l+(SUBS.sort===k?' <span class="ar">▼</span>':'')+'</th>'; };
   h+='<div class="row" style="margin:16px 0 8px;gap:8px"><b style="font-size:14px">By subreddit</b><span class="muted" style="font-size:12px">'+list.length+' of '+S.list.length+'</span><div style="flex:1"></div><input class="inp" placeholder="Search a subreddit…" value="'+esc(SUBS.q)+'" oninput="SUBS.q=this.value;renderView()" style="width:220px" id="sub-q"></div>';
-  h+='<div class="tbl-w"><table class="db"><thead><tr><th class="c1">Subreddit</th><th>Verdict</th>'+th('posts','Posts')+th('up','Stayed up')+'<th>Removed</th><th title="Caught by Reddit\'s or AutoModerator\'s spam filter">Spam filter</th>'+th('rate','Removal rate')+'<th>Accounts</th>'+th('ban','Banned ≤3 days','Accounts banned within 3 days after posting here — a hint, not proof')+th('last','Last post')+(admin?'<th></th>':'')+'</tr></thead><tbody>'+
+  h+='<div class="tbl-w"><table class="db"><thead><tr><th class="c1">Subreddit</th><th>Verdict</th>'+th('posts','Posts')+th('up','Stayed up')+'<th>Removed</th><th title="Caught by Reddit\'s or AutoModerator\'s spam filter">Spam filter</th><th title="Not checked yet — left out of the removal rate">Not checked</th>'+th('rate','Removal rate','Removed by mods + spam filter, as a share of the CHECKED posts')+'<th>Accounts</th>'+th('ban','Banned ≤3 days','Accounts banned within 3 days after posting here — a hint, not proof')+th('last','Last post')+(admin?'<th></th>':'')+'</tr></thead><tbody>'+
     list.map(function(s){ var vd=subVerdict(s), pc=Math.round(s.rate*100), av=subAvoidList().indexOf(s.k)>=0;
       return '<tr><td class="c1"><a href="https://www.reddit.com/'+esc(s.name)+'/" target="_blank" rel="noopener" style="color:inherit;font-weight:700">'+esc(s.name)+' ↗</a></td>'+
         '<td><span class="flag" style="background:'+vd.bg+';color:'+vd.c+'">'+esc(vd.t)+'</span></td>'+
-        '<td class="num">'+s.posts+'</td><td class="num" style="color:#047857;font-weight:700">'+s.up+'</td><td class="num" style="'+(s.removed-s.spam?'color:#b91c1c;font-weight:800':'')+'">'+((s.removed-s.spam)||'·')+'</td><td class="num" style="'+(s.spam?'color:#b45309;font-weight:800':'')+'">'+(s.spam||'·')+'</td>'+
+        '<td class="num">'+s.posts+'</td><td class="num" style="color:#047857;font-weight:700">'+s.up+'</td><td class="num" style="'+(s.removed-s.spam?'color:#b91c1c;font-weight:800':'')+'">'+((s.removed-s.spam)||'·')+'</td><td class="num" style="'+(s.spam?'color:#b45309;font-weight:800':'')+'">'+(s.spam||'·')+'</td><td class="num" style="'+(s.unk?'color:#c2410c;font-weight:700':'')+'">'+(s.unk||'·')+'</td>'+
         '<td style="min-width:120px"><div class="row" style="gap:6px"><div style="flex:1;height:6px;border-radius:6px;background:#f1f5f9;overflow:hidden"><i style="display:block;height:100%;width:'+pc+'%;background:'+(pc>=50?'#ef4444':(pc>=25?'#f59e0b':'#10b981'))+'"></i></div><b style="font-size:11.5px;min-width:32px;text-align:right">'+pc+'%</b></div></td>'+
         '<td class="num">'+s.nAcc+'</td><td class="num" style="'+(s.nBan?'color:#b91c1c;font-weight:700':'')+'">'+(s.nBan||'·')+'</td><td class="muted">'+esc(fmtDay(s.last))+'</td>'+
         (admin?'<td style="white-space:nowrap"><button class="btn sm '+(av?'sec':'dark')+'" onclick="subAvoidSet(\''+jsq(s.k)+'\','+(av?'false':'true')+')">'+(av?'Allow again':'Avoid')+'</button></td>':'')+'</tr>'; }).join('')+'</tbody></table></div>';
   if(S.removed.length){
     h+='<div class="sec-h" style="margin-top:18px"><b>Latest removals</b><span>'+S.removed.length+' in the '+rl+'</span><hr></div><div class="tbl-w" style="max-height:340px"><table class="db"><thead><tr><th class="c1">Subreddit</th><th>Account</th><th>Stage</th><th>Kind</th><th>Posted</th><th>Tagged</th>'+(admin?'<th>By</th>':'')+'</tr></thead><tbody>'+
       S.removed.slice(0,40).map(function(x){ var p=x.p, sm=stageMeta(p.st||x.r.status);
-        return '<tr><td class="c1">'+esc(p.r)+'</td><td><a href="#" onclick="openRec(\''+jsq(x.r.id)+'\');return false" style="color:inherit">'+esc(x.r.handle)+'</a></td><td><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+'">'+esc(sm.n)+'</span></td><td>'+(p.xr==='spam'?'<span class="flag a">Spam filter</span>':'<span class="flag r">Moderators</span>')+'</td><td class="muted">'+esc(fmtDay(p.d))+'</td><td class="muted">'+esc(p.xt?fmtDT(parseTs(p.xt)):'—')+'</td>'+(admin?'<td>'+esc(firstName(p.xb||p.b||''))+'</td>':'')+'</tr>'; }).join('')+'</tbody></table></div>';
+        return '<tr><td class="c1">'+esc(p.r)+'</td><td><a href="#" onclick="openRec(\''+jsq(x.r.id)+'\');return false" style="color:inherit">'+esc(x.r.handle)+'</a></td><td><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+'">'+esc(sm.n)+'</span></td><td>'+(p.xr==='spam'?'<span class="flag a">Spam filter</span>':'<span class="flag r">Moderators</span>')+'</td><td class="muted">'+esc(fmtDay(p.d))+'</td><td class="muted">'+esc((p.vt||p.xt)?fmtDT(parseTs(p.vt||p.xt)):'—')+'</td>'+(admin?'<td>'+esc(firstName(p.vb||p.xb||p.b||''))+'</td>':'')+'</tr>'; }).join('')+'</tbody></table></div>';
   }
   return h;
 }
@@ -3009,6 +3149,7 @@ async function pqAutoFill(){
 async function doSession(id, n, btn){
   var r=rowById(id); if(!r) return;
   if(!tmOn() && !(await fixGate())) return;   // username fixes first (Oct 13) — with timers on, Start is gated instead
+  if(!tmOn() && !(await pchkGate(r))) return;   // Oct 25 post check (never blocks the owner — pchkGate passes admins)
   if(!(await karmaGate(r))) return;
   var t=tmOn()?tmStop(id,'s'+n):null;
   var p=phase(r.status), task=(r.status==='recovery')?'Reddit Warmup':(p&&p.task);
