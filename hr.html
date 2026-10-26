@@ -441,7 +441,9 @@ async function doLogin(){
   err.style.display='none';
   if(!id||!pin){ err.textContent='Enter your contractor ID and PIN.'; err.style.display='block'; return; }
   if(id.toUpperCase()==='ADMIN'){
-    if(await verifyAdminPass(pin)){ enterApp({full_name:'Admin (JMB Virtuals)',employee_id:'ADMIN'}, true); }
+    if(await verifyAdminPass(pin)){
+      var _st=''; try{ var _sr=await fetch(PORTAL_URL,{method:'POST',body:JSON.stringify({action:'sess_admin',pass:pin})}); var _sd=await _sr.json(); _st=(_sd&&_sd.sess)||''; }catch(_e){}   // Oct 27: owner token (offboarding program records)
+      enterApp({full_name:'Admin (JMB Virtuals)',employee_id:'ADMIN',_sess:_st}, true); }
     else { err.textContent='Invalid admin password.'; err.style.display='block'; }
     return;
   }
@@ -455,7 +457,7 @@ async function doLogin(){
     var pos=String(d.position||'').toLowerCase();
     var isHR = /hr|human resource|manager|team lead|admin|owner|operations/.test(pos);
     if(!isHR){ err.textContent='HR access only. Use the Admin login or an HR account.'; err.style.display='block'; btn.disabled=false; btn.textContent='Sign in'; return; }
-    enterApp(d, false);
+    d._sess=d.sess||''; enterApp(d, false);
   }catch(e){ err.textContent='Invalid ID or PIN.'; err.style.display='block'; }
   finally{ btn.disabled=false; btn.textContent='Sign in'; }
 }
@@ -871,12 +873,72 @@ function offCard(c){
       linkHtml='<div style="margin-top:10px;"><button class="btn sm" onclick="offLink(\''+c.id+'\')">🔗 Generate resignation link</button> <span style="font-size:11px;color:var(--t3);">Lets the VA attach their resignation &amp; agree to the AWOL policy.</span></div>';
     }
   }
+  var progHtml=offProgBlock(c, completed);
   return '<div style="background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;">'+
     '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><b style="font-size:14px;">'+esc(c.full_name)+'</b>'+offBadge(c.type)+
     (completed?'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(148,163,184,.18);color:var(--t2);">Completed</span>':'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(255,107,26,.15);color:#ff8a3c;">In progress · '+done+'/'+total+'</span>')+
     '<span style="margin-left:auto;font-size:11px;color:var(--t3);">'+esc(c.employee_id)+'</span></div>'+
     '<div style="font-size:12px;color:var(--t2);margin:6px 0 4px;">'+dates+(c.reason?(' · '+esc(c.reason)):'')+'</div>'+
-    '<div style="border-top:1px solid var(--line);margin-top:8px;padding-top:6px;">'+checks+'</div>'+linkHtml+actions+'</div>';
+    '<div style="border-top:1px solid var(--line);margin-top:8px;padding-top:6px;">'+checks+'</div>'+progHtml+linkHtml+actions+'</div>';
+}
+/* ── Oct 27: OFFBOARDING PROGRAM (portal) — progress here, full record (answers, exit interview) for the owner only ── */
+var OFFP_T={welcome:'Welcome',closing:'Closing the engagement',confid:'Confidentiality',privacy:'Data privacy & clean-up',access:'Accounts & property',handover:'Handover',clients:'Non-solicitation',leaving:'Leaving well',exit:'Exit interview'};
+function offProgBlock(c, completed){
+  if(String(c.type||'').toLowerCase()!=='resignation') return '';
+  var g=c.program_summary;
+  if(!g) return completed?'':'<div style="margin-top:10px;border:1px dashed var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--t2);">'+
+    '<b>Offboarding program</b> · not started yet. '+esc(firstName(c.full_name))+' sees it in the portal’s <b>Offboarding</b> tab (about 2 hours, paid on JMB Internal › Offboarding).</div>';
+  var pct=Math.round((g.done||0)*100/(g.total||10)), mins=Math.round((g.secs||0)/60), qz=g.quiz||{};
+  var chips=Object.keys(qz).map(function(k){ var q=qz[k]; return '<span style="display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;margin:3px 4px 0 0;background:'+(q.passed?'rgba(22,163,74,.12);color:#15803d':'rgba(245,158,11,.14);color:#b45309')+';">'+esc(OFFP_T[k]||k)+' · 1st '+esc(q.first)+(q.tries>1?(' · '+q.tries+' tries'):'')+'</span>'; }).join('');
+  var head=g.submitted_at?'<b style="color:#15803d">✅ Offboarding program submitted &amp; signed</b> · '+esc(String(g.submitted_at).slice(0,16))
+    :'<b>Offboarding program</b> · '+g.done+'/'+g.total+' done · '+mins+' min so far · last saved '+esc(String(g.updated_at||'').slice(5,16));
+  return '<div style="margin-top:10px;border:1px solid '+(g.submitted_at?'#bbf7d0':'var(--line)')+';background:'+(g.submitted_at?'#f0fdf4':'#fff')+';border-radius:10px;padding:10px 12px;font-size:12.5px;">'+head+
+    '<div style="height:5px;border-radius:5px;background:#e2e8f0;margin:8px 0 4px;overflow:hidden"><i style="display:block;height:100%;width:'+pct+'%;background:linear-gradient(90deg,#ff8a3d,#f1560f)"></i></div>'+
+    (chips?'<div>'+chips+'</div>':'')+
+    '<div style="margin-top:8px"><button class="btn sm" onclick="offProgOpen(\''+c.id+'\')">View answers &amp; record</button> <span style="font-size:11px;color:var(--t3)">Owner sign-in only · includes the exit interview</span></div></div>';
+}
+function offProgOpen(id){
+  var tok=(USER&&USER._sess)||'';
+  var mb=document.getElementById('offp-modal'); if(!mb){ mb=document.createElement('div'); mb.className='mb'; mb.id='offp-modal';
+    mb.innerHTML='<div class="modal" style="max-width:860px;width:100%"><div class="mh"><h3 id="offp-h">Offboarding program</h3><button class="mx" onclick="document.getElementById(\'offp-modal\').classList.remove(\'open\')">✕</button></div><div class="mbd" id="offp-b" style="max-height:72vh;overflow:auto"></div></div>';
+    mb.addEventListener('click', function(e){ if(e.target===mb) mb.classList.remove('open'); }); document.body.appendChild(mb); }
+  mb.classList.add('open'); document.getElementById('offp-b').innerHTML='<div class="muted">Loading…</div>';
+  if(!tok){ document.getElementById('offp-b').innerHTML='<div class="muted">Sign out and sign in again as the owner (Admin password or JMBEAST) to view the full record.</div>'; return; }
+  fetch(PORTAL_URL+'?action=offb_prog_admin&id='+encodeURIComponent(id)+'&sess='+encodeURIComponent(tok)+'&_='+Date.now()).then(function(r){ return r.json(); }).then(function(d){
+    if(!d||!d.ok){ document.getElementById('offp-b').innerHTML='<div class="muted">'+(d&&d.error==='UNAUTHORIZED'?'Owner only — sign in with the Admin password or as JMBEAST.':('Could not load ('+esc((d&&d.error)||'error')+').'))+'</div>'; return; }
+    document.getElementById('offp-h').textContent='Offboarding program — '+d.case.full_name;
+    document.getElementById('offp-b').innerHTML=offProgRender(d);
+  }).catch(function(){ document.getElementById('offp-b').innerHTML='<div class="muted">Network error.</div>'; });
+}
+function offProgRender(d){
+  var P=d.program; if(!P) return '<div class="muted">Not started yet.</div>';
+  var M=P.mods||{}, T=d.titles||{}, H=function(t){ return '<div style="font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);margin:16px 0 6px">'+esc(t)+'</div>'; };
+  var KV=function(l,v){ v=String(v==null?'':v).trim(); return v?'<div style="margin:0 0 8px"><div style="font-size:11px;color:var(--t3);font-weight:700">'+esc(l)+'</div><div style="white-space:pre-wrap;font-size:13px">'+esc(v)+'</div></div>':''; };
+  var TB=function(h,rows){ return '<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">'+'<tr>'+h.map(function(x){ return '<th style="text-align:left;border-bottom:1px solid var(--line);padding:5px 6px;color:var(--t3);font-size:11px">'+esc(x)+'</th>'; }).join('')+'</tr>'+rows.map(function(r){ return '<tr>'+r.map(function(x){ return '<td style="border-bottom:1px solid #f1f5f9;padding:5px 6px;vertical-align:top">'+esc(x==null?'':x)+'</td>'; }).join('')+'</tr>'; }).join('')+'</table></div>'; };
+  var out='';
+  var sg=P.sign||{};
+  out+='<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12.5px;margin-bottom:6px">'+
+    '<span><b>Started</b> '+esc(P.started_at||'—')+'</span><span><b>Last saved</b> '+esc(P.updated_at||'—')+'</span><span><b>Time</b> '+Math.round((P.secs||0)/60)+' min</span>'+
+    (P.submitted_at?'<span style="color:#15803d"><b>Signed</b> '+esc(sg.name||'')+' · '+esc(P.submitted_at)+'</span>':'<span style="color:#b45309"><b>Not submitted yet</b></span>')+'</div>';
+  if(sg.pdf_url) out+='<a class="btn sm" href="'+esc(sg.pdf_url)+'" target="_blank" rel="noopener">Open signed PDF record</a> ';
+  out+=H('Modules')+TB(['Module','Done','Quiz first try','Quiz final','Time'], Object.keys(OFFP_T).map(function(k){ var s=M[k]||{}, z=s.quiz||{}, tr=z.tries||[], l=tr[tr.length-1];
+    return [T[k]||OFFP_T[k], s.form_at||s.read_at||'', z.first?(z.first.score+'/'+z.first.total):'—', l?(l.score+'/'+l.total+' ('+tr.length+')'):'—', Math.round((s.secs||0)/60)+' min']; }));
+  var au=((M.privacy||{}).form||{}), A=au.audit||{}, AL=d.audit||{};
+  out+=H('Data clean-up self-audit')+TB(['Place','Answer'], Object.keys(AL).map(function(k){ return [AL[k], A[k]||'—']; }))+KV('Notes', au.help);
+  var iv=((M.access||{}).form||{});
+  out+=H('Accounts, access & property')+TB(['Item','Type','Belongs to','What was done','Notes'], (iv.items||[]).map(function(r){ return [r.item,r.kind,r.owner,r.status,r.note]; }))+
+    KV('2FA / recovery on personal details', iv.twofa)+KV('Reddit accounts under them', iv.reddit)+KV('Company laptop / phone / SIM', iv.device)+KV('Other items', iv.extra);
+  var ho=((M.handover||{}).form||{});
+  out+=H('Handover')+KV('Role', ho.role)+(ho.streams||[]).map(function(w,i){ return '<div style="border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:0 0 8px"><b>'+esc((i+1)+'. '+(w.name||'Workstream'))+'</b>'+
+      KV('Status today', w.status)+KV('Open tasks & deadlines', w.open)+KV('Recurring work', w.recurring)+KV('Key contacts', w.contacts)+KV('Where files live', w.files)+KV('Tips & known issues', w.tips)+'</div>'; }).join('')+
+    KV('Documents & SOPs', ho.docs)+KV('Waiting on a decision', ho.decisions)+KV('Handing over to', ho.handto)+KV('Walkthrough', ho.walk)+KV('Advice for the successor', ho.advice);
+  var ex=((M.exit||{}).form||{}), G=ex.grid||{};
+  out+=H('Exit interview — founder only')+
+    '<div style="font-size:13px;margin-bottom:6px"><b>Overall</b> '+esc(ex.overall==null?'—':ex.overall+'/5')+' · <b>Recommend</b> '+esc(ex.nps==null?'—':ex.nps+'/10')+' · <b>Work with us again</b> '+esc(ex.again||'—')+'</div>'+
+    TB(['Area','Rating'], [['Clarity of expectations',G.clarity],['Support from management',G.support],['Tools & systems',G.tools],['Communication',G.comms],['Fairness of workload',G.workload],['Fairness of pay',G.pay],['Learning & growth',G.growth],['Team culture',G.culture]].map(function(r){ return [r[0], r[1]==null?'—':r[1]+'/5']; }))+
+    KV('Reasons for leaving', (ex.reasons||[]).join(', '))+KV('Recent change explained clearly?', ex.change)+KV('About that change', ex.change_note)+KV('Do well', ex.well)+KV('Improve', ex.improve)+KV('Would have stayed if', ex.stay)+KV('For the founder', ex.lead)+KV('Anything else', ex.other);
+  if(P.submitted_at){ var dl=d.decl||[]; out+=H('Declarations')+'<ol style="font-size:12.5px;padding-left:18px">'+dl.map(function(x){ return '<li style="margin:0 0 4px">'+((sg.decl||[]).indexOf(x[0])>=0?'☑ ':'☐ ')+esc(x[1])+'</li>'; }).join('')+'</ol>'; }
+  return out;
 }
 function offToggle(id,i,checked){
   var c=(OFF_DATA.cases||[]).filter(function(x){return x.id===id;})[0]; if(!c||!c.checklist[i]) return;
