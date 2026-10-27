@@ -2129,6 +2129,7 @@ function vOverview(){
     '<p class="cx-lead">Here is where your accounts stand right now — live from our operations floor.</p></div>' +
     '<div class="cx-hr"><div class="cx-clock"><small>Team time</small><b>' + esc(pt) + '</b><span>Manila · PHT</span></div>' +
     '<button class="cx-btn no-print" onclick="cxPrint()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download report</button></div></section>';
+  try{ h += cxDailyRemovals(); }catch(_dr){}   // Oct 27: the daily removal rate — the main highlight
   var postPct = cxPct(M.posting, M.alive), survPct = M.elig ? cxPct(M.surv, M.elig) : null;
   h += '<section class="cx-kpis">' +
     cxKpi('Live accounts', cxN(M.alive), cxDelta(M.alive, M.live7, true) + ' vs 7 days ago', cxSpark(M.live, '#f26716', 'line'), '30-day trend') +
@@ -2431,6 +2432,7 @@ async function load(force){
       INSD.asg=null; INSD.arch=(d.arch||[]).length; INSD.serverAt=d.at||''; INSD.lastFixed=0; INSD.err=''; INSD.at=Date.now(); LOAD_ERR='';
       var _hadSubs=!!subsD(); SUBSD=(d.subs && d.subs.r)?d.subs:null;   // Oct 14: the subreddit report (Client API cl-2026-10-14+)
       SUBSD_SX=(d.subs_sx && d.subs_sx.r)?d.subs_sx:null;                // Oct 25: the Suicidal Operation's own (cl-2026-10-25a+)
+      DRD=(d.dr && Array.isArray(d.dr.days))?d.dr:null;                   // Oct 27: the daily removal rate — the main highlight (cl-2026-10-27a+)
       if(_hadSubs!==!!subsD()) try{ paintTabs(); }catch(_t){}
       if(d.cfg){ CFG.phones=Array.isArray(d.cfg.phones)?d.cfg.phones:(CFG.phones||[]); if(Array.isArray(d.cfg.sx_assign)) CFG.sx_assign=d.cfg.sx_assign; CFG.methods=d.cfg.methods||CFG.methods; CFG.process_start=d.cfg.process_start||CFG.process_start; CFG.models=d.cfg.models||{}; CFG.sop_changes=d.cfg.sop_changes; }
       try{ cxNormModels(INSD.rows); }catch(_e){}
@@ -2723,6 +2725,50 @@ function vPipeline(){
    when it posted), a 10-week trend and the latest removals. No names — who posted or tagged anything never leaves our side.
    The tab sits right after Accounts and shows once the Client API sends the block. */
 var SUBSD=null, SUBSD_SX=null, SUBC={ range:30, q:'', sort:'posts', model:'' };
+/* ═══ DAILY REMOVAL RATE — the main highlight (Jeth + client, Oct 27) ═══
+   Posts by the day they went up — the morning and the night shift together; our team checks every post at the end of
+   the shift that posted it. Taken down = moderators + spam filters, as a share of the checked posts; posts not checked
+   yet are shown apart and never counted as stayed up. Split by model, by method and (when both run) by SOP. */
+var DRD=null, DRC={ day:'' };
+function drcRate(a){ var c=a[1]+a[2]+a[3]; return c?Math.round((a[2]+a[3])/c*100):null; }
+function drcCol(pc){ return pc==null?'#a9aec0':subCol(pc); }
+function drcCss(){
+  if(document.getElementById('drc-css')) return; var st=document.createElement('style'); st.id='drc-css';
+  st.textContent='.cx-dr{background:linear-gradient(135deg,#fff 0%,#fff6fa 55%,#f6f3ff 100%);border-color:rgba(236,72,153,.25)}'+
+    '.cx-dr-k{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#db2777}'+
+    '.cx-dr-seg{display:flex;gap:6px}.cx-dr-seg button{border:1px solid var(--line);background:#fff;border-radius:100px;padding:6px 12px;font:700 12px/1 inherit;font-family:inherit;color:var(--ink2);cursor:pointer}.cx-dr-seg button.on{background:var(--ink);border-color:var(--ink);color:#fff}'+
+    '.cx-dr-top{display:flex;gap:22px;align-items:flex-end;flex-wrap:wrap;margin:2px 0 6px}.cx-dr-big b{display:block;font-size:52px;line-height:1;font-weight:900;letter-spacing:-.04em}.cx-dr-big span{display:block;font-size:13px;font-weight:700;color:var(--ink2);margin-top:6px}.cx-dr-big small{display:block;font-size:12px;color:var(--ink3);margin-top:3px}'+
+    '.cx-dr-tr{flex:1;min-width:240px;display:flex;align-items:flex-end;gap:5px;height:64px}.cx-dr-tr div{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer}.cx-dr-tr i{display:block;width:100%;max-width:24px;border-radius:6px 6px 2px 2px;min-height:3px}.cx-dr-tr div.on i{outline:2px solid var(--ink);outline-offset:1px}.cx-dr-tr small{font-size:10px;color:var(--ink3);font-weight:700}'+
+    '.cx-dr-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;margin-top:14px}.cx-dr-cols h4{margin:0 0 6px;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}'+
+    '.cx-dr-r{display:grid;grid-template-columns:minmax(100px,1fr) 2fr 46px;gap:10px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px}.cx-dr-r:last-child{border-bottom:0}.cx-dr-r .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cx-dr-r .nm small{display:block;font-weight:600;color:var(--ink3);font-size:11px}'+
+    '.cx-dr-bar{height:8px;border-radius:6px;background:#f1f5f9;overflow:hidden}.cx-dr-bar i{display:block;height:100%;border-radius:6px}.cx-dr-r b{text-align:right}';
+  document.head.appendChild(st);
+}
+function drcList(obj, lab){
+  var L=Object.keys(obj||{}).map(function(k){ return { k:lab?lab(k):k, a:obj[k], pc:drcRate(obj[k]) }; }).sort(function(x,y){ return (y.a[0]-x.a[0]) || (x.k<y.k?-1:1); });
+  if(!L.length) return '<div style="font-size:12.5px;color:var(--ink3)">No posts this day.</div>';
+  return L.map(function(x){ var a=x.a, c=a[1]+a[2]+a[3];
+    return '<div class="cx-dr-r"><div class="nm" title="'+esc(x.k)+'">'+esc(x.k)+'<small>'+a[0]+' post'+(a[0]===1?'':'s')+(c?' · '+(a[2]+a[3])+' taken down':'')+(a[4]?' · '+a[4]+' not checked yet':'')+'</small></div>'+
+      '<div class="cx-dr-bar"><i style="width:'+(x.pc||0)+'%;background:'+drcCol(x.pc)+'"></i></div><b style="color:'+drcCol(x.pc)+'">'+(x.pc==null?'—':x.pc+'%')+'</b></div>'; }).join('');
+}
+function cxDailyRemovals(){
+  var L=(DRD&&DRD.days)||[]; if(!L.length) return '';
+  drcCss();
+  var by={}; L.forEach(function(x){ by[x.d]=x; });
+  var td=L[0].d, yd=L[1]?L[1].d:'', has=function(d){ return by[d] && by[d].t[0]>0; };
+  if(!L.some(function(x){ return x.t[0]>0; })) return '';
+  var day=(DRC.day && by[DRC.day])?DRC.day:(has(yd)?yd:td), D=by[day], a=D.t, pc=drcRate(a), c=a[1]+a[2]+a[3];
+  var lbl=function(d){ return d===td?'Today so far':(d===yd?'Yesterday':subDay(d)); };
+  var tr=L.slice().reverse().map(function(x){ var p=drcRate(x.t);
+    return '<div class="'+(x.d===day?'on':'')+'" onclick="DRC.day=\''+x.d+'\';renderView()" title="'+esc(lbl(x.d)+': '+(p==null?'no checked posts':p+'% of '+(x.t[1]+x.t[2]+x.t[3])+' checked posts')+(x.t[4]?' · '+x.t[4]+' not checked yet':''))+'"><i style="height:'+(p==null?3:Math.max(4,p/100*50))+'px;background:'+drcCol(p)+'"></i><small>'+esc(String(x.d).slice(8))+'</small></div>'; }).join('');
+  var sops=Object.keys(D.sop||{});
+  return '<section class="cx-card cx-dr"><div class="cx-ch"><div><div class="cx-dr-k">Daily removal rate</div><b style="font-size:19px;margin-top:3px">'+esc(lbl(day))+(day===td||day===yd?' <span style="font-size:12.5px;font-weight:600;color:var(--ink3)">'+esc(subDay(day))+'</span>':'')+'</b>'+
+      '<span>Posts by the day they went up — morning and night shift together, each post checked by our team at the end of its shift</span></div>'+
+      '<div class="cx-dr-seg no-print"><button class="'+(day===td?'on':'')+'" onclick="DRC.day=\''+td+'\';renderView()">Today</button>'+(yd?'<button class="'+(day===yd?'on':'')+'" onclick="DRC.day=\''+yd+'\';renderView()">Yesterday</button>':'')+'</div></div>'+
+    '<div class="cx-dr-top"><div class="cx-dr-big"><b style="color:'+drcCol(pc)+'">'+(pc==null?'—':pc+'%')+'</b><span>'+(c?(a[2]+a[3])+' of '+c+' checked posts taken down':'no checked posts yet')+'</span><small>'+a[0]+' posted · '+a[1]+' stayed up · '+a[2]+' by moderators · '+a[3]+' by spam filters'+(a[4]?' · '+a[4]+' not checked yet':'')+'</small></div>'+
+      '<div class="cx-dr-tr" title="Last 14 days — tap a day">'+tr+'</div></div>'+
+    '<div class="cx-dr-cols"><div><h4>By model</h4>'+drcList(D.model, subModelLabel)+'</div><div><h4>By method</h4>'+drcList(D.method, subMethodLabel)+'</div>'+(sops.length>1?'<div><h4>By SOP</h4>'+drcList(D.sop)+'</div>':'')+'</div></section>';
+}
 function subPct(a, b){ return b?Math.round(a/b*100):0; }
 function subDay(d){ if(!/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))) return String(d||'—'); var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return M[+d.slice(5,7)-1]+' '+(+d.slice(8,10)); }
 function subDayBack(n){ try{ return new Intl.DateTimeFormat('en-CA',{ timeZone:'Asia/Manila' }).format(new Date(Date.now()-8*3600000-n*86400000)); }catch(e){ return new Date(Date.now()-n*86400000).toISOString().slice(0,10); } }
@@ -2853,12 +2899,12 @@ function subFactors(R){
 function subDaysC(D){
   var L=(D && D.dy)||[]; if(!L.length) return '';
   var td=L[0].d, yd=L[1]?L[1].d:'';
-  return '<div class="card" style="margin-top:12px;padding:14px 16px"><div class="ch-h"><b>Day by day</b><span>posts by the day they went up · every post is checked the next day · taken down = moderators + spam filters, of the checked posts · all models</span></div>'+
+  return '<div class="card" style="margin-top:12px;padding:14px 16px"><div class="ch-h"><b>Day by day</b><span>posts by the day they went up · every post is checked at the end of the shift that posted it · taken down = moderators + spam filters, of the checked posts · all models</span></div>'+
     '<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Day</th><th>Posts</th><th>Stayed up</th><th>Moderators</th><th>Spam filter</th><th>Not checked yet</th><th>Taken down</th></tr></thead><tbody>'+
     L.map(function(x){ var chk=x.u+x.x+x.s, pc=subPct(x.x+x.s, chk), lb=x.d===td?'Today':(x.d===yd?'Yesterday':subDay(x.d));
       return '<tr><td class="c1"><b>'+esc(lb)+'</b>'+(x.d===td||x.d===yd?' <span class="muted" style="font-size:11px">'+esc(subDay(x.d))+'</span>':'')+'</td><td class="num">'+(x.p||'·')+'</td>'+
         '<td class="num" style="color:#047857;font-weight:700">'+(x.u||'·')+'</td><td class="num" style="'+(x.x?'color:#b91c1c;font-weight:800':'')+'">'+(x.x||'·')+'</td><td class="num" style="'+(x.s?'color:#b45309;font-weight:800':'')+'">'+(x.s||'·')+'</td>'+
-        '<td class="num" style="'+(x.k?'color:#c2410c;font-weight:700':'')+'">'+(x.k?x.k+(x.d===td?' <small class="muted">checked tomorrow</small>':''):'·')+'</td>'+
+        '<td class="num" style="'+(x.k?'color:#c2410c;font-weight:700':'')+'">'+(x.k?x.k+(x.d===td?' <small class="muted">checked at end of shift</small>':''):'·')+'</td>'+
         '<td style="min-width:130px">'+(chk?subBar(pc, subCol(pc)):'<span class="muted">—</span>')+'</td></tr>'; }).join('')+'</tbody></table></div></div>';
 }
 function vSubsC(){
@@ -2871,10 +2917,11 @@ function vSubsC(){
     '<div class="seg no-print" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(SUBC.range===x[0]?'on':'')+'" onclick="SUBC.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div></div>';
   if(models.length>1) h+='<div class="chips no-print" style="margin:-4px 0 12px;align-items:center"><span class="muted" style="font-size:12px;font-weight:700;margin-right:2px">Model</span>'+
     [''].concat(models).map(function(m){ var on=SUBC.model===m; return '<button class="chip" style="cursor:pointer;'+(on?'background:var(--ink);color:#fff;border-color:var(--ink)':'')+'" onclick="SUBC.model=\''+jsq(m)+'\';renderView()">'+esc(m||'All models')+'</button>'; }).join('')+'</div>';
+  try{ if(!SUBC.model && CXS.sop!=='sx') h+=cxDailyRemovals(); }catch(_dr){}   // Oct 27
   var unk=(!SUBC.model && T.unk)?T.unk:0, ofc=(unk||D.dy)?'% of checked posts':'% of posts';
   h+='<div class="kpis">'+kpi('Posts made',T.posts+unk,rl+ml,'#ec4899')+kpi('Stayed up',T.up,T.posts?subPct(T.up,T.posts)+ofc:'—','#10b981')+
     kpi('Removed by moderators',T.mod,T.posts?subPct(T.mod,T.posts)+ofc:'—','#ef4444')+kpi('Caught by spam filters',T.spam,T.posts?subPct(T.spam,T.posts)+ofc:'—','#f59e0b')+
-    (unk?kpi('Not checked yet',unk,'checked the next day · left out of the %','#f97316'):'')+
+    (unk?kpi('Not checked yet',unk,'checked at the end of the shift · left out of the %','#f97316'):'')+
     kpi('Subreddits',V.list.length,'posted in · '+rl,'#a855f7')+(T.acc!=null?kpi('Accounts posting',T.acc,'with at least one post','#0ea5e9'):'')+'</div>';
   h+=subDaysC(D);
   if(!T.posts && unk) return h+'<div class="card empty" style="margin-top:12px">'+unk+' post'+(unk===1?'':'s')+' made '+(SUBC.range?'in the '+rl:'so far')+' — our team checks each one the next day, then the subreddit numbers show up here.</div>';

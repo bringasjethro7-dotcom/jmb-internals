@@ -1242,6 +1242,8 @@ function vToday(){
     (tmOn()?(crGet()?'<button class="btn run" onclick="newAccount()" title="Account exists on the phone? Log it — the timer stops when it is counted"><span class="sq"></span> Creating… <span class="tmv" data-tm="'+crGet().t+'">'+tmFmt(Date.now()-crGet().t)+'</span></button><button class="btn sec sm" onclick="crCancel()" title="Cancel the creation timer">'+IC.x+'</button>'
       :'<button class="btn sec" onclick="crStart()" title="Press when you START creating an account on the iPhone">▶ Start creating</button>'):'')+
     '<button class="btn pri" onclick="newAccount()">'+IC.plus+' Log new account</button></div>';
+  h+=pcBanner();   // Oct 27: end-of-shift post check (before EOD)
+  try{ h+=drCard(ALL[PROJECT]||ROWS, baseOf(PROJECT).n); }catch(_dr){}   // Oct 27: the daily removal rate — the main highlight
   h+=hoBanner();
   h+=fixBanner();
   h+=tmCapBanner()+gapBanner();
@@ -1706,8 +1708,9 @@ function tmCapOf(key){
 function tmCapCheck(){
   try{ if(!USER || !tmOn()) return; }catch(e){ return; }
   try{ hcCheck(); }catch(_hc){}   // the health check has its own limit (accounts × max per account)
+  try{ pcCheckTick(); }catch(_pc){}   // Oct 27: the end-of-shift post check too (posts × 1 min)
   var o=tmAll(), now=Date.now(), hit=[];
-  Object.keys(o).forEach(function(key){ var x=o[key]; if(!x || !x.t || key.indexOf('__hc|')===0) return; var c=tmCapOf(key); if((now-x.t)/1000>=c.secs) hit.push({ key:key, x:x, c:c }); });
+  Object.keys(o).forEach(function(key){ var x=o[key]; if(!x || !x.t || key.indexOf('__hc|')===0 || key.indexOf('__pc|')===0) return; var c=tmCapOf(key); if((now-x.t)/1000>=c.secs) hit.push({ key:key, x:x, c:c }); });
   if(!hit.length) return;
   hit.forEach(function(h){
     var o2=tmAll(); delete o2[h.key]; tmPut(o2);
@@ -2210,7 +2213,7 @@ function tbActive(){ try{ if(Object.keys(tmAll()).length>0) return true; }catch(
 function tbInfo(){ var o={}; try{ o=tmAll(); }catch(e){}
   var best=null; Object.keys(o).forEach(function(k){ if(o[k] && o[k].t && (!best || o[k].t<o[best].t)) best=k; });
   var lbl=''; if(best){ var parts=best.split('|'), id=parts[0], k=parts[1]||'', r=null; try{ r=rowById(id); }catch(e){}
-    lbl = id==='__create' ? 'Creating an account' : id==='__hc' ? 'Health check' : ((/^s\d/.test(k) ? 'Session '+k.slice(1) : (k==='c' ? 'Creation' : 'Task'))+(r&&r.handle?' · '+r.handle:'')); }
+    lbl = id==='__create' ? 'Creating an account' : id==='__hc' ? 'Health check' : id==='__pc' ? 'Post check' : ((/^s\d/.test(k) ? 'Session '+k.slice(1) : (k==='c' ? 'Creation' : 'Task'))+(r&&r.handle?' · '+r.handle:'')); }
   var n=Object.keys(o).length; if(n>1) lbl+=' (+'+(n-1)+' more)';
   var td=0; try{ td=timedToday(); }catch(e){}
   return { run_since: best ? new Date(o[best].t).toISOString() : null, run_label: lbl || null, today_secs: td }; }
@@ -2236,6 +2239,7 @@ function tcWant(){
   w.idle=false;
   if(id==='__create'){ w.k='creation'; w.v=String(NA.method||''); w.lbl='Creating an account'; return w; }
   if(id==='__hc'){ w.k='warmup'; w.lbl='Health check'; return w; }   // Oct 22: the daily check runs its own timer (Reddit Warmup, main model)
+  if(id==='__pc'){ w.k='posting'; w.lbl='Post check'; return w; }   // Oct 27: the end-of-shift post check files under Reddit Posting (main model)
   var r=null; try{ r=rowById(id); }catch(e){}
   if(!r){ w.lbl='Task'; return w; }
   w.p=r.project||PROJECT; w.m=String(r.model||'').trim()||w.m; w.v=methodOf(r);
@@ -2825,6 +2829,195 @@ async function pchkSave(btn){
     closeModal(true); if($('drawer').classList.contains('on') && $('drawer').getAttribute('data-id')===r.id) openRec(r.id);
   } else { toast('Could not save — try again.'); if(btn){ btn.disabled=false; btn.textContent=lbl||'Save'; } }
 }
+/* ═══════════ END-OF-SHIFT POST CHECK (Jeth + the client, Oct 27) ═══════════
+   "Before they can do their EOD they need to do a final check of those posts … instead of checking it on the next
+   shift, they will check it before they go home." Every post a VA logged this shift (the last 18 h, posted by them)
+   gets its verdict — stayed up · removed by mods · spam filter — before they end the day: the portal's End of Day
+   asks the Reddit backend (pc_eod, rc-2026-10-27a) and waits for it. Time: 1 minute per post (fixed — cfg.pc_per
+   changes it), on its own task timer that files under Reddit Posting; the shift's allowance = posts × 1 min, it
+   pauses after 3 minutes with no answer. Whatever is still unchecked falls back to the next session's check. */
+var PC_PER=60, PC_IDLE=3*60000, PC_WIN=18*3600000;
+function pcPerSecs(){ var v=+((CFG&&CFG.pc_per)||0); return v>0?Math.round(v):PC_PER; }
+function pcRowsAll(){ var seen={}, out=[]; allRows().concat(ROWS||[]).forEach(function(r){ if(r && r.id && !seen[r.id]){ seen[r.id]=1; out.push(r); } }); return out; }
+function pcMine(){
+  if(!USER || isAdmin()) return [];
+  var me=myId(), lo=Date.now()-PC_WIN, td=today(), out=[];
+  pcRowsAll().forEach(function(r){
+    postsOf(r).forEach(function(p,i){
+      if(!p || !p.r || String(p.b||'').toLowerCase()!==me) return;
+      var d=String(p.d||''); if(d<PCHK_FROM) return;
+      var t=parseTs(p.t); if(t ? t.getTime()<lo : d!==td) return;
+      out.push({ r:r, i:i, p:p });
+    }); });
+  return out;
+}
+function pcPending(){ return pcMine().filter(function(x){ return postState(x.p)==='unk'; }); }
+function pcKey(k){ return 'rc_pc'+k+'_'+myId()+'_'+today(); }
+function pcNum(k){ try{ return +localStorage.getItem(pcKey(k))||0; }catch(e){ return 0; } }
+function pcSetNum(k,v){ try{ localStorage.setItem(pcKey(k), String(Math.round(v))); }catch(e){} }
+function pcTimer(){ return tmGet('__pc','pc'); }
+function pcCap(){ return pcMine().length*pcPerSecs(); }
+function pcUsed(){ return pcNum('used'); }
+function pcSpent(){ var x=pcTimer(); return pcUsed()+(x&&x.t?Math.round((Date.now()-x.t)/1000):0); }
+var _pcOutSaid='';
+function pcOutNote(){ var k=today(); if(_pcOutSaid===k) return; _pcOutSaid=k;
+  tmCapNote('Your post-check time is used up ('+fmtMS(pcCap())+' = '+pcMine().length+' post'+(pcMine().length===1?'':'s')+' × '+Math.round(pcPerSecs()/60*10)/10+' min). Finish the check — the extra time is not counted.'); }
+/* every answer calls this: (re)starts the timer while there is allowance left */
+function pcTouch(){
+  if(!USER || isAdmin() || !tmOn()) return;
+  pcSetNum('last', Date.now());
+  if(pcTimer()) return;
+  if(pcUsed()>=pcCap()){ pcOutNote(); return; }
+  tmStart('__pc','pc');
+}
+/* stop: what fits inside the allowance is counted, the rest is not */
+function pcStop(why, endAt){
+  var o=tmAll(), x=o['__pc|pc']; if(!x) return 0; delete o['__pc|pc']; tmPut(o);
+  var end=Math.min(Date.now(), endAt||Date.now()), raw=Math.max(0, Math.round((end-x.t)/1000));
+  var secs=Math.min(raw, Math.max(0, pcCap()-pcUsed()));
+  pcSetNum('used', pcUsed()+secs);
+  if(secs>=20) tmLog(null,'pcrun',{ secs:secs, start:x.t, parallel:x.p||0 },{ stage:'post check', source:String(why||'stop').slice(0,30)+(raw>secs?' · '+(raw-secs)+'s over':'') });
+  return secs;
+}
+/* called by tmCapCheck every 15 s */
+function pcCheckTick(){
+  var x=pcTimer(); if(!x) return;
+  if(pcSpent()>=pcCap()){ pcStop('cap'); pcOutNote(); try{ renderView(); }catch(e){} return; }
+  var last=Math.max(pcNum('last'), x.t); if(Date.now()-last>PC_IDLE){ pcStop('idle', last+30000); try{ toast('⏱ Post check paused — no answer for 3 minutes. Open it again to carry on.'); renderView(); }catch(e){} }
+}
+function pcClockChip(){
+  if(isAdmin()) return ''; var cap=pcCap(); if(!cap) return '';
+  var sp=Math.min(pcSpent(), cap), run=!!pcTimer(), out=pcUsed()>=cap;
+  var col=out?'#b91c1c':(sp>cap*0.8?'#b45309':'var(--ink3)');
+  return '<span class="muted" style="font-size:12px;font-weight:800;color:'+col+';white-space:nowrap" title="Post-check time counted this shift · '+esc(pcMine().length+' posts × '+Math.round(pcPerSecs()/60*10)/10+' min')+'">⏱ '+(run?'<span data-tm="'+(Date.now()-sp*1000)+'">'+fmtMS(sp)+'</span>':fmtMS(sp))+' / '+fmtMS(cap)+(out?' · limit reached':(run?'':' · paused'))+'</span>';
+}
+/* the VA's banner on Today */
+function pcBanner(){
+  if(!USER || isAdmin()) return '';
+  var all=pcMine(); if(!all.length) return '';
+  var pend=all.filter(function(x){ return postState(x.p)==='unk'; }), n=pend.length;
+  if(!n) return '<div class="banner info">'+IC.check+'<div style="flex:1"><b>End-of-shift post check done</b> — all '+all.length+' post'+(all.length===1?'':'s')+' you logged this shift have a verdict. You can end your day in the portal.</div></div>';
+  var acc={}; pend.forEach(function(x){ acc[x.r.id]=1; }); var na=Object.keys(acc).length;
+  return '<div class="banner warn">'+IC.search+'<div style="flex:1"><b>Before you end your day: check the '+n+' post'+(n===1?'':'s')+'</b> you logged this shift on '+na+' account'+(na===1?'':'s')+' — stayed up, removed by mods or spam filter. '+
+    'You have <b>'+fmtMS(pcCap())+'</b> for it ('+Math.round(pcPerSecs()/60*10)/10+' min per post, filed under Reddit Posting). <b>The portal\'s End of Day waits for this check.</b></div>'+
+    pcClockChip()+'<button class="btn sm dark" onclick="pcOpen()">Check '+n+' post'+(n===1?'':'s')+'</button></div>';
+}
+var PCK=null;
+function pcK(x){ return x.r.id+'#'+x.i; }
+function pcRow(x){
+  var k=pcK(x), v=(PCK&&PCK.ans[k])||'', p=x.p;
+  function b(val,l,c){ return '<button type="button" class="pk-b'+(v===val?' on '+c:'')+'" onclick="pcPick(\''+jsq(k)+'\',\''+val+'\')">'+l+'</button>'; }
+  return '<div class="pk-row'+(v?' done':'')+'" id="pc-'+esc(k.replace(/[^A-Za-z0-9_-]/g,'_'))+'"><div class="pk-n"><a href="https://www.reddit.com/'+esc(p.r)+'/new/" target="_blank" rel="noopener">'+esc(p.r)+' ↗</a>'+
+    '<small>'+(p.n?'session '+p.n:'')+(p.t?' · logged '+esc(fmtT(parseTs(p.t))):'')+(p.st?' · '+esc(stageMeta(p.st).n):'')+'</small></div>'+
+    '<div class="pk-seg">'+b('up','Stayed up','g')+b('mod','Removed by mods','r')+b('spam','Spam filter','a')+'</div></div>';
+}
+function pcHtml(){
+  var L=PCK.items, n=L.length, done=L.filter(function(x){ return PCK.ans[pcK(x)]; }).length, by={}, ord=[];
+  L.forEach(function(x){ if(!by[x.r.id]){ by[x.r.id]=[]; ord.push(x.r); } by[x.r.id].push(x); });
+  return '<div class="md-h"><h3>End-of-shift post check · '+n+' post'+(n===1?'':'s')+'</h3>'+
+    '<p>Open each account on its iPhone and look at the posts you made this shift. What happened to each one? This is the client\'s daily removal rate — <b>a post nobody checks counts as “not checked”, never as stayed up</b>.</p>'+
+    '<div class="row" style="gap:8px;margin-top:6px"><span id="pc-clock">'+pcClockChip()+'</span><span class="muted" style="font-size:12px">'+Math.round(pcPerSecs()/60*10)/10+' min per post · pauses after 3 min with no answer</span></div>'+pchkHelp()+'</div>'+
+    '<div class="md-b">'+ord.map(function(r){ var mo=String(r.model||'').trim();
+      return '<div style="margin:12px 0 6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b>'+esc(r.handle)+'</b>'+(mo?'<span class="pill" style="background:#f1f5f9;color:#475569">'+esc(mo)+'</span>':'')+methodPill(methodOf(r),true)+
+        '<a class="btn sm sec" href="'+esc(qrUrl(r))+'submitted/" target="rc-profile" rel="noopener" style="margin-left:auto">Open u/'+esc(r.handle)+' posts ↗</a></div>'+
+        '<div class="pk-list">'+by[r.id].map(pcRow).join('')+'</div>'; }).join('')+'</div>'+
+    '<div class="md-f" style="align-items:center"><span class="muted" id="pc-cnt" style="font-size:12px;margin-right:auto">'+done+' of '+n+' answered</span>'+
+    '<button class="btn sec" onclick="closeModal(false)">Not now</button><button class="btn pri" id="pc-save"'+(done?'':' disabled')+' onclick="pcSave(this)">'+(done<n?'Save '+done+' answered':'Save all')+'</button></div>';
+}
+async function pcOpen(){
+  if(isAdmin()) return;
+  var items=pcPending(); if(!items.length){ toast('Nothing to check — every post you logged this shift has a verdict.'); renderView(); return; }
+  if(!(await linkGate('The post check'))) return;   // counts while the portal timer runs on Reddit
+  PCK={ items:items, ans:{} }; pcTouch();
+  var v=await new Promise(function(res){ _mResolve=res; openModal(pcHtml()); try{ $('modal').classList.add('wide'); }catch(e){} tmEnsure(); });
+  if(v!==true) pcStop('close');
+  PCK=null; try{ renderView(); }catch(e){}
+}
+function pcPick(k, v){
+  if(!PCK) return; PCK.ans[k]=v; pcTouch();
+  var x=PCK.items.filter(function(y){ return pcK(y)===k; })[0]; if(!x) return;
+  var el=$('pc-'+k.replace(/[^A-Za-z0-9_-]/g,'_')); if(el) el.outerHTML=pcRow(x);
+  var n=PCK.items.length, done=PCK.items.filter(function(y){ return PCK.ans[pcK(y)]; }).length;
+  var c=$('pc-cnt'); if(c) c.textContent=done+' of '+n+' answered';
+  var sv=$('pc-save'); if(sv){ sv.disabled=!done; sv.textContent=done<n?'Save '+done+' answered':'Save all'; }
+  var ck=$('pc-clock'); if(ck) ck.innerHTML=pcClockChip();
+}
+async function pcSave(btn){
+  if(!PCK) return; var by={}, ord=[];
+  PCK.items.forEach(function(x){ var v=PCK.ans[pcK(x)]; if(!v) return; if(!by[x.r.id]){ by[x.r.id]={ r:x.r, set:[] }; ord.push(x.r.id); } by[x.r.id].set.push([x.i, v]); });
+  if(!ord.length){ toast('Answer at least one post.'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  var c={ up:0, mod:0, spam:0 }, bad=0;
+  for(var j=0;j<ord.length;j++){
+    var g=by[ord[j]], r=rowById(g.r.id)||g.r, arr=postsOf(r).map(function(p){ return Object.assign({}, p); });
+    g.set.forEach(function(s){ if(arr[s[0]]){ postSet(arr[s[0]], s[1]); } });
+    if(await saveMeta(r,{ posts:arr })) g.set.forEach(function(s){ c[s[1]]++; }); else bad++;
+  }
+  var left=pcPending().length;
+  toast((c.up+c.mod+c.spam)+' checked · '+c.up+' stayed up'+(c.mod?' · '+c.mod+' removed by mods':'')+(c.spam?' · '+c.spam+' spam filter':'')+(bad?' · '+bad+' account'+(bad===1?'':'s')+' could not save — try again':'')+(left?' · '+left+' still to check':''));
+  if(!left){ pcStop('done'); closeModal(true); }
+  else { PCK.items=pcPending(); PCK.ans={}; try{ $('modal').innerHTML=pcHtml(); }catch(e){} }
+}
+
+/* ═══════════ DAILY REMOVAL RATE — by model and by method (Jeth + the client, Oct 27) ═══════════
+   "The daily removal percentage for each model and for each method … that is the main highlight." Posts by the
+   business day they went up (morning + night shift together, both checked at the end of their shift):
+   removal rate = (removed by mods + spam filter) ÷ checked posts. Not-checked posts are shown apart, never counted
+   as stayed up. The same numbers reach the client portal (no names) and the Daily Huddle. */
+var DRV={ day:'' };
+function drStats(rows, nDays){
+  var td=today(), days={}, order=[];
+  for(var i=0;i<(nDays||14);i++){ var d=dAdd(td,-i); if(d<PCHK_FROM) break; days[d]={ d:d, t:[0,0,0,0,0], model:{}, method:{}, shift:{} }; order.push(d); }
+  function add(a, st){ a[0]++; a[st==='mod'?2:(st==='spam'?3:(st==='unk'?4:1))]++; }
+  (rows||[]).forEach(function(r){
+    var mo=String(r.model||'').trim()||'No model', me=methodOf(r)||'No method';
+    postsOf(r).forEach(function(p){ if(!p || !p.r) return; var D=days[String(p.d||'')]; if(!D) return; var st=postState(p); if(st==='old') st='up';
+      var sh=SHIFTOF[String(p.b||'').toLowerCase()]==='night'?'Night shift':'Morning shift';
+      add(D.t, st); add(D.model[mo]||(D.model[mo]=[0,0,0,0,0]), st); add(D.method[me]||(D.method[me]=[0,0,0,0,0]), st); add(D.shift[sh]||(D.shift[sh]=[0,0,0,0,0]), st); });
+  });
+  return { days:days, order:order };
+}
+function drRate(a){ var chk=a[1]+a[2]+a[3]; return chk?Math.round((a[2]+a[3])/chk*100):null; }
+function drCol(pc){ return pc==null?'#94a3b8':(pc>=50?'#ef4444':(pc>=25?'#f59e0b':'#10b981')); }
+function drCss(){
+  if(document.getElementById('dr-css')) return; var s=document.createElement('style'); s.id='dr-css';
+  s.textContent='.dr{position:relative;overflow:hidden;border:1px solid rgba(236,72,153,.22);background:linear-gradient(135deg,#fff 0%,#fff7fb 55%,#f5f3ff 100%);margin-bottom:14px}'+
+    '.dr-h{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap}.dr-k{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#db2777}'+
+    '.dr-t{font-size:17px;font-weight:800;color:var(--ink);margin-top:2px}.dr-days{display:flex;gap:5px;flex-wrap:wrap;margin-left:auto}'+
+    '.dr-days button{border:1px solid var(--line2);background:#fff;border-radius:100px;padding:5px 10px;font:700 11.5px/1 inherit;font-family:inherit;color:var(--ink2);cursor:pointer}.dr-days button.on{background:#0f172a;border-color:#0f172a;color:#fff}'+
+    '.dr-top{display:flex;gap:18px;align-items:flex-end;flex-wrap:wrap;margin:12px 0 4px}.dr-big b{font-size:44px;line-height:1;font-weight:900;letter-spacing:-.03em}.dr-big span{display:block;font-size:12.5px;color:var(--ink2);font-weight:700;margin-top:4px}.dr-big small{display:block;font-size:11.5px;color:var(--ink3);margin-top:2px}'+
+    '.dr-tr{flex:1;min-width:220px;display:flex;align-items:flex-end;gap:4px;height:58px}.dr-tr div{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}.dr-tr i{display:block;width:100%;max-width:22px;border-radius:5px 5px 2px 2px;min-height:3px}.dr-tr div.on i{outline:2px solid #0f172a;outline-offset:1px}.dr-tr small{font-size:9.5px;color:var(--ink3);font-weight:700}'+
+    '.dr-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:12px}.dr-cols h4{margin:0 0 6px;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}'+
+    '.dr-r{display:grid;grid-template-columns:minmax(90px,1fr) 2fr 44px;gap:8px;align-items:center;padding:5px 0;border-bottom:1px dashed var(--line);font-size:12.5px}.dr-r:last-child{border-bottom:0}.dr-r .nm{font-weight:700;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dr-r .nm small{display:block;font-weight:600;color:var(--ink3);font-size:10.5px}'+
+    '.dr-bar{height:8px;border-radius:6px;background:#f1f5f9;overflow:hidden}.dr-bar i{display:block;height:100%;border-radius:6px}.dr-r b{text-align:right;font-size:13px}';
+  document.head.appendChild(s);
+}
+function drList(obj){
+  var L=Object.keys(obj).map(function(k){ return { k:k, a:obj[k], pc:drRate(obj[k]) }; }).sort(function(x,y){ return (y.a[0]-x.a[0]) || (x.k<y.k?-1:1); });
+  if(!L.length) return '<div class="muted" style="font-size:12px">No posts.</div>';
+  return L.map(function(x){ var a=x.a, chk=a[1]+a[2]+a[3];
+    return '<div class="dr-r"><div class="nm" title="'+esc(x.k)+'">'+esc(x.k)+'<small>'+a[0]+' post'+(a[0]===1?'':'s')+(chk?' · '+(a[2]+a[3])+' removed'+(a[3]?' ('+a[3]+' spam)':''):'')+(a[4]?' · '+a[4]+' not checked':'')+'</small></div>'+
+      '<div class="dr-bar"><i style="width:'+(x.pc||0)+'%;background:'+drCol(x.pc)+'"></i></div><b style="color:'+drCol(x.pc)+'">'+(x.pc==null?'—':x.pc+'%')+'</b></div>'; }).join('');
+}
+function drCard(rows, label){
+  drCss();
+  var S=drStats(rows, 14); if(!S.order.length) return '';
+  var td=today(), yd=dAdd(td,-1);
+  var has=function(d){ var D=S.days[d]; return D && D.t[0]>0; };
+  var day=DRV.day && S.days[DRV.day] ? DRV.day : (has(yd)?yd:td);
+  if(!has(day) && !S.order.some(has)) return '';
+  var D=S.days[day], a=D.t, pc=drRate(a), chk=a[1]+a[2]+a[3];
+  var lbl=function(d){ return d===td?'Today so far':(d===yd?'Yesterday':fmtDay(d)); };
+  var trend=S.order.slice().reverse().map(function(d){ var x=S.days[d].t, p=drRate(x);
+    return '<div class="'+(d===day?'on':'')+'" onclick="DRV.day=\''+d+'\';renderView()" title="'+esc(lbl(d)+': '+(p==null?'no checked posts':p+'% of '+(x[1]+x[2]+x[3])+' checked')+(x[4]?' · '+x[4]+' not checked':''))+'"><i style="height:'+(p==null?3:Math.max(4,p/100*46))+'px;background:'+drCol(p)+'"></i><small>'+esc(d.slice(8))+'</small></div>'; }).join('');
+  return '<div class="card pad dr"><div class="dr-h"><div><div class="dr-k">Daily removal rate'+(label?' · '+esc(label):'')+'</div><div class="dr-t">'+esc(lbl(day))+(day===td||day===yd?' <span class="muted" style="font-size:12px;font-weight:600">'+esc(fmtDay(day))+'</span>':'')+'</div></div>'+
+    '<div class="dr-days"><button class="'+(day===td?'on':'')+'" onclick="DRV.day=\''+td+'\';renderView()">Today</button><button class="'+(day===yd?'on':'')+'" onclick="DRV.day=\''+yd+'\';renderView()">Yesterday</button></div></div>'+
+    '<div class="dr-top"><div class="dr-big"><b style="color:'+drCol(pc)+'">'+(pc==null?'—':pc+'%')+'</b><span>'+(chk?(a[2]+a[3])+' of '+chk+' checked posts removed':'no checked posts yet')+'</span><small>'+a[0]+' posted · '+a[1]+' stayed up · '+a[2]+' removed by mods · '+a[3]+' spam filter'+(a[4]?' · <b style="color:#c2410c">'+a[4]+' not checked yet</b>':'')+'</small></div>'+
+    '<div class="dr-tr" title="Last 14 days — tap a day">'+trend+'</div></div>'+
+    '<div class="dr-cols"><div><h4>By model</h4>'+drList(D.model)+'</div><div><h4>By method</h4>'+drList(D.method)+'</div>'+(isAdmin()?'<div><h4>By shift (who posted)</h4>'+drList(D.shift)+'</div>':'')+'</div>'+
+    '<div class="muted" style="font-size:11.5px;margin-top:10px">Morning and night shift together · each post is checked at the end of the shift that posted it · rate = removed by mods + spam filter, of the checked posts. The client sees the same numbers in their portal.</div></div>';
+}
+
 /* one post, any time: set or change its verdict (chips on the board, the record's Posts list) */
 async function postToggle(id, i){
   var r=rowById(id); if(!r) return; var arr=postsOf(r).map(function(p){ return Object.assign({}, p); }), p=arr[i]; if(!p) return;
@@ -2859,7 +3052,7 @@ function postFlag(p){
   if(st==='mod') return '<span class="flag r" title="'+tip+'">Removed by mods</span>';
   if(st==='spam') return '<span class="flag a" title="'+tip+'">Spam filter</span>';
   if(st==='old') return '<span class="flag" style="background:#f1f5f9;color:#64748b" title="Posted before the daily check started (25 Oct) and nobody tagged it — the report counts it as stayed up">Not tagged</span>';
-  if(String(p.d||'')>=td) return '<span class="flag" style="background:#f1f5f9;color:#475569" title="Checked from tomorrow, before the next session">Posted today</span>';
+  if(String(p.d||'')>=td) return '<span class="flag" style="background:#f1f5f9;color:#475569" title="Checked at the end of the shift that posted it — before End of Day">Posted today</span>';
   return '<span class="flag" style="background:#ffedd5;color:#c2410c">Not checked</span>';
 }
 function postsSection(r){
@@ -2895,12 +3088,12 @@ function subDaysCard(S){
   for(var i=0;i<14;i++){ var d=dAdd(td,-i); if(d<PCHK_FROM) break; rows.push(S.days[d]||{ d:d, p:0, up:0, mod:0, spam:0, unk:0, accts:{} }); }
   if(!rows.length) return '';
   var yd=dAdd(td,-1);
-  return '<div class="card pad" style="margin-top:12px"><div class="ch-h"><b>Day by day</b><span>posts by the day they went up · every post is checked the next day, before the account posts again · rate = removed ÷ checked</span></div>'+
+  return '<div class="card pad" style="margin-top:12px"><div class="ch-h"><b>Day by day</b><span>posts by the day they went up · every post is checked at the end of the shift that posted it (anything missed: before the account’s next session) · rate = removed ÷ checked</span></div>'+
     '<div class="tbl-w" style="max-height:none;margin-top:6px"><table class="db"><thead><tr><th class="c1">Day</th><th>Posts</th><th>Stayed up</th><th>Removed by mods</th><th>Spam filter</th><th>Not checked</th><th>Removed</th><th>Accounts</th></tr></thead><tbody>'+
     rows.map(function(D){ var chk=D.up+D.mod+D.spam, rm=D.mod+D.spam, pcx=chk?Math.round(rm/chk*100):0, lb=D.d===td?'Today':(D.d===yd?'Yesterday':fmtDay(D.d));
       return '<tr><td class="c1"><b>'+esc(lb)+'</b>'+(D.d===td||D.d===yd?' <span class="muted" style="font-size:11px">'+esc(fmtDay(D.d))+'</span>':'')+'</td><td class="num">'+(D.p||'·')+'</td>'+
         '<td class="num" style="color:#047857;font-weight:700">'+(D.up||'·')+'</td><td class="num" style="'+(D.mod?'color:#b91c1c;font-weight:800':'')+'">'+(D.mod||'·')+'</td><td class="num" style="'+(D.spam?'color:#b45309;font-weight:800':'')+'">'+(D.spam||'·')+'</td>'+
-        '<td class="num" style="'+(D.unk?'color:#c2410c;font-weight:700':'')+'">'+(D.unk?D.unk+(D.d===td?' <small class="muted">tomorrow</small>':''):'·')+'</td>'+
+        '<td class="num" style="'+(D.unk?'color:#c2410c;font-weight:700':'')+'">'+(D.unk?D.unk+(D.d===td?' <small class="muted">end of shift</small>':''):'·')+'</td>'+
         '<td style="min-width:130px">'+(chk?'<div class="row" style="gap:6px"><div style="flex:1;height:6px;border-radius:6px;background:#f1f5f9;overflow:hidden"><i style="display:block;height:100%;width:'+pcx+'%;background:'+(pcx>=50?'#ef4444':(pcx>=25?'#f59e0b':'#10b981'))+'"></i></div><b style="font-size:11.5px;min-width:32px;text-align:right">'+pcx+'%</b></div>':'<span class="muted">—</span>')+'</td>'+
         '<td class="num">'+(Object.keys(D.accts||{}).length||'·')+'</td></tr>'; }).join('')+'</tbody></table></div></div>';
 }
@@ -2913,10 +3106,11 @@ function vSubs(){
     (admin?'<select class="sel" onchange="SUBS.base=this.value;renderView()"><option value="all">All bases</option>'+BASES.map(function(b){ return '<option value="'+esc(b.id)+'"'+(SUBS.base===b.id?' selected':'')+'>'+esc(b.n)+'</option>'; }).join('')+'</select>':'')+
     '<div class="seg" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(SUBS.range===x[0]?'on':'')+'" onclick="SUBS.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div>'+
     (nSXs?'<div class="seg" style="width:auto"><button class="'+(SUBS.sop!=='sx'?'on':'')+'" onclick="SUBS.sop=\'std\';renderView()">Original SOP</button><button class="'+(SUBS.sop==='sx'?'on':'')+'" onclick="SUBS.sop=\'sx\';renderView()" style="color:'+SX_C+'">Suicidal Operation</button></div>':'')+'</div>';
+  try{ h+='<div style="margin-top:12px"></div>'+drCard(subRows(admin?SUBS.base:'all'), admin&&SUBS.base!=='all'?baseOf(SUBS.base).n:'all bases'); }catch(_dr){}   // Oct 27
   var T=S.tot, ck=T.chk, pc=function(a){ return ck?Math.round(a/ck*100)+'%':'—'; };
   h+='<div class="kpis" style="margin-top:12px">'+kpi('Posts logged',T.posts,rl,'#ec4899')+
     kpi('Stayed up',T.up,ck?pc(T.up)+' of checked posts':'—','#10b981')+kpi('Removed by mods',T.removed-T.spam,ck?pc(T.removed-T.spam)+' of checked posts':'—','#ef4444')+kpi('Spam filter',T.spam,ck?pc(T.spam)+' of checked posts':'—','#f59e0b')+
-    kpi('Not checked',T.unk,T.unk?(T.unkToday?T.unkToday+' posted today · checked tomorrow':'left out of every rate'):'every post checked','#f97316')+
+    kpi('Not checked',T.unk,T.unk?(T.unkToday?T.unkToday+' posted today · checked at the end of the shift':'left out of every rate'):'every post checked','#f97316')+
     kpi('Subreddits',S.list.length,'used · '+rl,'#a855f7')+kpi('Accounts posting',T.accts,'with at least one post','#0ea5e9')+'</div>';
   if(T.old) h+='<div class="note i" style="margin-top:10px">Since 25 Oct every post gets a verdict the next day, before the account posts again. The '+T.old+' older post'+(T.old===1?'':'s')+' nobody tagged before then still count as stayed up, so rates that reach back past 25 Oct may run low.</div>';
   h+=subDaysCard(S);
