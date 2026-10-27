@@ -887,6 +887,25 @@ async function jFetch(url, tries){
     }catch(e){ if(a===tries) throw e; await new Promise(function(res){ setTimeout(res, 600*(a+1)); }); }
   }
 }
+/* ── Oct 27 (Julian, Slaybae: "the pre-flight won't save even after attaching the screenshots"): every board write rode in the
+   URL of a GET, and Google refuses a URL over ~12 KB (the browser only says "Failed to fetch"). A phone's row carries its
+   pre-flight history with three screenshot links per check, so the busiest phones crossed that line and every save on them
+   failed — the phone stayed locked, nothing could be logged and the portal timer ran out. Long writes now go as a POST
+   (Portal API 27e routes pa_update); short ones stay as they were. Before 27e is deployed, a long write that still fits in
+   a URL goes the old way. ── */
+var PA_GET_MAX=7000;
+async function paUpdate(id, q){
+  var url=API+'?action=pa_update&id='+encodeURIComponent(id)+Object.keys(q).map(function(k){ return '&'+k+'='+encodeURIComponent(q[k]); }).join('')+'&_='+Date.now();
+  if(url.length<=PA_GET_MAX) return jFetch(url, 1);
+  var body=JSON.stringify(Object.assign({ action:'pa_update', id:id }, q)), d=null;
+  for(var a=0;a<2 && !d;a++){
+    try{ var r=await fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:body }); d=await r.json(); }
+    catch(e){ d=null; if(a===0) await new Promise(function(res){ setTimeout(res, 900); }); }
+  }
+  if(d && d.error!=='UNKNOWN_ACTION') return d;
+  if(url.length<11500) return jFetch(url, 1);
+  return { error:d?'this save needs the latest Portal API (27e)':'connection' };
+}
 function apiGet(q){ var u=API+'?'+Object.keys(q).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(q[k]==null?'':q[k]); }).join('&')+'&_='+Date.now(); return jFetch(u, 1); }
 
 /* ── who is signed in ── */
@@ -1416,8 +1435,8 @@ function hubWork(what){ WORK.at=Date.now(); WORK.what=String(what||''); try{ if(
       var url=String((u&&u.url)||u||'');
       if(url.indexOf(API)===0){
         var hit=RX.test(url);
-        if(!hit && o && typeof o.body==='string' && /"action"\s*:\s*"(proof_save|proof_img)"/.test(o.body)) hit=true;
-        if(hit && USER && !isOwner()) hubWork((url.match(/action=(\w+)/)||[])[1]||'proof');
+        if(!hit && o && typeof o.body==='string' && /"action"\s*:\s*"(proof_save|proof_img|pa_update|pa_add)"/.test(o.body)) hit=true;
+        if(hit && USER && !isOwner()) hubWork((url.match(/action=(\w+)/)||(o&&typeof o.body==='string'?o.body.match(/"action"\s*:\s*"(\w+)"/):null)||[])[1]||'proof');
       }
     }catch(e){}
     return f0.apply(this, arguments);
@@ -1935,7 +1954,7 @@ var DS=(function(){
   function rowById(id){ return S.rows.filter(function(x){ return x.id===id; })[0]; }
   async function upd(id, q, okMsg){
     try{
-      var d=await jFetch(API+'?action=pa_update&id='+encodeURIComponent(id)+Object.keys(q).map(function(k){ return '&'+k+'='+encodeURIComponent(q[k]); }).join('')+'&_='+Date.now(), 1);
+      var d=await paUpdate(id, q);
       if(d&&d.ok){ toast(okMsg); load(); return true; }
       toast('Could not update — '+((d&&d.error)||'try again')+'.'); return false;
     }catch(e){ toast('Connection error.'); return false; }
@@ -2084,6 +2103,7 @@ function IGPhones(CFG){
       S.rows=(d.rows||[]).map(function(r){ r.meta=r.meta||{}; return r; }); S.loaded=true; S.err=''; cacheRows();
     }catch(e){ S.err='Could not load — check your connection, then refresh.'; }
     HUB.onData(CID);
+    try{ if(USER && !isOwner() && pfqGet().length){ pfqStart(); if(!PFQ.busy) setTimeout(pfqFlush, 1500); } }catch(_q){}
   }
   function phones(){ return S.rows.filter(function(r){ return r.meta.kind==='phone'; }).sort(function(a,b){ return String(a.handle).localeCompare(String(b.handle), undefined, { numeric:true }); }); }
   function accts(){ return S.rows.filter(function(r){ return r.meta.kind==='acct'; }); }
@@ -2324,8 +2344,41 @@ function IGPhones(CFG){
 
   /* ── pre-flight (per phone, per shift) ── */
   function sessKey(){ return vaKeyOf(me()); }
-  function pfList(p, date){ return (((p.meta||{}).pf||{})[date||today()]||[]).slice(); }
-  function pfOk(x){ return x && x.maps && x.ip && x.scam && x.mgr && x.okMaps && x.okIp && x.okScam && +x.fraud>=0 && +x.fraud<=FRAUD_MAX && x.review!=='bad'; }
+  function pfList(p, date){ date=date||today(); var L=(((p.meta||{}).pf||{})[date]||[]).slice(), seen={}; L.forEach(function(x){ if(x&&x.at) seen[x.at]=1; });
+    pfqGet().forEach(function(q){ if(q.pid===p.id && q.date===date && q.rec && !seen[q.rec.at]) L.push(q.rec); }); return L; }
+  function pfOk(x){ return x && (x.lite ? +x.s3===1 : !!(x.maps && x.ip && x.scam)) && x.mgr && x.okMaps && x.okIp && x.okScam && +x.fraud>=0 && +x.fraud<=FRAUD_MAX && x.review!=='bad'; }
+  /* Oct 27 — keep a phone's row small. The screenshot links stay on today's and yesterday's checks only (every check is also
+     saved with its proof record, links included); older checks keep who, when, the fraud score, the three location checks,
+     the manager's go-ahead and the review — everything the QA tab and the month scorecard read. History is kept back to the
+     1st of last month, so a month can still be scored after it ends (it was a flat 21 days). */
+  function pfCompact(m){
+    if(!m || !m.pf) return m;
+    var t=today(), keepFrom=hubDayAdd(t.slice(0,8)+'01', -1).slice(0,8)+'01', cut=hubDayAdd(t,-1);
+    Object.keys(m.pf).forEach(function(d){
+      if(d<keepFrom){ delete m.pf[d]; return; }
+      if(d>=cut) return;
+      (m.pf[d]||[]).forEach(function(x){ if(!x || x.lite) return;
+        x.s3=(x.maps&&x.ip&&x.scam)?1:0; var n=0; ['maps','ip','scam','mgrShot'].forEach(function(k){ if(x[k]) n++; delete x[k]; });
+        x.shots=n; x.lite=1; delete x.sess; if(!x.mgrName) delete x.mgrName; });
+    });
+    return m;
+  }
+  /* Oct 27 — a pre-flight whose screenshots are uploaded is never lost: if the sheet can't take it right now it waits on this
+     computer (the phone opens for the shift) and is sent again every minute until it lands. */
+  function pfqKey(){ return KP+'_pfq_'+me(); }
+  function pfqGet(){ try{ var L=JSON.parse(localStorage.getItem(pfqKey())||'[]'); return Array.isArray(L)?L.filter(function(q){ return q && q.date>=hubDayAdd(today(),-1); }):[]; }catch(e){ return []; } }
+  function pfqSet(L){ try{ if(L.length) localStorage.setItem(pfqKey(), JSON.stringify(L)); else localStorage.removeItem(pfqKey()); }catch(e){} }
+  var PFQ={ busy:false, timer:null };
+  async function pfqFlush(){
+    if(PFQ.busy || isOwner()) return; var L=pfqGet(); if(!L.length) return; PFQ.busy=true;
+    try{
+      for(var i=0;i<L.length;i++){ var q=L[i];
+        var ok=await guarded(q.pid, function(){ return patchMeta(q.pid, function(m){ m.pf=m.pf||{}; var D=(m.pf[q.date]=m.pf[q.date]||[]); if(D.some(function(x){ return x && x.at===q.rec.at; })) return; D.push(q.rec); }, null, false); });
+        if(ok===true){ pfqSet(pfqGet().filter(function(x){ return !(x.pid===q.pid && x.rec && x.rec.at===q.rec.at); })); try{ toast('Pre-flight on '+(phoneLabel(rowById(q.pid)||{handle:''})||'the phone')+' synced to the sheet.'); }catch(_t){} }
+      }
+    } finally { PFQ.busy=false; }
+  }
+  function pfqStart(){ if(PFQ.timer) return; PFQ.timer=setInterval(function(){ try{ if(pfqGet().length) pfqFlush(); }catch(e){} }, 60000); }
   /* the latest pre-flight on this phone this shift (anyone's — two VAs on one phone share the check) */
   function pfNow(p){ var k=sessKey(), L=pfList(p).filter(function(x){ return x.sess===k; }); return L.length?L[L.length-1]:null; }
   function phoneOpen(p){ if(isOwner()) return true; var x=pfNow(p); return !!(x && pfOk(x)); }
@@ -2335,15 +2388,16 @@ function IGPhones(CFG){
   /* ── writes ── */
   async function upd(id, q, okMsg){
     try{
-      var d=await jFetch(API+'?action=pa_update&id='+encodeURIComponent(id)+Object.keys(q).map(function(k){ return '&'+k+'='+encodeURIComponent(q[k]); }).join('')+'&_='+Date.now(), 1);
+      var d=await paUpdate(id, q);
       if(d&&d.ok){ if(okMsg) toast(okMsg); return true; }
-      toast('Could not save — '+((d&&d.error)||'try again')+'.'); return false;
-    }catch(e){ toast('Connection error — nothing was saved.'); return false; }
+      if(okMsg!==false) toast('Could not save — '+((d&&d.error)||'try again')+'.'); return false;
+    }catch(e){ if(okMsg!==false) toast('Connection error — nothing was saved.'); return false; }
   }
   /* read-modify-write of one row's meta, on the freshest copy */
   async function patchMeta(id, fn, extra, okMsg){
     await load(); var r=rowById(id); if(!r) { toast('That entry is gone — refresh.'); return false; }
     var m=JSON.parse(JSON.stringify(r.meta||{})); var res=fn(m, r); if(res===false) return false;
+    if(m.kind==='phone') pfCompact(m);   // Oct 27: a phone's row stays small (see pfCompact)
     var q=Object.assign({ meta:JSON.stringify(m) }, extra||{});
     var ok=await upd(id, q, okMsg); if(ok){ r.meta=m; Object.keys(extra||{}).forEach(function(k){ r[k]=extra[k]; }); cacheRows(); paint(); setTimeout(load, 1500); }
     return ok;
@@ -2411,13 +2465,16 @@ function IGPhones(CFG){
       if(!(R0 && R0.ends && R0.aid===aid && R0.ends<=Date.now())){ toast(R0 && R0.ends && R0.aid===aid?('Keep scrolling — '+downClock(R0.ends-Date.now())+' left.'):('Press ▶ Start 15:00 on '+a.handle+' first — the scroll counts once the 15 minutes are done.')); return; } }
     if(k!=='scroll' && p) tmAuto(p.id, k);   // Oct 14: the timer starts by itself
     if(!(await linkGate(CL(), 'Logging work'))) return;
-    try{ await bump(PROJECT, T[k], 1); }catch(e){ return; }
-    await guarded(aid, function(){ return patchMeta(aid, function(m){
+    /* Oct 27: the step is counted (po_bump) only once it is saved on the account — a failed save used to leave the count in
+       the portal with nothing on the board, and the VA's retry counted it twice */
+    var _ok=await guarded(aid, function(){ return patchMeta(aid, function(m){
       var d=today(); m.log=m.log||{}; var L=m.log[d]=m.log[d]||{};
       L[k]=(+L[k]||0)+1; L.by=L.by||me(); if(!L.t) L.t=new Date().toISOString();
       L.who=L.who||{}; L.who[me()]=(+L.who[me()]||0)+1;
       Object.keys(m.log).sort().slice(0,-45).forEach(function(old){ delete m.log[old]; });   // keep ~6 weeks
     }, null, '+1 '+T[k]+' · '+a.handle); });
+    if(_ok!==true) return;
+    try{ bump(PROJECT, T[k], 1); }catch(e){}
     if(k==='scroll' && TM.run && TM.run.ends && TM.run.aid===aid){ TM.run=null; tmSave(); tmAuto(a.meta.phone, 'work'); tmPaint(true); } else tmTouch();   // after a scroll the phone work carries on, timed
     try{ snap(); }catch(_s){}
   }
@@ -2549,10 +2606,11 @@ function IGPhones(CFG){
     if(!(PF.shots.maps&&PF.shots.ip&&PF.shots.scam) || isNaN(fr)) return;
     if(!(await linkGate(CL(), 'The pre-flight'))) return;
     var go=$(''+PX+'-pf-go'); if(go){ go.disabled=true; go.textContent='Saving…'; }
-    var up={};
+    var up={}; PF.up=PF.up||{};
     try{
       var keys=['maps','ip','scam','mgr'].filter(function(k){ return PF.shots[k]; });
-      for(var i=0;i<keys.length;i++){ up[keys[i]]=await psUpload(PF.shots[keys[i]], me(), 'preflight-'+phoneLabel(p)+'-'+keys[i]); }
+      for(var i=0;i<keys.length;i++){ var uk=keys[i]+'|'+pupKey(PF.shots[keys[i]]);   // Oct 27: a retry doesn't upload the same screenshot again
+        up[keys[i]]=PF.up[uk] || (PF.up[uk]=await psUpload(PF.shots[keys[i]], me(), 'preflight-'+phoneLabel(p)+'-'+keys[i])); }
     }catch(e){ toast('Upload failed — check your connection and save again.'); if(go){ go.disabled=false; go.textContent='Save pre-flight'; } return; }
     var rec={ at:new Date().toISOString(), by:me(), sess:sessKey(), fraud:Math.round(fr*10)/10,
       okMaps:ok(''+PX+'-ok-m'), okIp:ok(''+PX+'-ok-i'), okScam:ok(''+PX+'-ok-s'), mgr:ok(''+PX+'-ok-g'), mgrName:String(($(''+PX+'-pf-who')||{}).value||'').slice(0,40),
@@ -2561,11 +2619,16 @@ function IGPhones(CFG){
     /* the screenshots are the proof — recorded like every other proof, and the check counts as work */
     try{ fetch(API, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({ action:'proof_save', employee_id:me(), full_name:(USER&&USER.name)||me(), project:PROJECT, task:T.pre, account:phoneLabel(p), date:today(), outputs:1, note:(clean?'clean':'STOP')+' · fraud '+rec.fraud, urls:[rec.maps,rec.ip,rec.scam].concat(rec.mgrShot?[rec.mgrShot]:[]) }) }).catch(function(){}); }catch(_p){}
     try{ fetch(API+'?action=po_bump&employee_id='+encodeURIComponent(me())+'&project='+encodeURIComponent(PROJECT)+'&task='+encodeURIComponent(T.pre)+'&n=1&_='+Date.now()).catch(function(){}); }catch(_b){}
+    var day=today();
     var saved=await guarded(p.id, function(){ return patchMeta(p.id, function(m){
-      var d=today(); m.pf=m.pf||{}; (m.pf[d]=m.pf[d]||[]).push(rec);
-      Object.keys(m.pf).sort().slice(0,-21).forEach(function(old){ delete m.pf[old]; });   // three weeks of history
+      m.pf=m.pf||{}; (m.pf[day]=m.pf[day]||[]).push(rec);   // pfCompact (in patchMeta) keeps the history short
     }, null, clean?('Pre-flight logged — '+phoneLabel(p)+' is open for this shift. +1 '+T.pre):'Logged as STOP — don\'t open Instagram on '+phoneLabel(p)+'. Tell a manager.'); });
-    if(saved) pfClose(); else if(go){ go.disabled=false; go.textContent='Save pre-flight'; }
+    if(saved===true){ pfClose(); return; }
+    if(saved===undefined){ if(go){ go.disabled=false; go.textContent='Save pre-flight'; } toast('Still saving the last change on '+phoneLabel(p)+' — try again in a few seconds.'); return; }
+    /* the screenshots are uploaded and recorded as proof — keep the check on this computer, open the phone, keep trying */
+    var Q=pfqGet(); Q.push({ pid:p.id, date:day, rec:rec, at:Date.now() }); pfqSet(Q); pfqStart();
+    pfClose(); paint();
+    toast(clean?('Pre-flight kept on this computer — '+phoneLabel(p)+' is open. It syncs to the sheet by itself.'):'STOP kept on this computer — don\'t open Instagram on '+phoneLabel(p)+'. It syncs by itself.');
   }
   async function pfReview(pid, date, ix, verdict){
     if(!isOwner()) return;
@@ -2738,7 +2801,7 @@ function IGPhones(CFG){
     var days=Object.keys(p.meta.pf||{}).sort().reverse().slice(0,7); if(!days.length) return '<div class="ihist muted">No pre-flights logged yet.</div>';
     return '<div class="ihist"><div class="is-h"><b>Pre-flight log</b><span class="muted">last 7 days</span></div>'+days.map(function(d){
       return (p.meta.pf[d]||[]).map(function(x, ix){
-        var thumbs=['maps','ip','scam','mgrShot'].filter(function(k){ return x[k]; }).map(function(k){ return '<a href="'+esc(x[k])+'" target="_blank" rel="noopener"><img src="'+esc(x[k])+'" alt="'+k+'"></a>'; }).join('');
+        var thumbs=x.lite?'<span class="muted" style="font-size:11px">'+(+x.shots||0)+' screenshots · in the proof log</span>':['maps','ip','scam','mgrShot'].filter(function(k){ return x[k]; }).map(function(k){ return '<a href="'+esc(x[k])+'" target="_blank" rel="noopener"><img src="'+esc(x[k])+'" alt="'+k+'"></a>'; }).join('');
         var rv=isOwner()?'<span class="rv"><button class="'+(x.review==='ok'?'on':'')+'" onclick="'+NS+'.pfReview(\''+jsq(p.id)+'\',\''+d+'\','+ix+',\'ok\')">✓ OK</button><button class="'+(x.review==='bad'?'on bad':'')+'" onclick="'+NS+'.pfReview(\''+jsq(p.id)+'\',\''+d+'\','+ix+',\'bad\')">✕ Not acceptable</button></span>':(x.review==='bad'?chip('bad','Not acceptable'):(x.review==='ok'?chip('ok','Reviewed'):''));
         return '<div class="ih-r'+(pfOk(x)?'':' stop')+'"><div class="ih-m"><b>'+esc(d)+' · '+esc(fmtT(x.at))+'</b><small>'+esc(vaName(x.by))+' · fraud '+esc(x.fraud)+(x.mgr?' · manager ✓'+(x.mgrName?' ('+esc(x.mgrName)+')':''):' · no manager go-ahead')+(pfOk(x)?'':' · STOP')+'</small></div><div class="ih-th">'+thumbs+'</div>'+rv+'</div>';
       }).join('');
@@ -3004,7 +3067,7 @@ var EM=(function(){
   function rowById(id){ return S.rows.filter(function(x){ return x.id===id; })[0]; }
   async function upd(id, q){
     try{
-      var d=await jFetch(API+'?action=pa_update&id='+encodeURIComponent(id)+Object.keys(q).map(function(k){ return '&'+k+'='+encodeURIComponent(q[k]); }).join('')+'&_='+Date.now(), 1);
+      var d=await paUpdate(id, q);
       if(d&&d.ok) return true;
       toast('Could not update — '+((d&&d.error)||'try again')+'.'); return false;
     }catch(e){ toast('Connection error.'); return false; }
@@ -3320,7 +3383,7 @@ var SKY=(function(){
   /* ── writes ── */
   async function upd(id, q, okMsg){
     try{
-      var d=await jFetch(API+'?action=pa_update&id='+encodeURIComponent(id)+Object.keys(q).map(function(k){ return '&'+k+'='+encodeURIComponent(q[k]); }).join('')+'&_='+Date.now(), 1);
+      var d=await paUpdate(id, q);
       if(d&&d.ok){ if(okMsg) toast(okMsg); return true; }
       toast('Could not save — '+((d&&d.error)||'try again')+'.'); return false;
     }catch(e){ toast('Connection error.'); return false; }
@@ -3541,7 +3604,7 @@ var P2=(function(){
   function queued(fn){ var p=_q.then(fn, fn); _q=p.then(function(){}, function(){}); return p; }
   async function upd(id, q, okMsg){
     try{
-      var d=await jFetch(API+'?action=pa_update&id='+encodeURIComponent(id)+Object.keys(q).map(function(k){ return '&'+k+'='+encodeURIComponent(q[k]); }).join('')+'&_='+Date.now(), 1);
+      var d=await paUpdate(id, q);
       if(d&&d.ok){ if(okMsg) toast(okMsg); return true; }
       toast('Could not save — '+((d&&d.error)||'try again')+'.'); return false;
     }catch(e){ toast('Connection error — nothing was saved.'); return false; }
@@ -4218,7 +4281,7 @@ var THR=(function(){
   /* ── writes ── */
   async function upd(id, q, okMsg){
     try{
-      var d=await jFetch(API+'?action=pa_update&id='+encodeURIComponent(id)+Object.keys(q).map(function(k){ return '&'+k+'='+encodeURIComponent(q[k]); }).join('')+'&_='+Date.now(), 1);
+      var d=await paUpdate(id, q);
       if(d&&d.ok){ if(okMsg) toast(okMsg); return true; }
       toast('Could not save — '+((d&&d.error)||'try again')+'.'); return false;
     }catch(e){ toast('Connection error.'); return false; }
