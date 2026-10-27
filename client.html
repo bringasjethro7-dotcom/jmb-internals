@@ -2745,7 +2745,8 @@ function drcCss(){
   document.head.appendChild(st);
 }
 function drcList(obj, lab){
-  var L=Object.keys(obj||{}).map(function(k){ return { k:lab?lab(k):k, a:obj[k], pc:drcRate(obj[k]) }; }).sort(function(x,y){ return (y.a[0]-x.a[0]) || (x.k<y.k?-1:1); });
+  var M={}; Object.keys(obj||{}).forEach(function(k){ var l=lab?lab(k):k, a=obj[k]||[], b=M[l]||(M[l]=[0,0,0,0,0]); for(var i=0;i<5;i++) b[i]+=(+a[i]||0); });   // "Arya/Kaia" + "Arya & Kaia" → one row
+  var L=Object.keys(M).map(function(k){ return { k:k, a:M[k], pc:drcRate(M[k]) }; }).sort(function(x,y){ return (y.a[0]-x.a[0]) || (x.k<y.k?-1:1); });
   if(!L.length) return '<div style="font-size:12.5px;color:var(--ink3)">No posts this day.</div>';
   return L.map(function(x){ var a=x.a, c=a[1]+a[2]+a[3];
     return '<div class="cx-dr-r"><div class="nm" title="'+esc(x.k)+'">'+esc(x.k)+'<small>'+a[0]+' post'+(a[0]===1?'':'s')+(c?' · '+(a[2]+a[3])+' taken down':'')+(a[4]?' · '+a[4]+' not checked yet':'')+'</small></div>'+

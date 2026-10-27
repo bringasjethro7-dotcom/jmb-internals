@@ -2969,8 +2969,14 @@ function drStats(rows, nDays){
   var td=today(), days={}, order=[];
   for(var i=0;i<(nDays||14);i++){ var d=dAdd(td,-i); if(d<PCHK_FROM) break; days[d]={ d:d, t:[0,0,0,0,0], model:{}, method:{}, shift:{} }; order.push(d); }
   function add(a, st){ a[0]++; a[st==='mod'?2:(st==='spam'?3:(st==='unk'?4:1))]++; }
+  /* one model however it was typed ("Arya/Kaia" = "Arya & Kaia" = "Kaia + Arya") — labelled by its most used spelling */
+  function mParts(v){ return String(v||'').split(/\s*(?:[\/⁄∕\\|&+,;]|\s(?:and|x)\s)\s*/i).map(function(x){ return x.replace(/\s+/g,' ').trim(); }).filter(Boolean); }
+  function mKey(v){ var p=mParts(v); return p.length?p.map(function(x){ return x.toLowerCase(); }).sort().join('|'):''; }
+  var mCnt={}, mLab={};
+  (rows||[]).forEach(function(r){ var raw=String(r.model||'').trim(), k=mKey(raw); if(!k) return; var c=mCnt[k]||(mCnt[k]={}); c[raw]=(c[raw]||0)+1; });
+  Object.keys(mCnt).forEach(function(k){ var best='', n=-1; Object.keys(mCnt[k]).forEach(function(s){ if(mCnt[k][s]>n){ n=mCnt[k][s]; best=s; } }); var p=mParts(best); mLab[k]=p.length>1?p.join(' & '):best; });
   (rows||[]).forEach(function(r){
-    var mo=String(r.model||'').trim()||'No model', me=methodOf(r)||'No method';
+    var mo=mLab[mKey(r.model)]||String(r.model||'').trim()||'No model', me=methodOf(r)||'No method';
     postsOf(r).forEach(function(p){ if(!p || !p.r) return; var D=days[String(p.d||'')]; if(!D) return; var st=postState(p); if(st==='old') st='up';
       var sh=SHIFTOF[String(p.b||'').toLowerCase()]==='night'?'Night shift':'Morning shift';
       add(D.t, st); add(D.model[mo]||(D.model[mo]=[0,0,0,0,0]), st); add(D.method[me]||(D.method[me]=[0,0,0,0,0]), st); add(D.shift[sh]||(D.shift[sh]=[0,0,0,0,0]), st); });
