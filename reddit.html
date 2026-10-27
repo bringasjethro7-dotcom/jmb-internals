@@ -623,8 +623,8 @@ var EXTRA=[
    It never climbs the ladder and its numbers are kept apart: every account on it carries meta.sop="sx" for life, the
    ladder's Pipeline / Insights / Results leave it out, and it has its own views. Its sessions and creations still count as work. */
 var SXPH=[
- {k:'sxwarm', n:'Suicidal · Warm-up', c:'#14b8a6', sx:true, from:2, plan:'Day 2 (or day 3 at the latest) · 8–12 min browsing · search 2–4 topics and read them · no upvotes · no joining · no posting yet. Posting opens on day 3.', task:'Reddit Warmup'},
- {k:'sxpost', n:'Suicidal · Posting', c:'#0f766e', sx:true, from:3, plan:'Day 3 onward · post the way the client assigned this account (its assignment is on the card — e.g. Location posting). No assignment yet? Ask the admin before you post. Log every post at the end of the session.', task:'Reddit Posting'}
+ {k:'sxwarm', n:'Suicidal · Warm-up', c:'#14b8a6', sx:true, from:2, plan:'ONE warm-up session, on day 2 (or day 3 at the latest) · 8–12 min browsing · search 2–4 topics and read them · no upvotes · no joining · no posting yet. After it, nothing is due on the account until it posts — posting opens on day 3.', task:'Reddit Warmup'},
+ {k:'sxpost', n:'Suicidal · Posting', c:'#0f766e', sx:true, from:3, plan:'Day 3 onward, once warmed · 2 sessions a day · post the way the client assigned this account (its assignment is on the card — e.g. Location posting). No assignment yet? Ask the admin before you post — until it is set the account is not in your target. Log every post at the end of the session.', task:'Reddit Posting'}
 ];
 var SX_STAGES=['sxwarm','sxpost'];
 var SX_OK=['new','sxwarm','sxpost','recovery','tempban','onhold','archived','banned'];   // where a Suicidal Operation account can be
@@ -636,6 +636,38 @@ function sxAssign(r){ return String(((r&&r.meta)||{}).sxa||'').trim(); }
 function sxAssignList(){ return (Array.isArray(CFG.sx_assign)&&CFG.sx_assign.length)?CFG.sx_assign.slice():['Location posting']; }
 function sxBadge(small){ return '<span class="pill" style="background:'+SX_C+'14;color:'+SX_C+(small?';font-size:10.5px;padding:2px 8px':'')+'" title="Suicidal Operation — its own SOP: day 1 created · day 2–3 warm-up · day 3+ posting as the client assigns">Suicidal Op</span>'; }
 function sxPosted(r){ return r.status==='sxpost' || ((r.meta||{}).prev==='sxpost'); }
+/* Oct 27 (Jeth): what a Suicidal Operation account owes TODAY, by its own SOP — not the ladder's "2 per account".
+   • Warm-up = ONE session, once (day 2, or day 3 at the latest). Once done, the account owes nothing until it posts.
+   • Posting = 2 sessions a day, but only once the client's posting assignment is recorded. With no assignment the SOP
+     says "ask the admin before you post", so it is not the VA's target yet (sessions already done still count). */
+function sxWarmAt(r){ var m=M(r); if(m.sxw) return String(m.sxw); if(r.status==='sxwarm' && m.s1 && String(m.s1).slice(0,10)>=String(m.pstart||'')) return String(m.s1); return ''; }
+function sxUnits(r, wk, ow){
+  var m=M(r), s1=markOkAny(m.s1,wk,ow)?1:0, s2=markOkAny(m.s2,wk,ow)?1:0;
+  if(r.status==='sxwarm'){
+    if(s1) return { tot:1, done:1, k:'warm' };
+    if(sxWarmAt(r)) return { tot:0, done:0, k:'warmed' };
+    return { tot:1, done:0, k:'warm', late:sxDay(r)>=3, over:sxDay(r)>=4 };
+  }
+  if(r.status==='sxpost'){
+    if(!sxAssign(r)) return { tot:s1+s2, done:s1+s2, k:'noassign' };
+    return { tot:2, done:s1+s2, k:'post' };
+  }
+  return null;
+}
+/* the day's Suicidal Operation picture for a set of rows (banners + "how is this counted") */
+function sxToday(rows){
+  var o={ warm:0, warmDone:0, late:0, over:0, warmed:0, ready:0, noassign:0, post:0, newToday:0 };
+  rows.forEach(function(r){ if(!isSX(r) || isParked(r) || isDead(r) || isHeld(r)) return;
+    if(r.status==='new'){ o.newToday++; return; }
+    var u=sxUnits(r, worksFor(r), owner(r)); if(!u) return;
+    if(u.k==='warm'){ o.warm++; if(u.done) o.warmDone++; else { if(u.late) o.late++; if(u.over) o.over++; } }
+    else if(u.k==='warmed'){ o.warmed++; if(sxDay(r)>=3) o.ready++; }
+    else if(u.k==='noassign') o.noassign++;
+    else o.post++;
+    if(u.k==='warm' && u.done && sxDay(r)>=3) o.ready++;
+  });
+  return o;
+}
 var ERR_TXT={ SX_DAY3:'Posting opens on day 3 of the account (Suicidal Operation).', SX_LADDER:'A Suicidal Operation account can\'t go onto the ladder — ask the admin.', SX_OWNER_ONLY:'Only the admin can move an account onto the Suicidal Operation.', OWNER_ONLY:'Only the owner can do that.' };
 var ORDER=['new','creation','creationstandby','warming','comment','nsfw','day1','early','earlydm','medium','strong','superstrong','sxwarm','sxpost','recovery','tempban','onhold','archived','banned'];
 var GROUPS=[
@@ -1199,6 +1231,8 @@ function progOf(rows, worker){
     if(!worker) cr=creationOf(r, crBy||wk, crBy||ow);
     else if(!crBy || crBy===wk) cr=creationOf(r, wk, ow);
     if(cr){ tot+=1; if(cr.done) done+=1; }
+    var sxu=(r.status==='sxwarm'||r.status==='sxpost')?sxUnits(r, wk, ow):null;   // Oct 27: the Suicidal Operation's own SOP
+    if(sxu){ tot+=sxu.tot; done+=sxu.done; return; }
     if(isWorkable(r)){ tot+=2; if(markOkAny(m.s1,wk,ow)) done++; if(markOkAny(m.s2,wk,ow)) done++; return; }
     if(r.status==='new') return;
     if(r.status==='banned'||r.status==='tempban'){
@@ -1274,6 +1308,16 @@ function vToday(){
   try{ if(!admin){ var _pk=0, _pa=0; mineWork.forEach(function(r){ if(isHeld(r) || isParked(r)) return; var n0=pchkPending(r).length; if(n0){ _pk+=n0; _pa++; } });   // Oct 25: the post check
     if(_pk) h+='<div class="banner warn">'+IC.search+'<div style="flex:1"><b>Post check:</b> '+_pk+' earlier post'+(_pk===1?'':'s')+' on '+_pa+' of your account'+(_pa===1?'':'s')+' to mark — <b>stayed up</b>, <b>removed by mods</b> or <b>spam filter</b>. Each account asks for it before its next session; tap the orange <b>“to check”</b> chip on the account to do it now.</div></div>'; } }catch(_pkb){}
   try{ if(!admin && ROWS.some(function(r){ return worksFor(r)===me && isPostingStage(r.status) && !isParked(r); })){ var _av=subAvoidAll(); if(_av.length) h+='<div class="banner bad">'+IC.ban+'<div style="flex:1"><b>Don\'t post in:</b> '+_av.slice(0,12).map(function(x){ return esc(x.name); }).join(', ')+(_av.length>12?' …':'')+' — they keep removing our posts. <a href="#" onclick="go(\'subs\');return false" style="color:inherit;font-weight:800">See the subreddit report</a></div></div>'; } }catch(_sb){}
+  try{   // Oct 27: the Suicidal Operation's day — one warm-up per account (day 2, day 3 at the latest), posting needs an assignment
+    var _sxRows=admin?(ALL[PROJECT]||ROWS).filter(function(r){ return !isParked(r); }):mineWork, _sx=sxToday(_sxRows);
+    var _sxNoA=_sxRows.filter(function(r){ return isSX(r) && !isDead(r) && !isParked(r) && !sxAssign(r) && (r.status==='sxpost' || (r.status==='sxwarm' && sxDay(r)>=3)); }).length;
+    var _wLeft=_sx.warm-_sx.warmDone;
+    if(_wLeft) h+='<div class="banner '+(_sx.over?'bad':'warn')+'" style="border-color:'+SX_C+'55">'+IC.hour+'<div style="flex:1"><b>Suicidal Op warm-ups:</b> '+_wLeft+' left today'+(_sx.warmDone?' ('+_sx.warmDone+' done)':'')+' — one 8–12 min session per account, then it owes nothing until it posts.'+
+      (_sx.late-_sx.over>0?' <b>'+(_sx.late-_sx.over)+'</b> '+((_sx.late-_sx.over)===1?'is':'are')+' on <b>day 3 — the SOP\'s last day</b> for the warm-up.':'')+
+      (_sx.over?' <b style="color:#b91c1c">'+_sx.over+' '+(_sx.over===1?'is':'are')+' past day 3 and never warmed.</b>':'')+'</div></div>';
+    if(_sxNoA) h+='<div class="banner info" style="border-color:'+SX_C+'55">'+IC.tag+'<div style="flex:1"><b>'+_sxNoA+' Suicidal Op account'+(_sxNoA===1?' is':'s are')+' on day 3+ with no posting assignment.</b> '+(admin?'The VA can\'t post '+(_sxNoA===1?'it':'them')+' until you record what the client assigned. They are kept out of the daily target until then.':'Ask the admin for the assignment before posting — until it is set, '+(_sxNoA===1?'it is':'they are')+' not in your target.')+'</div>'+
+      (admin?'<button class="btn sm dark" onclick="DB.sop=\'sx\';go(\'accounts\')">Set assignments</button>':'')+'</div>';
+  }catch(_sxb){}
   var covering=mineWork.filter(function(r){ return owner(r)!==me; });
   if(covering.length){
     var whose={}; covering.forEach(function(r){ var o=owner(r); whose[o]=(whose[o]||0)+1; });
@@ -1299,7 +1343,7 @@ function vToday(){
   var att=scopeRows.filter(needsAttention).length;
   var bannedWk=scopeRows.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<7; }).length;
   h+='<div class="kpis">'+
-    '<div class="card kpi"><div class="ringw"><div class="ring" style="--v:'+p.pct+'" data-t="'+p.pct+'%"></div><div><div class="k-l">'+(admin&&TD.va==='all'?'Team sessions':'Sessions today')+'</div><div class="k-v">'+p.done+'<span style="font-size:15px;color:var(--ink3)"> / '+p.tot+'</span></div><div class="k-s">2 per account · resets at your shift start</div></div></div></div>'+
+    '<div class="card kpi"><div class="ringw"><div class="ring" style="--v:'+p.pct+'" data-t="'+p.pct+'%"></div><div><div class="k-l">'+(admin&&TD.va==='all'?'Team sessions':'Sessions today')+'</div><div class="k-v">'+p.done+'<span style="font-size:15px;color:var(--ink3)"> / '+p.tot+'</span></div><div class="k-s">2 per account · Suicidal Op: 1 warm-up, then 2 once assigned · resets at your shift start</div></div></div></div>'+
     kpi('Created this shift', createdToday, 'setup finished & counted', '#ff6b1a')+
     kpi('Active accounts', active, 'in play — banned, on hold and archived are left out', '#a855f7')+
     kpi('Needs attention', att, 'recovery · temp ban · unfinished · stuck karma', att?'#ef4444':'#10b981')+
@@ -1483,10 +1527,8 @@ function rowHtml(r){
     prog='<span class="note i" title="10 min browsing · reply to 2–3 comments · no upvotes. Nothing left to reply to? Comment in the location subreddits. No posting until clear.">Recovery — browse and reply only (no upvotes)</span>';
     act=held?'':sesBtn(r,1)+sesBtn(r,2)+'<button class="ses ok2" onclick="liftBack(\''+id+'\')">'+IC.check+' Cleared</button>';
   } else if(p && p.sx){   // Suicidal Operation (Oct 25)
-    var sd=sxDay(r), asg=sxAssign(r), canPost=sd>=3;
-    if(st==='sxwarm') prog='<div class="gate" title="'+esc(p.plan)+'"><b style="color:'+(canPost?'#047857':'var(--ink2)')+'">Day '+sd+' · warm-up'+(canPost?' · posting open ✓':' · posting from day 3')+'</b><div class="prog"><i style="width:'+Math.min(100,sd/3*100)+'%;background:'+SX_C+'"></i></div></div>';
-    else prog='<span class="muted" title="'+esc(p.plan)+'" style="font-size:11.5px;font-weight:600">Day '+sd+' · '+(asg?esc(asg):'<b style="color:#b45309">no assignment yet</b>')+'</span>';
-    if(!held) act=sesBtn(r,1)+sesBtn(r,2)+(st==='sxwarm'&&canPost?'<button class="ses up" onclick="promote(\''+id+'\',\'sxpost\')" title="Start posting (day 3+)">'+IC.up+' Posting</button>':'');
+    prog=sxProg(r);   // Oct 27: one warm-up, then posting once warmed + assigned
+    if(!held) act=sxActs(r);
   } else if(p){
     var ix=phaseIx(st), next=PH[ix+1], km=karmaOf(r), can=true;
     if(p.dur){ can=din>=p.dur; prog='<div class="gate" title="'+esc(p.plan)+'"><b style="color:'+(can?'#047857':'var(--ink2)')+'">Day '+Math.min(din+1,p.dur)+'/'+p.dur+(can?' · ready ✓':'')+'</b><div class="prog"><i style="width:'+Math.min(100,(din+1)/p.dur*100)+'%"></i></div></div>'; }
@@ -1590,19 +1632,45 @@ function kmFill(d, id){
     return '<button class="'+(x[3]||'')+'" onclick="this.closest(\'details\').removeAttribute(\'open\');'+x[1]+'">'+x[2]+esc(x[0])+'</button>';
   }).join('');
 }
-function sesBtn(r, n){
+function sesBtn(r, n, lbl){   // lbl (Oct 27): a named single session, e.g. the Suicidal Operation's one "Warm-up"
   var m=M(r), ow=owner(r), wk=worksFor(r), k=n===2?'s2':'s1', t=n===2?'s2t':'s1t';
+  var L=lbl||('Session '+n), Ls=lbl||('S'+n);
   var done=markOkAny(m[k],wk,ow);
-  if(done){ var tt=m[t]?fmtT(parseTs(m[t])):''; return '<button class="ses done" disabled><span class="bx">'+IC.check+'</span>Session '+n+(tt?' <small>'+esc(tt)+'</small>':'')+'</button>'; }
+  if(done){ var tt=m[t]?fmtT(parseTs(m[t])):''; return '<button class="ses done" disabled><span class="bx">'+IC.check+'</span>'+esc(L)+(tt?' <small>'+esc(tt)+'</small>':'')+'</button>'; }
   var locked=(n===2 && !markOkAny(m.s1,wk,ow));
-  if(locked) return '<button class="ses" disabled title="Finish Session 1 first"><span class="bx"></span>Session '+n+'</button>';
-  if(!tmOn()) return '<button class="ses" onclick="doSession(\''+jsq(r.id)+'\','+n+',this)"><span class="bx"></span>Session '+n+'</button>';
+  if(locked) return '<button class="ses" disabled title="Finish Session 1 first"><span class="bx"></span>'+esc(L)+'</button>';
+  if(!tmOn()) return '<button class="ses" onclick="doSession(\''+jsq(r.id)+'\','+n+',this)"><span class="bx"></span>'+esc(L)+'</button>';
   var t=tmGet(r.id,'s'+n);
-  if(t) return '<button class="ses run" onclick="doSession(\''+jsq(r.id)+'\','+n+',this)" title="Press when the session is finished — this timer stops by itself at '+Math.round(tmCapSecs('session',r.status,methodOf(r))/60)+' minutes"><span class="sq"></span>Finish S'+n+' <small data-tm="'+t.t+'">'+tmFmt(Date.now()-t.t)+'</small></button>'+
+  if(t) return '<button class="ses run" onclick="doSession(\''+jsq(r.id)+'\','+n+',this)" title="Press when the session is finished — this timer stops by itself at '+Math.round(tmCapSecs('session',r.status,methodOf(r))/60)+' minutes"><span class="sq"></span>Finish '+esc(Ls)+' <small data-tm="'+t.t+'">'+tmFmt(Date.now()-t.t)+'</small></button>'+
     '<button class="ses x" onclick="tmCancel(\''+jsq(r.id)+'\',\'s'+n+'\')" title="Cancel this timer (started by mistake)">'+IC.x+'</button>';
   var pk=pchkPending(r).length;
-  if(pk) return '<button class="ses go" onclick="sesStart(\''+jsq(r.id)+'\','+n+')" title="First mark what happened to the '+pk+' earlier post'+(pk===1?'':'s')+' — then the session starts"><span class="pl"></span>Start S'+n+' <small>check '+pk+' post'+(pk===1?'':'s')+' first</small></button>';
-  return '<button class="ses go" onclick="sesStart(\''+jsq(r.id)+'\','+n+')" title="Press when you START this session — press again when it\'s done"><span class="pl"></span>Start S'+n+'</button>';
+  if(pk) return '<button class="ses go" onclick="sesStart(\''+jsq(r.id)+'\','+n+')" title="First mark what happened to the '+pk+' earlier post'+(pk===1?'':'s')+' — then the session starts"><span class="pl"></span>Start '+esc(Ls)+' <small>check '+pk+' post'+(pk===1?'':'s')+' first</small></button>';
+  return '<button class="ses go" onclick="sesStart(\''+jsq(r.id)+'\','+n+')" title="Press when you START this session — press again when it\'s done"><span class="pl"></span>Start '+esc(Ls)+'</button>';
+}
+/* Oct 27: the Suicidal Operation's actions — Warm-up is ONE session, once; Posting opens once it is warmed and on day 3+ */
+function sxActs(r){
+  var st=r.status, id=jsq(r.id), sd=sxDay(r), wk=worksFor(r), ow=owner(r), m=M(r);
+  if(st==='sxwarm'){
+    var today1=markOkAny(m.s1,wk,ow), warmed=!!sxWarmAt(r);
+    var a=(warmed && !today1)?'<button class="ses done" disabled title="The one warm-up session was done ('+esc(String(sxWarmAt(r)).replace('·',' '))+')"><span class="bx">'+IC.check+'</span>Warmed</button>':sesBtn(r,1,'Warm-up');
+    if(sd>=3) a+=(warmed||today1)
+      ? '<button class="ses up" onclick="promote(\''+id+'\',\'sxpost\')" title="Warmed and on day '+sd+' — start posting">'+IC.up+' Posting</button>'
+      : '<button class="ses" disabled title="Do the warm-up session first — then posting opens">'+IC.up+' Posting</button>';
+    return a;
+  }
+  return sesBtn(r,1)+sesBtn(r,2);
+}
+function sxProg(r){
+  var st=r.status, sd=sxDay(r), asg=sxAssign(r), u=sxUnits(r, worksFor(r), owner(r))||{}, p=phase(st)||{};
+  if(st==='sxwarm'){
+    var lbl, col;
+    if(u.k==='warmed' || (u.k==='warm' && u.done)){ lbl='Day '+sd+' · warmed ✓'+(sd>=3?(asg?' · ready to post':' · ready — <span style="color:#b45309">no assignment yet</span>'):' · posting from day 3'); col='#047857'; }
+    else if(u.over){ lbl='Day '+sd+' · warm-up overdue'; col='#b91c1c'; }
+    else if(u.late){ lbl='Day '+sd+' · warm-up today (last day)'; col='#b45309'; }
+    else { lbl='Day '+sd+' · warm-up due'; col='var(--ink2)'; }
+    return '<div class="gate" title="'+esc(p.plan||'')+'"><b style="color:'+col+'">'+lbl+'</b><div class="prog"><i style="width:'+Math.min(100,sd/3*100)+'%;background:'+SX_C+'"></i></div></div>';
+  }
+  return '<span class="muted" title="'+esc(p.plan||'')+'" style="font-size:11.5px;font-weight:600">Day '+sd+' · '+(asg?esc(asg):'<b style="color:#b45309" title="Not in the target until the admin records the client\'s assignment">no assignment yet · not in today\'s target</b>')+'</span>';
 }
 function cardHtml(r){
   var st=r.status, sm=stageMeta(st), p=phase(st), held=isHeld(r), m=M(r);
@@ -1632,14 +1700,12 @@ function cardHtml(r){
       (held?'':'<div class="acts">'+sesBtn(r,1)+sesBtn(r,2)+'<button class="ses ok2" onclick="liftBack(\''+jsq(r.id)+'\')">'+IC.check+' Cleared → '+esc(stageMeta(m.prev||(isSX(r)?'sxwarm':'warming')).n)+'</button></div>')+
       (!held && pchkPending(r).length?postsStrip(r):'');
   } else if(p && p.sx){   // Suicidal Operation (Oct 25)
-    var sd2=sxDay(r), asg2=sxAssign(r), canPost2=sd2>=3;
-    var gate2=st==='sxwarm'
-      ? '<b style="color:'+(canPost2?'#047857':'var(--ink2)')+'">Day '+sd2+' · warm-up'+(canPost2?' · posting open ✓':' · posting opens on day 3')+'</b><div class="prog"><i style="width:'+Math.min(100,sd2/3*100)+'%;background:'+SX_C+'"></i></div>'
-      : '<span>Day <b>'+sd2+'</b> · posting'+(asg2?' · <b style="color:'+SX_C+'">'+esc(asg2)+'</b>':'')+'</span>';
-    body='<div class="gate">'+gate2+'</div>'+
-      (st==='sxpost' && !asg2?'<div class="note w">No posting assignment yet — the client decides it (e.g. Location posting). Ask the admin before you post.</div>':'')+
+    var asg2=sxAssign(r), u2=sxUnits(r, worksFor(r), owner(r))||{};
+    body=(st==='sxwarm'?sxProg(r):'<div class="gate">'+sxProg(r)+'</div>')+   // Oct 27: one warm-up, then posting once warmed + assigned
+      (st==='sxpost' && !asg2?'<div class="note w">No posting assignment yet — the client decides it (e.g. Location posting). Ask the admin before you post. Until it is set, this account is not in your target.</div>':'')+
+      (st==='sxwarm' && u2.k==='warmed'?'<div class="note g">Warm-up done — nothing more is due on this account until it posts'+(sxDay(r)>=3?(asg2?'. Move it to Posting.':'. It needs its posting assignment from the admin first.'):' (day 3).')+'</div>':'')+
       '<details class="plan"><summary>'+IC.doc+' Today\'s plan · Suicidal Operation</summary><div>'+esc(p.plan)+'</div></details>'+
-      (held?'':'<div class="acts">'+sesBtn(r,1)+sesBtn(r,2)+(st==='sxwarm'&&canPost2?'<button class="ses up" onclick="promote(\''+jsq(r.id)+'\',\'sxpost\')">'+IC.up+' Start posting</button>':'')+'</div>')+
+      (held?'':'<div class="acts">'+sxActs(r)+'</div>')+
       (!held && (isPostingStage(st)||pchkPending(r).length)?postsStrip(r):'');
   } else if(p){
     var ix=phaseIx(st), next=PH[ix+1], din2=daysIn(r), km=karmaOf(r), can=true, gate='';
@@ -2454,7 +2520,9 @@ function creationOf(r, wk, ow){
    counted this shift, and anything logged in the last 36 hours that did NOT count, with the reason. */
 function progWhy(va){
   var rows=allRows().filter(function(r){ return worksFor(r)===va; }), p=progOf(rows.filter(function(r){ return r.project===PROJECT; }), va), w=shiftWindow(va);
-  var work=rows.filter(function(r){ return r.project===PROJECT && !isHeld(r) && isWorkable(r); });
+  var work=rows.filter(function(r){ return r.project===PROJECT && !isHeld(r) && isWorkable(r) && !(r.status==='sxwarm'||r.status==='sxpost'); });   // the Suicidal Operation is counted by its own SOP (Oct 27)
+  var sxw=rows.filter(function(r){ return r.project===PROJECT && !isHeld(r) && (r.status==='sxwarm'||r.status==='sxpost'); }), sxT=0, sxD=0, sxN={ warm:0, warmed:0, noassign:0, post:0 };
+  sxw.forEach(function(r){ var u=sxUnits(r, va, owner(r)); if(!u) return; sxT+=u.tot; sxD+=u.done; sxN[u.k]=(sxN[u.k]||0)+1; });
   var cre=[], miss=[], since=Date.now()-36*3600000;
   allRows().forEach(function(r){
     var by=String(r.created_by||'').toLowerCase(); if(by!==va && worksFor(r)!==va) return;
@@ -2477,6 +2545,10 @@ function progWhy(va){
     '<div class="md-b" style="max-height:62vh;overflow:auto;font-size:13px;line-height:1.6">'+
       '<div class="card pad" style="margin-bottom:10px"><b>Sessions</b> — '+work.length+' working account'+(work.length===1?'':'s')+' × 2 = <b>'+(work.length*2)+' due</b> · Session 1 done on '+s1+', Session 2 on '+s2+'.'+
         '<div class="muted" style="font-size:12px">Not due: '+standby+' in Creation / standby (no sessions)'+(parked?' · '+parked+' on hold / archived':'')+'.</div></div>'+
+      (sxw.length?'<div class="card pad" style="margin-bottom:10px;border-color:'+SX_C+'40"><b style="color:'+SX_C+'">Suicidal Operation</b> — <b>'+sxD+'/'+sxT+'</b> by its own SOP: '+
+        (sxN.warm?sxN.warm+' warm-up'+(sxN.warm===1?'':'s')+' due (1 session each, once)':'no warm-ups due')+
+        (sxN.post?' · '+sxN.post+' posting × 2':'')+'.'+
+        '<div class="muted" style="font-size:12px">Not due: '+(sxN.warmed||0)+' already warmed (waiting for day 3 / posting)'+(sxN.noassign?' · '+sxN.noassign+' posting with no assignment yet':'')+'.</div></div>':'')+
       '<div class="card pad" style="margin-bottom:10px"><b>Creations counted this shift — '+cre.length+'</b> ('+cre.filter(function(x){ return x.c.done; }).length+' finished)'+
         (cre.length?'<div style="margin-top:6px">'+cre.map(function(x){ return '<span class="chip" style="margin:2px">'+esc(x.r.handle)+(x.c.done?' ✓':' · setup open')+(x.c.how==='time'?' · by time':'')+'</span>'; }).join('')+'</div>':'')+'</div>'+
       (miss.length?'<div class="card pad" style="border-color:#fed7aa"><b style="color:#9a3412">Logged in the last 36 h but NOT counted — '+miss.length+'</b>'+
@@ -3367,12 +3439,15 @@ async function doSession(id, n, btn){
     if(!subs){ if(t){ var o0=tmAll(); o0[id+'|s'+n]={ t:t.start, p:t.parallel, d:today() }; tmPut(o0); } renderView(); toast('Session not saved — add the subreddits to finish it.'); return; } }
   if(btn){ btn.disabled=true; btn.innerHTML='<span class="bx"></span>Saving…'; }
   var patch=(n===2)?{ s2:vaKeyOf(USER.id), s2t:phtStamp(), last:vaKeyOf(USER.id) }:{ s1:vaKeyOf(USER.id), s1t:phtStamp() };
+  var sxWarm=(r.status==='sxwarm' && n===1);   // Oct 27: the Suicidal Operation's one warm-up session — remembered for good
+  if(sxWarm){ patch.sxw=vaKeyOf(USER.id); patch.last=vaKeyOf(USER.id); }
   if(subs) patch.posts=postsWith(r, subs, n);
   var ok=await saveMeta(r, patch);
   if(!ok){ if(t){ var o=tmAll(); o[id+'|s'+n]={ t:t.start, p:t.parallel, d:today() }; tmPut(o); } toast('Could not save the session — try again.'); renderView(); return; }
   tmLog(r, 'session', t);
   if(task) await bump(task,1);
-  toast('Session '+n+'/2 done'+(n===2?' — day complete for '+r.handle+'!':(task==='Reddit Posting'?' — rotate subs, captions & photos!':'')));
+  if(sxWarm) toast('Warm-up done for '+r.handle+' ✓ — '+(sxDay(r)>=3?(sxAssign(r)?'it can move to Posting.':'posting needs its assignment from the admin.'):'posting opens on day 3.'));
+  else toast('Session '+n+'/2 done'+(n===2?' — day complete for '+r.handle+'!':(task==='Reddit Posting'?' — rotate subs, captions & photos!':'')));
   renderView();
 }
 async function dmsDone(id){
