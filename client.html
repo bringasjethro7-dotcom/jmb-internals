@@ -1012,6 +1012,15 @@ table.db thead th{background:#faf8f5}
 .ph-c.bad{border-color:#fecdd3;box-shadow:0 0 0 3px #fff1f2}
 .ph-h{display:flex;align-items:center;gap:10px}.ph-h b{display:block;font-size:14.5px}.ph-h small{display:block;font-size:11.5px;color:var(--ink3);font-weight:600}
 .ph-ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(135deg,#ff6b1a,#a855f7);color:#fff;flex:none}
+.ph-no{min-width:48px;height:48px;padding:0 9px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#ff6b1a,#a855f7);color:#fff;flex:none;font-size:21px;font-weight:900;letter-spacing:-.03em;box-shadow:0 8px 18px -10px #a855f7}
+.ph-h .ph-t{font-size:17px;font-weight:900;letter-spacing:-.01em}
+.ph-c.idle{background:linear-gradient(180deg,#f8fafc,#fff)}.ph-c.idle .ph-no{background:linear-gradient(135deg,#a3adbf,#6b7487);box-shadow:none}.ph-c.idle .ph-ls{opacity:.7}
+.ph-idle{font-size:12px;font-weight:700;color:#64748b;background:#f1f5f9;border:1px dashed #cbd5e1;border-radius:10px;padding:7px 10px}
+.ph-md{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:11px;background:var(--s2,#f8fafc);border:1px solid var(--line)}
+.ph-md .k{width:96px;flex:none;color:var(--ink3);font-weight:800;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em}
+.ph-mv{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
+.ph-mc{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:800;color:var(--ink);background:#fff;border:1px solid var(--line2);border-radius:100px;padding:3px 10px}
+.ph-mc i{font-style:normal;font-size:11px;color:var(--ink3);font-weight:700}
 .ph-ls{display:flex;flex-direction:column;gap:6px}
 .ph-ln{display:flex;align-items:center;gap:8px;font-size:12.5px;min-height:24px}
 .ph-ln i{width:8px;height:8px;border-radius:50%;flex:none}
@@ -2384,12 +2393,25 @@ function phcLine(p, kind, name, valHtml, extra){
   var open=(p.issues||[]).filter(function(o){ return o.st==='open' && o.k===kind; }), dot=open.length?'#ef4444':(valHtml?'#10b981':'#cbd5e1');
   return '<div class="ph-ln"><i style="background:'+dot+'" title="'+esc(open.length?PHC_NOT[kind]:(valHtml?'OK':'Not set'))+'"></i><span class="k">'+esc(name)+'</span><span class="v">'+(valHtml||'<span class="muted">not set</span>')+'</span>'+(extra||'')+'</div>';
 }
+/* Oct 29c: the device number first ("Device #1"), the iPhone model as a detail, and the model the phone runs */
+function phcNum(L){ var m=String(L||'').match(/#\s*(\d+)/); return m?m[1]:''; }
+function phcHw(p){ var m=(p&&p.model&&p.model!=='Other')?p.model:''; if(!m){ var t=String((p&&p.label)||'').trim(), x=t.replace(/[·|,\-–—]*\s*#\s*\d+.*$/,'').replace(/[·|,\-–—\s]+$/,'').trim(); if(x && x!==t) m=x; } return m; }
+function phcDev(L){ var n=phcNum(L); return n?('Device #'+n):String(L||''); }
+function phcOrd(a, b){ var x=parseInt(phcNum(a.label),10), y=parseInt(phcNum(b.label),10); x=isNaN(x)?1e6:x; y=isNaN(y)?1e6:y; return x-y || String(a.label).localeCompare(String(b.label)); }
+function phcModels(p){ var got=Array.isArray(p.models)?p.models:[], set=Array.isArray(p.mdl)?p.mdl:[];
+  if(set.length) return set.map(function(n){ var hit=got.filter(function(g){ return String(g.n).toLowerCase()===String(n).toLowerCase(); })[0]; return { n:n, c:hit?hit.c:0 }; });
+  return got; }
+function phcModelHtml(p){ var M=phcModels(p); if(!M.length) return '<span class="muted" style="font-size:12px">no live accounts on it yet</span>';
+  return M.slice(0,4).map(function(m){ return '<span class="ph-mc">'+esc(m.n)+(m.c?'<i>'+m.c+'</i>':'')+'</span>'; }).join('')+(M.length>4?'<span class="muted" style="font-size:11.5px">+'+(M.length-4)+' more</span>':''); }
 function phcCp(t){ return t?'<button class="ghost" onclick="phcCopy(this,\''+jsq(t)+'\')">Copy</button>':''; }
 function phcCard(p){
   var open=(p.issues||[]).filter(function(o){ return o.st==='open'; }), past=(p.issues||[]).filter(function(o){ return o.st!=='open'; }), L=p.label, id=jsq(L), ic=p.icloud||[], lic=p.license||'';
   var ck=(p.chk||{}).proxy;
-  var h='<div class="card ph-c'+(open.length?' bad':'')+'"><div class="ph-h"><span class="ph-ic">'+IC.phone+'</span><div style="flex:1;min-width:0"><b>'+esc(L)+'</b><small>'+esc(p.model||'')+(p.active===false?' · not in use':'')+'</small></div>'+
-    (open.length?'<span class="pill" style="background:#ef444418;color:#b91c1c">'+open.length+' problem'+(open.length===1?'':'s')+'</span>':'<span class="pill" style="background:#10b98118;color:#047857">All OK</span>')+'</div>';
+  var no=phcNum(L), hw=phcHw(p), nl=(typeof p.live==='number')?p.live:null, idle=p.active===false;
+  var h='<div class="card ph-c'+(open.length?' bad':(idle?' idle':''))+'"><div class="ph-h">'+(no?'<span class="ph-no">#'+esc(no)+'</span>':'<span class="ph-ic">'+IC.phone+'</span>')+'<div style="flex:1;min-width:0"><b class="ph-t">'+esc(phcDev(L))+'</b><small>'+[hw, nl===null?'':(nl+' live account'+(nl===1?'':'s'))].filter(Boolean).map(esc).join(' · ')+'</small></div>'+
+    (open.length?'<span class="pill" style="background:#ef444418;color:#b91c1c">'+open.length+' problem'+(open.length===1?'':'s')+'</span>':(idle?'<span class="pill" style="background:#94a3b81f;color:#475569">Not in use</span>':'<span class="pill" style="background:#10b98118;color:#047857">All OK</span>'))+'</div>'+
+    (idle?'<div class="ph-idle">Not in use yet — ready and waiting for you to start using it.</div>':'')+
+    '<div class="ph-md"><span class="k">Model</span><div class="ph-mv">'+phcModelHtml(p)+'</div></div>';
   h+='<div class="ph-ls">'+
     phcLine(p,'proxy','Proxy', esc(p.proxy||''), phcCp(p.proxy||''))+(ck?'<div class="ph-ck" style="margin:-4px 0 0 128px">Proxy checked OK '+esc(phcAgo(ck))+'</div>':'')+
     phcLine(p,'proxy','Rotation link', p.rotate?'<a class="ph-a" href="'+esc(p.rotate)+'" target="_blank" rel="noopener noreferrer">Rotate IP ↗</a>':'', phcCp(p.rotate||''))+
@@ -2404,9 +2426,9 @@ function vPhonesC(){
   var ph=(Array.isArray(CFG.phones)?CFG.phones:[]).slice(), open=[]; ph.forEach(function(p){ (p.issues||[]).forEach(function(o){ if(o.st==='open') open.push({ p:p, o:o }); }); });
   var day=Date.now()-24*3600e3, checked=ph.filter(function(p){ var c=(p.chk||{}).proxy, d=c?parseTs(c):null; return d && d.getTime()>=day; }).length, inUse=ph.filter(function(p){ return p.active!==false; }).length;
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>iPhones</h2><p>Every iPhone running your accounts, with its proxy, IP rotation link, license key, the Apple ID used for the IPA and its Cloud+. When our team finds a problem it shows here right away — and you get it in your Telegram group — and again when it is fixed.</p></div><div class="cl-live no-print" id="cl-live"></div></div>';
-  h+='<div class="kpis">'+kpi('iPhones in use', inUse, ph.length+' listed', '#ff6b1a')+kpi('Open problems', open.length, open.length?'being worked on now':'none — all clear', open.length?'#ef4444':'#10b981')+kpi('Proxies checked', checked+' / '+inUse, 'OK in the last 24 h', '#0ea5e9')+'</div>';
-  if(open.length) h+='<div class="banner bad">'+IC.phone+'<div style="flex:1"><b>'+open.length+' open problem'+(open.length===1?'':'s')+':</b> '+open.slice(0,5).map(function(x){ return esc(x.p.label)+' — '+esc(PHC_NOT[x.o.k]||'Problem')+' ('+esc(phcAgo(x.o.at))+')'; }).join(' · ')+'</div></div>';
-  h+='<div class="ph-g">'+ph.sort(function(a,b){ var x=(a.issues||[]).filter(function(o){ return o.st==='open'; }).length, y=(b.issues||[]).filter(function(o){ return o.st==='open'; }).length; return y-x || String(a.label).localeCompare(String(b.label)); }).map(phcCard).join('')+'</div>';
+  h+='<div class="kpis">'+kpi('iPhones in use', inUse, (ph.length-inUse)?((ph.length-inUse)+' not in use yet · '+ph.length+' listed'):(ph.length+' listed'), '#ff6b1a')+kpi('Open problems', open.length, open.length?'being worked on now':'none — all clear', open.length?'#ef4444':'#10b981')+kpi('Proxies checked', checked+' / '+inUse, 'OK in the last 24 h', '#0ea5e9')+'</div>';
+  if(open.length) h+='<div class="banner bad">'+IC.phone+'<div style="flex:1"><b>'+open.length+' open problem'+(open.length===1?'':'s')+':</b> '+open.slice(0,5).map(function(x){ return esc(phcDev(x.p.label))+' — '+esc(PHC_NOT[x.o.k]||'Problem')+' ('+esc(phcAgo(x.o.at))+')'; }).join(' · ')+'</div></div>';
+  h+='<div class="ph-g">'+ph.sort(phcOrd).map(phcCard).join('')+'</div>';
   return h;
 }
 /* SETTINGS — iPhones & iClouds (Blaze+) and the Suicidal Operation (Oct 25) */
@@ -2414,9 +2436,9 @@ function vSettingsC(){
   var ph=Array.isArray(CFG.phones)?CFG.phones:[], L=sxAssignList(), withIc=ph.filter(function(p){ return (p.icloud||[]).length; }).length;
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Settings</h2><p>How your operation is set up on our side. Read-only — ask your JMB account manager for any change.</p></div></div>';
   h+='<div class="card pad"><div class="ch-h"><b>iPhones &amp; iClouds</b><span>the company iPhones running your accounts, and the iCloud signed in on each one (Blaze+)</span></div>'+
-    (ph.length?'<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">iPhone</th><th>Model</th><th>Status</th><th>iCloud · Blaze+</th></tr></thead><tbody>'+
-      ph.map(function(p){ var ic=p.icloud||[];
-        return '<tr><td class="c1"><b>'+esc(p.label)+'</b></td><td>'+esc(p.model||'—')+'</td><td>'+(p.active!==false?'<span class="pill" style="background:#10b98118;color:#047857">In use</span>':'<span class="pill" style="background:#94a3b818;color:#64748b">Not in use</span>')+'</td>'+
+    (ph.length?'<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">Device</th><th>iPhone</th><th>Model it runs</th><th>Status</th><th>iCloud · Blaze+</th></tr></thead><tbody>'+
+      ph.slice().sort(phcOrd).map(function(p){ var ic=p.icloud||[];
+        return '<tr><td class="c1"><b>'+esc(phcDev(p.label))+'</b></td><td>'+esc(phcHw(p)||'—')+'</td><td>'+(phcModels(p).map(function(m){ return esc(m.n); }).join(', ')||'<span class="muted">—</span>')+'</td><td>'+(p.active!==false?'<span class="pill" style="background:#10b98118;color:#047857">In use</span>':'<span class="pill" style="background:#94a3b818;color:#64748b">Not in use</span>')+'</td>'+
           '<td>'+(ic.length?ic.map(function(x){ return '<span class="chip" style="margin:2px 6px 2px 0">'+esc(x)+'</span>'; }).join(''):'<span class="muted">—</span>')+'</td></tr>'; }).join('')+
       '</tbody></table></div><div class="muted" style="font-size:12px;margin-top:8px">'+ph.length+' iPhone'+(ph.length===1?'':'s')+' · '+withIc+' with an iCloud listed. Addresses only — no passwords are kept here.</div>'
      :'<div class="muted" style="padding:10px 0">No iPhones listed yet.</div>')+'</div>';
