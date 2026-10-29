@@ -1205,7 +1205,7 @@ function start(){
   loadNames(); loadCfg().then(renderView); load(); loadAll(); smartPoll();
   if(isAdmin()){ loadOff(); loadHealth(); setTimeout(function(){ try{ pqAutoFill(); }catch(e){} }, 25000); }
   chkLoad(true); setTimeout(chkTick, 4000); setTimeout(chkTick, 15000);   // health check v2: who is in today (Oct 13)
-  setTimeout(function(){ phLoad(false).then(function(){ if(VIEW==='today') renderView(); }); }, 3000); setInterval(function(){ if(document.hidden) return; phLoad(true).then(function(){ if(VIEW==='phones'||VIEW==='today') renderView(); }); }, 120000);   // Oct 29: iPhones
+  setTimeout(function(){ phLoad(false).then(function(){ if(VIEW==='today') renderView(); }); }, 3000); setInterval(function(){ if(document.hidden) return; phLoad(true).then(function(){ if(PHN.edit || PHN.rep) return; if(VIEW==='phones'||VIEW==='today') renderView(); }); }, 120000);   // Oct 29: iPhones
   if(isAdmin()){ try{ var _dk='rc_dc_'+today(); if(!localStorage.getItem(_dk)){ localStorage.setItem(_dk,'1');
     // Day close runs from the owner's page in the background (05i) — never inside a VA's request.
     api({ action:'rc_day_close', by:USER.id, catchup:'1' }).then(function(d){ if(d&&d.ok&&d.closed&&d.closed.length){ toast('Closed '+d.closed.length+' day'+(d.closed.length===1?'':'s')+' → scorecard updated.'); if(VIEW==='prod'){ PQ.st=null; PQ.sc=null; renderView(); } } }).catch(function(){ try{ localStorage.removeItem(_dk); }catch(_r){} }); } }catch(_dc){} }
@@ -1244,6 +1244,9 @@ function askNumber(title, body, cur){
    Details are served only to a signed-in session (backend rc-2026-10-29a: rc_phones_get) and only the owner edits them. */
 var PHN={ sec:{}, log:[], tg:{ on:false }, loaded:false, loading:null, err:'', at:0, edit:'', rep:'', tgs:null, show:{}, f:'all' };
 var PH_KINDS=[['proxy','Proxy'],['license','License key'],['cloud','Cloud+ (Blaze+)'],['ipa','Apple ID (IPA)'],['other','Other']];
+var PH_SHEET='https://docs.google.com/spreadsheets/d/1TTprDJ25Vm9C7qGwiZmFqAGPz4k4NJK0nQ_noRaqCc4/edit';   // the portal spreadsheet → tab "iPhones" (29b)
+function phCloud(p){ var S=PHN.sec[p.label]||{}, c=Array.isArray(S.cloud)?S.cloud:String(S.cloud||'').split(/[\s,;]+/).filter(Boolean); return c.length?c:(Array.isArray(p.icloud)?p.icloud:[]); }
+function phDraft(L, k, v){ if(!PHN.draft || PHN.draft.L!==L) PHN.draft={ L:L, v:{} }; PHN.draft.v[k]=v; }
 function phKindN(k){ for(var i=0;i<PH_KINDS.length;i++) if(PH_KINDS[i][0]===k) return PH_KINDS[i][1]; return k; }
 var PH_NOT={ proxy:'Proxy not working', license:'License key error', cloud:'Cloud+ error', ipa:'Apple ID (IPA) problem', other:'Problem' };
 async function phLoad(force){
@@ -1278,22 +1281,24 @@ function phCard(p){
   var h='<div class="card ph-c'+(open.length?' bad':'')+'"><div class="ph-h"><span class="ph-ic">'+IC.phone+'</span><div style="flex:1;min-width:0"><b>'+esc(L)+'</b><small>'+esc(p.model||'')+' · '+esc(baseOf(phoneBase(p)).n)+(p.active===false?' · not in use':'')+' · '+phAccts(L)+' live account'+(phAccts(L)===1?'':'s')+'</small></div>'+
     (open.length?'<span class="pill" style="background:#ef444418;color:#b91c1c">'+open.length+' problem'+(open.length===1?'':'s')+'</span>':'<span class="pill" style="background:#10b98118;color:#047857">All OK</span>')+'</div>';
   if(PHN.edit===L && admin){
-    h+='<div class="ph-ed">'+[['proxy','Proxy','host:port (or host:port:user:pass)'],['rotate','IP rotation link','https://…'],['license','License key',''],['ipa','Apple ID used for the IPA','name@icloud.com']].map(function(f){
-      return '<label><span>'+esc(f[1])+'</span><input class="inp" id="phe-'+f[0]+'" value="'+esc(S[f[0]]||'')+'" placeholder="'+esc(f[2])+'" autocomplete="off"></label>'; }).join('')+
-      '<div class="row" style="gap:6px;margin-top:8px"><button class="btn sm pri" onclick="phSave(\''+id+'\')">Save details</button><button class="btn sm sec" onclick="PHN.edit=\'\';renderView()">Cancel</button></div>'+
-      '<div class="hint muted" style="font-size:11px;margin-top:6px">Signed-in staff and the client see these. Cloud+ iClouds are set in Settings → Company iPhones.</div></div>';
+    var DR=(PHN.draft && PHN.draft.L===L)?PHN.draft.v:null;   // what is typed survives the auto-refresh (Oct 29b)
+    h+='<div class="ph-ed">'+[['proxy','Proxy','host:port (or host:port:user:pass)'],['rotate','IP rotation link','https://…'],['license','License key',''],['ipa','Apple ID used for the IPA','name@icloud.com'],['cloud','Cloud+ (Blaze+ iCloud)','one or more, comma-separated']].map(function(f){
+      var cur=DR && DR[f[0]]!==undefined ? DR[f[0]] : (f[0]==='cloud' ? phCloud(p).join(', ') : (S[f[0]]||''));
+      return '<label><span>'+esc(f[1])+'</span><input class="inp" id="phe-'+f[0]+'" value="'+esc(cur)+'" placeholder="'+esc(f[2])+'" autocomplete="off" oninput="phDraft(\''+id+'\',\''+f[0]+'\',this.value)"></label>'; }).join('')+
+      '<div class="row" style="gap:6px;margin-top:8px"><button class="btn sm pri" onclick="phSave(\''+id+'\')">Save details</button><button class="btn sm sec" onclick="PHN.edit=\'\';PHN.draft=null;renderView()">Cancel</button></div>'+
+      '<div class="hint muted" style="font-size:11px;margin-top:6px">Signed-in staff and the client see these. Faster for many phones: type them straight into the <a href="'+PH_SHEET+'" target="_blank" rel="noopener">iPhones sheet ↗</a> (tab “iPhones”).</div></div>';
   } else {
     h+='<div class="ph-ls">'+
       phLine(L,'proxy','Proxy', esc(S.proxy||''), phCopyBtn(S.proxy||''))+(lastPx?'<div class="ph-ck" style="margin:-4px 0 0 128px">Proxy checked OK '+esc(phAgo(lastPx))+'</div>':'')+
       phLine(L,'proxy','Rotation link', S.rotate?'<a href="'+esc(S.rotate)+'" target="_blank" rel="noopener noreferrer" class="ph-a">Rotate IP ↗</a>':'', phCopyBtn(S.rotate||''))+
       phLine(L,'license','License key', licShow, lic?'<button class="ghost ph-cp" onclick="PHN.show[\''+id+'\']=!PHN.show[\''+id+'\'];renderView()">'+(PHN.show[L]?'Hide':'Show')+'</button>'+phCopyBtn(lic):'')+
       phLine(L,'ipa','Apple ID (IPA)', esc(S.ipa||''), phCopyBtn(S.ipa||''))+
-      phLine(L,'cloud','Cloud+ (Blaze+)', ic.map(esc).join(', '), '')+'</div>';
+      phLine(L,'cloud','Cloud+ (Blaze+)', phCloud(p).map(esc).join(', '), '')+'</div>';
   }
   if(open.length) h+='<div class="ph-op">'+open.map(function(o){ return '<div class="ph-is"><b>'+esc(PH_NOT[o.kind]||o.kind)+'</b><span>'+esc(o.note||'')+'</span><small>since '+esc(fmtT(parseTs(o.at)))+' · '+esc(phAgo(o.at))+' · '+esc(vaName(o.by)||o.by||'')+'</small><button class="btn sm" onclick="phFix(\''+jsq(o.id)+'\')">'+IC.check+' Fixed</button></div>'; }).join('')+'</div>';
   if(PHN.rep===L){
-    h+='<div class="ph-rp"><div class="row" style="gap:6px;flex-wrap:wrap"><select class="sel" id="phr-k">'+PH_KINDS.map(function(k){ return '<option value="'+k[0]+'">'+esc(k[1])+'</option>'; }).join('')+'</select>'+
-      '<input class="inp" id="phr-n" style="flex:1;min-width:200px" maxlength="300" placeholder="What happens? (the client reads this — no names)"></div>'+
+    h+='<div class="ph-rp"><div class="row" style="gap:6px;flex-wrap:wrap"><select class="sel" id="phr-k" onchange="PHN.rd=PHN.rd||{};PHN.rd.k=this.value">'+PH_KINDS.map(function(k){ return '<option value="'+k[0]+'"'+(PHN.rd&&PHN.rd.k===k[0]?' selected':'')+'>'+esc(k[1])+'</option>'; }).join('')+'</select>'+
+      '<input class="inp" id="phr-n" style="flex:1;min-width:200px" maxlength="300" placeholder="What happens? (the client reads this — no names)" value="'+esc((PHN.rd&&PHN.rd.n)||'')+'" oninput="PHN.rd=PHN.rd||{};PHN.rd.n=this.value"></div>'+
       '<div class="row" style="gap:6px;margin-top:8px"><button class="btn sm dark" onclick="phReport(\''+id+'\')">Report — the client is told</button><button class="btn sm sec" onclick="PHN.rep=\'\';renderView()">Cancel</button></div></div>';
   }
   h+='<div class="ph-ac">'+(PHN.rep===L?'':'<button class="btn sm sec" onclick="PHN.rep=\''+id+'\';PHN.edit=\'\';renderView()">Report a problem</button>')+
@@ -1318,16 +1323,18 @@ function phTgSave(){ var t=String(($('phtg-tok')||{}).value||'').trim(); if(!t){
 function phTgFind(){ phTgPost({ action:'rc_tg_find' }, 'Group found.'); }
 function phTgTest(){ phTgPost({ action:'rc_tg_test' }, 'Test sent — check the group.'); }
 async function phSave(label){
-  var o={ action:'rc_phone_sec_set', label:label }; ['proxy','rotate','license','ipa'].forEach(function(k){ var e=$('phe-'+k); if(e) o[k]=String(e.value||'').trim(); });
+  var o={ action:'rc_phone_sec_set', label:label }; ['proxy','rotate','license','ipa','cloud'].forEach(function(k){ var e=$('phe-'+k); if(e) o[k]=String(e.value||'').trim(); });
+  var sb=document.querySelector('.ph-ed .btn.pri'); if(sb){ sb.disabled=true; sb.textContent='Saving…'; }
   if(o.rotate && !/^https?:\/\//i.test(o.rotate)){ toast('The rotation link should start with http:// or https://'); return; }
   var d=null; try{ d=await apiPost(Object.assign({ by:USER.id }, o)); }catch(e){}
-  if(d && d.ok){ PHN.sec=d.sec||PHN.sec; PHN.edit=''; toast('Saved — '+label+'.'); renderView(); } else toast('Could not save — '+((d&&d.error)||'connection error'));
+  if(d && d.ok){ PHN.sec=d.sec||PHN.sec; PHN.edit=''; PHN.draft=null; toast('Saved — '+label+'.'); renderView(); }
+  else { if(sb){ sb.disabled=false; sb.textContent='Save details'; } toast('Could not save — '+((d&&d.error==='NOT_ALLOWED')?'sign out and back in, then try again':((d&&d.error)||'connection error'))+'. What you typed is kept.'); }
 }
 async function phReport(label){
   var k=String(($('phr-k')||{}).value||'proxy'), n=String(($('phr-n')||{}).value||'').trim();
   if(k==='other' && !n){ toast('Say what the problem is.'); return; }
   var d=null; try{ d=await apiPost({ action:'rc_issue_add', phone:label, kind:k, note:n }); }catch(e){}
-  if(d && d.ok){ PHN.rep=''; toast(d.dup?'Already reported — it is on the board.':((PH_NOT[k]||'Problem')+' reported'+(d.sent?' — the client\'s group is told.':'.'))); await phLoad(true); renderView(); }
+  if(d && d.ok){ PHN.rep=''; PHN.rd=null; toast(d.dup?'Already reported — it is on the board.':((PH_NOT[k]||'Problem')+' reported'+(d.sent?' — the client\'s group is told.':'.'))); await phLoad(true); renderView(); }
   else toast('Could not report — '+((d&&d.error==='SIGN_IN')?'sign out and back in first':((d&&d.error)||'connection error')));
 }
 async function phFix(id){
@@ -1371,6 +1378,7 @@ function vPhones(){
   if(!PHN.loaded && !PHN.err){ phLoad(true).then(function(){ if(VIEW==='phones') renderView(); }); }
   var admin=isAdmin(), list=phoneList(false).filter(function(p){ return admin || p.active!==false; }), open=PHN.log.filter(function(o){ return o.type==='issue' && o.status==='open'; });
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2><span class="gtxt">iPhones</span></h2><p>Every company iPhone with its proxy, IP rotation link, license key, the Apple ID used for the IPA and its Cloud+. Report a problem the moment you see it and mark it fixed when it works again — the client sees this board and gets a Telegram message both times.</p></div>'+
+    (admin?'<a class="btn sec" href="'+PH_SHEET+'" target="_blank" rel="noopener" title="Google Sheets → tab “iPhones”: one row per iPhone">Edit in Google Sheets ↗</a>':'')+
     '<button class="btn sec" onclick="phLoad(true).then(renderView)">Refresh</button></div>';
   if(PHN.err) return h+'<div class="card empty">'+esc(PHN.err)+'</div>';
   if(!PHN.loaded) return h+'<div class="grid"><div class="skel"></div><div class="skel"></div></div>';
