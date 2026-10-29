@@ -999,6 +999,19 @@ table.db thead th{background:#faf8f5}
 .cx-kfn{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 10px;padding:9px 14px;border-radius:10px;background:#fff;border:1px solid var(--line);font-size:12.5px;color:var(--ink2)}
 .cx-kfn b{color:var(--ink);font-weight:650}
 /* Suicidal Operation switch + Settings (Oct 25) */
+.cx-cnt{display:inline-block}
+.cx-delta{position:absolute;left:100%;top:-6px;margin-left:6px;font-size:12px;font-weight:900;padding:2px 7px;border-radius:100px;white-space:nowrap;letter-spacing:0;animation:cxRise 3.2s ease forwards;pointer-events:none}
+.cx-delta.g{background:#dcfce7;color:#047857}.cx-delta.b{background:#fee2e2;color:#b91c1c}
+@keyframes cxRise{0%{opacity:0;transform:translateY(8px)}12%{opacity:1;transform:none}75%{opacity:1}100%{opacity:0;transform:translateY(-10px)}}
+.cx-glow{animation:cxGlow 1.8s ease}
+@keyframes cxGlow{0%{box-shadow:0 0 0 0 rgba(16,185,129,0)}25%{box-shadow:0 0 0 4px rgba(16,185,129,.28),0 12px 30px -12px rgba(16,185,129,.45)}100%{box-shadow:0 0 0 0 rgba(16,185,129,0)}}
+.cx-pops{position:fixed;right:18px;bottom:18px;z-index:80;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.cx-pop{display:flex;align-items:center;gap:10px;background:#10131c;color:#fff;border-radius:14px;padding:10px 14px;box-shadow:0 16px 36px -14px rgba(0,0,0,.55);font-size:12.5px;animation:cxPopIn .45s cubic-bezier(.2,.8,.2,1);transition:opacity .45s,transform .45s;min-width:240px}
+.cx-pop.out{opacity:0;transform:translateX(20px)}
+.cx-pop .lv{font-size:9.5px;font-weight:900;letter-spacing:.14em;color:#10b981}
+.cx-pop i{width:9px;height:9px;border-radius:50%;flex:none}.cx-pop i.g{background:#10b981;box-shadow:0 0 0 4px rgba(16,185,129,.2)}.cx-pop i.b{background:#ef4444;box-shadow:0 0 0 4px rgba(239,68,68,.2)}.cx-pop i.o{background:#f59e0b}
+.cx-pop b{display:block;font-size:13px}.cx-pop span{display:block;color:#aab0c0;font-size:11.5px}
+@keyframes cxPopIn{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:none}}
 .cx-subtabs{margin:0 0 14px}.cx-subtabs .seg button{padding:8px 16px;font-size:13px}
 .cx-sopbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;font-size:12.5px}
 .cx-sopbar>span:first-child{font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:11px;color:var(--ink3,#64748b)}
@@ -2208,12 +2221,12 @@ function vOverview(){
   var phDots = '<div class="cx-pd">' + ph.slice().sort(phcOrd).map(function(p){ var o = (p.issues || []).some(function(x){ return x.st === 'open'; });
     return '<i title="' + esc(phcDev(p.label)) + '" style="background:' + (o ? '#ef4444' : (p.active === false ? '#cbd5e1' : '#10b981')) + '"></i>'; }).join('') + '</div>';
   h += '<section class="cx-k6">' +
-    cxKpi('Live accounts', cxN(M.alive), cxDelta(M.alive, M.live7, true) + ' vs 7 days ago', cxSpark(M.live, '#f26716', 'line')) +
-    cxKpi('New this week', cxN(M.c7), cxDelta(M.c7, M.c7p, true) + ' vs the week before', cxSpark(M.created.slice(-14), '#ff7a2f', 'bar')) +
-    cxKpi('Banned this week', cxN(M.b7), cxDelta(M.b7, M.b7p, false) + ' vs the week before', cxSpark(M.bans.slice(-14), '#64748b', 'bar')) +
-    cxKpi('Posting or beyond', cxN(M.posting), '<span class="cx-dl n">' + postPct + '% of live</span>', cxRing(postPct, '#ec4899')) +
-    cxKpi('Alive at day 14', survPct == null ? '—' : survPct + '%', '<span class="cx-dl n">' + cxN(M.elig) + ' old enough</span>', cxRing(survPct || 0, '#10b981')) +
-    (ph.length ? cxKpi('iPhones in use', phUse + '<small style="font-size:15px;color:var(--ink3);font-weight:700"> / ' + ph.length + '</small>', phOpen ? '<span class="cx-dl b">' + phOpen + ' open problem' + (phOpen === 1 ? '' : 's') + '</span>' : '<span class="cx-dl g">all clear</span>', phDots)
+    cxKpi('Live accounts', cxCnt('live', M.alive), cxDelta(M.alive, M.live7, true) + ' vs 7 days ago', cxSpark(M.live, '#f26716', 'line')) +
+    cxKpi('New this week', cxCnt('new7', M.c7), cxDelta(M.c7, M.c7p, true) + ' vs the week before', cxSpark(M.created.slice(-14), '#ff7a2f', 'bar')) +
+    cxKpi('Banned this week', cxCnt('ban7', M.b7, '', 'down'), cxDelta(M.b7, M.b7p, false) + ' vs the week before', cxSpark(M.bans.slice(-14), '#64748b', 'bar')) +
+    cxKpi('Posting or beyond', cxCnt('post', M.posting), '<span class="cx-dl n">' + postPct + '% of live</span>', cxRing(postPct, '#ec4899')) +
+    cxKpi('Alive at day 14', survPct == null ? '—' : cxCnt('surv', survPct, '%'), '<span class="cx-dl n">' + cxN(M.elig) + ' old enough</span>', cxRing(survPct || 0, '#10b981')) +
+    (ph.length ? cxKpi('iPhones in use', cxCnt('phuse', phUse) + '<small style="font-size:15px;color:var(--ink3);font-weight:700"> / ' + ph.length + '</small>', phOpen ? '<span class="cx-dl b">' + phOpen + ' open problem' + (phOpen === 1 ? '' : 's') + '</span>' : '<span class="cx-dl g">all clear</span>', phDots)
                : cxKpi('Removed by mods', '—', '<span class="cx-dl n">see the daily rate</span>', '')) +
     '</section>';
   var drH = ''; try{ drH = cxDailyRemovals(); }catch(_dr){}   // Oct 27: the daily removal rate — the main highlight
@@ -2472,7 +2485,7 @@ function cxPhones(){
       var st=open.length?'<span class="st" style="background:#ef444418;color:#b91c1c">'+open.length+' problem'+(open.length===1?'':'s')+'</span>':(idle?'<span class="st" style="background:#94a3b81f;color:#475569">Not in use</span>':'<span class="st" style="background:#10b98118;color:#047857">All OK</span>');
       var md=M.length?M.slice(0,2).map(function(m){ return esc(m.n)+(m.c?' <i>'+m.c+'</i>':''); }).join(' · ')+(M.length>2?' <i>+'+(M.length-2)+'</i>':''):(idle?'Not in use yet':(Array.isArray(p.models)?'No live accounts yet':''));
       return '<button class="cx-pht'+(open.length?' bad':(idle?' idle':''))+'" onclick="go(\'phones\')" title="'+esc(p.label)+'"><div class="r">'+(no?'<span class="ph-no">#'+esc(no)+'</span>':'<span class="ph-ic">'+IC.phone+'</span>')+
-        '<div class="tt"><b>'+esc(phcDev(p.label))+'</b><small>'+esc([phcHw(p), nl===null?'':(nl+' live')].filter(Boolean).join(' · '))+'</small></div>'+st+'</div>'+
+        '<div class="tt"><b>'+esc(phcDev(p.label))+'</b><small>'+[esc(phcHw(p)), nl===null?'':(cxCnt('ph'+no, nl)+' live')].filter(Boolean).join(' · ')+'</small></div>'+st+'</div>'+
         (md?'<div class="md">'+md+'</div>':'')+
         (open.length?'<div class="is">'+esc(open.map(function(o){ return PHC_NOT[o.k]||'Problem'; }).join(' · '))+'</div>':'')+'</button>'; }).join('')+'</div></section>';
 }
@@ -2593,6 +2606,7 @@ async function load(force){
   }catch(e){ INSD.err=LOAD_ERR=((e&&e.name)==='AbortError')?'timed out':'could not reach the server'; INSD.errAt=Date.now(); }
   finally{ LOADING=false; }
   INSD.sig=insSig(); insPaintLive();
+  try{ if(!INSD.err) cxLiveEvents(); }catch(_le){}
   var changed=INSD.sig!==before;
   if(changed || !allRows().length){ if(busy()) DIRTY=true; else renderView(); }
   return changed;
@@ -2601,7 +2615,7 @@ function insRefresh(){ load(true).then(function(ch){ toast(INSD.err?('Refresh fa
 function insLiveHtml(){
   var at=INSD.at, err=!!INSD.err, dot=LOADING?'#0ea5e9':(err?'#f59e0b':'#10b981');
   var txt=LOADING?(at?'Refreshing…':'Loading…'):(at?('Updated '+insT(at)+' · '+insAgo(Date.now()-at)):'Not loaded yet');
-  return '<span class="ins-dot'+(!err&&!LOADING&&at?' on':'')+'" style="background:'+dot+'"></span><b>Live</b><span>'+esc(txt)+'</span>'+(at?'<span class="muted">· refreshes every minute</span>':'');
+  return '<span class="ins-dot'+(!err&&!LOADING&&at?' on':'')+'" style="background:'+dot+'"></span><b>Live</b><span>'+esc(txt)+'</span>'+(at?'<span class="muted">· '+(LSIG.v && !LSIG.off?'live — updates within seconds':'refreshes every minute')+'</span>':'');
 }
 function insPaintLive(){ var e=$('ins-live'); if(e) e.innerHTML=insLiveHtml(); var f=$('cl-live'); if(f) f.innerHTML=insLiveHtml(); try{ cxPaintLive(); }catch(_){} }
 function busy(){ var a=document.activeElement, v=$('view'); if(a && /^(SELECT|INPUT|TEXTAREA)$/.test(a.tagName||'') && a.id!=='db-q' && a.id!=='sub-q' && v && v.contains(a)) return true; return $('drawer').classList.contains('on'); }
@@ -2641,7 +2655,58 @@ function renderView(){
   h=sopBarC()+subTabsC()+h;   // the SOP switch (Oct 25) + the part of a combined tab (Oct 29e)
   v.innerHTML=h;
   if(keepQ){ var q=$(keepQ); if(q){ q.focus(); try{ q.setSelectionRange(pos,pos); }catch(e){} } }
-  insPaintLive();
+  insPaintLive(); cxAnimateCounts();
+}
+/* ══ Oct 29g · LIVE DASHBOARD (Jeth: "it should move in real time — 682 to 683 the moment an account is added") ══
+   • every 15 s the page asks the Client API for a tiny change signal (cl-2026-10-29d "sig"); when it moves, the data is
+     reloaded at once (before: once a minute) — new accounts, stage moves, bans and iPhone problems show within seconds
+   • numbers that change count up / down to the new value, with a +1 / −1 chip and a soft glow on the card
+   • new accounts and bans slide in at the bottom right as they happen */
+var CNT={}, LSIG={ v:'', off:false, busy:false }, LIVEEV={ seen:null };
+function cxCnt(key, n, suf, good){ suf=suf||''; return '<span class="cx-cnt" data-cnt="'+esc(key)+'" data-v="'+(+n||0)+'" data-suf="'+esc(suf)+'"'+(good?' data-good="'+good+'"':'')+'>'+cxN(n)+suf+'</span>'; }
+function cxAnimateCounts(){
+  try{ document.querySelectorAll('[data-cnt]').forEach(function(el){
+    var k=el.getAttribute('data-cnt'), v=+el.getAttribute('data-v'), suf=el.getAttribute('data-suf')||'', good=el.getAttribute('data-good')==='down'?-1:1, prev=CNT[k]; CNT[k]=v;
+    if(prev===undefined || prev===v || isNaN(prev) || isNaN(v)) return;
+    var d=v-prev, t0=performance.now(), dur=1100;
+    el.textContent=cxN(prev)+suf;
+    (function step(now){ var q=Math.min(1,(now-t0)/dur), e=1-Math.pow(1-q,3); el.textContent=cxN(Math.round(prev+(v-prev)*e))+suf; if(q<1) requestAnimationFrame(step); })(t0);
+    var card=el.closest('.cx-card,.cx-pht'); if(card){ card.classList.remove('cx-glow'); void card.offsetWidth; card.classList.add('cx-glow'); }
+    var chip=document.createElement('span'); chip.className='cx-delta '+((d*good)>0?'g':'b'); chip.textContent=(d>0?'+':'−')+cxN(Math.abs(d))+suf;
+    el.style.position='relative'; el.appendChild(chip); setTimeout(function(){ try{ chip.remove(); }catch(_r){} }, 3200);
+  }); }catch(e){}
+}
+async function liveSigTick(){
+  if(!TOKEN || document.hidden || LSIG.off || LSIG.busy || LOADING) return; LSIG.busy=true;
+  try{ var d=await capi({ action:'sig', t:TOKEN }, 12000);
+    if(d && d.ok){ var ch=LSIG.v && d.sig!==LSIG.v; LSIG.v=d.sig; if(ch) await load(true); }
+    else if(d && d.error==='UNKNOWN_ACTION') LSIG.off=true; }catch(e){}
+  LSIG.busy=false;
+}
+setInterval(liveSigTick, 15000);
+function evKey(e){ return [e.at, e.account_id, e.kind, e.to].join('|'); }
+function cxLiveEvents(){
+  var ev=INSD.ev||[];
+  if(!LIVEEV.seen){ LIVEEV.seen={}; ev.forEach(function(e){ LIVEEV.seen[evKey(e)]=1; }); return; }
+  var fresh=ev.filter(function(e){ var k=evKey(e); if(LIVEEV.seen[k]) return false; LIVEEV.seen[k]=1; return true; });
+  var shown=fresh.filter(function(e){ return e.kind==='create' || e.kind==='ban' || e.kind==='reinstate'; });
+  if(!fresh.length) return;
+  if(shown.length>4){ cxLivePop({ sum:shown }); return; }
+  shown.forEach(function(e, i){ setTimeout(function(){ cxLivePop(e); }, i*800); });
+  if(!shown.length && fresh.length>=3) cxLivePop({ moves:fresh.length });
+}
+function cxLivePop(e){
+  var box=$('cx-pops'); if(!box){ box=document.createElement('div'); box.id='cx-pops'; box.className='cx-pops no-print'; document.body.appendChild(box); }
+  var html;
+  if(e.sum){ var c=e.sum.filter(function(x){ return x.kind==='create'; }).length, b=e.sum.filter(function(x){ return x.kind==='ban'; }).length;
+    html='<i class="g"></i><div><b>'+e.sum.length+' live updates</b><span>'+[c?c+' new account'+(c===1?'':'s'):'', b?b+' ban'+(b===1?'':'s'):''].filter(Boolean).join(' · ')+'</span></div>'; }
+  else if(e.moves){ html='<i class="o"></i><div><b>'+e.moves+' accounts moved stage</b><span>the pipeline just updated</span></div>'; }
+  else { var r=(INSD.rows||[]).filter(function(x){ return x.id===e.account_id; })[0]||{}, nm=r.handle?'u/'+r.handle:'An account', mo=r.model?' · '+r.model:'';
+    if(e.kind==='create') html='<i class="g"></i><div><b>New account created</b><span>'+esc(nm+mo)+'</span></div>';
+    else if(e.kind==='ban') html='<i class="b"></i><div><b>Account banned</b><span>'+esc(nm+mo)+'</span></div>';
+    else html='<i class="g"></i><div><b>Account reinstated</b><span>'+esc(nm+mo)+'</span></div>'; }
+  var el=document.createElement('div'); el.className='cx-pop'; el.innerHTML='<small class="lv">LIVE</small>'+html; box.appendChild(el);
+  setTimeout(function(){ el.classList.add('out'); setTimeout(function(){ try{ el.remove(); }catch(_r){} }, 500); }, 6500);
 }
 function closeAll(){ var d=$('drawer'), s=$('scrim'); if(d) d.classList.remove('on'); if(s) s.classList.remove('on'); }
 var _tt=null;
@@ -2943,8 +3008,8 @@ function cxDailyRemovals(){
       '<span>Of the posts our team has checked: how many were taken down and how many stayed up · posts by the day they went up, morning and night shift together</span></div>'+
       '<div class="cx-dr-seg no-print"><button class="'+(day===td?'on':'')+'" onclick="DRC.day=\''+td+'\';renderView()">Today</button>'+(yd?'<button class="'+(day===yd?'on':'')+'" onclick="DRC.day=\''+yd+'\';renderView()">Yesterday</button>':'')+'</div></div>'+
     '<div class="cx-dr-top"><div class="cx-dr-vs"><div class="cx-dr-nums">'+
-        '<div class="cx-dr-n dn"><b>'+(v?v.pd+'%':'—')+'</b><span>Taken down</span></div>'+
-        '<div class="cx-dr-n up"><b>'+(v?v.pu+'%':'—')+'</b><span>Stayed up</span></div>'+
+        '<div class="cx-dr-n dn"><b>'+(v?cxCnt('drd'+day, v.pd, '%', 'down'):'—')+'</b><span>Taken down</span></div>'+
+        '<div class="cx-dr-n up"><b>'+(v?cxCnt('dru'+day, v.pu, '%'):'—')+'</b><span>Stayed up</span></div>'+
         (a[4]?'<div class="cx-dr-n nc"><b>'+a[4]+'</b><span>Not checked yet</span></div>':'')+'</div>'+
       (v?'<div class="cx-dr-bigbar"><i class="cx-vs-dn" style="width:'+v.pd+'%"></i><i class="cx-vs-up" style="width:'+v.pu+'%"></i></div>':'<div class="cx-dr-bigbar"></div>')+
       '<div class="cx-dr-sub">'+(v?'<b>'+v.dn+'</b> of '+v.c+' checked posts taken down ('+a[2]+' by moderators · '+a[3]+' by spam filters) · <b>'+v.up+'</b> stayed up':'No checked posts yet')+' · '+a[0]+' posted'+(a[4]?' · '+a[4]+' still to check':'')+'</div>'+
