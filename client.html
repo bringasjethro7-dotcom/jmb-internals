@@ -999,6 +999,7 @@ table.db thead th{background:#faf8f5}
 .cx-kfn{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 10px;padding:9px 14px;border-radius:10px;background:#fff;border:1px solid var(--line);font-size:12.5px;color:var(--ink2)}
 .cx-kfn b{color:var(--ink);font-weight:650}
 /* Suicidal Operation switch + Settings (Oct 25) */
+.cx-subtabs{margin:0 0 14px}.cx-subtabs .seg button{padding:8px 16px;font-size:13px}
 .cx-sopbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;font-size:12.5px}
 .cx-sopbar>span:first-child{font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:11px;color:var(--ink3,#64748b)}
 .sx-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:6px}
@@ -2426,7 +2427,7 @@ function sopBarC(){
   return '<div class="cx-sopbar no-print"><span>Operation</span><div class="seg" style="width:auto"><button class="'+(CXS.sop==='std'?'on':'')+'" onclick="cxSop(\'std\')">Original SOP</button><button class="'+(CXS.sop==='sx'?'on':'')+'" onclick="cxSop(\'sx\')" style="color:'+SX_C+'">Suicidal Operation <small>'+n+'</small></button></div>'+
     '<span class="muted">'+(CXS.sop==='sx'?'Day 1 created · day 2–3 warm-up · posting from day 3 — reported on its own':'The ladder — Suicidal Operation accounts are not in these numbers')+'</span></div>';
 }
-function cxSop(k){ CXS.sop=k; DB.grp=''; if(k==='sx' && VIEW==='insights') VIEW='overview'; paintTabs(); renderView(); }
+function cxSop(k){ CXS.sop=k; DB.grp=''; if(k==='sx' && VIEW==='insights') VIEW='pipeline'; if(VIEW==='subs' && !subsD()) VIEW='accounts'; paintTabs(); renderView(); }
 function subsD(){ return CXS.sop==='sx'?SUBSD_SX:SUBSD; }
 /* SUICIDAL OPERATION — the client's overview of it (Oct 25) */
 function vSxC(){
@@ -2606,17 +2607,26 @@ document.addEventListener('visibilitychange', function(){ if(!document.hidden &&
 
 /* ── shell ── */
 var TABS=[['overview','Overview'],['accounts','Accounts'],['pipeline','Pipeline'],['insights','Insights']];
-function tabsC(){ var t=[], hasPh=(CFG.phones||[]).length>0; TABS.forEach(function(x){ if(x[0]==='insights' && CXS.sop==='sx') return; t.push(x); if(x[0]==='overview' && hasPh) t.push(['phones','iPhones']); if(x[0]==='accounts' && subsD()) t.push(['subs','Subreddits']); }); t.push(['settings','Settings']); return t; }   // Oct 29c: iPhones right after Overview   // Oct 29: iPhones dashboard   // Oct 14: Subreddits after Accounts · Oct 25: Settings; the Suicidal Operation's insights live on its Overview   // Oct 14: Subreddits sits right after Accounts
-function paintTabs(){ $('tabs').innerHTML=tabsC().map(function(t){ return '<button class="'+(VIEW===t[0]?'on':'')+'" onclick="go(\''+t[0]+'\')">'+t[1]+'</button>'; }).join(''); }
-function go(v){ VIEW=v; closeAll(); paintTabs(); renderView(); try{ window.scrollTo({ top:0, behavior:'smooth' }); }catch(e){ window.scrollTo(0,0); } }
+/* Oct 29e (Jeth): fewer tabs for the client — Accounts + Subreddits are one tab, Pipeline + Insights are one tab (a small
+   switch at the top picks the part), and Settings is internal only (no longer in the client portal) */
+var TABG=[{ k:'overview', n:'Overview', v:['overview'] }, { k:'phones', n:'iPhones', v:['phones'] }, { k:'accounts', n:'Accounts & Subreddits', v:['accounts','subs'] }, { k:'pipeline', n:'Pipeline & Insights', v:['pipeline','insights'] }];
+var TABLAST={}, SUBN={ accounts:'Accounts', subs:'Subreddits', pipeline:'Pipeline', insights:'Insights' };
+function tabSubs(g){ return g.v.filter(function(x){ if(x==='phones') return (CFG.phones||[]).length>0; if(x==='subs') return !!subsD(); if(x==='insights') return CXS.sop!=='sx'; return true; }); }
+function tabGroupOf(v){ for(var i=0;i<TABG.length;i++) if(TABG[i].v.indexOf(v)>=0) return TABG[i]; return null; }
+function tabsC(){ return TABG.filter(function(g){ return tabSubs(g).length; }).map(function(g){ return [g.k, g.n]; }); }
+function goTab(k){ var g=TABG.filter(function(x){ return x.k===k; })[0]; if(!g) return; var L=tabSubs(g); go((TABLAST[k] && L.indexOf(TABLAST[k])>=0)?TABLAST[k]:L[0]); }
+function subTabsC(){ var g=tabGroupOf(VIEW); if(!g) return ''; var L=tabSubs(g); if(L.length<2) return '';
+  return '<div class="cx-subtabs no-print"><div class="seg" style="width:auto">'+L.map(function(x){ return '<button class="'+(VIEW===x?'on':'')+'" onclick="go(\''+x+'\')">'+SUBN[x]+'</button>'; }).join('')+'</div></div>'; }
+function paintTabs(){ var cur=tabGroupOf(VIEW); $('tabs').innerHTML=tabsC().map(function(t){ return '<button class="'+(cur && cur.k===t[0]?'on':'')+'" onclick="goTab(\''+t[0]+'\')">'+t[1]+'</button>'; }).join(''); }
+function go(v){ if(!tabGroupOf(v)) v='overview'; VIEW=v; var g=tabGroupOf(v); if(g) TABLAST[g.k]=v; closeAll(); paintTabs(); renderView(); try{ window.scrollTo({ top:0, behavior:'smooth' }); }catch(e){ window.scrollTo(0,0); } }
 function renderView(){
   var v=$('view'); if(!v) return;
   try{ document.body.classList.toggle('cx-wide', VIEW==='overview' || VIEW==='phones'); }catch(_w){}   // Oct 29d: use the whole width of a big monitor
   var keepQ=(document.activeElement && /^(db-q|sub-q)$/.test(document.activeElement.id||''))?document.activeElement.id:'', pos=keepQ?document.activeElement.selectionStart:0;
   var h='';
   try{
-    if(VIEW==='settings') h=vSettingsC();
-    else if(VIEW==='phones') h=vPhonesC();
+    if(!tabGroupOf(VIEW)) VIEW='overview';   // Oct 29e: Settings is internal only
+    if(VIEW==='phones') h=vPhonesC();
     else if(!allRows().length) h=INSD.at?'<div class="card empty">No accounts yet.</div>':'<div class="card empty">'+(LOAD_ERR?'Could not load ('+esc(LOAD_ERR)+') — retrying. <a href="#" onclick="insRefresh();return false" style="color:var(--ot);font-weight:800">Retry now</a>':'<span class="cl-spin"></span> Loading your accounts…')+'</div>';
     else if(VIEW==='pipeline') h=vPipeline();
     else if(VIEW==='insights') h=CXS.sop==='sx'?vSxC():vInsights();
@@ -2624,7 +2634,7 @@ function renderView(){
     else if(VIEW==='overview') h=CXS.sop==='sx'?vSxC():vOverview();
     else h=vAccounts();
   }catch(e){ h='<div class="card empty">Something went wrong drawing this page. Please refresh.</div>'; try{ console.error(e); }catch(_){} }
-  if(VIEW!=='settings') h=sopBarC()+h;   // the SOP switch (Oct 25)
+  h=sopBarC()+subTabsC()+h;   // the SOP switch (Oct 25) + the part of a combined tab (Oct 29e)
   v.innerHTML=h;
   if(keepQ){ var q=$(keepQ); if(q){ q.focus(); try{ q.setSelectionRange(pos,pos); }catch(e){} } }
   insPaintLive();
