@@ -2700,13 +2700,13 @@ function vSxC(){
 /* iPHONES DASHBOARD (Oct 29) — every iPhone with its proxy, IP rotation link, license key, the Apple ID used for the IPA and
    its Cloud+ (Blaze+ iCloud); a problem our team reports shows here at once (and in your Telegram group), and so does the fix. */
 var PHC={ show:{} };
-var PHC_NOT={ proxy:'Proxy not working', license:'License key invalid', cloud:'Cloud+ error', cloudfull:'iCloud+ storage full', ipa:'Apple ID (IPA) problem', other:'Problem reported' };
-var PHC_OK={ proxy:'Proxy', license:'License key', cloud:'Cloud+', cloudfull:'iCloud+ storage', ipa:'Apple ID (IPA)', other:'Other' };
+var PHC_NOT={ proxy:'Proxy not working', license:'License key invalid', licreset:'License key needs a reset', cloud:'Cloud+ error', cloudfull:'iCloud+ storage full', ipa:'Apple ID (IPA) problem', other:'Problem reported' };
+var PHC_OK={ proxy:'Proxy', license:'License key', licreset:'License key reset', cloud:'Cloud+', cloudfull:'iCloud+ storage', ipa:'Apple ID (IPA)', other:'Other' };
 function phcAgo(stamp){ var d=parseTs(stamp); if(!d) return ''; var m=Math.round((Date.now()-d.getTime())/60000); if(m<1) return 'just now'; if(m<60) return m+' min ago'; if(m<48*60) return Math.round(m/60)+' h ago'; return fmtD(d); }
 function phcDur(a,b){ var x=parseTs(a), y=parseTs(b); if(!x||!y||y<=x) return ''; var m=Math.round((y-x)/60000); return m<60?(m+' min'):(Math.floor(m/60)+' h'+(m%60?' '+(m%60)+' min':'')); }
 async function phcCopy(btn, t){ try{ await navigator.clipboard.writeText(t); }catch(e){ var a=document.createElement('textarea'); a.value=t; document.body.appendChild(a); a.select(); try{ document.execCommand('copy'); }catch(_e){} a.remove(); } if(btn){ var o=btn.textContent; btn.textContent='Copied'; setTimeout(function(){ btn.textContent=o; },1200); } }
 function phcLine(p, kind, name, valHtml, extra){
-  var open=(p.issues||[]).filter(function(o){ return o.st==='open' && (o.k===kind || (kind==='cloud' && o.k==='cloudfull')); }), dot=open.length?'#ef4444':(valHtml?'#10b981':'#cbd5e1');
+  var open=(p.issues||[]).filter(function(o){ return o.st==='open' && (o.k===kind || (kind==='cloud' && o.k==='cloudfull') || (kind==='license' && o.k==='licreset')); }), dot=open.length?'#ef4444':(valHtml?'#10b981':'#cbd5e1');
   return '<div class="ph-ln"><i style="background:'+dot+'" title="'+esc(open.length?PHC_NOT[kind]:(valHtml?'OK':'Not set'))+'"></i><span class="k">'+esc(name)+'</span><span class="v">'+(valHtml||'<span class="muted">not set</span>')+'</span>'+(extra||'')+'</div>';
 }
 /* Oct 29c: the device number first ("Device #1"), the iPhone model as a detail, and the model the phone runs */
@@ -2860,7 +2860,12 @@ async function load(force){
   finally{ LOADING=false; }
   INSD.sig=insSig(); insPaintLive();
   try{ if(!INSD.err) cxLiveEvents(); }catch(_le){}
-  var changed=INSD.sig!==before;
+  try{ if(!INSD.err) cxPhoneEvents(); }catch(_pe){}
+  /* 29e (Jeth: "a problem the VAs report should show without refreshing"): the iPhones, the removal rate and the subreddit
+     report are part of the change check too — before, only accounts and their history were, so a new iPhone problem was
+     downloaded but never drawn */
+  var x2=''; try{ x2=insHash(JSON.stringify([CFG.phones||[], DRD||null, SUBSD||null, SUBSD_SX||null])); }catch(_x){}
+  var changed=INSD.sig!==before || x2!==INSD.sig2; INSD.sig2=x2;
   if(changed || !allRows().length){ if(busy()) DIRTY=true; else renderView(); }
   return changed;
 }
@@ -2936,11 +2941,18 @@ function cxAnimateCounts(){
 async function liveSigTick(){
   if(!TOKEN || document.hidden || LSIG.off || LSIG.busy || LOADING) return; LSIG.busy=true;
   try{ var d=await capi({ action:'sig', t:TOKEN }, 12000);
-    if(d && d.ok){ var ch=LSIG.v && d.sig!==LSIG.v; LSIG.v=d.sig; if(ch) await load(true); }
+    if(d && d.ok){
+      var hot=LSIG.v && d.sig!==LSIG.v, warm=LSIG.w!==undefined && d.warm!==undefined && d.warm!==LSIG.w;
+      LSIG.v=d.sig; if(d.warm!==undefined) LSIG.w=d.warm;
+      /* 29e: new accounts, bans, stage moves and iPhone problems / fixes → at once; an account row edited (a post
+         verdict, karma) → within a minute, so a busy shift doesn't rebuild the dashboard every few seconds */
+      if(hot) await load(true); else if(warm){ LSIG.pw=true; }
+      if(!hot && LSIG.pw && Date.now()-INSD.at>=55000){ LSIG.pw=false; await load(true); }
+    }
     else if(d && d.error==='UNKNOWN_ACTION') LSIG.off=true; }catch(e){}
   LSIG.busy=false;
 }
-setInterval(liveSigTick, 15000);
+setInterval(liveSigTick, 10000);
 function evKey(e){ return [e.at, e.account_id, e.kind, e.to].join('|'); }
 function cxLiveEvents(){
   var ev=INSD.ev||[];
@@ -2964,6 +2976,25 @@ function cxLivePop(e){
     else html='<i class="g"></i><div><b>Account reinstated</b><span>'+esc(nm+mo)+'</span></div>'; }
   var el=document.createElement('div'); el.className='cx-pop'; el.innerHTML='<small class="lv">LIVE</small>'+html; box.appendChild(el);
   setTimeout(function(){ el.classList.add('out'); setTimeout(function(){ try{ el.remove(); }catch(_r){} }, 500); }, 6500);
+}
+/* 29e: an iPhone problem reported or fixed slides in at the bottom right, like new accounts and bans */
+var PHEV={ seen:null };
+function cxPhoneEvents(){
+  var ph=Array.isArray(CFG.phones)?CFG.phones:[], now={};
+  ph.forEach(function(p){ (p.issues||[]).forEach(function(o){ now[p.label+'|'+o.k+'|'+o.at]={ p:p, o:o }; }); });
+  if(!PHEV.seen){ PHEV.seen={}; Object.keys(now).forEach(function(k){ PHEV.seen[k]=now[k].o.st; }); return; }
+  var pops=[];
+  Object.keys(now).forEach(function(k){ var x=now[k], was=PHEV.seen[k], st=x.o.st;
+    if(was===undefined && st==='open') pops.push({ bad:true, t:'iPhone problem reported', s:phcDev(x.p.label)+' — '+(PHC_NOT[x.o.k]||'Problem') });
+    else if(was && was!=='resolved' && st==='resolved') pops.push({ bad:false, t:'iPhone fixed', s:phcDev(x.p.label)+' — '+(PHC_OK[x.o.k]||'Problem')+' working again' });
+    else if((was==='resolved'||was==='verify') && st==='open') pops.push({ bad:true, t:'iPhone problem back', s:phcDev(x.p.label)+' — '+(PHC_NOT[x.o.k]||'Problem') });
+    PHEV.seen[k]=st; });
+  pops.slice(0,4).forEach(function(e, i){ setTimeout(function(){ cxPhonePop(e); }, i*800); });
+}
+function cxPhonePop(e){
+  var box=$('cx-pops'); if(!box){ box=document.createElement('div'); box.id='cx-pops'; box.className='cx-pops no-print'; document.body.appendChild(box); }
+  var el=document.createElement('div'); el.className='cx-pop'; el.innerHTML='<small class="lv">LIVE</small><i class="'+(e.bad?'b':'g')+'"></i><div><b>'+esc(e.t)+'</b><span>'+esc(e.s)+'</span></div>'; box.appendChild(el);
+  setTimeout(function(){ el.classList.add('out'); setTimeout(function(){ try{ el.remove(); }catch(_r){} }, 500); }, 8000);
 }
 function closeAll(){ var d=$('drawer'), s=$('scrim'); if(d) d.classList.remove('on'); if(s) s.classList.remove('on'); }
 var _tt=null;

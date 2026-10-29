@@ -1373,7 +1373,7 @@ function askNumber(title, body, cur){
    portal, and every problem and fix goes to the client's Telegram group — phone, item, note and time, never a name.
    Details are served only to a signed-in session (backend rc-2026-10-29a: rc_phones_get) and only the owner edits them. */
 var PHN={ sec:{}, log:[], tg:{ on:false }, loaded:false, loading:null, err:'', at:0, edit:'', rep:'', tgs:null, show:{}, f:'all' };
-var PH_KINDS=[['proxy','Proxy not working'],['license','License key invalid / not working'],['cloudfull','iCloud+ storage full (limit reached)'],['cloud','Cloud+ (Blaze+) error'],['ipa','Apple ID (IPA)'],['other','Other']];
+var PH_KINDS=[['proxy','Proxy not working'],['license','License key invalid'],['licreset','License key needs a reset'],['cloudfull','iCloud+ storage full (limit reached)'],['cloud','Cloud+ (Blaze+) error'],['ipa','Apple ID (IPA)'],['other','Other']];
 var PH_SHEET='https://docs.google.com/spreadsheets/d/1TTprDJ25Vm9C7qGwiZmFqAGPz4k4NJK0nQ_noRaqCc4/edit';   // the portal spreadsheet → tab "iPhones" (29b)
 function phCloud(p){ var S=PHN.sec[p.label]||{}, c=Array.isArray(S.cloud)?S.cloud:String(S.cloud||'').split(/[\s,;]+/).filter(Boolean); return c.length?c:(Array.isArray(p.icloud)?p.icloud:[]); }
 function phDraft(L, k, v){ if(!PHN.draft || PHN.draft.L!==L) PHN.draft={ L:L, v:{} }; PHN.draft.v[k]=v; }
@@ -1444,9 +1444,9 @@ function phDevCheck(model, dev, project){
   if(alt && alt!==dev) return confirm(phDev(dev)+' runs '+m.n+', but this account is '+cn+'.\n'+phDev(alt)+' runs '+cn+'.\n\nOK = put it on '+phDev(alt)+'\nCancel = keep '+phDev(dev))?alt:dev;
   return confirm(phDev(dev)+' runs '+m.n+', but this account is '+cn+'. One model per device — save it here anyway?')?dev:null;
 }
-var PH_SHORT={ proxy:'Proxy', license:'License key', cloudfull:'iCloud+ storage', cloud:'Cloud+', ipa:'Apple ID (IPA)', other:'Problem' };
+var PH_SHORT={ proxy:'Proxy', license:'License key', licreset:'License key reset', cloudfull:'iCloud+ storage', cloud:'Cloud+', ipa:'Apple ID (IPA)', other:'Problem' };
 function phKindN(k){ return PH_SHORT[k]||k; }
-var PH_NOT={ proxy:'Proxy not working', license:'License key invalid', cloud:'Cloud+ error', cloudfull:'iCloud+ storage full', ipa:'Apple ID (IPA) problem', other:'Problem' };
+var PH_NOT={ proxy:'Proxy not working', license:'License key invalid', licreset:'License key needs a reset', cloud:'Cloud+ error', cloudfull:'iCloud+ storage full', ipa:'Apple ID (IPA) problem', other:'Problem' };
 /* 29d: after someone taps Mark fixed in the Telegram group the problem waits in "verify" until a VA checks it */
 function phVer(label){ return PHN.log.filter(function(o){ return o.type==='issue' && o.status==='verify' && (!label || o.phone===label); }); }
 function phByName(b){ b=String(b||''); return b.indexOf('tg:')===0?(b.slice(3)+' (Telegram)'):(vaName(b)||b); }
@@ -1469,8 +1469,8 @@ function phAccts(label){ return allRows().filter(function(r){ return String(r.de
 function phMine(){ var me=myId(), s={}; ROWS.forEach(function(r){ if(worksFor(r)===me && !isParked(r) && !isDead(r) && r.device) s[r.device]=1; }); return s; }
 /* one line of the card: label · value (copy / open / show) · status dot */
 function phLine(label, kind, name, val, extra){
-  var open=kind?phOpen(label, kind).concat(kind==='cloud'?phOpen(label,'cloudfull'):[]):[], dot=open.length?'#ef4444':(val?'#10b981':'#cbd5e1');
-  var tip=open.length?(PH_NOT[kind]+' since '+fmtT(parseTs(open[0].at))):(val?'OK':'Not set');
+  var open=kind?phOpen(label, kind).concat(kind==='cloud'?phOpen(label,'cloudfull'):[]).concat(kind==='license'?phOpen(label,'licreset'):[]):[], dot=open.length?'#ef4444':(val?'#10b981':'#cbd5e1');   // 29e: the license line shows both license problems
+  var tip=open.length?((PH_NOT[open[0].kind]||PH_NOT[kind])+' since '+fmtT(parseTs(open[0].at))):(val?'OK':'Not set');
   return '<div class="ph-ln"><i style="background:'+dot+'" title="'+esc(tip)+'"></i><span class="k">'+esc(name)+'</span><span class="v">'+(val||'<span class="muted">not set</span>')+'</span>'+(extra||'')+'</div>';
 }
 function phCopyBtn(text){ return text?'<button class="ghost ph-cp" title="Copy" onclick="phCopy(this,\''+jsq(text)+'\')">Copy</button>':''; }
@@ -1555,6 +1555,7 @@ async function phReport(label){
   var k=String(($('phr-k')||{}).value||'proxy'), n=String(($('phr-n')||{}).value||'').trim();
   if(k==='other' && !n){ toast('Say what the problem is.'); return; }
   var d=null; try{ d=await apiPost({ action:'rc_issue_add', phone:label, kind:k, note:n }); }catch(e){}
+  if(d && d.error==='BAD_KIND' && k==='licreset'){ try{ d=await apiPost({ action:'rc_issue_add', phone:label, kind:'license', note:('Needs a reset'+(n?' — '+n:'')) }); }catch(e){} }   // backend before 29e
   if(d && d.error==='BAD_KIND' && k==='cloudfull'){ try{ d=await apiPost({ action:'rc_issue_add', phone:label, kind:'cloud', note:('iCloud+ storage full'+(n?' — '+n:'')) }); }catch(e){} }   // backend before 29d
   if(d && d.ok){ PHN.rep=''; PHN.rd=null; toast(d.dup?'Already reported — it is on the board.':((PH_NOT[k]||'Problem')+' reported'+(d.sent?' — the client\'s group is told.':'.'))); await phLoad(true); renderView(); }
   else toast('Could not report — '+((d&&d.error==='SIGN_IN')?'sign out and back in first':((d&&d.error)||'connection error')));
