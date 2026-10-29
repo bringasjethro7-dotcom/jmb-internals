@@ -537,6 +537,8 @@ svg text{font-family:'Inter',sans-serif}
 .ph-rp,.ph-ed{background:var(--s2,#f8fafc);border:1px solid var(--line);border-radius:10px;padding:10px}
 .ph-ed label{display:flex;align-items:center;gap:8px;margin-bottom:6px}.ph-ed label span{width:150px;flex:none;font-size:11.5px;font-weight:700;color:var(--ink3)}.ph-ed .inp{flex:1}
 .ph-ac{display:flex;gap:6px;flex-wrap:wrap}
+.ph-spin{display:inline-block;width:11px;height:11px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:phSpin .7s linear infinite;vertical-align:-1px;opacity:.8}@keyframes phSpin{to{transform:rotate(360deg)}}
+.btn:disabled .ph-spin{opacity:1}
 .ph-tg{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}.ph-tg>div{background:var(--s2,#f8fafc);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px}.ph-tg b{display:block;margin-bottom:4px}
 
 /* ══ Oct 29j · LEVEL-UP PASS (Jeth: "improve the Reddit Central tool itself … it's like a bunch of scratch") ══
@@ -1505,15 +1507,16 @@ function phCard(p){
   }
   var ver=phVer(L);   // 29d: marked fixed in Telegram → check it now
   if(ver.length) h+='<div class="ph-op">'+ver.map(function(o){ return '<div class="ph-is" style="background:#fffbeb;border-color:#fde68a"><b style="color:#b45309">'+esc(phKindN(o.kind))+' — marked fixed by '+esc(phByName(o.res_by))+'</b><span>Check it on the phone now.</span><small>'+esc(fmtT(parseTs(o.res_at)))+' · '+esc(phAgo(o.res_at))+'</small>'+
-    '<div class="row" style="gap:6px;margin-top:6px"><button class="btn sm pri" onclick="phVerify(\''+jsq(o.id)+'\',true)">'+IC.check+' Works now</button><button class="btn sm dark" onclick="phVerify(\''+jsq(o.id)+'\',false)">Still not working</button></div></div>'; }).join('')+'</div>';
-  if(open.length) h+='<div class="ph-op">'+open.map(function(o){ return '<div class="ph-is"><b>'+esc(PH_NOT[o.kind]||o.kind)+'</b><span>'+esc(o.note||'')+'</span><small>since '+esc(fmtT(parseTs(o.at)))+' · '+esc(phAgo(o.at))+' · '+esc(vaName(o.by)||o.by||'')+'</small><button class="btn sm" onclick="phFix(\''+jsq(o.id)+'\')">'+IC.check+' Fixed</button></div>'; }).join('')+'</div>';
+    (PHBUSY['ver:'+o.id]?'<div class="row" style="gap:6px;margin-top:6px"><button class="btn sm sec" disabled><span class="ph-spin"></span> Saving…</button></div></div>':
+    '<div class="row" style="gap:6px;margin-top:6px"><button class="btn sm pri" onclick="phVerify(\''+jsq(o.id)+'\',true)">'+IC.check+' Works now</button><button class="btn sm dark" onclick="phVerify(\''+jsq(o.id)+'\',false)">Still not working</button></div></div>'); }).join('')+'</div>';
+  if(open.length) h+='<div class="ph-op">'+open.map(function(o){ return '<div class="ph-is"><b>'+esc(PH_NOT[o.kind]||o.kind)+'</b><span>'+esc(o.note||'')+'</span><small>since '+esc(fmtT(parseTs(o.at)))+' · '+esc(phAgo(o.at))+' · '+esc(vaName(o.by)||o.by||'')+'</small>'+(PHBUSY['fix:'+o.id]?'<button class="btn sm" disabled><span class="ph-spin"></span> Saving…</button>':'<button class="btn sm" onclick="phFix(\''+jsq(o.id)+'\')">'+IC.check+' Fixed</button>')+'</div>'; }).join('')+'</div>';
   if(PHN.rep===L){
     h+='<div class="ph-rp"><div class="row" style="gap:6px;flex-wrap:wrap"><select class="sel" id="phr-k" onchange="PHN.rd=PHN.rd||{};PHN.rd.k=this.value">'+PH_KINDS.map(function(k){ return '<option value="'+k[0]+'"'+(PHN.rd&&PHN.rd.k===k[0]?' selected':'')+'>'+esc(k[1])+'</option>'; }).join('')+'</select>'+
       '<input class="inp" id="phr-n" style="flex:1;min-width:200px" maxlength="300" placeholder="What happens? (the client reads this — no names)" value="'+esc((PHN.rd&&PHN.rd.n)||'')+'" oninput="PHN.rd=PHN.rd||{};PHN.rd.n=this.value"></div>'+
-      '<div class="row" style="gap:6px;margin-top:8px"><button class="btn sm dark" onclick="phReport(\''+id+'\')">Report — the client is told</button><button class="btn sm sec" onclick="PHN.rep=\'\';renderView()">Cancel</button></div></div>';
+      '<div class="row" style="gap:6px;margin-top:8px">'+(PHBUSY['rep:'+L]?'<button class="btn sm dark" disabled><span class="ph-spin"></span> Sending report…</button><button class="btn sm sec" disabled>Cancel</button>':'<button class="btn sm dark" onclick="phReport(\''+id+'\')">Report — the client is told</button><button class="btn sm sec" onclick="PHN.rep=\'\';renderView()">Cancel</button>')+'</div></div>';
   }
   h+='<div class="ph-ac">'+(PHN.rep===L?'':'<button class="btn sm sec" onclick="PHN.rep=\''+id+'\';PHN.edit=\'\';renderView()">Report a problem</button>')+
-    (isAdmin()?'':'<button class="btn sm sec" onclick="phCheck(\''+id+'\',true)" title="The proxy works right now">Proxy working</button>')+
+    (isAdmin()?'':(PHBUSY['chk:'+L]?'<button class="btn sm sec" disabled><span class="ph-spin"></span> Saving…</button>':'<button class="btn sm sec" onclick="phCheck(\''+id+'\',true)" title="The proxy works right now">Proxy working</button>'))+
     (admin && PHN.edit!==L?'<button class="btn sm sec" onclick="PHN.edit=\''+id+'\';PHN.rep=\'\';renderView()">'+IC.edit+' Edit details</button>':'')+
     (admin && PHN.edit!==L?'<button class="btn sm sec" onclick="phUse(\''+id+'\','+(idle?'true':'false')+')" title="'+(idle?'The client has started using it':'Not used yet — waiting for the client')+'">'+(idle?'Put in use':'Set not in use')+'</button>':'')+'</div></div>';
   return h;
@@ -1531,8 +1534,20 @@ function phTgCard(){
         (T.hook_fail && !T.hook?'<div class="note b" style="margin-top:6px">'+esc(T.hook_fail)+' — Telegram could not reach the script, so the 2-minute read took over. Turn it on again after redeploying.</div>':'')+
         (PHN.tgh?'<div class="note '+(PHN.tgh.err?'b':'g')+'" style="margin-top:6px">'+(PHN.tgh.on?(PHN.tgh.err?'Telegram reports: '+esc(PHN.tgh.err):'Telegram is reaching the script')+' · '+PHN.tgh.pending+' waiting':'Instant replies are off')+'</div>':'')+
         '<div class="row" style="gap:6px;margin-top:6px">'+(T.hook?'<button class="btn sm sec" onclick="phTgHookCheck()">Check</button><button class="btn sm sec" onclick="phTgHook(0)">Turn off</button>':'<button class="btn sm dark" '+(T.token_set&&T.chat_set?'':'disabled')+' onclick="phTgHook(1)">Turn on instant replies</button>')+'</div></div>'+
+      phTgPCard(T)+
     '</div></div>';
 }
+/* 29h (Jeth): the proxy provider's group — proxy problems (and their fixes) go there instead of the client's group */
+function phTgPCard(T){
+  var seen=(T.seen||[]).filter(function(g){ return String(g.id)!==String(T.chat_id||''); }), bot=T.bot_name?'@'+T.bot_name:'the bot';
+  return '<div><b>4 · Proxy provider group</b>'+(T.pchat_set?'<span class="pill" style="background:#0ea5e918;color:#0369a1">'+esc(T.pchat_title||'Provider group')+' — proxy problems go here</span>':'<span class="muted">Not set — proxy problems go to the client\'s group.</span>')+
+    '<div class="muted" style="font-size:11.5px;margin-top:4px">Add '+esc(bot)+' to the provider\'s group, send <b>/start'+(T.bot_name?'@'+esc(T.bot_name):'')+'</b> there, press <b>Refresh</b>, then pick the group. The provider sees the device, the problem and the full proxy — never the client\'s models.</div>'+
+    '<div class="row" style="gap:6px;margin-top:6px"><select class="sel" id="phtg-pg" style="flex:1;min-width:160px"'+(T.token_set?'':' disabled')+'><option value="">'+(seen.length?'Pick the provider\'s group…':'No other group seen yet')+'</option>'+
+      seen.map(function(g){ return '<option value="'+esc(g.id)+'"'+(String(g.id)===String(T.pchat_id||'')?' selected':'')+'>'+esc(g.t||g.id)+'</option>'; }).join('')+'</select>'+
+      '<button class="btn sm sec" onclick="PHN.tgs=null;phTgLoad()">Refresh</button><button class="btn sm dark" '+(seen.length?'':'disabled')+' onclick="phTgPSet()">Use for proxy problems</button></div>'+
+    (T.pchat_set?'<div class="row" style="gap:6px;margin-top:6px"><button class="btn sm sec" onclick="phTgPost({ action:\'rc_tg_ptest\' }, \'Test sent to the provider\\\'s group.\')">Send a test there</button><button class="btn sm sec" onclick="if(confirm(\'Stop sending proxy problems to the provider\\\'s group? They go to the client\\\'s group again.\'))phTgPost({ action:\'rc_tg_pgroup\', chat:\'\' }, \'Proxy problems go to the client\\\'s group again.\')">Stop</button></div>':'')+'</div>';
+}
+function phTgPSet(){ var v=String(($('phtg-pg')||{}).value||''); if(!v){ toast('Pick the provider\'s group first.'); return; } phTgPost({ action:'rc_tg_pgroup', chat:v }, 'Proxy problems now go to the provider\'s group.'); }
 async function phTgHook(on){
   var d=null; try{ d=await apiPost({ by:USER.id, action:'rc_tg_hook', on:on?'1':'0', url:API }); }catch(e){}
   if(d && d.ok){ PHN.tgh=d; toast(on?(d.on?'Instant replies are on — tap Mark fixed in the group to try it.':'Could not turn it on.'):'Instant replies are off — back to the 2-minute read.'); PHN.tgs=null; phTgLoad(); renderView(); return; }
@@ -1565,34 +1580,54 @@ async function phSave(label){
   if(d && d.ok){ PHN.sec=d.sec||PHN.sec; PHN.edit=''; PHN.draft=null; toast('Saved — '+phDev(label)+'.'); renderView(); }
   else { if(sb){ sb.disabled=false; sb.textContent='Save details'; } toast('Could not save — '+((d&&d.error==='NOT_ALLOWED')?'sign out and back in, then try again':((d&&d.error)||'connection error'))+'. What you typed is kept.'); }
 }
+/* 29h (Jeth: "when I click it once, grey the button out — Report sending — so we can't send duplicates"): every iPhone action
+   is one request at a time — the button turns into a greyed "Sending report…" / "Saving…" until the server answers, a second
+   click does nothing, and the card keeps that state even if the page redraws meanwhile. The server also refuses a second
+   open report of the same problem on the same iPhone (from anyone). */
+var PHBUSY={};
+function phBusyOn(key){ if(PHBUSY[key]) return false; PHBUSY[key]=Date.now(); try{ renderView(); }catch(e){} return true; }
+function phBusyOff(key){ delete PHBUSY[key]; }
 async function phReport(label){
+  var key='rep:'+label; if(PHBUSY[key]) return;
   var k=String(($('phr-k')||{}).value||'proxy'), n=String(($('phr-n')||{}).value||'').trim();
   if(k==='other' && !n){ toast('Say what the problem is.'); return; }
-  var d=null; try{ d=await apiPost({ action:'rc_issue_add', phone:label, kind:k, note:n }); }catch(e){}
+  PHN.rd={ k:k, n:n };   // keep what was typed if the send fails
+  if(!phBusyOn(key)) return;
+  var d=null;
+  try{
+  try{ d=await apiPost({ action:'rc_issue_add', phone:label, kind:k, note:n }); }catch(e){}
   if(d && d.error==='BAD_KIND' && k==='licreset'){ try{ d=await apiPost({ action:'rc_issue_add', phone:label, kind:'license', note:('Needs a reset'+(n?' — '+n:'')) }); }catch(e){} }   // backend before 29e
   if(d && d.error==='BAD_KIND' && k==='cloudfull'){ try{ d=await apiPost({ action:'rc_issue_add', phone:label, kind:'cloud', note:('iCloud+ storage full'+(n?' — '+n:'')) }); }catch(e){} }   // backend before 29d
-  if(d && d.ok){ PHN.rep=''; PHN.rd=null; toast(d.dup?'Already reported — it is on the board.':((PH_NOT[k]||'Problem')+' reported'+(d.sent?' — the client\'s group is told.':'.'))); await phLoad(true); renderView(); }
-  else toast('Could not report — '+((d&&d.error==='SIGN_IN')?'sign out and back in first':((d&&d.error)||'connection error')));
+  } finally { phBusyOff(key); }
+  if(d && d.ok){ PHN.rep=''; PHN.rd=null; toast(d.dup?(d.verify?'It was marked fixed and is waiting for a check — use “Still not working” on the card.':'Already reported — it is on the board.'):((PH_NOT[k]||'Problem')+' reported'+(d.sent?' — the client\'s group is told.':'.'))); await phLoad(true); renderView(); }
+  else { toast('Could not report — '+((d&&d.error==='SIGN_IN')?'sign out and back in first':((d&&d.error)||'connection error'))+'. Nothing was sent — try again.'); renderView(); }
 }
 async function phVerify(id, good){
   var o=PHN.log.filter(function(x){ return x.id===id; })[0]; if(!o) return;
   var n='';
+  if(PHBUSY['ver:'+id]) return;
   if(!good){ n=prompt('Still not working: '+phKindN(o.kind)+' on '+phFull(o.phone)+'.\nWhat happens now? (optional — the group reads this)',''); if(n===null) return; }
-  var d=null; try{ d=await apiPost({ action:'rc_issue_verify', id:id, ok:good?'1':'0', note:String(n||'').trim() }); }catch(e){}
+  if(!phBusyOn('ver:'+id)) return;
+  var d=null; try{ d=await apiPost({ action:'rc_issue_verify', id:id, ok:good?'1':'0', note:String(n||'').trim() }); }catch(e){} finally { phBusyOff('ver:'+id); }
+  if(d && d.ok && d.already){ toast('Already checked by a teammate.'); await phLoad(true); renderView(); return; }
   if(d && d.ok){ toast(good?('Confirmed working — the group is told.'):('Reopened — the group gets a fresh alert.')); await phLoad(true); renderView(); }
-  else toast('Could not save — '+((d&&d.error==='UNKNOWN_ACTION')?'the Reddit Central backend needs the latest update (rc-2026-10-29d)':((d&&d.error)||'connection error')));
+  else { toast('Could not save — '+((d&&d.error==='UNKNOWN_ACTION')?'the Reddit Central backend needs the latest update (rc-2026-10-29d)':((d&&d.error)||'connection error'))); renderView(); }
 }
 async function phFix(id){
   var o=PHN.log.filter(function(x){ return x.id===id; })[0]; if(!o) return;
+  if(PHBUSY['fix:'+id]) return;
   var n=prompt('Fixed: '+(PH_NOT[o.kind]||'problem')+' on '+phFull(o.phone)+'.\nWhat fixed it? (optional — the client reads this)','');
   if(n===null) return;
-  var d=null; try{ d=await apiPost({ action:'rc_issue_resolve', id:id, note:String(n||'').trim() }); }catch(e){}
-  if(d && d.ok){ toast('Marked fixed'+(d.sent?' — the client\'s group is told.':'.')); await phLoad(true); renderView(); } else toast('Could not save — '+((d&&d.error)||'connection error'));
+  if(!phBusyOn('fix:'+id)) return;
+  var d=null; try{ d=await apiPost({ action:'rc_issue_resolve', id:id, note:String(n||'').trim() }); }catch(e){} finally { phBusyOff('fix:'+id); }
+  if(d && d.ok && d.already){ toast('Already marked fixed by a teammate.'); await phLoad(true); renderView(); return; }
+  if(d && d.ok){ toast('Marked fixed'+(d.sent?' — the client\'s group is told.':'.')); await phLoad(true); renderView(); } else { toast('Could not save — '+((d&&d.error)||'connection error')); renderView(); }
 }
 async function phCheck(label, ok, note){
-  var d=null; try{ d=await apiPost({ action:'rc_check_add', phone:label, kind:'proxy', ok:ok?'1':'0', note:note||'' }); }catch(e){}
+  var key='chk:'+label; if(!phBusyOn(key)) return false;
+  var d=null; try{ d=await apiPost({ action:'rc_check_add', phone:label, kind:'proxy', ok:ok?'1':'0', note:note||'' }); }catch(e){} finally { phBusyOff(key); }
   if(d && d.ok){ try{ localStorage.setItem(phCkKey(label), '1'); }catch(e){} if(ok) toast('Proxy on '+phDev(label)+' — working ✓'); await phLoad(true); if(VIEW==='phones'||VIEW==='today') renderView(); return true; }
-  toast('Could not save the check — '+((d&&d.error)||'connection error')); return false;
+  toast('Could not save the check — '+((d&&d.error)||'connection error')); try{ renderView(); }catch(_r){} return false;
 }
 function phCkKey(label){ return 'rc_pck_'+myId()+'_'+vaKeyOf(USER.id)+'_'+label; }
 /* GATE: before the first session on an iPhone each shift, the VA confirms its proxy works (Oct 29, "VA check only") */
