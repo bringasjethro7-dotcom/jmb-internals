@@ -1016,6 +1016,38 @@ table.db thead th{background:#faf8f5}
 .ph-h .ph-t{font-size:17px;font-weight:900;letter-spacing:-.01em}
 .ph-c.idle{background:linear-gradient(180deg,#f8fafc,#fff)}.ph-c.idle .ph-no{background:linear-gradient(135deg,#a3adbf,#6b7487);box-shadow:none}.ph-c.idle .ph-ls{opacity:.7}
 .ph-idle{font-size:12px;font-weight:700;color:#64748b;background:#f1f5f9;border:1px dashed #cbd5e1;border-radius:10px;padding:7px 10px}
+/* Oct 29d (Jeth): the Overview's first screen is a command view — everything Justin needs without scrolling, and on a wide
+   monitor the page uses the width (up to 2560 px) instead of a 1320 px column */
+body.cx-wide #view{max-width:2560px;padding:18px 32px 10px}
+body.cx-wide .cx-top-in,body.cx-wide .cl-foot{max-width:2560px}
+.cx-ov.cmd{gap:14px}
+.cx-hero.cmd{align-items:center;padding:0 2px}
+.cx-hero.cmd .cx-h1{font-size:clamp(24px,1.9vw,32px);margin-top:4px}
+.cx-hero.cmd .cx-lead{margin-top:4px;font-size:13px}
+.cx-k6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}
+.cx-k6 .cx-kpi{padding:13px 15px 12px}
+.cx-k6 .cx-kl{font-size:12px}
+.cx-k6 .cx-kv{font-size:28px;margin-top:2px}
+.cx-k6 .cx-ks{margin-top:6px;font-size:11.5px}
+.cx-k6 .cx-kz{width:92px;height:36px}
+.cx-k6 .cx-sp{width:92px;height:30px}
+.cx-k6 .cx-kz .cx-ring{width:42px;height:42px}
+.cx-k6 .cx-pd{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;max-width:92px}
+.cx-k6 .cx-pd i{width:12px;height:12px;border-radius:4px;display:block}
+.cx-cmd{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr);gap:14px;align-items:stretch}
+.cx-cmd.one{grid-template-columns:1fr}
+.cx-cmd>.cx-card{margin:0}
+.cx-cmd .cx-dr{padding:18px 20px}
+.cx-cmd .cx-dr .cx-ch{margin-bottom:8px}
+.cx-cmd .cx-dr-big b{font-size:46px}
+.cx-cmd .cx-dr-cols{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:10px}
+.cx-cmd .cx-dr-r{padding:5px 0}
+.cx-cmd .cx-phs{padding:18px 20px}
+.cx-cmd .cx-phg{grid-template-columns:repeat(auto-fill,minmax(228px,1fr))}
+.cx-pht .tt b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cx-pht .tt small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:1500px){ .cx-k6{grid-template-columns:repeat(3,minmax(0,1fr))} }
+@media (max-width:1200px){ .cx-cmd{grid-template-columns:1fr} }
+@media (max-width:700px){ .cx-k6{grid-template-columns:repeat(2,minmax(0,1fr))} body.cx-wide #view{padding:18px 14px 8px} }
 /* Oct 29c: iPhones at a glance — first thing on the Overview */
 .cx-phs .cx-ch{margin-bottom:12px}
 .cx-phg{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:10px}
@@ -2163,20 +2195,29 @@ function cxFeed(M){
 function vOverview(){
   var M = cxModel(), ws = cxWs(), nm = cxFirst(CLIENT && CLIENT.name);
   var pt = ''; try { pt = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' }); } catch(e){}
-  var h = '<section class="cx-hero"><div class="cx-hl"><div class="cx-eb"><i></i>' + esc(ws.label || 'Operations') + (ws.sub ? ' · ' + esc(ws.sub) : '') + '</div>' +
+  var h = '<section class="cx-hero cmd"><div class="cx-hl"><div class="cx-eb"><i></i>' + esc(ws.label || 'Operations') + (ws.sub ? ' · ' + esc(ws.sub) : '') + '</div>' +
     '<h1 class="cx-h1">' + esc(cxGreet()) + (nm ? ', ' + esc(nm) : '') + '.</h1>' +
     '<p class="cx-lead">Here is where your accounts stand right now — live from our operations floor.</p></div>' +
     '<div class="cx-hr"><div class="cx-clock"><small>Team time</small><b>' + esc(pt) + '</b><span>Manila · PHT</span></div>' +
     '<button class="cx-btn no-print" onclick="cxPrint()"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download report</button></div></section>';
-  try{ h += cxPhones(); }catch(_ph){}         // Oct 29c (Jeth): the iPhones board at first glance
-  try{ h += cxDailyRemovals(); }catch(_dr){}   // Oct 27: the daily removal rate — the main highlight
+  /* Oct 29d — the command view: one screen, no scrolling (Jeth: "fit all the iPhones, the removal rate and the live accounts") */
   var postPct = cxPct(M.posting, M.alive), survPct = M.elig ? cxPct(M.surv, M.elig) : null;
-  h += '<section class="cx-kpis">' +
-    cxKpi('Live accounts', cxN(M.alive), cxDelta(M.alive, M.live7, true) + ' vs 7 days ago', cxSpark(M.live, '#f26716', 'line'), '30-day trend') +
-    cxKpi('New this week', cxN(M.c7), cxDelta(M.c7, M.c7p, true) + ' vs the week before', cxSpark(M.created.slice(-14), '#ff7a2f', 'bar'), 'last 14 days') +
-    cxKpi('Posting or beyond', cxN(M.posting), '<span class="cx-dl n">' + postPct + '% of live accounts</span>', cxRing(postPct, '#ec4899'), 'Day 1 Posting → Super Strong') +
-    cxKpi('Alive at day 14', survPct == null ? '—' : survPct + '%', '<span class="cx-dl n">' + cxN(M.elig) + ' accounts old enough</span>', cxRing(survPct || 0, '#10b981'), 'survival past two weeks') +
+  var ph = Array.isArray(CFG.phones) ? CFG.phones : [], phUse = ph.filter(function(p){ return p.active !== false; }).length, phOpen = 0;
+  ph.forEach(function(p){ phOpen += (p.issues || []).filter(function(o){ return o.st === 'open'; }).length; });
+  var phDots = '<div class="cx-pd">' + ph.slice().sort(phcOrd).map(function(p){ var o = (p.issues || []).some(function(x){ return x.st === 'open'; });
+    return '<i title="' + esc(phcDev(p.label)) + '" style="background:' + (o ? '#ef4444' : (p.active === false ? '#cbd5e1' : '#10b981')) + '"></i>'; }).join('') + '</div>';
+  h += '<section class="cx-k6">' +
+    cxKpi('Live accounts', cxN(M.alive), cxDelta(M.alive, M.live7, true) + ' vs 7 days ago', cxSpark(M.live, '#f26716', 'line')) +
+    cxKpi('New this week', cxN(M.c7), cxDelta(M.c7, M.c7p, true) + ' vs the week before', cxSpark(M.created.slice(-14), '#ff7a2f', 'bar')) +
+    cxKpi('Banned this week', cxN(M.b7), cxDelta(M.b7, M.b7p, false) + ' vs the week before', cxSpark(M.bans.slice(-14), '#64748b', 'bar')) +
+    cxKpi('Posting or beyond', cxN(M.posting), '<span class="cx-dl n">' + postPct + '% of live</span>', cxRing(postPct, '#ec4899')) +
+    cxKpi('Alive at day 14', survPct == null ? '—' : survPct + '%', '<span class="cx-dl n">' + cxN(M.elig) + ' old enough</span>', cxRing(survPct || 0, '#10b981')) +
+    (ph.length ? cxKpi('iPhones in use', phUse + '<small style="font-size:15px;color:var(--ink3);font-weight:700"> / ' + ph.length + '</small>', phOpen ? '<span class="cx-dl b">' + phOpen + ' open problem' + (phOpen === 1 ? '' : 's') + '</span>' : '<span class="cx-dl g">all clear</span>', phDots)
+               : cxKpi('Removed by mods', '—', '<span class="cx-dl n">see the daily rate</span>', '')) +
     '</section>';
+  var drH = ''; try{ drH = cxDailyRemovals(); }catch(_dr){}   // Oct 27: the daily removal rate — the main highlight
+  var phH = ''; try{ phH = cxPhones(); }catch(_ph){}         // Oct 29c: the iPhones board
+  if (drH || phH) h += '<section class="cx-cmd' + (drH && phH ? '' : ' one') + '">' + drH + phH + '</section>';
   h += '<section class="cx-g2"><div class="cx-card s8"><div class="cx-ch"><div><b>Growth</b><span>Last 30 days · hover a day for details</span></div><div class="cx-chn"><b>' + cxDelta(M.alive, M.live[0], true, '') + '</b><span>net in 30 days</span></div></div>' + cxGrowth(M) + '</div>' +
     '<div class="cx-card s4 cx-wkc"><div class="cx-ch"><div><b>This week</b><span>The last 7 days at a glance</span></div></div>' + cxWeek(M) +
     '<button class="cx-link no-print" onclick="go(\'insights\')">Open full insights →</button></div></section>';
@@ -2426,7 +2467,7 @@ function cxPhones(){
       var st=open.length?'<span class="st" style="background:#ef444418;color:#b91c1c">'+open.length+' problem'+(open.length===1?'':'s')+'</span>':(idle?'<span class="st" style="background:#94a3b81f;color:#475569">Not in use</span>':'<span class="st" style="background:#10b98118;color:#047857">All OK</span>');
       var md=M.length?M.slice(0,2).map(function(m){ return esc(m.n)+(m.c?' <i>'+m.c+'</i>':''); }).join(' · ')+(M.length>2?' <i>+'+(M.length-2)+'</i>':''):(idle?'Not in use yet':(Array.isArray(p.models)?'No live accounts yet':''));
       return '<button class="cx-pht'+(open.length?' bad':(idle?' idle':''))+'" onclick="go(\'phones\')" title="'+esc(p.label)+'"><div class="r">'+(no?'<span class="ph-no">#'+esc(no)+'</span>':'<span class="ph-ic">'+IC.phone+'</span>')+
-        '<div class="tt"><b>'+esc(phcDev(p.label))+'</b><small>'+esc([phcHw(p), nl===null?'':(nl+' live account'+(nl===1?'':'s'))].filter(Boolean).join(' · '))+'</small></div>'+st+'</div>'+
+        '<div class="tt"><b>'+esc(phcDev(p.label))+'</b><small>'+esc([phcHw(p), nl===null?'':(nl+' live')].filter(Boolean).join(' · '))+'</small></div>'+st+'</div>'+
         (md?'<div class="md">'+md+'</div>':'')+
         (open.length?'<div class="is">'+esc(open.map(function(o){ return PHC_NOT[o.k]||'Problem'; }).join(' · '))+'</div>':'')+'</button>'; }).join('')+'</div></section>';
 }
@@ -2570,6 +2611,7 @@ function paintTabs(){ $('tabs').innerHTML=tabsC().map(function(t){ return '<butt
 function go(v){ VIEW=v; closeAll(); paintTabs(); renderView(); try{ window.scrollTo({ top:0, behavior:'smooth' }); }catch(e){ window.scrollTo(0,0); } }
 function renderView(){
   var v=$('view'); if(!v) return;
+  try{ document.body.classList.toggle('cx-wide', VIEW==='overview' || VIEW==='phones'); }catch(_w){}   // Oct 29d: use the whole width of a big monitor
   var keepQ=(document.activeElement && /^(db-q|sub-q)$/.test(document.activeElement.id||''))?document.activeElement.id:'', pos=keepQ?document.activeElement.selectionStart:0;
   var h='';
   try{
