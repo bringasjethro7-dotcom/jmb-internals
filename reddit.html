@@ -1335,7 +1335,10 @@ function start(){
   loadNames(); loadCfg().then(renderView); load(); loadAll(); smartPoll();
   if(isAdmin()){ loadOff(); loadHealth(); setTimeout(function(){ try{ pqAutoFill(); }catch(e){} }, 25000); }
   chkLoad(true); setTimeout(chkTick, 4000); setTimeout(chkTick, 15000);   // health check v2: who is in today (Oct 13)
-  setTimeout(function(){ phLoad(false).then(function(){ if(VIEW==='today') renderView(); }); }, 3000); setInterval(function(){ if(document.hidden) return; phLoad(true).then(function(){ if(PHN.edit || PHN.rep) return; if(VIEW==='phones'||VIEW==='today') renderView(); }); }, 120000);   // Oct 29: iPhones
+  setTimeout(function(){ phLoad(false).then(function(){ if(VIEW==='today') renderView(); }); }, 3000); setInterval(function(){ if(document.hidden || PHN.loading) return;   // Oct 29: iPhones · 29g: every 45 s while a problem is open or waiting for its check (a tap in Telegram shows here fast), else every 2 min
+    var hot=(PHN.log||[]).some(function(o){ return o.type==='issue' && (o.status==='open' || o.status==='verify'); });
+    if(Date.now()-(PHN.at||0)<(hot?45000:120000)) return;
+    phLoad(true).then(function(){ if(PHN.edit || PHN.rep) return; if(VIEW==='phones'||VIEW==='today') renderView(); }); }, 15000);
   if(isAdmin()){ try{ var _dk='rc_dc_'+today(); if(!localStorage.getItem(_dk)){ localStorage.setItem(_dk,'1');
     // Day close runs from the owner's page in the background (05i) — never inside a VA's request.
     api({ action:'rc_day_close', by:USER.id, catchup:'1' }).then(function(d){ if(d&&d.ok&&d.closed&&d.closed.length){ toast('Closed '+d.closed.length+' day'+(d.closed.length===1?'':'s')+' → scorecard updated.'); if(VIEW==='prod'){ PQ.st=null; PQ.sc=null; renderView(); } } }).catch(function(){ try{ localStorage.removeItem(_dk); }catch(_r){} }); } }catch(_dc){} }
@@ -1523,8 +1526,19 @@ function phTgCard(){
         '<div class="row" style="gap:6px;margin-top:6px"><input class="inp" id="phtg-tok" type="password" autocomplete="off" placeholder="'+(T.token_set?'paste a new token to replace it':'123456789:AA…')+'" style="flex:1"><button class="btn sm sec" onclick="phTgSave()">Save token</button></div></div>'+
       '<div><b>2 · Group</b>'+(T.chat_set?'<span class="pill" style="background:#10b98118;color:#047857">'+esc(T.chat_title||'Group set')+'</span>':'<span class="muted">Make a group with you, the client and the bot, send <b>/start</b> in it, then press Find.</span>')+
         '<div class="row" style="gap:6px;margin-top:6px"><button class="btn sm sec" '+(T.token_set?'':'disabled')+' onclick="phTgFind()">Find the group</button><button class="btn sm dark" '+(T.chat_set?'':'disabled')+' onclick="phTgTest()">Send a test</button></div></div>'+
+      /* 29g: instant replies — Telegram calls Reddit Central the moment someone taps Mark fixed, replies "fixed" or sends /status */
+      '<div><b>3 · Instant replies</b>'+(T.hook?'<span class="pill" style="background:#10b98118;color:#047857">On — taps and replies land in about a second</span>':(T.hook_fail?'<span class="pill" style="background:#ef444418;color:#b91c1c">Switched itself off</span>':'<span class="muted">Off — taps and replies are read every 2 minutes, and only while someone has the tool open.</span>'))+
+        (T.hook_fail && !T.hook?'<div class="note b" style="margin-top:6px">'+esc(T.hook_fail)+' — Telegram could not reach the script, so the 2-minute read took over. Turn it on again after redeploying.</div>':'')+
+        (PHN.tgh?'<div class="note '+(PHN.tgh.err?'b':'g')+'" style="margin-top:6px">'+(PHN.tgh.on?(PHN.tgh.err?'Telegram reports: '+esc(PHN.tgh.err):'Telegram is reaching the script')+' · '+PHN.tgh.pending+' waiting':'Instant replies are off')+'</div>':'')+
+        '<div class="row" style="gap:6px;margin-top:6px">'+(T.hook?'<button class="btn sm sec" onclick="phTgHookCheck()">Check</button><button class="btn sm sec" onclick="phTgHook(0)">Turn off</button>':'<button class="btn sm dark" '+(T.token_set&&T.chat_set?'':'disabled')+' onclick="phTgHook(1)">Turn on instant replies</button>')+'</div></div>'+
     '</div></div>';
 }
+async function phTgHook(on){
+  var d=null; try{ d=await apiPost({ by:USER.id, action:'rc_tg_hook', on:on?'1':'0', url:API }); }catch(e){}
+  if(d && d.ok){ PHN.tgh=d; toast(on?(d.on?'Instant replies are on — tap Mark fixed in the group to try it.':'Could not turn it on.'):'Instant replies are off — back to the 2-minute read.'); PHN.tgs=null; phTgLoad(); renderView(); return; }
+  toast(d&&d.error==='UNKNOWN_ACTION'?'Deploy the Reddit Central backend rc-2026-10-29g first.':('Could not change it — '+((d&&d.error)||'connection error')));
+}
+async function phTgHookCheck(){ var d=null; try{ d=await apiPost({ by:USER.id, action:'rc_tg_hook_info' }); }catch(e){} if(d && d.ok){ PHN.tgh=d; renderView(); } else toast('Could not check — '+((d&&d.error)||'connection error')); }
 async function phTgLoad(){ if(phTgLoad._b) return; phTgLoad._b=1; try{ var d=await api({ action:'rc_tg_get', by:USER.id, _:Date.now() }); if(d && d.ok){ PHN.tgs=d; if(VIEW==='phones') renderView(); } }catch(e){} phTgLoad._b=0; }
 async function phTgPost(o, msg){ var d=null; try{ d=await apiPost(Object.assign({ by:USER.id }, o)); }catch(e){} if(d && d.ok){ PHN.tgs=d.token_set!==undefined?d:PHN.tgs; if(msg) toast(msg); PHN.tg.on=!!(PHN.tgs&&PHN.tgs.token_set&&PHN.tgs.chat_set); renderView(); return d; }
   toast(d&&d.error==='NO_GROUP'?'No group found yet — add the bot to the group, send /start there, then press Find again.':('Could not save — '+((d&&d.error)||'connection error'))); return null; }
