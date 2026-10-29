@@ -1006,6 +1006,24 @@ table.db thead th{background:#faf8f5}
 .sx-steps b{display:block;color:#0f766e;font-size:13px;letter-spacing:.04em;text-transform:uppercase}
 .sx-steps span{display:block;margin-top:4px;font-size:13px}
 @media (max-width:700px){ .sx-steps{grid-template-columns:1fr} }
+/* Oct 29 · iPhones dashboard */
+.ph-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px;margin-top:12px}
+.ph-c{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.ph-c.bad{border-color:#fecdd3;box-shadow:0 0 0 3px #fff1f2}
+.ph-h{display:flex;align-items:center;gap:10px}.ph-h b{display:block;font-size:14.5px}.ph-h small{display:block;font-size:11.5px;color:var(--ink3);font-weight:600}
+.ph-ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(135deg,#ff6b1a,#a855f7);color:#fff;flex:none}
+.ph-ls{display:flex;flex-direction:column;gap:6px}
+.ph-ln{display:flex;align-items:center;gap:8px;font-size:12.5px;min-height:24px}
+.ph-ln i{width:8px;height:8px;border-radius:50%;flex:none}
+.ph-ln .k{width:112px;flex:none;color:var(--ink3);font-weight:700;font-size:11.5px}
+.ph-ln .v{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.ph-ln .ghost{padding:2px 7px;font-size:11px}
+.ph-ck{font-size:10.5px;color:#047857;font-weight:700;white-space:nowrap}
+.ph-a{color:#0ea5e9;font-weight:800;text-decoration:none;font-family:inherit}
+.ph-is{background:#fff1f2;border:1px solid #fecdd3;border-radius:10px;padding:8px 10px;font-size:12.5px;display:flex;flex-direction:column;gap:2px}
+.ph-is b{color:#9f1239}.ph-is small{font-size:11px;color:var(--ink3)}
+.ph-hist summary{cursor:pointer;font-size:12px;font-weight:800;color:var(--ink3)}
+.ph-hist div{font-size:12px;color:var(--ink2);padding:4px 0;border-top:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -2354,6 +2372,43 @@ function vSxC(){
     '<div class="seg no-print" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(CXS.range===x[0]?'on':'')+'" onclick="CXS.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div></div>';
   return h+sxInsightsHtml(allRows(), CXS.range, 'openRecC');
 }
+/* iPHONES DASHBOARD (Oct 29) — every iPhone with its proxy, IP rotation link, license key, the Apple ID used for the IPA and
+   its Cloud+ (Blaze+ iCloud); a problem our team reports shows here at once (and in your Telegram group), and so does the fix. */
+var PHC={ show:{} };
+var PHC_NOT={ proxy:'Proxy not working', license:'License key error', cloud:'Cloud+ error', ipa:'Apple ID (IPA) problem', other:'Problem reported' };
+var PHC_OK={ proxy:'Proxy', license:'License key', cloud:'Cloud+', ipa:'Apple ID (IPA)', other:'Other' };
+function phcAgo(stamp){ var d=parseTs(stamp); if(!d) return ''; var m=Math.round((Date.now()-d.getTime())/60000); if(m<1) return 'just now'; if(m<60) return m+' min ago'; if(m<48*60) return Math.round(m/60)+' h ago'; return fmtD(d); }
+function phcDur(a,b){ var x=parseTs(a), y=parseTs(b); if(!x||!y||y<=x) return ''; var m=Math.round((y-x)/60000); return m<60?(m+' min'):(Math.floor(m/60)+' h'+(m%60?' '+(m%60)+' min':'')); }
+async function phcCopy(btn, t){ try{ await navigator.clipboard.writeText(t); }catch(e){ var a=document.createElement('textarea'); a.value=t; document.body.appendChild(a); a.select(); try{ document.execCommand('copy'); }catch(_e){} a.remove(); } if(btn){ var o=btn.textContent; btn.textContent='Copied'; setTimeout(function(){ btn.textContent=o; },1200); } }
+function phcLine(p, kind, name, valHtml, extra){
+  var open=(p.issues||[]).filter(function(o){ return o.st==='open' && o.k===kind; }), dot=open.length?'#ef4444':(valHtml?'#10b981':'#cbd5e1');
+  return '<div class="ph-ln"><i style="background:'+dot+'" title="'+esc(open.length?PHC_NOT[kind]:(valHtml?'OK':'Not set'))+'"></i><span class="k">'+esc(name)+'</span><span class="v">'+(valHtml||'<span class="muted">not set</span>')+'</span>'+(extra||'')+'</div>';
+}
+function phcCp(t){ return t?'<button class="ghost" onclick="phcCopy(this,\''+jsq(t)+'\')">Copy</button>':''; }
+function phcCard(p){
+  var open=(p.issues||[]).filter(function(o){ return o.st==='open'; }), past=(p.issues||[]).filter(function(o){ return o.st!=='open'; }), L=p.label, id=jsq(L), ic=p.icloud||[], lic=p.license||'';
+  var ck=(p.chk||{}).proxy;
+  var h='<div class="card ph-c'+(open.length?' bad':'')+'"><div class="ph-h"><span class="ph-ic">'+IC.phone+'</span><div style="flex:1;min-width:0"><b>'+esc(L)+'</b><small>'+esc(p.model||'')+(p.active===false?' · not in use':'')+'</small></div>'+
+    (open.length?'<span class="pill" style="background:#ef444418;color:#b91c1c">'+open.length+' problem'+(open.length===1?'':'s')+'</span>':'<span class="pill" style="background:#10b98118;color:#047857">All OK</span>')+'</div>';
+  h+='<div class="ph-ls">'+
+    phcLine(p,'proxy','Proxy', esc(p.proxy||''), phcCp(p.proxy||'')+(ck?'<small class="ph-ck">checked OK '+esc(phcAgo(ck))+'</small>':''))+
+    phcLine(p,'proxy','Rotation link', p.rotate?'<a class="ph-a" href="'+esc(p.rotate)+'" target="_blank" rel="noopener noreferrer">Rotate IP ↗</a>':'', phcCp(p.rotate||''))+
+    phcLine(p,'license','License key', lic?(PHC.show[L]?esc(lic):'•••• '+esc(lic.slice(-4))):'', lic?'<button class="ghost" onclick="PHC.show[\''+id+'\']=!PHC.show[\''+id+'\'];renderView()">'+(PHC.show[L]?'Hide':'Show')+'</button>'+phcCp(lic):'')+
+    phcLine(p,'ipa','Apple ID (IPA)', esc(p.ipa||''), phcCp(p.ipa||''))+
+    phcLine(p,'cloud','Cloud+ (Blaze+)', ic.map(esc).join(', '), '')+'</div>';
+  if(open.length) h+=open.map(function(o){ return '<div class="ph-is"><b>'+esc(PHC_NOT[o.k]||'Problem')+'</b>'+(o.note?'<span>'+esc(o.note)+'</span>':'')+'<small>reported '+esc(fmtDT(parseTs(o.at)))+' · '+esc(phcAgo(o.at))+'</small></div>'; }).join('');
+  if(past.length) h+='<details class="ph-hist"><summary>Fixed in the last 30 days · '+past.length+'</summary>'+past.slice(0,10).map(function(o){ return '<div><b>'+esc(PHC_OK[o.k]||o.k)+'</b> — '+esc(fmtDT(parseTs(o.at)))+(o.res_at?' → fixed '+esc(fmtDT(parseTs(o.res_at)))+(phcDur(o.at,o.res_at)?' ('+esc(phcDur(o.at,o.res_at))+')':''):'')+(o.note?'<br><span class="muted">'+esc(o.note)+'</span>':'')+(o.res_note?'<br><span class="muted">Fix: '+esc(o.res_note)+'</span>':'')+'</div>'; }).join('')+'</details>';
+  return h+'</div>';
+}
+function vPhonesC(){
+  var ph=(Array.isArray(CFG.phones)?CFG.phones:[]).slice(), open=[]; ph.forEach(function(p){ (p.issues||[]).forEach(function(o){ if(o.st==='open') open.push({ p:p, o:o }); }); });
+  var day=Date.now()-24*3600e3, checked=ph.filter(function(p){ var c=(p.chk||{}).proxy, d=c?parseTs(c):null; return d && d.getTime()>=day; }).length, inUse=ph.filter(function(p){ return p.active!==false; }).length;
+  var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>iPhones</h2><p>Every iPhone running your accounts, with its proxy, IP rotation link, license key, the Apple ID used for the IPA and its Cloud+. When our team finds a problem it shows here right away — and you get it in your Telegram group — and again when it is fixed.</p></div><div class="cl-live no-print" id="cl-live"></div></div>';
+  h+='<div class="kpis">'+kpi('iPhones in use', inUse, ph.length+' listed', '#ff6b1a')+kpi('Open problems', open.length, open.length?'being worked on now':'none — all clear', open.length?'#ef4444':'#10b981')+kpi('Proxies checked', checked+' / '+inUse, 'OK in the last 24 h', '#0ea5e9')+'</div>';
+  if(open.length) h+='<div class="banner bad">'+IC.phone+'<div style="flex:1"><b>'+open.length+' open problem'+(open.length===1?'':'s')+':</b> '+open.slice(0,5).map(function(x){ return esc(x.p.label)+' — '+esc(PHC_NOT[x.o.k]||'Problem')+' ('+esc(phcAgo(x.o.at))+')'; }).join(' · ')+'</div></div>';
+  h+='<div class="ph-g">'+ph.sort(function(a,b){ var x=(a.issues||[]).filter(function(o){ return o.st==='open'; }).length, y=(b.issues||[]).filter(function(o){ return o.st==='open'; }).length; return y-x || String(a.label).localeCompare(String(b.label)); }).map(phcCard).join('')+'</div>';
+  return h;
+}
 /* SETTINGS — iPhones & iClouds (Blaze+) and the Suicidal Operation (Oct 25) */
 function vSettingsC(){
   var ph=Array.isArray(CFG.phones)?CFG.phones:[], L=sxAssignList(), withIc=ph.filter(function(p){ return (p.icloud||[]).length; }).length;
@@ -2461,7 +2516,7 @@ document.addEventListener('visibilitychange', function(){ if(!document.hidden &&
 
 /* ── shell ── */
 var TABS=[['overview','Overview'],['accounts','Accounts'],['pipeline','Pipeline'],['insights','Insights']];
-function tabsC(){ var t=[]; TABS.forEach(function(x){ if(x[0]==='insights' && CXS.sop==='sx') return; t.push(x); if(x[0]==='accounts' && subsD()) t.push(['subs','Subreddits']); }); t.push(['settings','Settings']); return t; }   // Oct 14: Subreddits after Accounts · Oct 25: Settings; the Suicidal Operation's insights live on its Overview   // Oct 14: Subreddits sits right after Accounts
+function tabsC(){ var t=[]; TABS.forEach(function(x){ if(x[0]==='insights' && CXS.sop==='sx') return; t.push(x); if(x[0]==='accounts' && subsD()) t.push(['subs','Subreddits']); }); if((CFG.phones||[]).length) t.push(['phones','iPhones']); t.push(['settings','Settings']); return t; }   // Oct 29: iPhones dashboard   // Oct 14: Subreddits after Accounts · Oct 25: Settings; the Suicidal Operation's insights live on its Overview   // Oct 14: Subreddits sits right after Accounts
 function paintTabs(){ $('tabs').innerHTML=tabsC().map(function(t){ return '<button class="'+(VIEW===t[0]?'on':'')+'" onclick="go(\''+t[0]+'\')">'+t[1]+'</button>'; }).join(''); }
 function go(v){ VIEW=v; closeAll(); paintTabs(); renderView(); try{ window.scrollTo({ top:0, behavior:'smooth' }); }catch(e){ window.scrollTo(0,0); } }
 function renderView(){
@@ -2470,6 +2525,7 @@ function renderView(){
   var h='';
   try{
     if(VIEW==='settings') h=vSettingsC();
+    else if(VIEW==='phones') h=vPhonesC();
     else if(!allRows().length) h=INSD.at?'<div class="card empty">No accounts yet.</div>':'<div class="card empty">'+(LOAD_ERR?'Could not load ('+esc(LOAD_ERR)+') — retrying. <a href="#" onclick="insRefresh();return false" style="color:var(--ot);font-weight:800">Retry now</a>':'<span class="cl-spin"></span> Loading your accounts…')+'</div>';
     else if(VIEW==='pipeline') h=vPipeline();
     else if(VIEW==='insights') h=CXS.sop==='sx'?vSxC():vInsights();
