@@ -653,7 +653,7 @@ var EXTRA=[
    It never climbs the ladder and its numbers are kept apart: every account on it carries meta.sop="sx" for life, the
    ladder's Pipeline / Insights / Results leave it out, and it has its own views. Its sessions and creations still count as work. */
 var SXPH=[
- {k:'sxwarm', n:'Suicidal · Warm-up', c:'#14b8a6', sx:true, from:2, plan:'ONE warm-up session, on day 2 (or day 3 at the latest) · 8–12 min browsing · search 2–4 topics and read them · no upvotes · no joining · no posting yet. After it, nothing is due on the account until it posts — posting opens on day 3.', task:'Reddit Warmup'},
+ {k:'sxwarm', n:'Suicidal · Warm-up', c:'#14b8a6', sx:true, from:2, plan:'TWO warm-up sessions on the warm-up day — Warm-up 1, then Warm-up 2 later the same day (day 2, or day 3 at the latest) · 8–12 min browsing each · search 2–4 topics and read them · no upvotes · no joining · no posting yet. After both, nothing is due on the account until it posts — posting opens on day 3.', task:'Reddit Warmup'},
  {k:'sxpost', n:'Suicidal · Posting', c:'#0f766e', sx:true, from:3, plan:'Day 3 onward, once warmed · 2 sessions a day · post the way the client assigned this account (its assignment is on the card — e.g. Location posting). No assignment yet? Ask the admin before you post — until it is set the account is not in your target. Log every post at the end of the session.', task:'Reddit Posting'}
 ];
 var SX_STAGES=['sxwarm','sxpost'];
@@ -673,10 +673,10 @@ function sxPosted(r){ return r.status==='sxpost' || ((r.meta||{}).prev==='sxpost
 function sxWarmAt(r){ var m=M(r); if(m.sxw) return String(m.sxw); if(r.status==='sxwarm' && m.s1 && String(m.s1).slice(0,10)>=String(m.pstart||'')) return String(m.s1); return ''; }
 function sxUnits(r, wk, ow){
   var m=M(r), s1=markOkAny(m.s1,wk,ow)?1:0, s2=markOkAny(m.s2,wk,ow)?1:0;
-  if(r.status==='sxwarm'){
-    if(s1) return { tot:1, done:1, k:'warm' };
-    if(sxWarmAt(r)) return { tot:0, done:0, k:'warmed' };
-    return { tot:1, done:0, k:'warm', late:sxDay(r)>=3, over:sxDay(r)>=4 };
+  if(r.status==='sxwarm'){   // Oct 29 (Jeth): the warm-up day has TWO sessions — Warm-up 1 and Warm-up 2
+    if(s1||s2) return { tot:2, done:s1+s2, k:'warm', late:sxDay(r)>=3, over:sxDay(r)>=4 };
+    if(sxWarmAt(r)) return { tot:0, done:0, k:'warmed' };   // warmed on an earlier day (one session under the Oct 27 rule counts) — never reset
+    return { tot:2, done:0, k:'warm', late:sxDay(r)>=3, over:sxDay(r)>=4 };
   }
   if(r.status==='sxpost'){
     if(!sxAssign(r)) return { tot:s1+s2, done:s1+s2, k:'noassign' };
@@ -690,7 +690,7 @@ function sxToday(rows){
   rows.forEach(function(r){ if(!isSX(r) || isParked(r) || isDead(r) || isHeld(r)) return;
     if(r.status==='new'){ o.newToday++; return; }
     var u=sxUnits(r, worksFor(r), owner(r)); if(!u) return;
-    if(u.k==='warm'){ o.warm++; if(u.done) o.warmDone++; else { if(u.late) o.late++; if(u.over) o.over++; } }
+    if(u.k==='warm'){ o.warm++; if(u.done>=u.tot) o.warmDone++; else if(!u.done){ if(u.late) o.late++; if(u.over) o.over++; } }
     else if(u.k==='warmed'){ o.warmed++; if(sxDay(r)>=3) o.ready++; }
     else if(u.k==='noassign') o.noassign++;
     else o.post++;
@@ -1571,7 +1571,7 @@ function vToday(){
     var _sxRows=admin?(ALL[PROJECT]||ROWS).filter(function(r){ return !isParked(r); }):mineWork, _sx=sxToday(_sxRows);
     var _sxNoA=_sxRows.filter(function(r){ return isSX(r) && !isDead(r) && !isParked(r) && !sxAssign(r) && (r.status==='sxpost' || (r.status==='sxwarm' && sxDay(r)>=3)); }).length;
     var _wLeft=_sx.warm-_sx.warmDone;
-    if(_wLeft) h+='<div class="banner '+(_sx.over?'bad':'warn')+'" style="border-color:'+SX_C+'55">'+IC.hour+'<div style="flex:1"><b>Suicidal Op warm-ups:</b> '+_wLeft+' left today'+(_sx.warmDone?' ('+_sx.warmDone+' done)':'')+' — one 8–12 min session per account, then it owes nothing until it posts.'+
+    if(_wLeft) h+='<div class="banner '+(_sx.over?'bad':'warn')+'" style="border-color:'+SX_C+'55">'+IC.hour+'<div style="flex:1"><b>Suicidal Op warm-ups:</b> '+_wLeft+' left today'+(_sx.warmDone?' ('+_sx.warmDone+' done)':'')+' — two 8–12 min sessions per account (Warm-up 1, then Warm-up 2 later the same day), then it owes nothing until it posts.'+
       (_sx.late-_sx.over>0?' <b>'+(_sx.late-_sx.over)+'</b> '+((_sx.late-_sx.over)===1?'is':'are')+' on <b>day 3 — the SOP\'s last day</b> for the warm-up.':'')+
       (_sx.over?' <b style="color:#b91c1c">'+_sx.over+' '+(_sx.over===1?'is':'are')+' past day 3 and never warmed.</b>':'')+'</div></div>';
     if(_sxNoA) h+='<div class="banner info" style="border-color:'+SX_C+'55">'+IC.tag+'<div style="flex:1"><b>'+_sxNoA+' Suicidal Op account'+(_sxNoA===1?' is':'s are')+' on day 3+ with no posting assignment.</b> '+(admin?'The VA can\'t post '+(_sxNoA===1?'it':'them')+' until you record what the client assigned. They are kept out of the daily target until then.':'Ask the admin for the assignment before posting — until it is set, '+(_sxNoA===1?'it is':'they are')+' not in your target.')+'</div>'+
@@ -1910,11 +1910,11 @@ function sesBtn(r, n, lbl){   // lbl (Oct 27): a named single session, e.g. the 
 function sxActs(r){
   var st=r.status, id=jsq(r.id), sd=sxDay(r), wk=worksFor(r), ow=owner(r), m=M(r);
   if(st==='sxwarm'){
-    var today1=markOkAny(m.s1,wk,ow), warmed=!!sxWarmAt(r);
-    var a=(warmed && !today1)?'<button class="ses done" disabled title="The one warm-up session was done ('+esc(String(sxWarmAt(r)).replace('·',' '))+')"><span class="bx">'+IC.check+'</span>Warmed</button>':sesBtn(r,1,'Warm-up');
+    var today1=markOkAny(m.s1,wk,ow), today2=markOkAny(m.s2,wk,ow), warmed=!!sxWarmAt(r);
+    var a=(warmed && !today1 && !today2)?'<button class="ses done" disabled title="Warmed ('+esc(String(sxWarmAt(r)).replace('·',' '))+')"><span class="bx">'+IC.check+'</span>Warmed</button>':(sesBtn(r,1,'Warm-up 1')+sesBtn(r,2,'Warm-up 2'));   // Oct 29: two warm-up sessions
     if(sd>=3) a+=(warmed||today1)
       ? '<button class="ses up" onclick="promote(\''+id+'\',\'sxpost\')" title="Warmed and on day '+sd+' — start posting">'+IC.up+' Posting</button>'
-      : '<button class="ses" disabled title="Do the warm-up session first — then posting opens">'+IC.up+' Posting</button>';
+      : '<button class="ses" disabled title="Do the warm-up sessions first — then posting opens">'+IC.up+' Posting</button>';
     return a;
   }
   return sesBtn(r,1)+sesBtn(r,2);
@@ -1923,7 +1923,8 @@ function sxProg(r){
   var st=r.status, sd=sxDay(r), asg=sxAssign(r), u=sxUnits(r, worksFor(r), owner(r))||{}, p=phase(st)||{};
   if(st==='sxwarm'){
     var lbl, col;
-    if(u.k==='warmed' || (u.k==='warm' && u.done)){ lbl='Day '+sd+' · warmed ✓'+(sd>=3?(asg?' · ready to post':' · ready — <span style="color:#b45309">no assignment yet</span>'):' · posting from day 3'); col='#047857'; }
+    if(u.k==='warm' && u.done===1 && u.tot===2){ lbl='Day '+sd+' · Warm-up 1 done · Warm-up 2 due today'; col='#b45309'; }
+    else if(u.k==='warmed' || (u.k==='warm' && u.done)){ lbl='Day '+sd+' · warmed ✓'+(sd>=3?(asg?' · ready to post':' · ready — <span style="color:#b45309">no assignment yet</span>'):' · posting from day 3'); col='#047857'; }
     else if(u.over){ lbl='Day '+sd+' · warm-up overdue'; col='#b91c1c'; }
     else if(u.late){ lbl='Day '+sd+' · warm-up today (last day)'; col='#b45309'; }
     else { lbl='Day '+sd+' · warm-up due'; col='var(--ink2)'; }
@@ -2806,7 +2807,7 @@ function progWhy(va){
       '<div class="card pad" style="margin-bottom:10px"><b>Sessions</b> — '+work.length+' working account'+(work.length===1?'':'s')+' × 2 = <b>'+(work.length*2)+' due</b> · Session 1 done on '+s1+', Session 2 on '+s2+'.'+
         '<div class="muted" style="font-size:12px">Not due: '+standby+' in Creation / standby (no sessions)'+(parked?' · '+parked+' on hold / archived':'')+'.</div></div>'+
       (sxw.length?'<div class="card pad" style="margin-bottom:10px;border-color:'+SX_C+'40"><b style="color:'+SX_C+'">Suicidal Operation</b> — <b>'+sxD+'/'+sxT+'</b> by its own SOP: '+
-        (sxN.warm?sxN.warm+' warm-up'+(sxN.warm===1?'':'s')+' due (1 session each, once)':'no warm-ups due')+
+        (sxN.warm?sxN.warm+' warm-up'+(sxN.warm===1?'':'s')+' due (2 sessions each, on the warm-up day)':'no warm-ups due')+
         (sxN.post?' · '+sxN.post+' posting × 2':'')+'.'+
         '<div class="muted" style="font-size:12px">Not due: '+(sxN.warmed||0)+' already warmed (waiting for day 3 / posting)'+(sxN.noassign?' · '+sxN.noassign+' posting with no assignment yet':'')+'.</div></div>':'')+
       '<div class="card pad" style="margin-bottom:10px"><b>Creations counted this shift — '+cre.length+'</b> ('+cre.filter(function(x){ return x.c.done; }).length+' finished)'+
@@ -3706,7 +3707,8 @@ async function doSession(id, n, btn){
   if(!ok){ if(t){ var o=tmAll(); o[id+'|s'+n]={ t:t.start, p:t.parallel, d:today() }; tmPut(o); } toast('Could not save the session — try again.'); renderView(); return; }
   tmLog(r, 'session', t);
   if(task) await bump(task,1);
-  if(sxWarm) toast('Warm-up done for '+r.handle+' ✓ — '+(sxDay(r)>=3?(sxAssign(r)?'it can move to Posting.':'posting needs its assignment from the admin.'):'posting opens on day 3.'));
+  if(r.status==='sxwarm' && n===1) toast('Warm-up 1 done for '+r.handle+' ✓ — do Warm-up 2 later today.');
+  else if(r.status==='sxwarm') toast('Warm-up 2 done for '+r.handle+' ✓ — warm-up complete; '+(sxDay(r)>=3?(sxAssign(r)?'it can move to Posting.':'posting needs its assignment from the admin.'):'posting opens on day 3.'));
   else toast('Session '+n+'/2 done'+(n===2?' — day complete for '+r.handle+'!':(task==='Reddit Posting'?' — rotate subs, captions & photos!':'')));
   renderView();
 }
