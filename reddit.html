@@ -1242,24 +1242,24 @@ function askNumber(title, body, cur){
    session on a phone each shift they confirm the proxy works ("VA check only"). The client sees the same board in their
    portal, and every problem and fix goes to the client's Telegram group — phone, item, note and time, never a name.
    Details are served only to a signed-in session (backend rc-2026-10-29a: rc_phones_get) and only the owner edits them. */
-var PH={ sec:{}, log:[], tg:{ on:false }, loaded:false, loading:null, err:'', at:0, edit:'', rep:'', tgs:null, show:{}, f:'all' };
+var PHN={ sec:{}, log:[], tg:{ on:false }, loaded:false, loading:null, err:'', at:0, edit:'', rep:'', tgs:null, show:{}, f:'all' };
 var PH_KINDS=[['proxy','Proxy'],['license','License key'],['cloud','Cloud+ (Blaze+)'],['ipa','Apple ID (IPA)'],['other','Other']];
 function phKindN(k){ for(var i=0;i<PH_KINDS.length;i++) if(PH_KINDS[i][0]===k) return PH_KINDS[i][1]; return k; }
 var PH_NOT={ proxy:'Proxy not working', license:'License key error', cloud:'Cloud+ error', ipa:'Apple ID (IPA) problem', other:'Problem' };
 async function phLoad(force){
-  if(PH.loading) return PH.loading;
-  if(!force && PH.loaded && Date.now()-PH.at<45000) return;
-  PH.loading=(async function(){
+  if(PHN.loading) return PHN.loading;
+  if(!force && PHN.loaded && Date.now()-PHN.at<45000) return;
+  PHN.loading=(async function(){
     try{ var d=await api({ action:'rc_phones_get', _:Date.now() });
-      if(d && d.ok){ PH.sec=d.sec||{}; PH.log=d.log||[]; PH.tg=d.tg||{ on:false }; PH.loaded=true; PH.err=''; PH.at=Date.now(); }
-      else PH.err=(d&&d.error==='SIGN_IN')?'Sign out and back in to see the iPhone details (your sign-in is too old).':(d&&d.error==='UNKNOWN_ACTION'?'The Reddit Central backend needs the latest update (rc-2026-10-29a).':((d&&d.error)||'Could not load the iPhones.'));
-    }catch(e){ PH.err='Connection error — refresh.'; }
-    finally{ PH.loading=null; }
+      if(d && d.ok){ PHN.sec=d.sec||{}; PHN.log=d.log||[]; PHN.tg=d.tg||{ on:false }; PHN.loaded=true; PHN.err=''; PHN.at=Date.now(); }
+      else PHN.err=(d&&d.error==='SIGN_IN')?'Sign out and back in to see the iPhone details (your sign-in is too old).':(d&&d.error==='UNKNOWN_ACTION'?'The Reddit Central backend needs the latest update (rc-2026-10-29a).':((d&&d.error)||'Could not load the iPhones.'));
+    }catch(e){ PHN.err='Connection error — refresh.'; }
+    finally{ PHN.loading=null; }
   })();
-  return PH.loading;
+  return PHN.loading;
 }
-function phOpen(label, kind){ return PH.log.filter(function(o){ return o.type==='issue' && o.status==='open' && o.phone===label && (!kind || o.kind===kind); }); }
-function phLastOk(label, kind){ var t=''; PH.log.forEach(function(o){ if(o.phone===label && o.kind===kind && o.type==='check' && o.status==='ok' && o.at>t) t=o.at; }); return t; }
+function phOpen(label, kind){ return PHN.log.filter(function(o){ return o.type==='issue' && o.status==='open' && o.phone===label && (!kind || o.kind===kind); }); }
+function phLastOk(label, kind){ var t=''; PHN.log.forEach(function(o){ if(o.phone===label && o.kind===kind && o.type==='check' && o.status==='ok' && o.at>t) t=o.at; }); return t; }
 function phAgo(stamp){ var d=parseTs(stamp); if(!d) return ''; var m=Math.round((Date.now()-d.getTime())/60000); if(m<1) return 'just now'; if(m<60) return m+' min ago'; if(m<48*60) return Math.round(m/60)+' h ago'; return fmtD(d); }
 function phAccts(label){ return allRows().filter(function(r){ return String(r.device||'')===label && !isDead(r) && !isParked(r); }).length; }
 function phMine(){ var me=myId(), s={}; ROWS.forEach(function(r){ if(worksFor(r)===me && !isParked(r) && !isDead(r) && r.device) s[r.device]=1; }); return s; }
@@ -1272,37 +1272,37 @@ function phLine(label, kind, name, val, extra){
 function phCopyBtn(text){ return text?'<button class="ghost ph-cp" title="Copy" onclick="phCopy(this,\''+jsq(text)+'\')">Copy</button>':''; }
 async function phCopy(btn, t){ try{ await navigator.clipboard.writeText(t); }catch(e){ var a=document.createElement('textarea'); a.value=t; document.body.appendChild(a); a.select(); try{ document.execCommand('copy'); }catch(_e){} a.remove(); } if(btn){ var o=btn.textContent; btn.textContent='Copied'; setTimeout(function(){ btn.textContent=o; }, 1200); } }
 function phCard(p){
-  var L=p.label, S=PH.sec[L]||{}, admin=isAdmin(), open=phOpen(L), id=jsq(L), ic=Array.isArray(p.icloud)?p.icloud:[];
-  var lic=S.license||'', licShow=PH.show[L]?esc(lic):(lic?'•••• '+esc(lic.slice(-4)):'');
+  var L=p.label, S=PHN.sec[L]||{}, admin=isAdmin(), open=phOpen(L), id=jsq(L), ic=Array.isArray(p.icloud)?p.icloud:[];
+  var lic=S.license||'', licShow=PHN.show[L]?esc(lic):(lic?'•••• '+esc(lic.slice(-4)):'');
   var lastPx=phLastOk(L,'proxy');
   var h='<div class="card ph-c'+(open.length?' bad':'')+'"><div class="ph-h"><span class="ph-ic">'+IC.phone+'</span><div style="flex:1;min-width:0"><b>'+esc(L)+'</b><small>'+esc(p.model||'')+' · '+esc(baseOf(phoneBase(p)).n)+(p.active===false?' · not in use':'')+' · '+phAccts(L)+' live account'+(phAccts(L)===1?'':'s')+'</small></div>'+
     (open.length?'<span class="pill" style="background:#ef444418;color:#b91c1c">'+open.length+' problem'+(open.length===1?'':'s')+'</span>':'<span class="pill" style="background:#10b98118;color:#047857">All OK</span>')+'</div>';
-  if(PH.edit===L && admin){
+  if(PHN.edit===L && admin){
     h+='<div class="ph-ed">'+[['proxy','Proxy','host:port (or host:port:user:pass)'],['rotate','IP rotation link','https://…'],['license','License key',''],['ipa','Apple ID used for the IPA','name@icloud.com']].map(function(f){
       return '<label><span>'+esc(f[1])+'</span><input class="inp" id="phe-'+f[0]+'" value="'+esc(S[f[0]]||'')+'" placeholder="'+esc(f[2])+'" autocomplete="off"></label>'; }).join('')+
-      '<div class="row" style="gap:6px;margin-top:8px"><button class="btn sm pri" onclick="phSave(\''+id+'\')">Save details</button><button class="btn sm sec" onclick="PH.edit=\'\';renderView()">Cancel</button></div>'+
+      '<div class="row" style="gap:6px;margin-top:8px"><button class="btn sm pri" onclick="phSave(\''+id+'\')">Save details</button><button class="btn sm sec" onclick="PHN.edit=\'\';renderView()">Cancel</button></div>'+
       '<div class="hint muted" style="font-size:11px;margin-top:6px">Signed-in staff and the client see these. Cloud+ iClouds are set in Settings → Company iPhones.</div></div>';
   } else {
     h+='<div class="ph-ls">'+
       phLine(L,'proxy','Proxy', esc(S.proxy||''), phCopyBtn(S.proxy||''))+(lastPx?'<div class="ph-ck" style="margin:-4px 0 0 128px">Proxy checked OK '+esc(phAgo(lastPx))+'</div>':'')+
       phLine(L,'proxy','Rotation link', S.rotate?'<a href="'+esc(S.rotate)+'" target="_blank" rel="noopener noreferrer" class="ph-a">Rotate IP ↗</a>':'', phCopyBtn(S.rotate||''))+
-      phLine(L,'license','License key', licShow, lic?'<button class="ghost ph-cp" onclick="PH.show[\''+id+'\']=!PH.show[\''+id+'\'];renderView()">'+(PH.show[L]?'Hide':'Show')+'</button>'+phCopyBtn(lic):'')+
+      phLine(L,'license','License key', licShow, lic?'<button class="ghost ph-cp" onclick="PHN.show[\''+id+'\']=!PHN.show[\''+id+'\'];renderView()">'+(PHN.show[L]?'Hide':'Show')+'</button>'+phCopyBtn(lic):'')+
       phLine(L,'ipa','Apple ID (IPA)', esc(S.ipa||''), phCopyBtn(S.ipa||''))+
       phLine(L,'cloud','Cloud+ (Blaze+)', ic.map(esc).join(', '), '')+'</div>';
   }
   if(open.length) h+='<div class="ph-op">'+open.map(function(o){ return '<div class="ph-is"><b>'+esc(PH_NOT[o.kind]||o.kind)+'</b><span>'+esc(o.note||'')+'</span><small>since '+esc(fmtT(parseTs(o.at)))+' · '+esc(phAgo(o.at))+' · '+esc(vaName(o.by)||o.by||'')+'</small><button class="btn sm" onclick="phFix(\''+jsq(o.id)+'\')">'+IC.check+' Fixed</button></div>'; }).join('')+'</div>';
-  if(PH.rep===L){
+  if(PHN.rep===L){
     h+='<div class="ph-rp"><div class="row" style="gap:6px;flex-wrap:wrap"><select class="sel" id="phr-k">'+PH_KINDS.map(function(k){ return '<option value="'+k[0]+'">'+esc(k[1])+'</option>'; }).join('')+'</select>'+
       '<input class="inp" id="phr-n" style="flex:1;min-width:200px" maxlength="300" placeholder="What happens? (the client reads this — no names)"></div>'+
-      '<div class="row" style="gap:6px;margin-top:8px"><button class="btn sm dark" onclick="phReport(\''+id+'\')">Report — the client is told</button><button class="btn sm sec" onclick="PH.rep=\'\';renderView()">Cancel</button></div></div>';
+      '<div class="row" style="gap:6px;margin-top:8px"><button class="btn sm dark" onclick="phReport(\''+id+'\')">Report — the client is told</button><button class="btn sm sec" onclick="PHN.rep=\'\';renderView()">Cancel</button></div></div>';
   }
-  h+='<div class="ph-ac">'+(PH.rep===L?'':'<button class="btn sm sec" onclick="PH.rep=\''+id+'\';PH.edit=\'\';renderView()">Report a problem</button>')+
+  h+='<div class="ph-ac">'+(PHN.rep===L?'':'<button class="btn sm sec" onclick="PHN.rep=\''+id+'\';PHN.edit=\'\';renderView()">Report a problem</button>')+
     (isAdmin()?'':'<button class="btn sm sec" onclick="phCheck(\''+id+'\',true)" title="The proxy works right now">Proxy working</button>')+
-    (admin && PH.edit!==L?'<button class="btn sm sec" onclick="PH.edit=\''+id+'\';PH.rep=\'\';renderView()">'+IC.edit+' Edit details</button>':'')+'</div></div>';
+    (admin && PHN.edit!==L?'<button class="btn sm sec" onclick="PHN.edit=\''+id+'\';PHN.rep=\'\';renderView()">'+IC.edit+' Edit details</button>':'')+'</div></div>';
   return h;
 }
 function phTgCard(){
-  var T=PH.tgs; if(!T){ phTgLoad(); T={}; }
+  var T=PHN.tgs; if(!T){ phTgLoad(); T={}; }
   return '<div class="card pad" style="margin-top:14px"><div class="ch-h"><b>Client alerts on Telegram</b><span>a problem or a fix on any iPhone → a message in the client\'s group · no names</span></div>'+
     '<div class="ph-tg">'+
       '<div><b>1 · Bot</b>'+(T.token_set?'<span class="pill" style="background:#10b98118;color:#047857">Connected · bot '+esc(T.bot)+'</span>':'<span class="muted">Telegram → @BotFather → /newbot → paste the token here.</span>')+
@@ -1311,8 +1311,8 @@ function phTgCard(){
         '<div class="row" style="gap:6px;margin-top:6px"><button class="btn sm sec" '+(T.token_set?'':'disabled')+' onclick="phTgFind()">Find the group</button><button class="btn sm dark" '+(T.chat_set?'':'disabled')+' onclick="phTgTest()">Send a test</button></div></div>'+
     '</div></div>';
 }
-async function phTgLoad(){ if(phTgLoad._b) return; phTgLoad._b=1; try{ var d=await api({ action:'rc_tg_get', by:USER.id, _:Date.now() }); if(d && d.ok){ PH.tgs=d; if(VIEW==='phones') renderView(); } }catch(e){} phTgLoad._b=0; }
-async function phTgPost(o, msg){ var d=null; try{ d=await apiPost(Object.assign({ by:USER.id }, o)); }catch(e){} if(d && d.ok){ PH.tgs=d.token_set!==undefined?d:PH.tgs; if(msg) toast(msg); PH.tg.on=!!(PH.tgs&&PH.tgs.token_set&&PH.tgs.chat_set); renderView(); return d; }
+async function phTgLoad(){ if(phTgLoad._b) return; phTgLoad._b=1; try{ var d=await api({ action:'rc_tg_get', by:USER.id, _:Date.now() }); if(d && d.ok){ PHN.tgs=d; if(VIEW==='phones') renderView(); } }catch(e){} phTgLoad._b=0; }
+async function phTgPost(o, msg){ var d=null; try{ d=await apiPost(Object.assign({ by:USER.id }, o)); }catch(e){} if(d && d.ok){ PHN.tgs=d.token_set!==undefined?d:PHN.tgs; if(msg) toast(msg); PHN.tg.on=!!(PHN.tgs&&PHN.tgs.token_set&&PHN.tgs.chat_set); renderView(); return d; }
   toast(d&&d.error==='NO_GROUP'?'No group found yet — add the bot to the group, send /start there, then press Find again.':('Could not save — '+((d&&d.error)||'connection error'))); return null; }
 function phTgSave(){ var t=String(($('phtg-tok')||{}).value||'').trim(); if(!t){ toast('Paste the bot token first.'); return; } phTgPost({ action:'rc_tg_set', token:t }, 'Bot token saved — now add the bot to the group.'); }
 function phTgFind(){ phTgPost({ action:'rc_tg_find' }, 'Group found.'); }
@@ -1321,17 +1321,17 @@ async function phSave(label){
   var o={ action:'rc_phone_sec_set', label:label }; ['proxy','rotate','license','ipa'].forEach(function(k){ var e=$('phe-'+k); if(e) o[k]=String(e.value||'').trim(); });
   if(o.rotate && !/^https?:\/\//i.test(o.rotate)){ toast('The rotation link should start with http:// or https://'); return; }
   var d=null; try{ d=await apiPost(Object.assign({ by:USER.id }, o)); }catch(e){}
-  if(d && d.ok){ PH.sec=d.sec||PH.sec; PH.edit=''; toast('Saved — '+label+'.'); renderView(); } else toast('Could not save — '+((d&&d.error)||'connection error'));
+  if(d && d.ok){ PHN.sec=d.sec||PHN.sec; PHN.edit=''; toast('Saved — '+label+'.'); renderView(); } else toast('Could not save — '+((d&&d.error)||'connection error'));
 }
 async function phReport(label){
   var k=String(($('phr-k')||{}).value||'proxy'), n=String(($('phr-n')||{}).value||'').trim();
   if(k==='other' && !n){ toast('Say what the problem is.'); return; }
   var d=null; try{ d=await apiPost({ action:'rc_issue_add', phone:label, kind:k, note:n }); }catch(e){}
-  if(d && d.ok){ PH.rep=''; toast(d.dup?'Already reported — it is on the board.':((PH_NOT[k]||'Problem')+' reported'+(d.sent?' — the client\'s group is told.':'.'))); await phLoad(true); renderView(); }
+  if(d && d.ok){ PHN.rep=''; toast(d.dup?'Already reported — it is on the board.':((PH_NOT[k]||'Problem')+' reported'+(d.sent?' — the client\'s group is told.':'.'))); await phLoad(true); renderView(); }
   else toast('Could not report — '+((d&&d.error==='SIGN_IN')?'sign out and back in first':((d&&d.error)||'connection error')));
 }
 async function phFix(id){
-  var o=PH.log.filter(function(x){ return x.id===id; })[0]; if(!o) return;
+  var o=PHN.log.filter(function(x){ return x.id===id; })[0]; if(!o) return;
   var n=prompt('Fixed: '+(PH_NOT[o.kind]||'problem')+' on '+o.phone+'.\nWhat fixed it? (optional — the client reads this)','');
   if(n===null) return;
   var d=null; try{ d=await apiPost({ action:'rc_issue_resolve', id:id, note:String(n||'').trim() }); }catch(e){}
@@ -1350,8 +1350,8 @@ async function phGate(r){
     var label=String(r.device); if(!phoneList(false).some(function(p){ return p.label===label; })) return true;
     try{ if(localStorage.getItem(phCkKey(label))) return true; }catch(e){}
     await Promise.race([phLoad(false), new Promise(function(res){ setTimeout(res, 2500); })]);
-    if(!PH.loaded) return true;                                          // backend not updated / offline → never block work
-    var since=shiftWindow(myId()).start.getTime(), done=PH.log.some(function(o){ return o.phone===label && o.kind==='proxy' && (o.type==='check' || o.type==='issue') && (parseTs(o.at)||0)>=since; });
+    if(!PHN.loaded) return true;                                          // backend not updated / offline → never block work
+    var since=shiftWindow(myId()).start.getTime(), done=PHN.log.some(function(o){ return o.phone===label && o.kind==='proxy' && (o.type==='check' || o.type==='issue') && (parseTs(o.at)||0)>=since; });
     if(done){ try{ localStorage.setItem(phCkKey(label), '1'); }catch(e){} return true; }
     var ans=await new Promise(function(res){ _mResolve=res;
       openModal('<div class="md-h"><h3>Proxy check · '+esc(label)+'</h3><p>Before your first session on this iPhone this shift: is its proxy working?</p></div>'+
@@ -1362,44 +1362,44 @@ async function phGate(r){
   }catch(e){ return true; }
 }
 function phBanner(){
-  if(!PH.loaded) return '';
-  var open=PH.log.filter(function(o){ return o.type==='issue' && o.status==='open'; }); if(!open.length) return '';
+  if(!PHN.loaded) return '';
+  var open=PHN.log.filter(function(o){ return o.type==='issue' && o.status==='open'; }); if(!open.length) return '';
   var mine=isAdmin()?null:phMine(), L=mine?open.filter(function(o){ return mine[o.phone]; }):open; if(!L.length) return '';
   return '<div class="banner bad">'+IC.phone+'<div style="flex:1"><b>'+L.length+' iPhone problem'+(L.length===1?'':'s')+' open</b> — '+L.slice(0,4).map(function(o){ return esc(o.phone)+': '+esc(PH_NOT[o.kind]||o.kind); }).join(' · ')+(L.length>4?' …':'')+'. The client sees this on their dashboard.</div><button class="btn sm dark" onclick="go(\'phones\')">Open iPhones</button></div>';
 }
 function vPhones(){
-  if(!PH.loaded && !PH.err){ phLoad(true).then(function(){ if(VIEW==='phones') renderView(); }); }
-  var admin=isAdmin(), list=phoneList(false).filter(function(p){ return admin || p.active!==false; }), open=PH.log.filter(function(o){ return o.type==='issue' && o.status==='open'; });
+  if(!PHN.loaded && !PHN.err){ phLoad(true).then(function(){ if(VIEW==='phones') renderView(); }); }
+  var admin=isAdmin(), list=phoneList(false).filter(function(p){ return admin || p.active!==false; }), open=PHN.log.filter(function(o){ return o.type==='issue' && o.status==='open'; });
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2><span class="gtxt">iPhones</span></h2><p>Every company iPhone with its proxy, IP rotation link, license key, the Apple ID used for the IPA and its Cloud+. Report a problem the moment you see it and mark it fixed when it works again — the client sees this board and gets a Telegram message both times.</p></div>'+
     '<button class="btn sec" onclick="phLoad(true).then(renderView)">Refresh</button></div>';
-  if(PH.err) return h+'<div class="card empty">'+esc(PH.err)+'</div>';
-  if(!PH.loaded) return h+'<div class="grid"><div class="skel"></div><div class="skel"></div></div>';
-  if(admin && !PH.tg.on) h+='<div class="banner warn">'+IC.mail+'<div style="flex:1"><b>Client alerts are off.</b> Connect the client\'s Telegram group below — until then problems only show on the dashboards.</div></div>';
+  if(PHN.err) return h+'<div class="card empty">'+esc(PHN.err)+'</div>';
+  if(!PHN.loaded) return h+'<div class="grid"><div class="skel"></div><div class="skel"></div></div>';
+  if(admin && !PHN.tg.on) h+='<div class="banner warn">'+IC.mail+'<div style="flex:1"><b>Client alerts are off.</b> Connect the client\'s Telegram group below — until then problems only show on the dashboards.</div></div>';
   var since=shiftWindow(myId()).start.getTime(), checked=list.filter(function(p){ var t=phLastOk(p.label,'proxy'); return t && (parseTs(t)||0)>=since; }).length;
   h+='<div class="kpis">'+kpi('iPhones', list.length, admin?'on the list':'in use', '#ff6b1a')+kpi('Open problems', open.length, open.length?'the client sees them':'none — all clear', open.length?'#ef4444':'#10b981')+
-    kpi('Proxies checked', checked+' / '+list.filter(function(p){ return p.active!==false; }).length, 'OK this shift', '#0ea5e9')+kpi('Client alerts', PH.tg.on?'On':'Off', PH.tg.on?'Telegram group connected':'not connected yet', PH.tg.on?'#10b981':'#94a3b8')+'</div>';
+    kpi('Proxies checked', checked+' / '+list.filter(function(p){ return p.active!==false; }).length, 'OK this shift', '#0ea5e9')+kpi('Client alerts', PHN.tg.on?'On':'Off', PHN.tg.on?'Telegram group connected':'not connected yet', PHN.tg.on?'#10b981':'#94a3b8')+'</div>';
   if(!list.length) h+='<div class="card empty">No iPhones yet — add them in Settings → Company iPhones.</div>';
   else h+='<div class="ph-g">'+list.slice().sort(function(a,b){ return phOpen(b.label).length-phOpen(a.label).length || String(a.label).localeCompare(String(b.label)); }).map(phCard).join('')+'</div>';
-  var hist=PH.log.filter(function(o){ return o.type==='issue' || PH.f==='all'; }).slice().sort(function(a,b){ var x=a.res_at&&a.res_at>a.at?a.res_at:a.at, y=b.res_at&&b.res_at>b.at?b.res_at:b.at; return x<y?1:-1; }).slice(0,40);
-  h+='<div class="card pad" style="margin-top:14px"><div class="ch-h"><b>Log</b><span>problems, fixes and proxy checks — last 60 days</span><span style="flex:1"></span><div class="seg" style="width:auto;white-space:nowrap"><button class="'+(PH.f==='all'?'on':'')+'" onclick="PH.f=\'all\';renderView()">Everything</button><button class="'+(PH.f==='iss'?'on':'')+'" onclick="PH.f=\'iss\';renderView()">Problems only</button></div></div>'+
+  var hist=PHN.log.filter(function(o){ return o.type==='issue' || PHN.f==='all'; }).slice().sort(function(a,b){ var x=a.res_at&&a.res_at>a.at?a.res_at:a.at, y=b.res_at&&b.res_at>b.at?b.res_at:b.at; return x<y?1:-1; }).slice(0,40);
+  h+='<div class="card pad" style="margin-top:14px"><div class="ch-h"><b>Log</b><span>problems, fixes and proxy checks — last 60 days</span><span style="flex:1"></span><div class="seg" style="width:auto;white-space:nowrap"><button class="'+(PHN.f==='all'?'on':'')+'" onclick="PHN.f=\'all\';renderView()">Everything</button><button class="'+(PHN.f==='iss'?'on':'')+'" onclick="PHN.f=\'iss\';renderView()">Problems only</button></div></div>'+
     (hist.length?'<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">When</th><th>iPhone</th><th>What</th><th>Note</th><th>Who</th></tr></thead><tbody>'+hist.map(function(o){
       var what=o.type==='check'?'<span class="pill" style="background:#0ea5e918;color:#0369a1">Proxy OK</span>':(o.status==='open'?'<span class="pill" style="background:#ef444418;color:#b91c1c">'+esc(PH_NOT[o.kind]||o.kind)+'</span>':'<span class="pill" style="background:#10b98118;color:#047857">'+esc(phKindN(o.kind))+' · fixed</span>');
       return '<tr><td class="c1">'+esc(fmtDT(parseTs(o.at)))+(o.res_at?'<div class="muted" style="font-size:11px">fixed '+esc(fmtDT(parseTs(o.res_at)))+'</div>':'')+'</td><td>'+esc(o.phone)+'</td><td>'+what+'</td><td style="white-space:normal;max-width:280px">'+esc(o.note||'')+(o.res_note?'<div class="muted" style="font-size:11px">Fix: '+esc(o.res_note)+'</div>':'')+'</td><td>'+esc(vaName(o.by)||o.by||'')+(o.res_by?'<div class="muted" style="font-size:11px">fixed by '+esc(vaName(o.res_by)||o.res_by)+'</div>':'')+'</td></tr>'; }).join('')+'</tbody></table></div>'
      :'<div class="muted">Nothing logged yet.</div>')+'</div>';
   if(admin){   // details saved under a name that is no longer on the list (a renamed phone) — move them over
     var names={}; phoneList(false).forEach(function(p){ names[p.label]=1; });
-    var orphan=Object.keys(PH.sec).filter(function(k){ return !names[k]; });
+    var orphan=Object.keys(PHN.sec).filter(function(k){ return !names[k]; });
     if(orphan.length) h+='<div class="card pad" style="margin-top:14px"><div class="ch-h"><b>Details without an iPhone</b><span>saved under a name that is no longer in Settings — a renamed phone? move them</span></div>'+
-      orphan.map(function(k){ var S=PH.sec[k]||{}; return '<div class="row" style="gap:8px;margin-bottom:6px;align-items:center"><b style="min-width:150px">'+esc(k)+'</b><span class="muted" style="flex:1;font-size:12px">'+esc([S.proxy?'proxy':'',S.rotate?'rotation link':'',S.license?'license key':'',S.ipa?'Apple ID':''].filter(Boolean).join(' · ')||'empty')+'</span>'+
+      orphan.map(function(k){ var S=PHN.sec[k]||{}; return '<div class="row" style="gap:8px;margin-bottom:6px;align-items:center"><b style="min-width:150px">'+esc(k)+'</b><span class="muted" style="flex:1;font-size:12px">'+esc([S.proxy?'proxy':'',S.rotate?'rotation link':'',S.license?'license key':'',S.ipa?'Apple ID':''].filter(Boolean).join(' · ')||'empty')+'</span>'+
         '<select class="sel" id="pho-'+esc(k.replace(/[^A-Za-z0-9]/g,'_'))+'">'+phoneList(false).map(function(p){ return '<option>'+esc(p.label)+'</option>'; }).join('')+'</select><button class="btn sm sec" onclick="phMove(\''+jsq(k)+'\')">Move</button><button class="ghost" title="Delete these details" onclick="phDrop(\''+jsq(k)+'\')">'+IC.x+'</button></div>'; }).join('')+'</div>';
     h+=phTgCard();
   }
   return h;
 }
-async function phMove(from){ var e=$('pho-'+from.replace(/[^A-Za-z0-9]/g,'_')), to=e&&e.value; if(!to) return; if(PH.sec[to] && !(await confirmBox('Replace the details on '+to+'?', esc(to)+' already has details — the ones from '+esc(from)+' will be added where it has none.', 'Move'))) return;
-  var d=null; try{ d=await apiPost({ action:'rc_phone_sec_set', by:USER.id, label:to, from:from }); }catch(e2){} if(d && d.ok){ PH.sec=d.sec||PH.sec; toast('Moved to '+to+'.'); renderView(); } else toast('Could not move — '+((d&&d.error)||'connection error')); }
+async function phMove(from){ var e=$('pho-'+from.replace(/[^A-Za-z0-9]/g,'_')), to=e&&e.value; if(!to) return; if(PHN.sec[to] && !(await confirmBox('Replace the details on '+to+'?', esc(to)+' already has details — the ones from '+esc(from)+' will be added where it has none.', 'Move'))) return;
+  var d=null; try{ d=await apiPost({ action:'rc_phone_sec_set', by:USER.id, label:to, from:from }); }catch(e2){} if(d && d.ok){ PHN.sec=d.sec||PHN.sec; toast('Moved to '+to+'.'); renderView(); } else toast('Could not move — '+((d&&d.error)||'connection error')); }
 async function phDrop(k){ if(!(await confirmBox('Delete the details saved under '+k+'?', 'Proxy, rotation link, license key and Apple ID for this name are removed. The problem log stays.', 'Delete', true))) return;
-  var d=null; try{ d=await apiPost({ action:'rc_phone_sec_set', by:USER.id, label:k, clear:'1' }); }catch(e){} if(d && d.ok){ PH.sec=d.sec||PH.sec; renderView(); } else toast('Could not delete — '+((d&&d.error)||'connection error')); }
+  var d=null; try{ d=await apiPost({ action:'rc_phone_sec_set', by:USER.id, label:k, clear:'1' }); }catch(e){} if(d && d.ok){ PHN.sec=d.sec||PHN.sec; renderView(); } else toast('Could not delete — '+((d&&d.error)||'connection error')); }
 
 /* ═══════════ TODAY — the work board ═══════════ */
 var TD={ grp:'all', stg:'all', q:'', va:'mine', m:'all', by:'stage' };   // stg/va = the Stage and VA column filters (owner, Oct 5)   // stage by default — the method is on every card
