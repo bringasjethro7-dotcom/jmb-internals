@@ -1313,7 +1313,8 @@ function phCard(p){
     '<div class="ph-md"><span class="k">Model</span><div class="ph-mv">'+phModelHtml(L)+'</div></div>';
   if(PHN.edit===L && admin){
     var DR=(PHN.draft && PHN.draft.L===L)?PHN.draft.v:null;   // what is typed survives the auto-refresh (Oct 29b)
-    h+='<div class="ph-ed">'+[['proxy','Proxy','host:port (or host:port:user:pass)'],['rotate','IP rotation link','https://…'],['license','License key',''],['ipa','Apple ID used for the IPA','name@icloud.com'],['cloud','Cloud+ (Blaze+ iCloud)','one or more, comma-separated']].map(function(f){
+    var hwCur=(DR && DR.hw!==undefined)?DR.hw:(phHw(L,p)||'Other');
+    h+='<div class="ph-ed"><label><span>iPhone model</span><select class="sel" id="phe-hw" onchange="phDraft(\''+id+'\',\'hw\',this.value)">'+['iPhone 12','iPhone 13','Other'].map(function(m){ return '<option'+(m===hwCur?' selected':'')+'>'+m+'</option>'; }).join('')+'</select></label>'+[['proxy','Proxy','host:port (or host:port:user:pass)'],['rotate','IP rotation link','https://…'],['license','License key',''],['ipa','Apple ID used for the IPA','name@icloud.com'],['cloud','Cloud+ (Blaze+ iCloud)','one or more, comma-separated']].map(function(f){
       var cur=DR && DR[f[0]]!==undefined ? DR[f[0]] : (f[0]==='cloud' ? phCloud(p).join(', ') : (S[f[0]]||''));
       return '<label><span>'+esc(f[1])+'</span><input class="inp" id="phe-'+f[0]+'" value="'+esc(cur)+'" placeholder="'+esc(f[2])+'" autocomplete="off" oninput="phDraft(\''+id+'\',\''+f[0]+'\',this.value)"></label>'; }).join('')+
       '<div class="row" style="gap:6px;margin-top:8px"><button class="btn sm pri" onclick="phSave(\''+id+'\')">Save details</button><button class="btn sm sec" onclick="PHN.edit=\'\';PHN.draft=null;renderView()">Cancel</button></div>'+
@@ -1354,10 +1355,22 @@ async function phTgPost(o, msg){ var d=null; try{ d=await apiPost(Object.assign(
 function phTgSave(){ var t=String(($('phtg-tok')||{}).value||'').trim(); if(!t){ toast('Paste the bot token first.'); return; } phTgPost({ action:'rc_tg_set', token:t }, 'Bot token saved — now add the bot to the group.'); }
 function phTgFind(){ phTgPost({ action:'rc_tg_find' }, 'Group found.'); }
 function phTgTest(){ phTgPost({ action:'rc_tg_test' }, 'Test sent — check the group.'); }
+/* Oct 29c: the iPhone model of a device (12 / 13) — "iPhone 12 · #9" becomes "iPhone 13 · #9" when nothing is tied to the old
+   name yet (no account on it, nothing in its log); otherwise only the model changes and the name stays */
+function phRelabel(L, from, to){ L=String(L||''); if(!to || to==='Other' || from===to) return L; if(from && L.indexOf(from)>=0) return L.replace(from, to); return L; }
+function phNameFree(L){ return !allRows().some(function(r){ return String(r.device||'')===L; }) && !PHN.log.some(function(o){ return o.phone===L; }); }
+async function phSetHw(label, hw){   // → the label the details now live under, or null when Settings could not be saved
+  var p=phoneList(false).filter(function(x){ return x.label===label; })[0]; if(!p || !hw || hw===(p.model||'Other')) return label;
+  var nl=phNameFree(label)?phRelabel(label, phHw(label,p), hw):label; if(nl!==label && phoneList(false).some(function(x){ return x.label===nl; })) nl=label;
+  var d=await cfgWrite(function(c){ (c.phones||[]).forEach(function(x){ if(x && String(x.label||'').trim()===label){ x.model=hw; if(nl!==label) x.label=nl; } }); });
+  if(!(d && d.ok)){ toast('Could not change the iPhone model — '+((d&&d.error)||'connection error')); return null; }
+  return nl;
+}
 async function phSave(label){
   var o={ action:'rc_phone_sec_set', label:label }; ['proxy','rotate','license','ipa','cloud'].forEach(function(k){ var e=$('phe-'+k); if(e) o[k]=String(e.value||'').trim(); });
   var sb=document.querySelector('.ph-ed .btn.pri'); if(sb){ sb.disabled=true; sb.textContent='Saving…'; }
-  if(o.rotate && !/^https?:\/\//i.test(o.rotate)){ toast('The rotation link should start with http:// or https://'); return; }
+  if(o.rotate && !/^https?:\/\//i.test(o.rotate)){ if(sb){ sb.disabled=false; sb.textContent='Save details'; } toast('The rotation link should start with http:// or https://'); return; }
+  var hwE=$('phe-hw'); if(hwE){ var nl=await phSetHw(label, hwE.value); if(nl===null){ if(sb){ sb.disabled=false; sb.textContent='Save details'; } return; } if(nl!==label){ o.label=nl; o.from=label; label=nl; } }
   var d=null; try{ d=await apiPost(Object.assign({ by:USER.id }, o)); }catch(e){}
   if(d && d.ok){ PHN.sec=d.sec||PHN.sec; PHN.edit=''; PHN.draft=null; toast('Saved — '+phDev(label)+'.'); renderView(); }
   else { if(sb){ sb.disabled=false; sb.textContent='Save details'; } toast('Could not save — '+((d&&d.error==='NOT_ALLOWED')?'sign out and back in, then try again':((d&&d.error)||'connection error'))+'. What you typed is kept.'); }
@@ -1432,16 +1445,19 @@ function vPhones(){
     var orphan=Object.keys(PHN.sec).filter(function(k){ return !names[k]; });
     orphan.sort(phOrd);
     if(orphan.length) h+='<div class="card pad" style="margin-top:14px"><div class="ch-h"><b>In the sheet, not on the iPhone list yet</b><span>a new phone typed into the sheet → Add it (VAs can then pick it on their accounts) · a renamed phone → Move its details</span></div>'+
-      orphan.map(function(k){ var S=PHN.sec[k]||{}; return '<div class="row" style="gap:8px;margin-bottom:6px;align-items:center;flex-wrap:wrap"><b style="min-width:150px">'+esc(phFull(k))+'</b>'+(/renamed/i.test(k)?'':'<button class="btn sm pri" onclick="phAddNew(\''+jsq(k)+'\')">Add as a new iPhone</button>')+'<span class="muted" style="flex:1;font-size:12px">'+esc([S.proxy?'proxy':'',S.rotate?'rotation link':'',S.license?'license key':'',S.ipa?'Apple ID':''].filter(Boolean).join(' · ')||'empty')+'</span>'+
+      orphan.map(function(k){ var S=PHN.sec[k]||{}; return '<div class="row" style="gap:8px;margin-bottom:6px;align-items:center;flex-wrap:wrap"><b style="min-width:150px">'+esc(phFull(k))+'</b>'+(/renamed/i.test(k)?'':'<select class="sel" id="phn-'+esc(k.replace(/[^A-Za-z0-9]/g,'_'))+'" title="iPhone model">'+['iPhone 12','iPhone 13','Other'].map(function(m){ return '<option'+(m===(phHw(k)||'Other')?' selected':'')+'>'+m+'</option>'; }).join('')+'</select><button class="btn sm pri" onclick="phAddNew(\''+jsq(k)+'\')">Add as a new iPhone</button>')+'<span class="muted" style="flex:1;font-size:12px">'+esc([S.proxy?'proxy':'',S.rotate?'rotation link':'',S.license?'license key':'',S.ipa?'Apple ID':''].filter(Boolean).join(' · ')||'empty')+'</span>'+
         '<select class="sel" id="pho-'+esc(k.replace(/[^A-Za-z0-9]/g,'_'))+'">'+phoneList(false).map(function(p){ return '<option>'+esc(p.label)+'</option>'; }).join('')+'</select><button class="btn sm sec" onclick="phMove(\''+jsq(k)+'\')">Move</button><button class="ghost" title="Delete these details" onclick="phDrop(\''+jsq(k)+'\')">'+IC.x+'</button></div>'; }).join('')+'</div>';
     h+=phTgCard();
   }
   return h;
 }
 async function phAddNew(k){   // a new phone starts as "Not in use" — waiting for the client; "Put in use" on its card when they start
-  var hw=phHw(k), mdl=(hw==='iPhone 12'||hw==='iPhone 13')?hw:'Other';
-  var d=await cfgWrite(function(c){ c.phones=Array.isArray(c.phones)?c.phones:[]; if(!c.phones.some(function(p){ return p && String(p.label||'').trim()===k; })) c.phones.push({ label:k, model:mdl, base:'Reddit', active:false }); });
-  if(d && d.ok){ toast(phDev(k)+' added as Not in use — press Put in use on its card when the client starts using it.'); renderView(); } else toast('Could not add — '+((d&&d.error)||'connection error'));
+  var se=$('phn-'+k.replace(/[^A-Za-z0-9]/g,'_')), hw=se?se.value:phHw(k), mdl=(hw==='iPhone 12'||hw==='iPhone 13')?hw:'Other';
+  var nl=phNameFree(k)?phRelabel(k, phHw(k), mdl):k; if(nl!==k && (phoneList(false).some(function(p){ return p.label===nl; }) || PHN.sec[nl])) nl=k;   // "iPhone 12 · #8" typed for an iPhone 13 → "iPhone 13 · #8"
+  var d=await cfgWrite(function(c){ c.phones=Array.isArray(c.phones)?c.phones:[]; if(!c.phones.some(function(p){ return p && String(p.label||'').trim()===nl; })) c.phones.push({ label:nl, model:mdl, base:'Reddit', active:false }); });
+  if(!(d && d.ok)){ toast('Could not add — '+((d&&d.error)||'connection error')); return; }
+  if(nl!==k){ var m=null; try{ m=await apiPost({ action:'rc_phone_sec_set', by:USER.id, label:nl, from:k }); }catch(e){} if(m && m.ok) PHN.sec=m.sec||PHN.sec; }   // the sheet row takes the new name
+  toast(phDev(nl)+' ('+mdl+') added as Not in use — press Put in use on its card when the client starts using it.'); renderView();
 }
 /* in use ⇄ not in use (waiting for the client) — the same switch as Settings → Company iPhones */
 async function phUse(L, on){
