@@ -2453,9 +2453,13 @@ function phcNum(L){ var m=String(L||'').match(/#\s*(\d+)/); return m?m[1]:''; }
 function phcHw(p){ var m=(p&&p.model&&p.model!=='Other')?p.model:''; if(!m){ var t=String((p&&p.label)||'').trim(), x=t.replace(/[·|,\-–—]*\s*#\s*\d+.*$/,'').replace(/[·|,\-–—\s]+$/,'').trim(); if(x && x!==t) m=x; } return m; }
 function phcDev(L){ var n=phcNum(L); return n?('Device #'+n):String(L||''); }
 function phcOrd(a, b){ var x=parseInt(phcNum(a.label),10), y=parseInt(phcNum(b.label),10); x=isNaN(x)?1e6:x; y=isNaN(y)?1e6:y; return x-y || String(a.label).localeCompare(String(b.label)); }
-function phcModels(p){ var got=Array.isArray(p.models)?p.models:[], set=Array.isArray(p.mdl)?p.mdl:[];
-  if(set.length) return set.map(function(n){ var hit=got.filter(function(g){ return String(g.n).toLowerCase()===String(n).toLowerCase(); })[0]; return { n:n, c:hit?hit.c:0 }; });
-  return got; }
+/* Oct 29e (Jeth): ONE model per device — spellings of the same pair are one model, named the way the model list has it,
+   and the device shows the model most of its accounts run (or the one typed in the sheet), with that model's count */
+function phcCanon(v){ var k=cxModelKey(v); if(!k) return String(v||'').trim(); var L=[]; try{ Object.keys(CFG.models||{}).forEach(function(b){ (CFG.models[b]||[]).forEach(function(m){ L.push(m); }); }); }catch(e){}
+  for(var i=0;i<L.length;i++) if(cxModelKey(L[i])===k) return String(L[i]).trim(); return String(v||'').trim(); }
+function phcModels(p){ var c={}; (Array.isArray(p.models)?p.models:[]).forEach(function(g){ var n=phcCanon(g.n); if(!n || n==='(no model)') return; c[n]=(c[n]||0)+(+g.c||0); });
+  if(Array.isArray(p.mdl) && p.mdl.length){ var n=phcCanon(p.mdl.join('/')); return [{ n:n, c:c[n]||0 }]; }
+  var best=null; Object.keys(c).forEach(function(k){ if(!best || c[k]>best.c) best={ n:k, c:c[k] }; }); return best?[best]:[]; }
 function phcModelHtml(p){ var M=phcModels(p); if(!M.length) return '<span class="muted" style="font-size:12px">no live accounts on it yet</span>';
   return M.slice(0,4).map(function(m){ return '<span class="ph-mc">'+esc(m.n)+(m.c?'<i>'+m.c+'</i>':'')+'</span>'; }).join('')+(M.length>4?'<span class="muted" style="font-size:11.5px">+'+(M.length-4)+' more</span>':''); }
 function cxPhones(){

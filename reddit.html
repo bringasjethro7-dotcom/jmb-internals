@@ -1264,16 +1264,64 @@ function phHw(L, p){ var m=(p&&p.model&&p.model!=='Other')?p.model:''; if(!m){ v
 function phDev(L){ var n=phNum(L); return n?('Device #'+n):String(L||''); }
 function phFull(L){ var n=phNum(L), h=phHw(L, phoneList(false).filter(function(x){ return x.label===L; })[0]); return n?('Device #'+n+(h?' · '+h:'')):String(L||''); }
 function phOrd(a, b){ var x=parseInt(phNum(a),10), y=parseInt(phNum(b),10); x=isNaN(x)?1e6:x; y=isNaN(y)?1e6:y; return x-y || String(a).localeCompare(String(b)); }
-function phModels(L){
-  var S=PHN.sec[L]||{}, set=String(S.mdl||'').split(/\s*[,;\/]\s*/).map(function(x){ return x.trim(); }).filter(Boolean), c={};
-  allRows().forEach(function(r){ if(String(r.device||'')!==L || isDead(r) || isParked(r)) return; var m=String(r.model||'').trim()||'(no model)'; c[m]=(c[m]||0)+1; });
-  var got=Object.keys(c).map(function(k){ return { n:k, c:c[k] }; }).sort(function(a,b){ return b.c-a.c || a.n.localeCompare(b.n); });
-  if(set.length) return set.map(function(n){ var hit=got.filter(function(g){ return g.n.toLowerCase()===n.toLowerCase(); })[0]; return { n:n, c:hit?hit.c:0 }; });
-  return got;
+/* Oct 29e (Jeth): ONE model per device. A device runs the model typed in the sheet's Model column, else the model most of
+   its live accounts carry; spellings of the same pair count as one ("Stella & Capri" = "Capri/Stella", labelled the way
+   Settings lists it). Accounts on a device with another model are strays — a wrong tag — and the owner fixes them below. */
+function mdlParts(v){ return String(v||'').split(/\s*(?:[\/⁄∕\\|&+,;]|\s(?:and|x)\s)\s*/i).map(function(x){ return x.replace(/\s+/g,' ').trim(); }).filter(Boolean); }
+function mdlKey(v){ var p=mdlParts(v); return p.length?p.map(function(x){ return x.toLowerCase(); }).sort().join('|'):''; }
+function mdlCanon(v, project){ var k=mdlKey(v); if(!k) return String(v||'').trim(); var L=modelsAllowed(project||PROJECT); for(var i=0;i<L.length;i++) if(mdlKey(L[i])===k) return L[i]; return String(v||'').trim(); }
+function phLive(L){ return allRows().filter(function(r){ return String(r.device||'')===L && !isDead(r) && !isParked(r); }); }
+function phMain(L){
+  var S=PHN.sec[L]||{}, set=String(S.mdl||'').split(/\s*[,;]\s*/).map(function(x){ return x.trim(); }).filter(Boolean)[0];
+  var c={}, rows=phLive(L); rows.forEach(function(r){ var m=mdlCanon(r.model, r.project)||'(no model)'; c[m]=(c[m]||0)+1; });
+  if(set){ var n=mdlCanon(set); return { n:n, c:c[n]||0, set:1 }; }
+  var best=null; Object.keys(c).forEach(function(k){ if(k!=='(no model)' && (!best || c[k]>best.c)) best={ n:k, c:c[k] }; });
+  return best;
 }
+function phStrays(L){ var m=phMain(L); if(!m) return []; return phLive(L).filter(function(r){ var x=mdlCanon(r.model, r.project); return x && x!==m.n; }); }
+function phModels(L){ var m=phMain(L); return m?[m]:[]; }
 function phModelHtml(L){
-  var M=phModels(L); if(!M.length) return '<span class="muted" style="font-size:12px">no live accounts on it yet</span>';
-  return M.slice(0,4).map(function(m){ return '<span class="ph-mc">'+esc(m.n)+(m.c?'<i>'+m.c+'</i>':'')+'</span>'; }).join('')+(M.length>4?'<span class="muted" style="font-size:11.5px">+'+(M.length-4)+' more</span>':'');
+  var m=phMain(L); if(!m) return '<span class="muted" style="font-size:12px">no live accounts on it yet</span>';
+  var st=isAdmin()?phStrays(L):[];
+  return '<span class="ph-mc">'+esc(m.n)+(m.c?'<i>'+m.c+'</i>':'')+'</span>'+(st.length?'<span style="font-size:11.5px;font-weight:700;color:#b45309">'+st.length+' tagged another model — fix below</span>':'');
+}
+/* the owner's one-click clean-up: pair spellings → the Settings spelling; stray accounts → the device that runs their model */
+function phFixPlan(){
+  var retag=[], moves=[], lost=[], byModel={};
+  phoneList(false).forEach(function(p){ var m=phMain(p.label); if(m){ (byModel[m.n]=byModel[m.n]||[]).push({ L:p.label, c:m.c }); } });
+  allRows().forEach(function(r){ if(isDead(r) || isParked(r)) return; var raw=String(r.model||'').trim(), cn=mdlCanon(raw, r.project); if(raw && cn!==raw) retag.push({ r:r, to:cn }); });
+  phoneList(false).forEach(function(p){ phStrays(p.label).forEach(function(r){ var cn=mdlCanon(r.model, r.project), T=(byModel[cn]||[]).filter(function(x){ return x.L!==p.label; }).sort(function(a,b){ return b.c-a.c; })[0];
+    if(T) moves.push({ r:r, from:p.label, to:T.L, m:cn }); else lost.push({ r:r, from:p.label, m:cn }); }); });
+  return { retag:retag, moves:moves, lost:lost };
+}
+function phFixCard(){
+  var P=phFixPlan(); if(!P.retag.length && !P.moves.length && !P.lost.length) return '';
+  var grp={}; P.retag.forEach(function(x){ var k=String(x.r.model).trim()+'→'+x.to; (grp[k]=grp[k]||{ from:String(x.r.model).trim(), to:x.to, n:0 }).n++; });
+  return '<div class="card pad" style="margin-top:12px;border-color:#fde68a;background:#fffdf5"><div class="ch-h"><b>Model &amp; device check</b><span>one model per device — fix the tags so the dashboards (and the client) show one model and one count per device</span><span style="flex:1"></span>'+
+    ((P.retag.length||P.moves.length)?'<button class="btn sm pri" onclick="phFixAll(this)">Fix all ('+(P.retag.length+P.moves.length)+')</button>':'')+'</div>'+
+    Object.keys(grp).map(function(k){ var g=grp[k]; return '<div class="row" style="gap:8px;margin:4px 0"><span class="pill" style="background:#f59e0b1f;color:#b45309">Spelling</span><b>'+esc(g.from)+'</b> → <b>'+esc(g.to)+'</b><span class="muted">'+g.n+' account'+(g.n===1?'':'s')+'</span></div>'; }).join('')+
+    P.moves.map(function(x){ return '<div class="row" style="gap:8px;margin:4px 0"><span class="pill" style="background:#0ea5e918;color:#0369a1">Wrong device</span><b>'+esc(x.r.handle)+'</b><span class="muted">'+esc(x.m)+' · on '+esc(phDev(x.from))+'</span> → <b>'+esc(phDev(x.to))+'</b> <span class="muted">(runs '+esc(x.m)+')</span></div>'; }).join('')+
+    P.lost.map(function(x){ return '<div class="row" style="gap:8px;margin:4px 0"><span class="pill" style="background:#ef444418;color:#b91c1c">Check</span><b>'+esc(x.r.handle)+'</b><span class="muted">'+esc(x.m)+' · on '+esc(phDev(x.from))+' — no device runs '+esc(x.m)+'; open the account and set the right model or device</span></div>'; }).join('')+'</div>';
+}
+async function phFixAll(btn){
+  var P=phFixPlan(), jobs=[];
+  P.retag.forEach(function(x){ jobs.push({ id:x.r.id, f:{ model:x.to } }); });
+  P.moves.forEach(function(x){ var j=jobs.filter(function(y){ return y.id===x.r.id; })[0]; if(j) j.f.device=x.to; else jobs.push({ id:x.r.id, f:{ device:x.to } }); });
+  if(!jobs.length) return;
+  if(!(await confirmBox('Fix '+jobs.length+' account tag'+(jobs.length===1?'':'s')+'?', (P.retag.length?P.retag.length+' model spelling'+(P.retag.length===1?'':'s')+' → the Settings spelling. ':'')+(P.moves.length?P.moves.length+' account'+(P.moves.length===1?'':'s')+' moved to the device that runs their model. ':'')+'Each change goes in the account\'s history.', 'Fix all'))) return;
+  if(btn){ btn.disabled=true; } var ok=0, bad=0;
+  for(var i=0;i<jobs.length;i++){ if(btn) btn.textContent='Fixing '+(i+1)+'/'+jobs.length+'…';
+    var d=null; try{ d=await upd(jobs[i].id, Object.assign({ note:'tag fix (one model per device)' }, jobs[i].f)); }catch(e){}
+    if(d && d.ok){ ok++; patchLocal(jobs[i].id, jobs[i].f); } else bad++; }
+  toast('Fixed '+ok+(bad?' · '+bad+' could not be saved — try again':'')+'.'); renderView();
+}
+/* when a VA puts an account on a device that runs another model: offer the right device */
+function phDevFor(model, project){ var cn=mdlCanon(model, project), best=null; phoneList(false).forEach(function(p){ var m=phMain(p.label); if(m && m.n===cn && (!best || m.c>best.c)) best={ L:p.label, c:m.c }; }); return best?best.L:''; }
+function phDevCheck(model, dev, project){
+  if(!dev || !model) return dev; var m=phMain(dev), cn=mdlCanon(model, project); if(!m || m.n===cn) return dev;
+  var alt=phDevFor(model, project);
+  if(alt && alt!==dev) return confirm(phDev(dev)+' runs '+m.n+', but this account is '+cn+'.\n'+phDev(alt)+' runs '+cn+'.\n\nOK = put it on '+phDev(alt)+'\nCancel = keep '+phDev(dev))?alt:dev;
+  return confirm(phDev(dev)+' runs '+m.n+', but this account is '+cn+'. One model per device — save it here anyway?')?dev:null;
 }
 var PH_SHORT={ proxy:'Proxy', license:'License key', cloudfull:'iCloud+ storage', cloud:'Cloud+', ipa:'Apple ID (IPA)', other:'Problem' };
 function phKindN(k){ return PH_SHORT[k]||k; }
@@ -1451,7 +1499,7 @@ function vPhones(){
   h+='<div class="kpis">'+kpi('iPhones', list.length, admin?(idleN?(list.length-idleN)+' in use · '+idleN+' not in use yet':'all in use'):'in use', '#ff6b1a')+kpi('Open problems', open.length, open.length?'the client sees them':'none — all clear', open.length?'#ef4444':'#10b981')+
     kpi('Proxies checked', checked+' / '+list.filter(function(p){ return p.active!==false; }).length, 'OK this shift', '#0ea5e9')+kpi('Client alerts', PHN.tg.on?'On':'Off', PHN.tg.on?'Telegram group connected':'not connected yet', PHN.tg.on?'#10b981':'#94a3b8')+'</div>';
   if(!list.length) h+='<div class="card empty">No iPhones yet — add them in Settings → Company iPhones.</div>';
-  else h+='<div class="ph-g">'+list.slice().sort(function(a,b){ return phOrd(a.label, b.label); }).map(phCard).join('')+'</div>';
+  else h+=(admin?phFixCard():'')+'<div class="ph-g">'+list.slice().sort(function(a,b){ return phOrd(a.label, b.label); }).map(phCard).join('')+'</div>';
   var hist=PHN.log.filter(function(o){ return o.type==='issue' || PHN.f==='all'; }).slice().sort(function(a,b){ var x=a.res_at&&a.res_at>a.at?a.res_at:a.at, y=b.res_at&&b.res_at>b.at?b.res_at:b.at; return x<y?1:-1; }).slice(0,40);
   h+='<div class="card pad" style="margin-top:14px"><div class="ch-h"><b>Log</b><span>problems, fixes and proxy checks — last 60 days</span><span style="flex:1"></span><div class="seg" style="width:auto;white-space:nowrap"><button class="'+(PHN.f==='all'?'on':'')+'" onclick="PHN.f=\'all\';renderView()">Everything</button><button class="'+(PHN.f==='iss'?'on':'')+'" onclick="PHN.f=\'iss\';renderView()">Problems only</button></div></div>'+
     (hist.length?'<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">When</th><th>Device</th><th>What</th><th>Note</th><th>Who</th></tr></thead><tbody>'+hist.map(function(o){
@@ -4035,6 +4083,7 @@ async function naSave(){
   if(!NA.method){ toast('Pick the method — Vysor, Jailbroken or Blaze+.'); return; }
   if(!model){ toast('Pick the model this account is for.'); return; }
   if(!dev && !NA.seed && phoneList(true, PROJECT).length){ toast('Pick the iPhone it was created on.'); return; }
+  if(dev){ var dv=phDevCheck(model, dev, PROJECT); if(dv===null) return; if(dv!==dev){ dev=dv; try{ $('na-d').value=dv; }catch(_d){} } }   // Oct 29e: one model per device
   var st='new', cd=today(), ctime=phtStamp().slice(11,16), setup={};
   if(NA.seed){ st=$('na-st').value||(NA.sop==='sx'?'sxwarm':'creation'); cd=$('na-cd').value||today(); ctime=''; }
   else setup={ cred:$('na-c1').checked };
@@ -4271,6 +4320,7 @@ async function editSave(id){
   [['method','ed-me'],['model','ed-m'],['device','ed-d'],['niche','ed-n']].forEach(function(p){ var x=v(p[1]); if(x!=null && x!==String(r[p[0]]||'')) f[p[0]]=x; });
   var va=v('ed-va'); if(va && va!==owner(r)){ f.assigned_to=va.toUpperCase(); f.note='permanent transfer (Edit details)'; }
   var no=v('ed-no'); if(no!==String(r.notes||'')) f.notes=no;
+  if(f.device!==undefined || f.model!==undefined){ var _dv=phDevCheck(f.model!==undefined?f.model:r.model, f.device!==undefined?f.device:r.device, r.project); if(_dv===null) return; if(_dv!==(f.device!==undefined?f.device:r.device)) f.device=_dv; }   // Oct 29e: one model per device
   if(!Object.keys(f).length){ closeModal(); return; }
   $('ed-go').disabled=true;
   var prevMethod=String(r.method||'');
