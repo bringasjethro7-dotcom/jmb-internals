@@ -2438,13 +2438,13 @@ function vSxC(){
 /* iPHONES DASHBOARD (Oct 29) — every iPhone with its proxy, IP rotation link, license key, the Apple ID used for the IPA and
    its Cloud+ (Blaze+ iCloud); a problem our team reports shows here at once (and in your Telegram group), and so does the fix. */
 var PHC={ show:{} };
-var PHC_NOT={ proxy:'Proxy not working', license:'License key error', cloud:'Cloud+ error', ipa:'Apple ID (IPA) problem', other:'Problem reported' };
-var PHC_OK={ proxy:'Proxy', license:'License key', cloud:'Cloud+', ipa:'Apple ID (IPA)', other:'Other' };
+var PHC_NOT={ proxy:'Proxy not working', license:'License key invalid', cloud:'Cloud+ error', cloudfull:'iCloud+ storage full', ipa:'Apple ID (IPA) problem', other:'Problem reported' };
+var PHC_OK={ proxy:'Proxy', license:'License key', cloud:'Cloud+', cloudfull:'iCloud+ storage', ipa:'Apple ID (IPA)', other:'Other' };
 function phcAgo(stamp){ var d=parseTs(stamp); if(!d) return ''; var m=Math.round((Date.now()-d.getTime())/60000); if(m<1) return 'just now'; if(m<60) return m+' min ago'; if(m<48*60) return Math.round(m/60)+' h ago'; return fmtD(d); }
 function phcDur(a,b){ var x=parseTs(a), y=parseTs(b); if(!x||!y||y<=x) return ''; var m=Math.round((y-x)/60000); return m<60?(m+' min'):(Math.floor(m/60)+' h'+(m%60?' '+(m%60)+' min':'')); }
 async function phcCopy(btn, t){ try{ await navigator.clipboard.writeText(t); }catch(e){ var a=document.createElement('textarea'); a.value=t; document.body.appendChild(a); a.select(); try{ document.execCommand('copy'); }catch(_e){} a.remove(); } if(btn){ var o=btn.textContent; btn.textContent='Copied'; setTimeout(function(){ btn.textContent=o; },1200); } }
 function phcLine(p, kind, name, valHtml, extra){
-  var open=(p.issues||[]).filter(function(o){ return o.st==='open' && o.k===kind; }), dot=open.length?'#ef4444':(valHtml?'#10b981':'#cbd5e1');
+  var open=(p.issues||[]).filter(function(o){ return o.st==='open' && (o.k===kind || (kind==='cloud' && o.k==='cloudfull')); }), dot=open.length?'#ef4444':(valHtml?'#10b981':'#cbd5e1');
   return '<div class="ph-ln"><i style="background:'+dot+'" title="'+esc(open.length?PHC_NOT[kind]:(valHtml?'OK':'Not set'))+'"></i><span class="k">'+esc(name)+'</span><span class="v">'+(valHtml||'<span class="muted">not set</span>')+'</span>'+(extra||'')+'</div>';
 }
 /* Oct 29c: the device number first ("Device #1"), the iPhone model as a detail, and the model the phone runs */
@@ -2487,7 +2487,7 @@ function phcCard(p){
     phcLine(p,'ipa','Apple ID (IPA)', esc(p.ipa||''), phcCp(p.ipa||''))+
     phcLine(p,'cloud','Cloud+ (Blaze+)', ic.map(esc).join(', '), '')+'</div>';
   if(open.length) h+=open.map(function(o){ return '<div class="ph-is"><b>'+esc(PHC_NOT[o.k]||'Problem')+'</b>'+(o.note?'<span>'+esc(o.note)+'</span>':'')+'<small>reported '+esc(fmtDT(parseTs(o.at)))+' · '+esc(phcAgo(o.at))+'</small></div>'; }).join('');
-  if(past.length) h+='<details class="ph-hist"><summary>Fixed in the last 30 days · '+past.length+'</summary>'+past.slice(0,10).map(function(o){ return '<div><b>'+esc(PHC_OK[o.k]||o.k)+'</b> — '+esc(fmtDT(parseTs(o.at)))+(o.res_at?' → fixed '+esc(fmtDT(parseTs(o.res_at)))+(phcDur(o.at,o.res_at)?' ('+esc(phcDur(o.at,o.res_at))+')':''):'')+(o.note?'<br><span class="muted">'+esc(o.note)+'</span>':'')+(o.res_note?'<br><span class="muted">Fix: '+esc(o.res_note)+'</span>':'')+'</div>'; }).join('')+'</details>';
+  if(past.length) h+='<details class="ph-hist"><summary>Fixed in the last 30 days · '+past.length+'</summary>'+past.slice(0,10).map(function(o){ return '<div><b>'+esc(PHC_OK[o.k]||o.k)+'</b>'+(o.st==='verify'?' <span class="muted">· marked fixed, our team is checking it</span>':'')+' — '+esc(fmtDT(parseTs(o.at)))+(o.res_at?' → fixed '+esc(fmtDT(parseTs(o.res_at)))+(phcDur(o.at,o.res_at)?' ('+esc(phcDur(o.at,o.res_at))+')':''):'')+(o.note?'<br><span class="muted">'+esc(o.note)+'</span>':'')+(o.res_note?'<br><span class="muted">Fix: '+esc(o.res_note)+'</span>':'')+'</div>'; }).join('')+'</details>';
   return h+'</div>';
 }
 function vPhonesC(){

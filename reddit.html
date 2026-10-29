@@ -1252,7 +1252,7 @@ function askNumber(title, body, cur){
    portal, and every problem and fix goes to the client's Telegram group — phone, item, note and time, never a name.
    Details are served only to a signed-in session (backend rc-2026-10-29a: rc_phones_get) and only the owner edits them. */
 var PHN={ sec:{}, log:[], tg:{ on:false }, loaded:false, loading:null, err:'', at:0, edit:'', rep:'', tgs:null, show:{}, f:'all' };
-var PH_KINDS=[['proxy','Proxy'],['license','License key'],['cloud','Cloud+ (Blaze+)'],['ipa','Apple ID (IPA)'],['other','Other']];
+var PH_KINDS=[['proxy','Proxy not working'],['license','License key invalid / not working'],['cloudfull','iCloud+ storage full (limit reached)'],['cloud','Cloud+ (Blaze+) error'],['ipa','Apple ID (IPA)'],['other','Other']];
 var PH_SHEET='https://docs.google.com/spreadsheets/d/1TTprDJ25Vm9C7qGwiZmFqAGPz4k4NJK0nQ_noRaqCc4/edit';   // the portal spreadsheet → tab "iPhones" (29b)
 function phCloud(p){ var S=PHN.sec[p.label]||{}, c=Array.isArray(S.cloud)?S.cloud:String(S.cloud||'').split(/[\s,;]+/).filter(Boolean); return c.length?c:(Array.isArray(p.icloud)?p.icloud:[]); }
 function phDraft(L, k, v){ if(!PHN.draft || PHN.draft.L!==L) PHN.draft={ L:L, v:{} }; PHN.draft.v[k]=v; }
@@ -1275,8 +1275,12 @@ function phModelHtml(L){
   var M=phModels(L); if(!M.length) return '<span class="muted" style="font-size:12px">no live accounts on it yet</span>';
   return M.slice(0,4).map(function(m){ return '<span class="ph-mc">'+esc(m.n)+(m.c?'<i>'+m.c+'</i>':'')+'</span>'; }).join('')+(M.length>4?'<span class="muted" style="font-size:11.5px">+'+(M.length-4)+' more</span>':'');
 }
-function phKindN(k){ for(var i=0;i<PH_KINDS.length;i++) if(PH_KINDS[i][0]===k) return PH_KINDS[i][1]; return k; }
-var PH_NOT={ proxy:'Proxy not working', license:'License key error', cloud:'Cloud+ error', ipa:'Apple ID (IPA) problem', other:'Problem' };
+var PH_SHORT={ proxy:'Proxy', license:'License key', cloudfull:'iCloud+ storage', cloud:'Cloud+', ipa:'Apple ID (IPA)', other:'Problem' };
+function phKindN(k){ return PH_SHORT[k]||k; }
+var PH_NOT={ proxy:'Proxy not working', license:'License key invalid', cloud:'Cloud+ error', cloudfull:'iCloud+ storage full', ipa:'Apple ID (IPA) problem', other:'Problem' };
+/* 29d: after someone taps Mark fixed in the Telegram group the problem waits in "verify" until a VA checks it */
+function phVer(label){ return PHN.log.filter(function(o){ return o.type==='issue' && o.status==='verify' && (!label || o.phone===label); }); }
+function phByName(b){ b=String(b||''); return b.indexOf('tg:')===0?(b.slice(3)+' (Telegram)'):(vaName(b)||b); }
 async function phLoad(force){
   if(PHN.loading) return PHN.loading;
   if(!force && PHN.loaded && Date.now()-PHN.at<45000) return;
@@ -1296,7 +1300,7 @@ function phAccts(label){ return allRows().filter(function(r){ return String(r.de
 function phMine(){ var me=myId(), s={}; ROWS.forEach(function(r){ if(worksFor(r)===me && !isParked(r) && !isDead(r) && r.device) s[r.device]=1; }); return s; }
 /* one line of the card: label · value (copy / open / show) · status dot */
 function phLine(label, kind, name, val, extra){
-  var open=kind?phOpen(label, kind):[], dot=open.length?'#ef4444':(val?'#10b981':'#cbd5e1');
+  var open=kind?phOpen(label, kind).concat(kind==='cloud'?phOpen(label,'cloudfull'):[]):[], dot=open.length?'#ef4444':(val?'#10b981':'#cbd5e1');
   var tip=open.length?(PH_NOT[kind]+' since '+fmtT(parseTs(open[0].at))):(val?'OK':'Not set');
   return '<div class="ph-ln"><i style="background:'+dot+'" title="'+esc(tip)+'"></i><span class="k">'+esc(name)+'</span><span class="v">'+(val||'<span class="muted">not set</span>')+'</span>'+(extra||'')+'</div>';
 }
@@ -1308,7 +1312,7 @@ function phCard(p){
   var lastPx=phLastOk(L,'proxy');
   var no=phNum(L), na=phAccts(L), hw=phHw(L, p), idle=p.active===false;   // idle: not in use yet — waiting for the client (Jeth, Oct 29)
   var h='<div class="card ph-c'+(open.length?' bad':(idle?' idle':''))+'"><div class="ph-h">'+(no?'<span class="ph-no">#'+esc(no)+'</span>':'<span class="ph-ic">'+IC.phone+'</span>')+'<div style="flex:1;min-width:0"><b class="ph-t">'+esc(phDev(L))+'</b><small>'+[hw, baseOf(phoneBase(p)).n, na+' live account'+(na===1?'':'s')].filter(Boolean).map(esc).join(' · ')+'</small></div>'+
-    (open.length?'<span class="pill" style="background:#ef444418;color:#b91c1c">'+open.length+' problem'+(open.length===1?'':'s')+'</span>':(idle?'<span class="pill" style="background:#94a3b81f;color:#475569">Not in use</span>':'<span class="pill" style="background:#10b98118;color:#047857">All OK</span>'))+'</div>'+
+    (open.length?'<span class="pill" style="background:#ef444418;color:#b91c1c">'+open.length+' problem'+(open.length===1?'':'s')+'</span>':(phVer(L).length?'<span class="pill" style="background:#f59e0b1f;color:#b45309">Check the fix</span>':(idle?'<span class="pill" style="background:#94a3b81f;color:#475569">Not in use</span>':'<span class="pill" style="background:#10b98118;color:#047857">All OK</span>')))+'</div>'+
     (idle?'<div class="ph-idle">Not in use yet — waiting for the client to start using it.</div>':'')+
     '<div class="ph-md"><span class="k">Model</span><div class="ph-mv">'+phModelHtml(L)+'</div></div>';
   if(PHN.edit===L && admin){
@@ -1327,6 +1331,9 @@ function phCard(p){
       phLine(L,'ipa','Apple ID (IPA)', esc(S.ipa||''), phCopyBtn(S.ipa||''))+
       phLine(L,'cloud','Cloud+ (Blaze+)', phCloud(p).map(esc).join(', '), '')+'</div>';
   }
+  var ver=phVer(L);   // 29d: marked fixed in Telegram → check it now
+  if(ver.length) h+='<div class="ph-op">'+ver.map(function(o){ return '<div class="ph-is" style="background:#fffbeb;border-color:#fde68a"><b style="color:#b45309">'+esc(phKindN(o.kind))+' — marked fixed by '+esc(phByName(o.res_by))+'</b><span>Check it on the phone now.</span><small>'+esc(fmtT(parseTs(o.res_at)))+' · '+esc(phAgo(o.res_at))+'</small>'+
+    '<div class="row" style="gap:6px;margin-top:6px"><button class="btn sm pri" onclick="phVerify(\''+jsq(o.id)+'\',true)">'+IC.check+' Works now</button><button class="btn sm dark" onclick="phVerify(\''+jsq(o.id)+'\',false)">Still not working</button></div></div>'; }).join('')+'</div>';
   if(open.length) h+='<div class="ph-op">'+open.map(function(o){ return '<div class="ph-is"><b>'+esc(PH_NOT[o.kind]||o.kind)+'</b><span>'+esc(o.note||'')+'</span><small>since '+esc(fmtT(parseTs(o.at)))+' · '+esc(phAgo(o.at))+' · '+esc(vaName(o.by)||o.by||'')+'</small><button class="btn sm" onclick="phFix(\''+jsq(o.id)+'\')">'+IC.check+' Fixed</button></div>'; }).join('')+'</div>';
   if(PHN.rep===L){
     h+='<div class="ph-rp"><div class="row" style="gap:6px;flex-wrap:wrap"><select class="sel" id="phr-k" onchange="PHN.rd=PHN.rd||{};PHN.rd.k=this.value">'+PH_KINDS.map(function(k){ return '<option value="'+k[0]+'"'+(PHN.rd&&PHN.rd.k===k[0]?' selected':'')+'>'+esc(k[1])+'</option>'; }).join('')+'</select>'+
@@ -1341,7 +1348,7 @@ function phCard(p){
 }
 function phTgCard(){
   var T=PHN.tgs; if(!T){ phTgLoad(); T={}; }
-  return '<div class="card pad" style="margin-top:14px"><div class="ch-h"><b>Client alerts on Telegram</b><span>a problem or a fix on any iPhone → a message in the client\'s group · no names</span></div>'+
+  return '<div class="card pad" style="margin-top:14px"><div class="ch-h"><b>Client alerts on Telegram</b><span>every problem → a message in the group with the device, its model and the issue, plus a <b>Mark fixed</b> button · whoever fixes it taps it (or replies “fixed”) → the VAs are asked to check · /status lists what is open · no VA names</span></div>'+
     '<div class="ph-tg">'+
       '<div><b>1 · Bot</b>'+(T.token_set?'<span class="pill" style="background:#10b98118;color:#047857">Connected · bot '+esc(T.bot)+'</span>':'<span class="muted">Telegram → @BotFather → /newbot → paste the token here.</span>')+
         '<div class="row" style="gap:6px;margin-top:6px"><input class="inp" id="phtg-tok" type="password" autocomplete="off" placeholder="'+(T.token_set?'paste a new token to replace it':'123456789:AA…')+'" style="flex:1"><button class="btn sm sec" onclick="phTgSave()">Save token</button></div></div>'+
@@ -1379,8 +1386,17 @@ async function phReport(label){
   var k=String(($('phr-k')||{}).value||'proxy'), n=String(($('phr-n')||{}).value||'').trim();
   if(k==='other' && !n){ toast('Say what the problem is.'); return; }
   var d=null; try{ d=await apiPost({ action:'rc_issue_add', phone:label, kind:k, note:n }); }catch(e){}
+  if(d && d.error==='BAD_KIND' && k==='cloudfull'){ try{ d=await apiPost({ action:'rc_issue_add', phone:label, kind:'cloud', note:('iCloud+ storage full'+(n?' — '+n:'')) }); }catch(e){} }   // backend before 29d
   if(d && d.ok){ PHN.rep=''; PHN.rd=null; toast(d.dup?'Already reported — it is on the board.':((PH_NOT[k]||'Problem')+' reported'+(d.sent?' — the client\'s group is told.':'.'))); await phLoad(true); renderView(); }
   else toast('Could not report — '+((d&&d.error==='SIGN_IN')?'sign out and back in first':((d&&d.error)||'connection error')));
+}
+async function phVerify(id, good){
+  var o=PHN.log.filter(function(x){ return x.id===id; })[0]; if(!o) return;
+  var n='';
+  if(!good){ n=prompt('Still not working: '+phKindN(o.kind)+' on '+phFull(o.phone)+'.\nWhat happens now? (optional — the group reads this)',''); if(n===null) return; }
+  var d=null; try{ d=await apiPost({ action:'rc_issue_verify', id:id, ok:good?'1':'0', note:String(n||'').trim() }); }catch(e){}
+  if(d && d.ok){ toast(good?('Confirmed working — the group is told.'):('Reopened — the group gets a fresh alert.')); await phLoad(true); renderView(); }
+  else toast('Could not save — '+((d&&d.error==='UNKNOWN_ACTION')?'the Reddit Central backend needs the latest update (rc-2026-10-29d)':((d&&d.error)||'connection error')));
 }
 async function phFix(id){
   var o=PHN.log.filter(function(x){ return x.id===id; })[0]; if(!o) return;
@@ -1415,9 +1431,11 @@ async function phGate(r){
 }
 function phBanner(){
   if(!PHN.loaded) return '';
-  var open=PHN.log.filter(function(o){ return o.type==='issue' && o.status==='open'; }); if(!open.length) return '';
-  var mine=isAdmin()?null:phMine(), L=mine?open.filter(function(o){ return mine[o.phone]; }):open; if(!L.length) return '';
-  return '<div class="banner bad">'+IC.phone+'<div style="flex:1"><b>'+L.length+' iPhone problem'+(L.length===1?'':'s')+' open</b> — '+L.slice(0,4).map(function(o){ return esc(phDev(o.phone))+': '+esc(PH_NOT[o.kind]||o.kind); }).join(' · ')+(L.length>4?' …':'')+'. The client sees this on their dashboard.</div><button class="btn sm dark" onclick="go(\'phones\')">Open iPhones</button></div>';
+  var mine=isAdmin()?null:phMine(), V=phVer().filter(function(o){ return !mine || mine[o.phone]; }), vb='';
+  if(V.length) vb='<div class="banner warn">'+IC.phone+'<div style="flex:1"><b>Marked fixed — please check:</b> '+V.slice(0,4).map(function(o){ return esc(phDev(o.phone))+' '+esc(phKindN(o.kind).toLowerCase())+' (by '+esc(phByName(o.res_by))+')'; }).join(' · ')+'. Tell the tool if it works now or not.</div><button class="btn sm dark" onclick="go(\'phones\')">Check now</button></div>';
+  var open=PHN.log.filter(function(o){ return o.type==='issue' && o.status==='open'; }); if(!open.length) return vb;
+  var L=mine?open.filter(function(o){ return mine[o.phone]; }):open; if(!L.length) return vb;
+  return vb+'<div class="banner bad">'+IC.phone+'<div style="flex:1"><b>'+L.length+' iPhone problem'+(L.length===1?'':'s')+' open</b> — '+L.slice(0,4).map(function(o){ return esc(phDev(o.phone))+': '+esc(PH_NOT[o.kind]||o.kind); }).join(' · ')+(L.length>4?' …':'')+'. The client sees this on their dashboard.</div><button class="btn sm dark" onclick="go(\'phones\')">Open iPhones</button></div>';
 }
 function vPhones(){
   if(!PHN.loaded && !PHN.err){ phLoad(true).then(function(){ if(VIEW==='phones') renderView(); }); }
@@ -1437,8 +1455,8 @@ function vPhones(){
   var hist=PHN.log.filter(function(o){ return o.type==='issue' || PHN.f==='all'; }).slice().sort(function(a,b){ var x=a.res_at&&a.res_at>a.at?a.res_at:a.at, y=b.res_at&&b.res_at>b.at?b.res_at:b.at; return x<y?1:-1; }).slice(0,40);
   h+='<div class="card pad" style="margin-top:14px"><div class="ch-h"><b>Log</b><span>problems, fixes and proxy checks — last 60 days</span><span style="flex:1"></span><div class="seg" style="width:auto;white-space:nowrap"><button class="'+(PHN.f==='all'?'on':'')+'" onclick="PHN.f=\'all\';renderView()">Everything</button><button class="'+(PHN.f==='iss'?'on':'')+'" onclick="PHN.f=\'iss\';renderView()">Problems only</button></div></div>'+
     (hist.length?'<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">When</th><th>Device</th><th>What</th><th>Note</th><th>Who</th></tr></thead><tbody>'+hist.map(function(o){
-      var what=o.type==='check'?'<span class="pill" style="background:#0ea5e918;color:#0369a1">Proxy OK</span>':(o.status==='open'?'<span class="pill" style="background:#ef444418;color:#b91c1c">'+esc(PH_NOT[o.kind]||o.kind)+'</span>':'<span class="pill" style="background:#10b98118;color:#047857">'+esc(phKindN(o.kind))+' · fixed</span>');
-      return '<tr><td class="c1">'+esc(fmtDT(parseTs(o.at)))+(o.res_at?'<div class="muted" style="font-size:11px">fixed '+esc(fmtDT(parseTs(o.res_at)))+'</div>':'')+'</td><td><b>'+esc(phDev(o.phone))+'</b>'+(phHw(o.phone)?'<div class="muted" style="font-size:11px">'+esc(phHw(o.phone))+'</div>':'')+'</td><td>'+what+'</td><td style="white-space:normal;max-width:280px">'+esc(o.note||'')+(o.res_note?'<div class="muted" style="font-size:11px">Fix: '+esc(o.res_note)+'</div>':'')+'</td><td>'+esc(vaName(o.by)||o.by||'')+(o.res_by?'<div class="muted" style="font-size:11px">fixed by '+esc(vaName(o.res_by)||o.res_by)+'</div>':'')+'</td></tr>'; }).join('')+'</tbody></table></div>'
+      var what=o.type==='check'?'<span class="pill" style="background:#0ea5e918;color:#0369a1">Proxy OK</span>':o.status==='verify'?'<span class="pill" style="background:#f59e0b1f;color:#b45309">'+esc(phKindN(o.kind))+' · marked fixed, checking</span>':(o.status==='open'?'<span class="pill" style="background:#ef444418;color:#b91c1c">'+esc(PH_NOT[o.kind]||o.kind)+'</span>':'<span class="pill" style="background:#10b98118;color:#047857">'+esc(phKindN(o.kind))+' · fixed</span>');
+      return '<tr><td class="c1">'+esc(fmtDT(parseTs(o.at)))+(o.res_at?'<div class="muted" style="font-size:11px">fixed '+esc(fmtDT(parseTs(o.res_at)))+'</div>':'')+'</td><td><b>'+esc(phDev(o.phone))+'</b>'+(phHw(o.phone)?'<div class="muted" style="font-size:11px">'+esc(phHw(o.phone))+'</div>':'')+'</td><td>'+what+'</td><td style="white-space:normal;max-width:280px">'+esc(o.note||'')+(o.res_note?'<div class="muted" style="font-size:11px">Fix: '+esc(o.res_note)+'</div>':'')+'</td><td>'+esc(vaName(o.by)||o.by||'')+(o.res_by?'<div class="muted" style="font-size:11px">fixed by '+esc(phByName(o.res_by))+'</div>':'')+'</td></tr>'; }).join('')+'</tbody></table></div>'
      :'<div class="muted">Nothing logged yet.</div>')+'</div>';
   if(admin){   // details saved under a name that is no longer on the list (a renamed phone) — move them over
     var names={}; phoneList(false).forEach(function(p){ names[p.label]=1; });
