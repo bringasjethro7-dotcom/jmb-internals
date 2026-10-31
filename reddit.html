@@ -1794,8 +1794,9 @@ function vToday(){
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>'+greet+', <span class="gtxt">'+esc(nm)+'</span></h2>'+
     '<p>'+esc(baseOf(PROJECT).n)+' base · '+new Date().toLocaleDateString('en-US',{timeZone:'Asia/Manila',weekday:'long',month:'long',day:'numeric'})+
     ' · '+(tmOn()?'press <b>Start</b> when a task begins and <b>Finish</b> when it ends':'tick each session as you finish it')+' — no screenshots needed.</p></div>'+
-    (tmOn()?(crGet()?'<button class="btn run" onclick="newAccount()" title="Account exists on the phone? Log it — the timer stops when it is counted"><span class="sq"></span> Creating… <span class="tmv" data-tm="'+crGet().t+'">'+tmFmt(Date.now()-crGet().t)+'</span></button><button class="btn sec sm" onclick="crCancel()" title="Cancel the creation timer">'+IC.x+'</button>'+crPickHtml()
-      :'<button class="btn sec" onclick="crStart()" title="Press when you START creating an account on the iPhone">▶ Start creating</button>'+crPickHtml()):'')+
+    (tmOn()?(crGet()?'<button class="btn run" onclick="newAccount()" title="Account exists on the phone? Log it — the timer stops when it is counted"><span class="sq"></span> Creating… <span class="tmv" data-tm="'+crGet().t+'">'+tmFmt(Date.now()-crGet().t)+'</span></button><button class="btn sec sm" onclick="crCancel()" title="Cancel — free in the first 2 minutes; after that it is recorded as a failed creation">'+IC.x+'</button>'+crPickHtml()
+      :(crLocked()?'<button class="btn sec" onclick="crLockedBox()" title="Locked: '+CR_STREAK+' creation timers in a row ended without an account" style="opacity:.6">Start creating · locked</button>'
+        :'<button class="btn sec" onclick="crStart()" title="Press when you START creating an account on the iPhone (stops by itself at '+Math.round(tmCapSecs('creation','','')/60)+' min)">▶ Start creating</button>'+crPickHtml())):'')+
     '<button class="btn pri" onclick="newAccount()">'+IC.plus+' Log new account</button></div>';
   h+=pcBanner();   // Oct 27: end-of-shift post check (before EOD)
   try{ h+=phBanner(); }catch(_pb){}   // Oct 29: open iPhone problems (proxy · license key · Cloud+ · Apple ID)
@@ -2297,9 +2298,37 @@ function tmCount(){ return Object.keys(tmAll()).length; }
    and Productivity & QA counts it (−0.5 each, max 2 a day). A stopped timer also stops keeping the portal's
    10-minute tool rule alive, which is the point. */
 var TM_DEF_CAP={ session:30*60, dms:25*60, creation:45*60 };
+/* ══════════ CREATION TIMER RULES (Jeth, Oct 31) ══════════
+   "They start creating, let it run 27 minutes or more, then cancel it — deceiving the portal." A creation takes 10–15
+   minutes, 20 at most, so:
+     · the creation timer stops by itself at 20 minutes (lower if the learned limit is lower), with a warning 5 minutes before
+     · Cancel is free only in the first 2 minutes (started by mistake). After that the timer ends with "Log new account"
+       or "Creation failed" + a reason — recorded either way (RcTasks kind "crfail"), so the owner sees each one in
+       Productivity & QA with its minutes and reason
+     · a creation timer that runs out is recorded the same way (and still counts as "past its time limit")
+     · 3 creation timers in a row that end with no account lock "Start creating" until the VA logs an account she just
+       made (Log new account → Just created) or her next shift */
+var CR_MAX=20*60, CR_WARN_BEFORE=5*60, CR_FREE=120, CR_STREAK=3;
+function crfKey(){ return 'rc_crf_'+myId()+'_'+today(); }
+function crfGet(){ var d={ n:0, s:0, all:0 }; try{ return JSON.parse(localStorage.getItem(crfKey())||'null')||d; }catch(e){ return d; } }
+function crfAdd(secs){ var x=crfGet(); x.n=(+x.n||0)+1; x.all=(+x.all||0)+1; x.s=(+x.s||0)+Math.max(0,Math.round(secs||0)); try{ localStorage.setItem(crfKey(), JSON.stringify(x)); }catch(e){} return x; }
+function crfReset(){ var x=crfGet(); if(!x.n) return; x.n=0; try{ localStorage.setItem(crfKey(), JSON.stringify(x)); }catch(e){} }
+function crLocked(){ try{ return tmOn() && (+crfGet().n||0)>=CR_STREAK; }catch(e){ return false; } }
+function crLockedBox(){
+  var x=crfGet();
+  openModal('<div class="md-h"><h3>Start creating is locked</h3><p>'+CR_STREAK+' creation timers in a row ended without an account today'+(x.s?' ('+Math.round(x.s/60)+' min)':'')+'.</p></div>'+
+    '<div class="md-b"><p style="font-size:13px;line-height:1.6">It opens again as soon as you log an account you just created (<b>Log new account → Just created</b>), or at your next shift.<br>If Reddit keeps blocking sign-ups or the iPhone has a problem, tell the admin now.</p></div>'+
+    '<div class="md-f"><button class="btn pri" onclick="closeModal()">OK</button></div>');
+}
+/* the creation timer ended with no account: record it (the owner sees it) and count it toward the lock */
+function crFailLog(x, secs, why){
+  try{ tmLog(null, 'crfail', { secs:secs, start:x.t, parallel:x.p||0 }, { source:String(why||'').slice(0,40) }); }catch(e){}
+  return crfAdd(secs);
+}
 function tmCapFrom(T){ T=+T||0; return Math.round(Math.min(60*60, Math.max(10*60, T*2.5, T+5*60))); }
 function tmCapKey(kind, stage, meth){ return kind+'|'+((kind==='creation'||kind==='healthcheck')?'':(stage||''))+'|'+(meth||'(none)'); }
-function tmCapSecs(kind, stage, meth){
+function tmCapSecs(kind, stage, meth){ var v=tmCapRaw(kind, stage, meth); return kind==='creation'?Math.min(CR_MAX, v):v; }   // Oct 31: creation never more than 20 min
+function tmCapRaw(kind, stage, meth){
   var caps=CFG.task_caps||{}, k=tmCapKey(kind,stage,meth);
   if(caps[k]) return +caps[k];
   if(kind==='creation'){ var mx=0; Object.keys(caps).forEach(function(x){ if(x.indexOf('creation|')===0) mx=Math.max(mx,+caps[x]||0); }); if(mx) return mx; }
@@ -2317,12 +2346,20 @@ function tmCapCheck(){
   try{ hcCheck(); }catch(_hc){}   // the health check has its own limit (accounts × max per account)
   try{ pcCheckTick(); }catch(_pc){}   // Oct 27: the end-of-shift post check too (posts × 1 min)
   var o=tmAll(), now=Date.now(), hit=[];
+  var cx=o['__create|c'], cCap=tmCapSecs('creation','','');   // Oct 31: warn 5 minutes before the creation timer stops
+  if(cx && cx.t && !cx.w && (now-cx.t)/1000>=cCap-CR_WARN_BEFORE && (now-cx.t)/1000<cCap){ cx.w=1; tmPut(o);
+    tmCapNote('The creation timer stops at '+Math.round(cCap/60)+' minutes — '+Math.max(1,Math.round((cCap-(now-cx.t)/1000)/60))+' min left. Account made? Log it now. Didn\'t work? Press ✕ and mark it failed.'); }
   Object.keys(o).forEach(function(key){ var x=o[key]; if(!x || !x.t || key.indexOf('__hc|')===0 || key.indexOf('__pc|')===0) return; var c=tmCapOf(key); if((now-x.t)/1000>=c.secs) hit.push({ key:key, x:x, c:c }); });
   if(!hit.length) return;
   hit.forEach(function(h){
     var o2=tmAll(); delete o2[h.key]; tmPut(o2);
     try{ tmLog(h.c.r, 'overrun', { secs:h.c.secs, start:h.x.t, parallel:h.x.p||0 }, { stage:h.c.r?h.c.r.status:'', source:'cap · '+h.c.kind }); }catch(e){}
-    var what=h.c.kind==='creation'?'The creation timer':(h.c.kind==='dms'?'The DM timer':'Session '+String(h.c.k||'').replace(/^s/,'')+' timer')+(h.c.r?' for '+h.c.r.handle:'');
+    if(h.c.kind==='creation'){   // Oct 31: no account logged in time = a failed creation, recorded for the owner
+      var st=crFailLog(h.x, h.c.secs, 'timed out at '+Math.round(h.c.secs/60)+' min');
+      tmCapNote('The creation timer stopped at '+Math.round(h.c.secs/60)+' minutes with no account logged — recorded as a failed creation.'+(st.n>=CR_STREAK?' Start creating is now locked: log an account you just created to open it again.':' If the account exists, log it with Log new account.'));
+      return;
+    }
+    var what=(h.c.kind==='dms'?'The DM timer':'Session '+String(h.c.k||'').replace(/^s/,'')+' timer')+(h.c.r?' for '+h.c.r.handle:'');
     tmCapNote(what+' stopped at its '+Math.round(h.c.secs/60)+'-minute limit. Time past the limit doesn\'t count. Still working on it? Start it again.');
   });
   try{ renderView(); }catch(e){}
@@ -3061,8 +3098,32 @@ async function sesStart(id, n){
 function tmCancel(id, k){ var o=tmAll(); delete o[id+'|'+k]; tmPut(o); renderView(); toast('Timer cancelled — nothing was recorded.'); }
 /* creation: ▶ Start creating (hero) → Log new account → counted */
 function crGet(){ return tmGet('__create','c'); }
-async function crStart(){ if(!(await fixGate())) return; if(!(await linkGate('A creation'))) return; var _cm=crModel(); tmStart('__create','c'); try{ var _o=tmAll(); if(_o['__create|c'] && _cm){ _o['__create|c'].m=_cm; tmPut(_o); } }catch(_x){} renderView(); toast('Timer started for '+(_cm||'this account')+' — create the account on the iPhone, then press Log new account.'); }
-function crCancel(){ var o=tmAll(); delete o['__create|c']; tmPut(o); renderView(); }
+async function crStart(){ if(crLocked()){ crLockedBox(); return; } if(!(await fixGate())) return; if(!(await linkGate('A creation'))) return; var _cm=crModel(); tmStart('__create','c'); try{ var _o=tmAll(); if(_o['__create|c'] && _cm){ _o['__create|c'].m=_cm; tmPut(_o); } }catch(_x){} renderView(); toast('Timer started for '+(_cm||'this account')+' — create the account on the iPhone, then press Log new account.'); }
+/* Oct 31: Cancel is free only in the first 2 minutes; after that the timer ends as "Creation failed" with a reason */
+function crCancel(){
+  var x=crGet(); if(!x) return;
+  var el=Math.round((Date.now()-x.t)/1000);
+  if(el<CR_FREE || !tmOn()){ var o=tmAll(); delete o['__create|c']; tmPut(o);
+    if(tmOn() && el>=20){ try{ tmLog(null, 'crfail', { secs:el, start:x.t, parallel:x.p||0 }, { source:'cancel · started by mistake' }); }catch(e){} }
+    renderView(); toast('Creation timer cancelled.'); return; }
+  var R=['Reddit blocked the sign-up','Verification code or email never came','iPhone or app problem','Proxy / connection problem','Other'];
+  openModal('<div class="md-h"><h3>The account didn\'t get made?</h3><p>This creation timer has run '+tmFmt(Date.now()-x.t)+'. Cancel is only free in the first 2 minutes — after that it is recorded as a failed creation, with your reason, and the admin sees it.</p></div>'+
+    '<div class="md-b"><div class="fld"><label>What happened?</label><div class="seg" id="crf-r" style="flex-wrap:wrap">'+R.map(function(t){ return '<button type="button" data-r="'+esc(t)+'" onclick="crFailPick(this)">'+esc(t)+'</button>'; }).join('')+'</div></div>'+
+      '<div class="fld" id="crf-o" style="display:none"><label>Tell us what happened</label><input class="inp" id="crf-t" maxlength="60" placeholder="e.g. the app crashed twice"></div>'+
+      '<div class="hint">The account exists after all? Close this and press <b>Creating…</b> to log it instead.</div></div>'+
+    '<div class="md-f"><button class="btn sec" onclick="closeModal()">Back</button><button class="btn pri" onclick="crFailSave()">Record as failed</button></div>');
+}
+var _crfR='';
+function crFailPick(b){ _crfR=b.getAttribute('data-r'); document.querySelectorAll('#crf-r button').forEach(function(x){ x.classList.toggle('on', x===b); }); var o=$('crf-o'); if(o) o.style.display=_crfR==='Other'?'block':'none'; }
+function crFailSave(){
+  var why=_crfR; if(!why){ toast('Pick what happened.'); return; }
+  if(why==='Other'){ why=(($('crf-t')||{}).value||'').trim(); if(why.length<4){ toast('Type what happened.'); return; } }
+  var o=tmAll(), x=o['__create|c']; if(!x){ closeModal(); renderView(); return; }
+  delete o['__create|c']; tmPut(o);
+  var secs=Math.round((Date.now()-x.t)/1000), st=crFailLog(x, secs, 'cancel · '+why);
+  _crfR=''; closeModal(); renderView();
+  toast('Recorded as a failed creation ('+Math.round(secs/60)+' min).'+(st.n>=CR_STREAK?' That\'s '+CR_STREAK+' in a row — Start creating is locked until you log an account you just created.':''));
+}
 function crTake(){ var o=tmAll(), x=o['__create|c']; if(!x) return null; delete o['__create|c']; tmPut(o); return x.t; }
 /* VA's own day line in RcDaily (backend rc-2026-10-05b+) — fire-and-forget, only when a number changes */
 var _dsK='';
@@ -4364,6 +4425,7 @@ async function naSave(){
   try{
     var d=await api({ action:'pa_add', project:PROJECT, handle:u, status:st, method:NA.method, model:model, device:dev, niche:niche, meta:JSON.stringify(meta), employee_id:USER.id, by:USER.id });
     if(d && d.ok){
+      if(!NA.seed){ try{ crfReset(); }catch(_cr){} }   // Oct 31: a real creation clears the failed-creation streak
       if(!NA.seed && model){ var _was=cgo?String((crGet()||{}).m||''):''; try{ localStorage.setItem(crmKey(), model); }catch(_s){} tcLastSet(model); if(_was && _was!==model) setTimeout(function(){ toast('Logged as '+model+'. Your next creation will go to '+model+' — pick the model next to Start creating before you start.'); }, 1800); }
       if(cgo){ crTake(); if(full) tmLog({ id:d.id||'', handle:u, project:PROJECT, method:NA.method, device:dev, status:'new' },'creation',{ secs:Math.round((Date.now()-cgo)/1000), start:cgo, parallel:0 }); }
       if(full) await bump('Reddit Account Creation',1);
@@ -6022,6 +6084,7 @@ var QA_RULES=[
   { k:'fast',       n:'Under 35% of the team time for that task (once it is learned)', d:0.5, u:'each · max 2' },
   { k:'cover',      n:'Portal time more than 30 minutes ahead of the tool timers', d:1, u:'' },
   { k:'overrun',    n:'Task timer left running past its time limit', d:0.5, u:'each · max 2' },
+  { k:'crfail',     n:'Creation timer ended with no account — cancelled after 2 minutes or ran out (shown with minutes and reasons)', d:0, u:'shown, no deduction' },
   { k:'typo',       n:'Username typo — the health check could not find the account until the owner corrected the name', d:0.5, u:'each · max 2' },
   { k:'fix_open',   n:'A username sent back for fixing is still not corrected (or marked banned)', d:1, u:'each, per day it stays open · max 3' }
 ];
@@ -6247,6 +6310,10 @@ function pqFlags(va, day, dr, L){
   if(fast) F.push({ k:'fast', t:fast+' far under the team time', d:Math.min(2,fast*pqRule('fast').d), c:'a' });
   var ovr=((PQ.st&&PQ.st.rows)||[]).filter(function(x){ return String(x.va).toLowerCase()===va && x.kind==='overrun'; }).length;
   if(ovr) F.push({ k:'overrun', t:ovr+' timer'+(ovr===1?'':'s')+' ran past the limit', d:Math.min(2, ovr*pqRule('overrun').d), c:'r' });
+  var crf=((PQ.st&&PQ.st.rows)||[]).filter(function(x){ return String(x.va).toLowerCase()===va && x.kind==='crfail' && (x.secs==null || x.secs>=CR_FREE); });   // Oct 31
+  if(crf.length){ var crm=Math.round(crf.reduce(function(s2,x){ return s2+(+x.secs||0); },0)/60);
+    F.push({ k:'crfail', t:crf.length+' creation'+(crf.length===1?'':'s')+' with no account · '+crm+' min', d:0, c:crf.length>=CR_STREAK?'r':'a',
+      tip:crf.map(function(x){ return fmtSecs(x.secs)+' — '+String(x.source||'').replace(/^cancel · /,''); }).join(' · ') }); }
   try{ var cv=pqCover(va, day, dr); if(cv && cv.tracked-cv.timed>1800) F.push({ k:'cover', t:'Portal '+hm(cv.tracked-cv.timed)+' ahead of the tool ('+hm(cv.timed)+' of '+hm(cv.tracked)+')', d:pqRule('cover').d, c:'r', tip:'The portal tracked '+hm(cv.tracked)+' but this tool\'s timers only covered '+hm(cv.timed)+' of it.' }); }catch(_cv){}
   var ps=CFG.process_start||'2026-10-01', untag=allRows().filter(function(r){ return owner(r)===va && !isDead(r) && !isParked(r) && (!methodOf(r) || !r.model || (cdateOf(r)>=ps && !r.device && phoneList(false, r.project).length)); });
   var typos=allRows().filter(function(r){ var ty=M(r).typo; return ty && ty.day===day && String(ty.by||owner(r)).toLowerCase()===va; });
@@ -6274,7 +6341,7 @@ function pqQA(){
     '<div class="sp"></div><span class="muted" style="font-size:12px">Business day · '+esc(fmtD(parseTs(day)))+'</span> <button class="btn sm sec" onclick="pqFillAll()" title="Save the suggested score for every VA who worked and has no score yet">Fill suggested for everyone</button></div>';
   h+='<details class="card pad" style="margin-bottom:12px"><summary style="cursor:pointer;font-weight:800">How the QA score works</summary><div style="font-size:13px;line-height:1.6;margin-top:8px">'+
     'You score each VA <b>out of 10</b> for the day — your number is final. The <b>suggested</b> score starts at 10 and takes off what the rules found:'+
-    '<table class="db" style="margin-top:8px"><tbody>'+QA_RULES.map(function(r){ return '<tr><td class="c1">'+esc(r.n)+'</td><td class="num" style="font-weight:800;color:#b91c1c">−'+r.d+'</td><td class="muted" style="font-size:11.5px">'+esc(r.u)+'</td></tr>'; }).join('')+'</tbody></table>'+
+    '<table class="db" style="margin-top:8px"><tbody>'+QA_RULES.map(function(r){ return '<tr><td class="c1">'+esc(r.n)+'</td><td class="num" style="font-weight:800;color:#b91c1c">'+(r.d?'−'+r.d:'—')+'</td><td class="muted" style="font-size:11.5px">'+esc(r.u)+'</td></tr>'; }).join('')+'</tbody></table>'+
     '<div class="muted" style="font-size:12px;margin-top:6px">Sessions done and accounts created are shown for context — they are productivity, not QA, and are not scored until you set the task targets.</div></div></details>';
   if(!vas.length) return h+'<div class="card empty">No VAs with accounts yet.</div>';
   var avg={}; (PQ.dd||[]).forEach(function(x){ if(x.qa_score===''||x.qa_score==null) return; var s=parseFloat(x.qa_score); if(isNaN(s)) return; var k=String(x.va).toLowerCase(); (avg[k]=avg[k]||[]).push(s); });
@@ -6286,7 +6353,7 @@ function pqQA(){
       return '<tr data-va="'+esc(va)+'"><td class="c1">'+esc(vaName(va))+(SHIFTOF[va]==='night'?' 🌙':'')+'</td>'+
         '<td class="num">'+(L.nodata?'—':(L.done+'/'+L.due))+'</td><td class="num">'+(L.nodata?'—':(L.cre||'·'))+'</td><td>'+hc+'</td>'+
         (function(){ var cv=pqCover(va,day,dr); return '<td style="white-space:nowrap">'+(cv?(hm(cv.timed)+' <span class="muted">/ '+hm(cv.tracked)+'</span>'+(cv.pct!=null?' <b style="color:'+covColor(cv.pct)+'">'+cv.pct+'%</b>':'')):'<span class="muted">—</span>')+'</td>'; })()+
-        '<td style="white-space:normal;max-width:300px;min-width:180px">'+(F.length?F.map(function(f){ return '<span class="qf '+f.c+'" title="'+esc(f.tip?f.tip:('−'+f.d))+'">'+esc(f.t)+' <b>−'+f.d+'</b></span>'; }).join(''):'<span class="qf g">'+IC.check+' clean</span>')+'</td>'+
+        '<td style="white-space:normal;max-width:300px;min-width:180px">'+(F.length?F.map(function(f){ return '<span class="qf '+f.c+'" title="'+esc(f.tip?f.tip:('−'+f.d))+'">'+esc(f.t)+(f.d?' <b>−'+f.d+'</b>':'')+'</span>'; }).join(''):'<span class="qf g">'+IC.check+' clean</span>')+'</td>'+
         '<td class="num" style="font-weight:800;color:'+(sug>=9?'#047857':(sug>=7?'#b45309':'#b91c1c'))+'">'+sug+'</td>'+
         '<td><input class="qa-sc'+(sc!==''?' saved':'')+'" id="qa-s-'+esc(va)+'" type="number" min="0" max="10" step="0.5" value="'+esc(sc)+'" placeholder="'+sug+'"></td>'+
         '<td style="max-width:none"><input class="qa-nt" id="qa-n-'+esc(va)+'" value="'+esc(dr&&dr.qa_note||'')+'" placeholder="optional"></td>'+
