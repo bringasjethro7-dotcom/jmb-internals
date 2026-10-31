@@ -566,6 +566,8 @@ main{padding:22px 22px 80px}
 .hero h2{font-size:28px;font-weight:800;letter-spacing:-.03em}
 .hero h2 .gtxt{background:linear-gradient(92deg,#ff8a3d,#ec4899 70%,#a855f7);-webkit-background-clip:text;background-clip:text;color:transparent}
 .hero p{color:var(--ink3)}
+.hero .crm{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink3);white-space:nowrap}
+.hero .crm .sel{padding:6px 9px;font-size:12.5px;max-width:170px}
 .sec-h{margin:26px 0 12px}
 .sec-h b{font-size:15px;letter-spacing:-.01em}
 .sec-h b::before,.ch-h>b:first-child::before{content:'';display:inline-block;width:4px;height:15px;border-radius:3px;background:linear-gradient(180deg,#ff8a3d,#ec4899);margin-right:9px;vertical-align:-2px}
@@ -1792,8 +1794,8 @@ function vToday(){
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>'+greet+', <span class="gtxt">'+esc(nm)+'</span></h2>'+
     '<p>'+esc(baseOf(PROJECT).n)+' base · '+new Date().toLocaleDateString('en-US',{timeZone:'Asia/Manila',weekday:'long',month:'long',day:'numeric'})+
     ' · '+(tmOn()?'press <b>Start</b> when a task begins and <b>Finish</b> when it ends':'tick each session as you finish it')+' — no screenshots needed.</p></div>'+
-    (tmOn()?(crGet()?'<button class="btn run" onclick="newAccount()" title="Account exists on the phone? Log it — the timer stops when it is counted"><span class="sq"></span> Creating… <span class="tmv" data-tm="'+crGet().t+'">'+tmFmt(Date.now()-crGet().t)+'</span></button><button class="btn sec sm" onclick="crCancel()" title="Cancel the creation timer">'+IC.x+'</button>'
-      :'<button class="btn sec" onclick="crStart()" title="Press when you START creating an account on the iPhone">▶ Start creating</button>'):'')+
+    (tmOn()?(crGet()?'<button class="btn run" onclick="newAccount()" title="Account exists on the phone? Log it — the timer stops when it is counted"><span class="sq"></span> Creating… <span class="tmv" data-tm="'+crGet().t+'">'+tmFmt(Date.now()-crGet().t)+'</span></button><button class="btn sec sm" onclick="crCancel()" title="Cancel the creation timer">'+IC.x+'</button>'+crPickHtml()
+      :'<button class="btn sec" onclick="crStart()" title="Press when you START creating an account on the iPhone">▶ Start creating</button>'+crPickHtml()):'')+
     '<button class="btn pri" onclick="newAccount()">'+IC.plus+' Log new account</button></div>';
   h+=pcBanner();   // Oct 27: end-of-shift post check (before EOD)
   try{ h+=phBanner(); }catch(_pb){}   // Oct 29: open iPhone problems (proxy · license key · Cloud+ · Apple ID)
@@ -2829,25 +2831,58 @@ function tbInfo(){ var o={}; try{ o=tmAll(); }catch(e){}
    Spam recovery sessions → Reddit Warmup · Day 1 → Super Strong sessions and DM rounds → Reddit Posting · Vysor adds
    "Vysor" (Jailbroken and Blaze+ stay plain) · health checks, username fixes and any time with no task timer running
    → Reddit Warmup, under the model the VA works most. The portal turns base + model into its own project/category. */
+/* ═══ WHICH MODEL THE PORTAL BILLS (Jeth, Oct 31) ═══
+   Each model is a different client, so the portal category must be the model the VA is actually working on.
+   Until today creations, health checks, post checks and idle time all went to the model most of the VA's assigned
+   accounts belong to, so a VA moved from Capri/Stella to Nikki kept billing her Nikki creations to Capri/Stella. Now:
+     · creation     → the model shown next to Start creating ("for Nikki"). It follows the last account the VA logged
+                      and can be changed before or while the timer runs (the portal follows within ~20 s)
+     · health check → the model most of today's check list belongs to
+     · post check   → the model most of the posts being checked belong to
+     · idle / open  → the model she last worked on today (a session or a creation), then her main model */
+function tcTally(list){ var cnt={}, best='', n=0; (list||[]).forEach(function(r){ var m=String((r&&r.model)||'').trim(); if(!m) return; cnt[m]=(cnt[m]||0)+1; if(cnt[m]>n){ n=cnt[m]; best=m; } }); return best; }
 function tcMainModel(){
-  var me=myId(), cnt={}, best='', n=0;
-  try{ (ROWS||[]).forEach(function(r){ if(!r || isParked(r) || isDead(r)) return; if(worksFor(r)!==me) return;
-    var m=String(r.model||'').trim(); if(!m) return; cnt[m]=(cnt[m]||0)+1; if(cnt[m]>n){ n=cnt[m]; best=m; } }); }catch(e){}
+  var me=myId(), L=[];
+  try{ (ROWS||[]).forEach(function(r){ if(!r || isParked(r) || isDead(r)) return; if(worksFor(r)!==me) return; L.push(r); }); }catch(e){}
+  return tcTally(L);
+}
+/* a model name that belongs to this base ('' when it doesn't) */
+function tcModelOk(m){ m=String(m||'').trim(); if(!m) return ''; var L=[]; try{ L=modelsAllowed(PROJECT); }catch(e){} if(!L.length) return m;
+  return L.filter(function(x){ return String(x).toLowerCase()===m.toLowerCase(); })[0]||''; }
+function tcLastKey(){ return 'rc_tclast_'+PROJECT+'_'+myId(); }
+function tcLastSet(m){ m=String(m||'').trim(); if(!m) return; try{ var v=JSON.stringify({ d:today(), m:m }); if(localStorage.getItem(tcLastKey())!==v) localStorage.setItem(tcLastKey(), v); }catch(e){} }
+function tcLastToday(){ try{ var x=JSON.parse(localStorage.getItem(tcLastKey())||'null'); if(x && x.d===today() && x.m) return String(x.m); }catch(e){} return ''; }
+/* the model of the last account this VA logged as a creation */
+function tcLastCreated(){
+  var me=myId(), best='', bt=0;
+  try{ (ROWS||[]).forEach(function(r){ if(!r || String(r.created_by||'').toLowerCase()!==me) return; var mm=tcModelOk(r.model); if(!mm) return;
+    var m=M(r); if(!m.cdone && !m.added) return; var d=parseTs(m.cdoneAt||r.created_at), t=d?d.getTime():0; if(t>bt){ bt=t; best=mm; } }); }catch(e){}
   return best;
 }
+function tcWorkModel(){ return tcLastToday() || tcMainModel(); }
+/* creation: the model this creation is for */
+function crmKey(){ return 'rc_crm_'+PROJECT+'_'+myId(); }
+function crModel(){ var x=crGet(); if(x && x.m) return x.m; var s=''; try{ s=localStorage.getItem(crmKey())||''; }catch(e){} return tcModelOk(s) || tcLastCreated() || tcWorkModel(); }
+function crModelSet(m, quiet){ m=String(m||'').trim(); if(!m) return; try{ localStorage.setItem(crmKey(), m); }catch(e){}
+  var o=tmAll(), x=o['__create|c']; if(x && x.m!==m){ x.m=m; tmPut(o); if(!quiet) toast('This creation now goes to '+m+' in the portal.'); } }
+function crPick(sel){ crModelSet(sel.value); renderView(); }
+function crPickHtml(){ var L=[]; try{ L=modelsAllowed(PROJECT).slice(); }catch(e){} if(!L.length) return ''; var cur=crModel();
+  if(cur && L.map(function(x){ return String(x).toLowerCase(); }).indexOf(cur.toLowerCase())<0) L.unshift(cur);
+  return '<label class="crm" title="The model this creation is for. The portal bills the creation time to it.">for <select class="sel" onchange="crPick(this)">'+
+    L.map(function(x){ return '<option'+(x===cur?' selected':'')+'>'+esc(x)+'</option>'; }).join('')+'</select></label>'; }
 function tcWant(){
   var o={}; try{ o=tmAll(); }catch(e){}
   var best=null; Object.keys(o).forEach(function(k){ if(o[k] && o[k].t && (!best || o[k].t<o[best].t)) best=k; });
-  var w={ p:PROJECT, m:tcMainModel(), k:'warmup', v:'', idle:true, lbl:'Reddit Central open', at:new Date().toISOString() };
+  var w={ p:PROJECT, m:tcWorkModel(), k:'warmup', v:'', idle:true, lbl:'Reddit Central open', at:new Date().toISOString() };
   if(!best) return w;
   var parts=best.split('|'), id=parts[0], key=parts[1]||'';
   w.idle=false;
-  if(id==='__create'){ w.k='creation'; w.v=String(NA.method||''); w.lbl='Creating an account'; return w; }
-  if(id==='__hc'){ w.k='warmup'; w.lbl='Health check'; return w; }   // Oct 22: the daily check runs its own timer (Reddit Warmup, main model)
-  if(id==='__pc'){ w.k='posting'; w.lbl='Post check'; return w; }   // Oct 27: the end-of-shift post check files under Reddit Posting (main model)
+  if(id==='__create'){ w.k='creation'; w.m=String(o[best].m||'')||crModel()||w.m; w.v=String(NA.method||''); w.lbl='Creating an account'; tcLastSet(w.m); return w; }
+  if(id==='__hc'){ w.k='warmup'; w.lbl='Health check'; try{ w.m=tcTally(ccMine())||w.m; }catch(_c){} return w; }   // Oct 31: the model most of today's check list belongs to
+  if(id==='__pc'){ w.k='posting'; w.lbl='Post check'; try{ w.m=tcTally(pcMine().map(function(x){ return x.r; }))||w.m; }catch(_p){} return w; }   // Oct 31: the model of the posts being checked
   var r=null; try{ r=rowById(id); }catch(e){}
   if(!r){ w.lbl='Task'; return w; }
-  w.p=r.project||PROJECT; w.m=String(r.model||'').trim()||w.m; w.v=methodOf(r);
+  w.p=r.project||PROJECT; w.m=String(r.model||'').trim()||w.m; w.v=methodOf(r); tcLastSet(w.m);
   if(/^s\d/.test(key)){ var ph=phase(r.status), t=(r.status==='recovery')?'Reddit Warmup':(ph&&ph.task); w.k=(t==='Reddit Posting')?'posting':'warmup'; w.lbl='Session '+key.slice(1)+' · '+(r.handle||''); }
   else if(key==='dm'){ w.k='posting'; w.lbl='DMs · '+(r.handle||''); }
   else { w.k='warmup'; w.lbl='Task · '+(r.handle||''); }
@@ -3026,7 +3061,7 @@ async function sesStart(id, n){
 function tmCancel(id, k){ var o=tmAll(); delete o[id+'|'+k]; tmPut(o); renderView(); toast('Timer cancelled — nothing was recorded.'); }
 /* creation: ▶ Start creating (hero) → Log new account → counted */
 function crGet(){ return tmGet('__create','c'); }
-async function crStart(){ if(!(await fixGate())) return; if(!(await linkGate('A creation'))) return; tmStart('__create','c'); renderView(); toast('Timer started — create the account on the iPhone, then press Log new account.'); }
+async function crStart(){ if(!(await fixGate())) return; if(!(await linkGate('A creation'))) return; var _cm=crModel(); tmStart('__create','c'); try{ var _o=tmAll(); if(_o['__create|c'] && _cm){ _o['__create|c'].m=_cm; tmPut(_o); } }catch(_x){} renderView(); toast('Timer started for '+(_cm||'this account')+' — create the account on the iPhone, then press Log new account.'); }
 function crCancel(){ var o=tmAll(); delete o['__create|c']; tmPut(o); renderView(); }
 function crTake(){ var o=tmAll(), x=o['__create|c']; if(!x) return null; delete o['__create|c']; tmPut(o); return x.t; }
 /* VA's own day line in RcDaily (backend rc-2026-10-05b+) — fire-and-forget, only when a number changes */
@@ -4329,6 +4364,7 @@ async function naSave(){
   try{
     var d=await api({ action:'pa_add', project:PROJECT, handle:u, status:st, method:NA.method, model:model, device:dev, niche:niche, meta:JSON.stringify(meta), employee_id:USER.id, by:USER.id });
     if(d && d.ok){
+      if(!NA.seed && model){ var _was=cgo?String((crGet()||{}).m||''):''; try{ localStorage.setItem(crmKey(), model); }catch(_s){} tcLastSet(model); if(_was && _was!==model) setTimeout(function(){ toast('Logged as '+model+'. Your next creation will go to '+model+' — pick the model next to Start creating before you start.'); }, 1800); }
       if(cgo){ crTake(); if(full) tmLog({ id:d.id||'', handle:u, project:PROJECT, method:NA.method, device:dev, status:'new' },'creation',{ secs:Math.round((Date.now()-cgo)/1000), start:cgo, parallel:0 }); }
       if(full) await bump('Reddit Account Creation',1);
       closeModal();
