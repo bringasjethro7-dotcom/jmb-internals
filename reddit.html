@@ -790,6 +790,7 @@ function sxUnits(r, wk, ow){
   if(r.status==='sxwarm'){   // Oct 29 (Jeth): the warm-up day has TWO sessions — Warm-up 1 and Warm-up 2
     if(s1||s2) return { tot:2, done:s1+s2, k:'warm', late:sxDay(r)>=3, over:sxDay(r)>=4 };
     if(sxWarmAt(r)) return { tot:0, done:0, k:'warmed' };   // warmed on an earlier day (one session under the Oct 27 rule counts) — never reset
+    if(sxDay(r)===1) return { tot:0, done:0, k:'day1' };   // Oct 31: created today — the warm-up is due from day 2, not before
     return { tot:2, done:0, k:'warm', late:sxDay(r)>=3, over:sxDay(r)>=4 };
   }
   if(r.status==='sxpost'){
@@ -807,6 +808,7 @@ function sxToday(rows){
     if(u.k==='warm'){ o.warm++; if(u.done>=u.tot) o.warmDone++; else if(!u.done){ if(u.late) o.late++; if(u.over) o.over++; } }
     else if(u.k==='warmed'){ o.warmed++; if(sxDay(r)>=3) o.ready++; }
     else if(u.k==='noassign') o.noassign++;
+    else if(u.k==='day1') return;
     else o.post++;
     if(u.k==='warm' && u.done && sxDay(r)>=3) o.ready++;
   });
@@ -1329,7 +1331,12 @@ function start(){
   try{ want=window.__RC_VIEW || (new URLSearchParams(location.search)).get("tab") || sessionStorage.getItem("rc_view"); }catch(e){}
   if(want==='coverage'){ SETSUB='coverage'; want='settings'; }
   VIEW=(want && tabsFor().some(function(t){ return t[0]===want; }))?want:'today';
-  try{ api({ action:'rc_build' }).then(function(d){ BE_BUILD=(d&&d.build)||''; }).catch(function(){}); }catch(_bb){}
+  try{ api({ action:'rc_build' }).then(function(d){ BE_BUILD=(d&&d.build)||'';
+    /* Oct 31: once the backend with the Suicidal Op session fix (31a) is live, the owner's page asks it once to recount
+       the days since Oct 25 (it runs inside the day close catch-up, then republishes the scorecard). */
+    try{ if(isAdmin() && BE_BUILD>='rc-2026-10-31a' && !localStorage.getItem('rc_sxrc_31a')){ localStorage.setItem('rc_sxrc_31a','1');
+      api({ action:'rc_day_close', by:USER.id, catchup:'1' }).then(function(r){ if(r&&r.ok){ toast('Suicidal Op sessions recounted since Oct 25 — scorecard updated.'); if(VIEW==='prod'){ PQ.st=null; PQ.sc=null; PQ.key=''; renderView(); } } else { try{ localStorage.removeItem('rc_sxrc_31a'); }catch(_r){} } }).catch(function(){ try{ localStorage.removeItem('rc_sxrc_31a'); }catch(_r){} }); } }catch(_sx){}
+  }).catch(function(){}); }catch(_bb){}
   if(isAdmin()){ DB.va='all'; TD.va='all'; }
   if(!isAdmin()){ QZ.pending=!qzOptimistic(); quizCheck(); }   // SOP quiz gate — the tool opens when the current quiz is passed
   paintTop(); paintCached();
