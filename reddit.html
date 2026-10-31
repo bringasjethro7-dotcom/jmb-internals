@@ -785,13 +785,19 @@ function sxPosted(r){ return r.status==='sxpost' || ((r.meta||{}).prev==='sxpost
    • Posting = 2 sessions a day, but only once the client's posting assignment is recorded. With no assignment the SOP
      says "ask the admin before you post", so it is not the VA's target yet (sessions already done still count). */
 function sxWarmAt(r){ var m=M(r); if(m.sxw) return String(m.sxw); if(r.status==='sxwarm' && m.s1 && String(m.s1).slice(0,10)>=String(m.pstart||'')) return String(m.s1); return ''; }
+/* Oct 31: is today this account's warm-up window? Day 2–3 of the account (created = day 1). With no creation date,
+   the 2 days from when it entered the warm-up stage. */
+function sxWarmWindow(r){ var d=sxDay(r); if(d>0) return d>=2 && d<=3;
+  var ps=String(M(r).pstart||'').slice(0,10); if(!/^\d{4}-\d{2}-\d{2}$/.test(ps)) return false;
+  var n=Math.round((Date.parse(today()+'T00:00:00Z')-Date.parse(ps+'T00:00:00Z'))/86400000); return n>=0 && n<=1; }
 function sxUnits(r, wk, ow){
   var m=M(r), s1=markOkAny(m.s1,wk,ow)?1:0, s2=markOkAny(m.s2,wk,ow)?1:0;
   if(r.status==='sxwarm'){   // Oct 29 (Jeth): the warm-up day has TWO sessions — Warm-up 1 and Warm-up 2
     if(s1||s2) return { tot:2, done:s1+s2, k:'warm', late:sxDay(r)>=3, over:sxDay(r)>=4 };
     if(sxWarmAt(r)) return { tot:0, done:0, k:'warmed' };   // warmed on an earlier day (one session under the Oct 27 rule counts) — never reset
     if(sxDay(r)===1) return { tot:0, done:0, k:'day1' };   // Oct 31: created today — the warm-up is due from day 2, not before
-    return { tot:2, done:0, k:'warm', late:sxDay(r)>=3, over:sxDay(r)>=4 };
+    if(!sxWarmWindow(r)) return { tot:0, done:0, k:'overdue', late:true, over:true };   // Oct 31 (Jeth): only the warm-up DAY counts (day 2–3). A waiting queue / past-day-3 account is flagged, never piled onto the target
+    return { tot:2, done:0, k:'warm', late:sxDay(r)>=3, over:false };
   }
   if(r.status==='sxpost'){
     if(!sxAssign(r)) return { tot:s1+s2, done:s1+s2, k:'noassign' };
@@ -805,7 +811,8 @@ function sxToday(rows){
   rows.forEach(function(r){ if(!isSX(r) || isParked(r) || isDead(r) || isHeld(r)) return;
     if(r.status==='new'){ o.newToday++; return; }
     var u=sxUnits(r, worksFor(r), owner(r)); if(!u) return;
-    if(u.k==='warm'){ o.warm++; if(u.done>=u.tot) o.warmDone++; else if(!u.done){ if(u.late) o.late++; if(u.over) o.over++; } }
+    if(u.k==='warm'){ o.warm++; if(u.done>=u.tot) o.warmDone++; else if(!u.done){ if(u.late) o.late++; } }
+    else if(u.k==='overdue'){ o.over++; }
     else if(u.k==='warmed'){ o.warmed++; if(sxDay(r)>=3) o.ready++; }
     else if(u.k==='noassign') o.noassign++;
     else if(u.k==='day1') return;
@@ -1334,8 +1341,8 @@ function start(){
   try{ api({ action:'rc_build' }).then(function(d){ BE_BUILD=(d&&d.build)||'';
     /* Oct 31: once the backend with the Suicidal Op session fix (31a) is live, the owner's page asks it once to recount
        the days since Oct 25 (it runs inside the day close catch-up, then republishes the scorecard). */
-    try{ if(isAdmin() && BE_BUILD>='rc-2026-10-31a' && !localStorage.getItem('rc_sxrc_31a')){ localStorage.setItem('rc_sxrc_31a','1');
-      api({ action:'rc_day_close', by:USER.id, catchup:'1' }).then(function(r){ if(r&&r.ok){ toast('Suicidal Op sessions recounted since Oct 25 — scorecard updated.'); if(VIEW==='prod'){ PQ.st=null; PQ.sc=null; PQ.key=''; renderView(); } } else { try{ localStorage.removeItem('rc_sxrc_31a'); }catch(_r){} } }).catch(function(){ try{ localStorage.removeItem('rc_sxrc_31a'); }catch(_r){} }); } }catch(_sx){}
+    try{ if(isAdmin() && BE_BUILD>='rc-2026-10-31b' && !localStorage.getItem('rc_sxrc_31b')){ localStorage.setItem('rc_sxrc_31b','1');
+      api({ action:'rc_day_close', by:USER.id, catchup:'1' }).then(function(r){ if(r&&r.ok){ toast('Suicidal Op sessions recounted since Oct 25 — scorecard updated.'); if(VIEW==='prod'){ PQ.st=null; PQ.sc=null; PQ.key=''; renderView(); } } else { try{ localStorage.removeItem('rc_sxrc_31b'); }catch(_r){} } }).catch(function(){ try{ localStorage.removeItem('rc_sxrc_31b'); }catch(_r){} }); } }catch(_sx){}
   }).catch(function(){}); }catch(_bb){}
   if(isAdmin()){ DB.va='all'; TD.va='all'; }
   if(!isAdmin()){ QZ.pending=!qzOptimistic(); quizCheck(); }   // SOP quiz gate — the tool opens when the current quiz is passed
@@ -1721,7 +1728,7 @@ var TD={ grp:'all', stg:'all', q:'', va:'mine', m:'all', by:'stage' };   // stg/
    is logged and counts when its setup is finished. Banned / temp-banned mid-shift keep the
    sessions they earned. Accounts on a client-approved hold today count for nobody. */
 function progOf(rows, worker){
-  var done=0, tot=0;
+  var done=0, tot=0, parts={ ladder:0, sxw:0, sxp:0, cr:0 };   // Oct 31: what the target is made of (shown on the Sessions card)
   rows.forEach(function(r){
     if(isHeld(r)) return;
     var m=M(r), ow=owner(r), wk=worker||worksFor(r);
@@ -1732,20 +1739,20 @@ function progOf(rows, worker){
     var crBy=String(r.created_by||'').toLowerCase(), cr=null;                  // a creation is its creator's, even after a transfer (Oct 9)
     if(!worker) cr=creationOf(r, crBy||wk, crBy||ow);
     else if(!crBy || crBy===wk) cr=creationOf(r, wk, ow);
-    if(cr){ tot+=1; if(cr.done) done+=1; }
+    if(cr){ tot+=1; parts.cr+=1; if(cr.done) done+=1; }
     var sxu=(r.status==='sxwarm'||r.status==='sxpost')?sxUnits(r, wk, ow):null;   // Oct 27: the Suicidal Operation's own SOP
-    if(sxu){ tot+=sxu.tot; done+=sxu.done; return; }
-    if(isWorkable(r)){ tot+=2; if(markOkAny(m.s1,wk,ow)) done++; if(markOkAny(m.s2,wk,ow)) done++; return; }
+    if(sxu){ tot+=sxu.tot; done+=sxu.done; parts[r.status==='sxwarm'?'sxw':'sxp']+=sxu.tot; return; }
+    if(isWorkable(r)){ tot+=2; parts.ladder+=2; if(markOkAny(m.s1,wk,ow)) done++; if(markOkAny(m.s2,wk,ow)) done++; return; }
     if(r.status==='new') return;
     if(r.status==='banned'||r.status==='tempban'){
       var e=(markOkAny(m.s1,wk,ow)?1:0)+(markOkAny(m.s2,wk,ow)?1:0); done+=e; tot+=e;
     }
   });  if(worker){   // Oct 9: today's creations that were handed over still count for the VA who made them
     var have={}, pjs={}; rows.forEach(function(r){ have[r.id]=1; pjs[r.project]=1; }); pjs[PROJECT]=1;
-    allRows().forEach(function(r){ if(have[r.id] || !pjs[r.project] || isHeld(r) || String(r.created_by||'').toLowerCase()!==worker) return; var cr=creationOf(r, worker, worker); if(cr){ tot+=1; if(cr.done) done+=1; } });
+    allRows().forEach(function(r){ if(have[r.id] || !pjs[r.project] || isHeld(r) || String(r.created_by||'').toLowerCase()!==worker) return; var cr=creationOf(r, worker, worker); if(cr){ tot+=1; parts.cr+=1; if(cr.done) done+=1; } });
   }
 
-  return {done:done, tot:tot, pct:tot?Math.round(done/tot*100):0};
+  return {done:done, tot:tot, pct:tot?Math.round(done/tot*100):0, parts:parts};
 }
 var _snapK='';
 function maybeSnap(p){
@@ -1755,6 +1762,9 @@ function maybeSnap(p){
     fetch(API+'?'+qs({action:'po_snap', employee_id:USER.id, project:PROJECT, task:'📋 Board Completion', done:p.done, total:p.tot, date:today()})+'&_='+Date.now()).catch(function(){});
   }catch(e){}
 }
+function progParts(p){ var P=p.parts||{}, L=[];
+  if(P.ladder) L.push('Ladder '+P.ladder); if(P.sxw) L.push('Suicidal warm-up '+P.sxw); if(P.sxp) L.push('Suicidal posting '+P.sxp); if(P.cr) L.push('New accounts '+P.cr);
+  return L.length?L.join(' · '):'2 per account'; }
 function needsAttention(r){
   var m=M(r);
   if(r.status==='recovery'||r.status==='tempban') return true;
@@ -1815,9 +1825,9 @@ function vToday(){
     var _sxRows=admin?(ALL[PROJECT]||ROWS).filter(function(r){ return !isParked(r); }):mineWork, _sx=sxToday(_sxRows);
     var _sxNoA=_sxRows.filter(function(r){ return isSX(r) && !isDead(r) && !isParked(r) && !sxAssign(r) && (r.status==='sxpost' || (r.status==='sxwarm' && sxDay(r)>=3)); }).length;
     var _wLeft=_sx.warm-_sx.warmDone;
-    if(_wLeft) h+='<div class="banner '+(_sx.over?'bad':'warn')+'" style="border-color:'+SX_C+'55">'+IC.hour+'<div style="flex:1"><b>Suicidal Op warm-ups:</b> '+_wLeft+' left today'+(_sx.warmDone?' ('+_sx.warmDone+' done)':'')+' — two 8–12 min sessions per account (Warm-up 1, then Warm-up 2 later the same day), then it owes nothing until it posts.'+
-      (_sx.late-_sx.over>0?' <b>'+(_sx.late-_sx.over)+'</b> '+((_sx.late-_sx.over)===1?'is':'are')+' on <b>day 3 — the SOP\'s last day</b> for the warm-up.':'')+
-      (_sx.over?' <b style="color:#b91c1c">'+_sx.over+' '+(_sx.over===1?'is':'are')+' past day 3 and never warmed.</b>':'')+'</div></div>';
+    if(_wLeft || _sx.over) h+='<div class="banner '+(_sx.over?'bad':'warn')+'" style="border-color:'+SX_C+'55">'+IC.hour+'<div style="flex:1"><b>Suicidal Op warm-ups:</b> '+(_wLeft?_wLeft+' left today'+(_sx.warmDone?' ('+_sx.warmDone+' done)':'')+' — two 8–12 min sessions per account (Warm-up 1, then Warm-up 2 later the same day), then it owes nothing until it posts.':'none due today.')+
+      (_sx.late>0?' <b>'+_sx.late+'</b> '+(_sx.late===1?'is':'are')+' on <b>day 3 — the SOP\'s last day</b> for the warm-up.':'')+
+      (_sx.over?' <b style="color:#b91c1c">'+_sx.over+' '+(_sx.over===1?'is':'are')+' past day 3 and never warmed</b> — not in the daily target, but warm '+(_sx.over===1?'it':'them')+' as soon as you can (a warm-up done today still counts).':'')+'</div></div>';
     if(_sxNoA) h+='<div class="banner info" style="border-color:'+SX_C+'55">'+IC.tag+'<div style="flex:1"><b>'+_sxNoA+' Suicidal Op account'+(_sxNoA===1?' is':'s are')+' on day 3+ with no posting assignment.</b> '+(admin?'The VA can\'t post '+(_sxNoA===1?'it':'them')+' until you record what the client assigned. They are kept out of the daily target until then.':'Ask the admin for the assignment before posting — until it is set, '+(_sxNoA===1?'it is':'they are')+' not in your target.')+'</div>'+
       (admin?'<button class="btn sm dark" onclick="DB.sop=\'sx\';go(\'accounts\')">Set assignments</button>':'')+'</div>';
   }catch(_sxb){}
@@ -1846,7 +1856,7 @@ function vToday(){
   var att=scopeRows.filter(needsAttention).length;
   var bannedWk=scopeRows.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<7; }).length;
   h+='<div class="kpis">'+
-    '<div class="card kpi"><div class="ringw"><div class="ring" style="--v:'+p.pct+'" data-t="'+p.pct+'%"></div><div><div class="k-l">'+(admin&&TD.va==='all'?'Team sessions':'Sessions today')+'</div><div class="k-v">'+p.done+'<span style="font-size:15px;color:var(--ink3)"> / '+p.tot+'</span></div><div class="k-s">2 per account · Suicidal Op: 1 warm-up, then 2 once assigned · resets at your shift start</div></div></div></div>'+
+    '<div class="card kpi"><div class="ringw"><div class="ring" style="--v:'+p.pct+'" data-t="'+p.pct+'%"></div><div><div class="k-l">'+(admin&&TD.va==='all'?'Team sessions':'Sessions today')+'</div><div class="k-v">'+p.done+'<span style="font-size:15px;color:var(--ink3)"> / '+p.tot+'</span></div><div class="k-s">'+progParts(p)+' · resets at your shift start</div></div></div></div>'+
     kpi('Created this shift', createdToday, 'setup finished & counted', '#ff6b1a')+
     kpi('Active accounts', active, 'in play — banned, on hold and archived are left out', '#a855f7')+
     kpi('Needs attention', att, 'recovery · temp ban · unfinished · stuck karma', att?'#ef4444':'#10b981')+
@@ -3026,7 +3036,7 @@ function creationOf(r, wk, ow){
 function progWhy(va){
   var rows=allRows().filter(function(r){ return worksFor(r)===va; }), p=progOf(rows.filter(function(r){ return r.project===PROJECT; }), va), w=shiftWindow(va);
   var work=rows.filter(function(r){ return r.project===PROJECT && !isHeld(r) && isWorkable(r) && !(r.status==='sxwarm'||r.status==='sxpost'); });   // the Suicidal Operation is counted by its own SOP (Oct 27)
-  var sxw=rows.filter(function(r){ return r.project===PROJECT && !isHeld(r) && (r.status==='sxwarm'||r.status==='sxpost'); }), sxT=0, sxD=0, sxN={ warm:0, warmed:0, noassign:0, post:0 };
+  var sxw=rows.filter(function(r){ return r.project===PROJECT && !isHeld(r) && (r.status==='sxwarm'||r.status==='sxpost'); }), sxT=0, sxD=0, sxN={ warm:0, warmed:0, noassign:0, post:0, overdue:0, day1:0 };
   sxw.forEach(function(r){ var u=sxUnits(r, va, owner(r)); if(!u) return; sxT+=u.tot; sxD+=u.done; sxN[u.k]=(sxN[u.k]||0)+1; });
   var cre=[], miss=[], since=Date.now()-36*3600000;
   allRows().forEach(function(r){
@@ -3053,7 +3063,7 @@ function progWhy(va){
       (sxw.length?'<div class="card pad" style="margin-bottom:10px;border-color:'+SX_C+'40"><b style="color:'+SX_C+'">Suicidal Operation</b> — <b>'+sxD+'/'+sxT+'</b> by its own SOP: '+
         (sxN.warm?sxN.warm+' warm-up'+(sxN.warm===1?'':'s')+' due (2 sessions each, on the warm-up day)':'no warm-ups due')+
         (sxN.post?' · '+sxN.post+' posting × 2':'')+'.'+
-        '<div class="muted" style="font-size:12px">Not due: '+(sxN.warmed||0)+' already warmed (waiting for day 3 / posting)'+(sxN.noassign?' · '+sxN.noassign+' posting with no assignment yet':'')+'.</div></div>':'')+
+        '<div class="muted" style="font-size:12px">Not due: '+(sxN.warmed||0)+' already warmed (waiting for day 3 / posting)'+(sxN.noassign?' · '+sxN.noassign+' posting with no assignment yet':'')+(sxN.day1?' · '+sxN.day1+' created today (warm-up is day 2)':'')+(sxN.overdue?' · <b style="color:#b91c1c">'+sxN.overdue+' past day 3 and never warmed</b> (flagged, not in the target)':'')+'.</div></div>':'')+
       '<div class="card pad" style="margin-bottom:10px"><b>Creations counted this shift — '+cre.length+'</b> ('+cre.filter(function(x){ return x.c.done; }).length+' finished)'+
         (cre.length?'<div style="margin-top:6px">'+cre.map(function(x){ return '<span class="chip" style="margin:2px">'+esc(x.r.handle)+(x.c.done?' ✓':' · setup open')+(x.c.how==='time'?' · by time':'')+'</span>'; }).join('')+'</div>':'')+'</div>'+
       (miss.length?'<div class="card pad" style="border-color:#fed7aa"><b style="color:#9a3412">Logged in the last 36 h but NOT counted — '+miss.length+'</b>'+
@@ -6711,22 +6721,22 @@ function vSettingsLists(){
     '<div class="note g" style="margin-bottom:10px">Day 1 the account is created · day 2 (or day 3 at the latest) warm-up · from day 3 it posts, the way the client assigns it. VAs pick it when they log a new account; the owner can move an existing account onto it from its ⋯ menu.</div>'+
     '<div class="lbl" style="margin-bottom:6px">Posting assignments the client can give</div><div class="chips">'+
     SET.sx_assign.map(function(x,i){ return '<span class="chip" style="background:'+SX_C+'12;color:'+SX_C+'">'+esc(x)+(SET.sx_assign.length>1?' <a href="#" onclick="SET.sx_assign.splice('+i+',1);renderView();return false" style="color:inherit;text-decoration:none;opacity:.6">×</a>':'')+'</span>'; }).join('')+
-    '<input class="inp" style="width:170px;padding:4px 9px;font-size:12px" placeholder="+ add assignment" onkeydown="if(event.key===\'Enter\'&&this.value.trim()){SET.sx_assign.push(this.value.trim().slice(0,60));renderView();}"></div>'+
+    '<input class="inp" data-add="sx_assign" style="width:170px;padding:4px 9px;font-size:12px" placeholder="+ add assignment" onkeydown="if(event.key===\'Enter\'&&this.value.trim()){SET.sx_assign.push(this.value.trim().slice(0,60));renderView();}"></div>'+
     '<div class="hint muted" style="font-size:11px;margin-top:6px">Set an account\'s assignment from its ⋯ menu → Posting assignment, or for many at once in Accounts → SOP: Suicidal Operation.</div></div>';
   h+='<div class="card pad s6"><div class="ch-h"><b>Models per base</b><span>who each account is for</span></div>'+BASES.map(function(b){
     var list=SET.models[b.id]||[];
     return '<div style="margin-bottom:12px"><div class="lbl" style="color:'+b.c+';margin-bottom:6px">'+esc(b.n)+'</div><div class="chips">'+
-      list.map(function(m,i){ return '<span class="chip">'+esc(m)+' <a href="#" onclick="SET.models[\''+jsq(b.id)+'\'].splice('+i+',1);renderView();return false" style="color:var(--ink3);text-decoration:none">×</a></span>'; }).join('')+
-      '<input class="inp" style="width:140px;padding:4px 9px;font-size:12px" placeholder="+ add model" onkeydown="if(event.key===\'Enter\'&&this.value.trim()){(SET.models[\''+jsq(b.id)+'\']=SET.models[\''+jsq(b.id)+'\']||[]).push(this.value.trim());renderView();}"></div></div>';
+      list.map(function(m,i){ return '<span class="chip">'+esc(m)+' <a href="#" onclick="modelDel(\''+jsq(b.id)+'\','+i+');return false" style="color:var(--ink3);text-decoration:none">×</a></span>'; }).join('')+
+      '<input class="inp" data-add="models|'+esc(b.id)+'" style="width:140px;padding:4px 9px;font-size:12px" placeholder="+ add model (Enter)" onkeydown="if(event.key===\'Enter\'&&this.value.trim()){var v=this.value;this.value=\'\';modelAdd(\''+jsq(b.id)+'\',v);}" onblur="if(this.value.trim()){var v=this.value;this.value=\'\';modelAdd(\''+jsq(b.id)+'\',v);}"></div></div>';
   }).join('')+'<div class="hint muted" style="font-size:11px">Only these show when an account is logged or edited — per base. A base with no models yet falls back to the models its accounts already use.</div></div>';
   if(!SET.methods || !SET.methods.length) SET.methods=['Vysor','Jailbroken','Blaze+'];
   h+='<div class="card pad s6"><div class="ch-h"><b>Methods</b><span>how an account is run — every account is tagged with one</span></div><div class="chips">'+
     SET.methods.map(function(m,i){ return '<span class="chip" style="background:'+methodColor(m)+'16;color:'+methodColor(m)+'">'+esc(m)+(SET.methods.length>1?' <a href="#" onclick="SET.methods.splice('+i+',1);renderView();return false" style="color:inherit;text-decoration:none;opacity:.6">×</a>':'')+'</span>'; }).join('')+
-    '<input class="inp" style="width:150px;padding:4px 9px;font-size:12px" placeholder="+ add method" onkeydown="if(event.key===\'Enter\'&&this.value.trim()){SET.methods.push(this.value.trim());renderView();}"></div>'+
+    '<input class="inp" data-add="methods" style="width:150px;padding:4px 9px;font-size:12px" placeholder="+ add method" onkeydown="if(event.key===\'Enter\'&&this.value.trim()){SET.methods.push(this.value.trim());renderView();}"></div>'+
     '<div class="hint muted" style="font-size:11px;margin-top:6px">Renaming a method here does not retag existing accounts.</div></div>';
   h+='<div class="card pad s6"><div class="ch-h"><b>Persona niches</b><span>suggestions in the log form</span></div><div class="chips">'+
     (SET.niches||[]).map(function(m,i){ return '<span class="chip">'+esc(m)+' <a href="#" onclick="SET.niches.splice('+i+',1);renderView();return false" style="color:var(--ink3);text-decoration:none">×</a></span>'; }).join('')+
-    '<input class="inp" style="width:150px;padding:4px 9px;font-size:12px" placeholder="+ add niche" onkeydown="if(event.key===\'Enter\'&&this.value.trim()){SET.niches.push(this.value.trim());renderView();}"></div></div>';
+    '<input class="inp" data-add="niches" style="width:150px;padding:4px 9px;font-size:12px" placeholder="+ add niche" onkeydown="if(event.key===\'Enter\'&&this.value.trim()){SET.niches.push(this.value.trim());renderView();}"></div></div>';
   h+='<div class="card pad s6"><div class="ch-h"><b>iPhone process start</b><span>splits "before" vs "iPhone process" in Insights</span></div>'+
     '<input class="inp" type="date" value="'+esc(SET.process_start||SOP_START)+'" onchange="SET.process_start=this.value"></div>';
   if(!Array.isArray(SET.sop_changes)) SET.sop_changes=sopList();
@@ -6828,8 +6838,36 @@ async function cfgWrite(apply){
   if(d && d.ok && d.cfg){ CFG=d.cfg; if(!CFG.models) CFG.models={}; if(!CFG.phones) CFG.phones=[]; if(!CFG.niches) CFG.niches=[]; if(!CFG.methods||!CFG.methods.length) CFG.methods=['Vysor','Jailbroken','Blaze+']; CFG_READY=true; }
   return d||{ ok:false };
 }
+/* Oct 31 (Jeth: "added a new model, refreshed, it disappeared"): a model typed in Settings is saved the moment it is
+   added (Enter or leaving the box) and the moment it is removed — no separate Save needed, nothing lost on a refresh. */
+var _mdlQ=Promise.resolve();
+function modelSave(base, fn, okMsg){
+  _mdlQ=_mdlQ.then(async function(){
+    if(!CFG_READY){ toast('The current settings have not loaded yet — wait a moment.'); return; }
+    try{ var d=await cfgWrite(function(c){ c.models=(c.models&&typeof c.models==='object')?c.models:{}; c.models[base]=fn((c.models[base]||[]).slice()); });
+      if(d && d.ok){ var saved=((CFG.models||{})[base]||[]).slice();
+        if(SET){ SET.models=SET.models||{}; SET.models[base]=saved.slice(); try{ var sn=JSON.parse(SET_SNAP||'{}')||{}; sn.models=sn.models||{}; sn.models[base]=saved.slice(); SET_SNAP=JSON.stringify(sn); }catch(_s){} }
+        toast(okMsg); }
+      else toast('Could not save the model — '+((d&&d.error)||'connection error')+'. Try again.'); }
+    catch(e){ toast('Could not save the model — connection error.'); }
+    if(VIEW==='settings') renderView();
+  });
+  return _mdlQ;
+}
+function modelAdd(base, v){ v=String(v||'').trim().slice(0,60); if(!v || !SET) return;
+  SET.models=SET.models||{}; var L=SET.models[base]||[];
+  if(L.some(function(x){ return String(x).toLowerCase()===v.toLowerCase(); })){ toast(v+' is already on the list.'); return; }
+  SET.models[base]=L.concat([v]); renderView();
+  modelSave(base, function(cur){ if(!cur.some(function(x){ return String(x).toLowerCase()===v.toLowerCase(); })) cur.push(v); return cur; }, v+' added and saved.'); }
+function modelDel(base, i){ if(!SET) return; var L=(SET.models&&SET.models[base])||[], v=L[i]; if(v===undefined) return;
+  SET.models[base]=L.filter(function(_x,j){ return j!==i; }); renderView();
+  modelSave(base, function(cur){ return cur.filter(function(x){ return String(x).toLowerCase()!==String(v).toLowerCase(); }); }, v+' removed.'); }
 async function setSave(){
   if(!CFG_READY){ toast('The current settings have not loaded yet — wait a moment, then save.'); return; }
+  try{ Array.prototype.forEach.call(document.querySelectorAll('[data-add]'), function(el){ var v=String(el.value||'').trim(); if(!v) return; var k=el.getAttribute('data-add').split('|');   // Oct 31: anything still typed in a "+ add" box goes in too
+    if(k[0]==='models'){ SET.models=SET.models||{}; var L=SET.models[k[1]]||(SET.models[k[1]]=[]); if(!L.some(function(x){ return String(x).toLowerCase()===v.toLowerCase(); })) L.push(v.slice(0,60)); }
+    else if(Array.isArray(SET[k[0]]) && SET[k[0]].indexOf(v)<0) SET[k[0]].push(v.slice(0,60));
+    el.value=''; }); }catch(_pa){}
   var b=$('set-go'); b.disabled=true; b.textContent='Saving…';
   SET.phones=SET.phones.filter(function(p){ return p.label && p.label.trim(); }).map(phNorm);
   try{
