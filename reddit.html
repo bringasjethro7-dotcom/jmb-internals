@@ -790,14 +790,18 @@ function sxWarmAt(r){ var m=M(r); if(m.sxw) return String(m.sxw); if(r.status===
 function sxWarmWindow(r){ var d=sxDay(r); if(d>0) return d>=2 && d<=3;
   var ps=String(M(r).pstart||'').slice(0,10); if(!/^\d{4}-\d{2}-\d{2}$/.test(ps)) return false;
   var n=Math.round((Date.parse(today()+'T00:00:00Z')-Date.parse(ps+'T00:00:00Z'))/86400000); return n>=0 && n<=1; }
+/* Oct 31 (Jeth): "instead of the tool deciding an account is overdue, the VA decides if it is in today's target" — the
+   Suicidal SOP follows the client's instructions day by day, so the VA can put an account on STANDBY (client's advice):
+   it is out of the daily target until they put it back. Sessions done on it anyway still count. */
+function sxStandby(r){ return String((M(r)||{}).sxsb||''); }
 function sxUnits(r, wk, ow){
   var m=M(r), s1=markOkAny(m.s1,wk,ow)?1:0, s2=markOkAny(m.s2,wk,ow)?1:0;
+  if((r.status==='sxwarm'||r.status==='sxpost') && sxStandby(r)) return { tot:s1+s2, done:s1+s2, k:'standby' };
   if(r.status==='sxwarm'){   // Oct 29 (Jeth): the warm-up day has TWO sessions — Warm-up 1 and Warm-up 2
     if(s1||s2) return { tot:2, done:s1+s2, k:'warm', late:sxDay(r)>=3, over:sxDay(r)>=4 };
     if(sxWarmAt(r)) return { tot:0, done:0, k:'warmed' };   // warmed on an earlier day (one session under the Oct 27 rule counts) — never reset
     if(sxDay(r)===1) return { tot:0, done:0, k:'day1' };   // Oct 31: created today — the warm-up is due from day 2, not before
-    if(!sxWarmWindow(r)) return { tot:0, done:0, k:'overdue', late:true, over:true };   // Oct 31 (Jeth): only the warm-up DAY counts (day 2–3). A waiting queue / past-day-3 account is flagged, never piled onto the target
-    return { tot:2, done:0, k:'warm', late:sxDay(r)>=3, over:false };
+    return { tot:2, done:0, k:'warm', late:sxDay(r)>=3, over:sxDay(r)>=4 };   // Oct 31: no automatic "overdue" — the VA puts it on Standby when the client says so
   }
   if(r.status==='sxpost'){
     if(!sxAssign(r)) return { tot:s1+s2, done:s1+s2, k:'noassign' };
@@ -811,8 +815,8 @@ function sxToday(rows){
   rows.forEach(function(r){ if(!isSX(r) || isParked(r) || isDead(r) || isHeld(r)) return;
     if(r.status==='new'){ o.newToday++; return; }
     var u=sxUnits(r, worksFor(r), owner(r)); if(!u) return;
-    if(u.k==='warm'){ o.warm++; if(u.done>=u.tot) o.warmDone++; else if(!u.done){ if(u.late) o.late++; } }
-    else if(u.k==='overdue'){ o.over++; }
+    if(u.k==='standby'){ o.standby=(o.standby||0)+1; return; }
+    if(u.k==='warm'){ o.warm++; if(u.done>=u.tot) o.warmDone++; else if(!u.done){ if(u.late) o.late++; if(u.over) o.over++; } }
     else if(u.k==='warmed'){ o.warmed++; if(sxDay(r)>=3) o.ready++; }
     else if(u.k==='noassign') o.noassign++;
     else if(u.k==='day1') return;
@@ -1341,8 +1345,8 @@ function start(){
   try{ api({ action:'rc_build' }).then(function(d){ BE_BUILD=(d&&d.build)||'';
     /* Oct 31: once the backend with the Suicidal Op session fix (31a) is live, the owner's page asks it once to recount
        the days since Oct 25 (it runs inside the day close catch-up, then republishes the scorecard). */
-    try{ if(isAdmin() && BE_BUILD>='rc-2026-10-31b' && !localStorage.getItem('rc_sxrc_31b')){ localStorage.setItem('rc_sxrc_31b','1');
-      api({ action:'rc_day_close', by:USER.id, catchup:'1' }).then(function(r){ if(r&&r.ok){ toast('Suicidal Op sessions recounted since Oct 25 — scorecard updated.'); if(VIEW==='prod'){ PQ.st=null; PQ.sc=null; PQ.key=''; renderView(); } } else { try{ localStorage.removeItem('rc_sxrc_31b'); }catch(_r){} } }).catch(function(){ try{ localStorage.removeItem('rc_sxrc_31b'); }catch(_r){} }); } }catch(_sx){}
+    try{ if(isAdmin() && BE_BUILD>='rc-2026-10-31e' && !localStorage.getItem('rc_sxrc_31e')){ localStorage.setItem('rc_sxrc_31e','1');
+      api({ action:'rc_day_close', by:USER.id, catchup:'1' }).then(function(r){ if(r&&r.ok){ toast('Suicidal Op sessions recounted since Oct 25 — scorecard updated.'); if(VIEW==='prod'){ PQ.st=null; PQ.sc=null; PQ.key=''; renderView(); } } else { try{ localStorage.removeItem('rc_sxrc_31e'); }catch(_r){} } }).catch(function(){ try{ localStorage.removeItem('rc_sxrc_31e'); }catch(_r){} }); } }catch(_sx){}
   }).catch(function(){}); }catch(_bb){}
   if(isAdmin()){ DB.va='all'; TD.va='all'; }
   if(!isAdmin()){ QZ.pending=!qzOptimistic(); quizCheck(); }   // SOP quiz gate — the tool opens when the current quiz is passed
@@ -1743,7 +1747,7 @@ function progOf(rows, worker){
     else if(!crBy || crBy===wk) cr=creationOf(r, wk, ow);
     if(cr){ tot+=1; parts.cr+=1; if(cr.done) done+=1; }
     var sxu=(r.status==='sxwarm'||r.status==='sxpost')?sxUnits(r, wk, ow):null;   // Oct 27: the Suicidal Operation's own SOP
-    if(sxu){ tot+=sxu.tot; done+=sxu.done; parts[r.status==='sxwarm'?'sxw':'sxp']+=sxu.tot; return; }
+    if(sxu){ tot+=sxu.tot; done+=sxu.done; if(sxu.k==='standby') parts.sxsb=(parts.sxsb||0)+1; else parts[r.status==='sxwarm'?'sxw':'sxp']+=sxu.tot; return; }
     if(isWorkable(r)){ tot+=2; parts.ladder+=2; if(markOkAny(m.s1,wk,ow)) done++; if(markOkAny(m.s2,wk,ow)) done++; return; }
     if(r.status==='new') return;
     if(r.status==='banned'||r.status==='tempban'){
@@ -1766,6 +1770,7 @@ function maybeSnap(p){
 }
 function progParts(p){ var P=p.parts||{}, L=[];
   if(P.ladder) L.push('Ladder '+P.ladder); if(P.sxw) L.push('Suicidal warm-up '+P.sxw); if(P.sxp) L.push('Suicidal posting '+P.sxp); if(P.cr) L.push('New accounts '+P.cr);
+  if(P.sxsb) L.push(P.sxsb+' on standby (not counted)');
   return L.length?L.join(' · '):'2 per account'; }
 function needsAttention(r){
   var m=M(r);
@@ -1827,9 +1832,11 @@ function vToday(){
     var _sxRows=admin?(ALL[PROJECT]||ROWS).filter(function(r){ return !isParked(r); }):mineWork, _sx=sxToday(_sxRows);
     var _sxNoA=_sxRows.filter(function(r){ return isSX(r) && !isDead(r) && !isParked(r) && !sxAssign(r) && (r.status==='sxpost' || (r.status==='sxwarm' && sxDay(r)>=3)); }).length;
     var _wLeft=_sx.warm-_sx.warmDone;
-    if(_wLeft || _sx.over) h+='<div class="banner '+(_sx.over?'bad':'warn')+'" style="border-color:'+SX_C+'55">'+IC.hour+'<div style="flex:1"><b>Suicidal Op warm-ups:</b> '+(_wLeft?_wLeft+' left today'+(_sx.warmDone?' ('+_sx.warmDone+' done)':'')+' — two 8–12 min sessions per account (Warm-up 1, then Warm-up 2 later the same day), then it owes nothing until it posts.':'none due today.')+
-      (_sx.late>0?' <b>'+_sx.late+'</b> '+(_sx.late===1?'is':'are')+' on <b>day 3 — the SOP\'s last day</b> for the warm-up.':'')+
-      (_sx.over?' <b style="color:#b91c1c">'+_sx.over+' '+(_sx.over===1?'is':'are')+' past day 3 and never warmed</b> — not in the daily target, but warm '+(_sx.over===1?'it':'them')+' as soon as you can (a warm-up done today still counts).':'')+'</div></div>';
+    if(_wLeft) h+='<div class="banner '+(_sx.over?'bad':'warn')+'" style="border-color:'+SX_C+'55">'+IC.hour+'<div style="flex:1"><b>Suicidal Op warm-ups:</b> '+(_wLeft?_wLeft+' left today'+(_sx.warmDone?' ('+_sx.warmDone+' done)':'')+' — two 8–12 min sessions per account (Warm-up 1, then Warm-up 2 later the same day), then it owes nothing until it posts.':'none due today.')+
+      (_sx.late-_sx.over>0?' <b>'+(_sx.late-_sx.over)+'</b> '+((_sx.late-_sx.over)===1?'is':'are')+' on <b>day 3</b>.':'')+
+      (_sx.over?' <b style="color:#b91c1c">'+_sx.over+' '+(_sx.over===1?'is':'are')+' past day 3 and not warmed yet</b>.':'')+
+      ' Not working '+(_wLeft===1?'it':'some of them')+' today on the client\'s advice? Tap <b>Standby</b> on the account — it leaves today\'s target until you put it back.'+
+      (_sx.standby?' <span class="muted">('+_sx.standby+' on standby now.)</span>':'')+'</div></div>';
     if(_sxNoA) h+='<div class="banner info" style="border-color:'+SX_C+'55">'+IC.tag+'<div style="flex:1"><b>'+_sxNoA+' Suicidal Op account'+(_sxNoA===1?' is':'s are')+' on day 3+ with no posting assignment.</b> '+(admin?'The VA can\'t post '+(_sxNoA===1?'it':'them')+' until you record what the client assigned. They are kept out of the daily target until then.':'Ask the admin for the assignment before posting — until it is set, '+(_sxNoA===1?'it is':'they are')+' not in your target.')+'</div>'+
       (admin?'<button class="btn sm dark" onclick="DB.sop=\'sx\';go(\'accounts\')">Set assignments</button>':'')+'</div>';
   }catch(_sxb){}
@@ -2097,7 +2104,7 @@ function stageSelect(r, cls){
 function chipsHtml(r, withVa){
   var c=[];
   c.push(methodOf(r)?methodPill(methodOf(r),true):'<span class="chip" style="background:#fff8eb;color:#92400e;cursor:pointer" onclick="editRec(\''+jsq(r.id)+'\')" title="Tag the method">'+IC.tag+' set method</span>');
-  if(isSX(r)){ c.push(sxBadge(true)); if(sxAssign(r)) c.push('<span class="chip" style="background:'+SX_C+'10;color:'+SX_C+'" title="Posting assignment — from the client">'+IC.tag+' '+esc(sxAssign(r))+'</span>'); }
+  if(isSX(r)){ c.push(sxBadge(true)); if(sxStandby(r)) c.push('<span class="chip" style="background:#f1f5f9;color:#475569" title="Out of the daily target on the client\'s advice">Standby</span>'); if(sxAssign(r)) c.push('<span class="chip" style="background:'+SX_C+'10;color:'+SX_C+'" title="Posting assignment — from the client">'+IC.tag+' '+esc(sxAssign(r))+'</span>'); }
   if(r.model) c.push('<span class="chip" title="Model">'+IC.user+' '+esc(r.model)+'</span>');
   if(r.device) c.push('<span class="chip" title="Created on">'+IC.phone+' '+esc(r.device)+'</span>');
   if(r.niche) c.push('<span class="chip" title="Persona niche">'+IC.tag+' '+esc(r.niche)+'</span>');
@@ -2175,6 +2182,20 @@ function sxActs(r){
   }
   return sesBtn(r,1)+sesBtn(r,2);
 }
+function sxSbWho(sb){ var p=String(sb||'').split('|'); return (p[0]?' since '+esc(fmtD(parseTs(p[0]))||p[0]):'')+(p[1]?' · set by '+esc(vaName(p[1])||p[1]):''); }
+function sxSbBtn(r){ var id=jsq(r.id);
+  if(SXSB[r.id]) return '<button class="ses" disabled><span class="ph-spin"></span> Saving…</button>';
+  return sxStandby(r)
+    ? '<button class="ses up" onclick="sxSbSet(\''+id+'\',false)" title="The client says to continue — back into today\'s target">'+IC.up+' Back to today\'s target</button>'
+    : '<button class="ses" onclick="sxSbSet(\''+id+'\',true)" title="Client\'s advice: don\'t work this account for now — it leaves today\'s target until you put it back">'+IC.pause+' Standby</button>'; }
+var SXSB={};
+async function sxSbSet(id, on){
+  var r=rowById(id); if(!r || SXSB[id]) return;
+  if(on && !(await confirmBox('Put '+r.handle+' on standby?', 'Only on the client\'s advice. It leaves today\'s target (and every day after) until you tap Back to today\'s target.', 'Standby'))) return;
+  SXSB[id]=1; renderView();
+  var ok=false; try{ ok=await saveMeta(r, { sxsb: on ? (today()+'|'+myId()) : null }); }catch(e){}
+  delete SXSB[id]; renderView();
+  toast(ok ? (on ? r.handle+' is on standby — out of today\'s target.' : r.handle+' is back in today\'s target.') : 'Could not save — try again.'); }
 function sxProg(r){
   var st=r.status, sd=sxDay(r), asg=sxAssign(r), u=sxUnits(r, worksFor(r), owner(r))||{}, p=phase(st)||{};
   if(st==='sxwarm'){
@@ -2217,11 +2238,13 @@ function cardHtml(r){
       (!held && pchkPending(r).length?postsStrip(r):'');
   } else if(p && p.sx){   // Suicidal Operation (Oct 25)
     var asg2=sxAssign(r), u2=sxUnits(r, worksFor(r), owner(r))||{};
-    body=(st==='sxwarm'?sxProg(r):'<div class="gate">'+sxProg(r)+'</div>')+   // Oct 27: one warm-up, then posting once warmed + assigned
+    var sb=sxStandby(r);
+    body=(sb?'<div class="note" style="background:#f1f5f9;border-color:#cbd5e1;color:#334155"><b>Standby</b> — out of today\'s target on the client\'s advice'+sxSbWho(sb)+'. Put it back when the client says to continue.</div>':'')+
+      (st==='sxwarm'?sxProg(r):'<div class="gate">'+sxProg(r)+'</div>')+   // Oct 27: one warm-up, then posting once warmed + assigned
       (st==='sxpost' && !asg2?'<div class="note w">No posting assignment yet — the client decides it (e.g. Location posting). Ask the admin before you post. Until it is set, this account is not in your target.</div>':'')+
       (st==='sxwarm' && u2.k==='warmed'?'<div class="note g">Warm-up done — nothing more is due on this account until it posts'+(sxDay(r)>=3?(asg2?'. Move it to Posting.':'. It needs its posting assignment from the admin first.'):' (day 3).')+'</div>':'')+
       '<details class="plan"><summary>'+IC.doc+' Today\'s plan · Suicidal Operation</summary><div>'+esc(p.plan)+'</div></details>'+
-      (held?'':'<div class="acts">'+sxActs(r)+'</div>')+
+      (held?'':'<div class="acts">'+(sb?'':sxActs(r))+sxSbBtn(r)+'</div>')+
       (!held && (isPostingStage(st)||pchkPending(r).length)?postsStrip(r):'');
   } else if(p){
     var ix=phaseIx(st), next=PH[ix+1], din2=daysIn(r), km=karmaOf(r), can=true, gate='';
@@ -3038,7 +3061,7 @@ function creationOf(r, wk, ow){
 function progWhy(va){
   var rows=allRows().filter(function(r){ return worksFor(r)===va; }), p=progOf(rows.filter(function(r){ return r.project===PROJECT; }), va), w=shiftWindow(va);
   var work=rows.filter(function(r){ return r.project===PROJECT && !isHeld(r) && isWorkable(r) && !(r.status==='sxwarm'||r.status==='sxpost'); });   // the Suicidal Operation is counted by its own SOP (Oct 27)
-  var sxw=rows.filter(function(r){ return r.project===PROJECT && !isHeld(r) && (r.status==='sxwarm'||r.status==='sxpost'); }), sxT=0, sxD=0, sxN={ warm:0, warmed:0, noassign:0, post:0, overdue:0, day1:0 };
+  var sxw=rows.filter(function(r){ return r.project===PROJECT && !isHeld(r) && (r.status==='sxwarm'||r.status==='sxpost'); }), sxT=0, sxD=0, sxN={ warm:0, warmed:0, noassign:0, post:0, standby:0, day1:0 };
   sxw.forEach(function(r){ var u=sxUnits(r, va, owner(r)); if(!u) return; sxT+=u.tot; sxD+=u.done; sxN[u.k]=(sxN[u.k]||0)+1; });
   var cre=[], miss=[], since=Date.now()-36*3600000;
   allRows().forEach(function(r){
@@ -3065,7 +3088,7 @@ function progWhy(va){
       (sxw.length?'<div class="card pad" style="margin-bottom:10px;border-color:'+SX_C+'40"><b style="color:'+SX_C+'">Suicidal Operation</b> — <b>'+sxD+'/'+sxT+'</b> by its own SOP: '+
         (sxN.warm?sxN.warm+' warm-up'+(sxN.warm===1?'':'s')+' due (2 sessions each, on the warm-up day)':'no warm-ups due')+
         (sxN.post?' · '+sxN.post+' posting × 2':'')+'.'+
-        '<div class="muted" style="font-size:12px">Not due: '+(sxN.warmed||0)+' already warmed (waiting for day 3 / posting)'+(sxN.noassign?' · '+sxN.noassign+' posting with no assignment yet':'')+(sxN.day1?' · '+sxN.day1+' created today (warm-up is day 2)':'')+(sxN.overdue?' · <b style="color:#b91c1c">'+sxN.overdue+' past day 3 and never warmed</b> (flagged, not in the target)':'')+'.</div></div>':'')+
+        '<div class="muted" style="font-size:12px">Not due: '+(sxN.warmed||0)+' already warmed (waiting for day 3 / posting)'+(sxN.noassign?' · '+sxN.noassign+' posting with no assignment yet':'')+(sxN.day1?' · '+sxN.day1+' created today (warm-up is day 2)':'')+(sxN.standby?' · '+sxN.standby+' on standby (the VA took them out of today\'s target on the client\'s advice)':'')+'.</div></div>':'')+
       '<div class="card pad" style="margin-bottom:10px"><b>Creations counted this shift — '+cre.length+'</b> ('+cre.filter(function(x){ return x.c.done; }).length+' finished)'+
         (cre.length?'<div style="margin-top:6px">'+cre.map(function(x){ return '<span class="chip" style="margin:2px">'+esc(x.r.handle)+(x.c.done?' ✓':' · setup open')+(x.c.how==='time'?' · by time':'')+'</span>'; }).join('')+'</div>':'')+'</div>'+
       (miss.length?'<div class="card pad" style="border-color:#fed7aa"><b style="color:#9a3412">Logged in the last 36 h but NOT counted — '+miss.length+'</b>'+
