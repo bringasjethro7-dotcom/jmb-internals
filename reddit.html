@@ -2356,7 +2356,7 @@ function tmCapCheck(){
     try{ tmLog(h.c.r, 'overrun', { secs:h.c.secs, start:h.x.t, parallel:h.x.p||0 }, { stage:h.c.r?h.c.r.status:'', source:'cap · '+h.c.kind }); }catch(e){}
     if(h.c.kind==='creation'){   // Oct 31: no account logged in time = a failed creation, recorded for the owner
       var st=crFailLog(h.x, h.c.secs, 'timed out at '+Math.round(h.c.secs/60)+' min');
-      tmCapNote('The creation timer stopped at '+Math.round(h.c.secs/60)+' minutes with no account logged — recorded as a failed creation.'+(st.n>=CR_STREAK?' Start creating is now locked: log an account you just created to open it again.':' If the account exists, log it with Log new account.'));
+      tmCapNote('The creation timer stopped at '+Math.round(h.c.secs/60)+' minutes with no account logged — recorded as a failed creation (−0.5 QA).'+(st.n>=CR_STREAK?' Start creating is now locked: log an account you just created to open it again.':' If the account exists, log it with Log new account.'));
       return;
     }
     var what=(h.c.kind==='dms'?'The DM timer':'Session '+String(h.c.k||'').replace(/^s/,'')+' timer')+(h.c.r?' for '+h.c.r.handle:'');
@@ -3107,7 +3107,7 @@ function crCancel(){
     if(tmOn() && el>=20){ try{ tmLog(null, 'crfail', { secs:el, start:x.t, parallel:x.p||0 }, { source:'cancel · started by mistake' }); }catch(e){} }
     renderView(); toast('Creation timer cancelled.'); return; }
   var R=['Reddit blocked the sign-up','Verification code or email never came','iPhone or app problem','Proxy / connection problem','Other'];
-  openModal('<div class="md-h"><h3>The account didn\'t get made?</h3><p>This creation timer has run '+tmFmt(Date.now()-x.t)+'. Cancel is only free in the first 2 minutes — after that it is recorded as a failed creation, with your reason, and the admin sees it.</p></div>'+
+  openModal('<div class="md-h"><h3>The account didn\'t get made?</h3><p>This creation timer has run '+tmFmt(Date.now()-x.t)+'. Cancel is only free in the first 2 minutes — after that it is recorded as a failed creation, with your reason: the admin sees it and it takes 0.5 off your QA score for the day.</p></div>'+
     '<div class="md-b"><div class="fld"><label>What happened?</label><div class="seg" id="crf-r" style="flex-wrap:wrap">'+R.map(function(t){ return '<button type="button" data-r="'+esc(t)+'" onclick="crFailPick(this)">'+esc(t)+'</button>'; }).join('')+'</div></div>'+
       '<div class="fld" id="crf-o" style="display:none"><label>Tell us what happened</label><input class="inp" id="crf-t" maxlength="60" placeholder="e.g. the app crashed twice"></div>'+
       '<div class="hint">The account exists after all? Close this and press <b>Creating…</b> to log it instead.</div></div>'+
@@ -3122,7 +3122,7 @@ function crFailSave(){
   delete o['__create|c']; tmPut(o);
   var secs=Math.round((Date.now()-x.t)/1000), st=crFailLog(x, secs, 'cancel · '+why);
   _crfR=''; closeModal(); renderView();
-  toast('Recorded as a failed creation ('+Math.round(secs/60)+' min).'+(st.n>=CR_STREAK?' That\'s '+CR_STREAK+' in a row — Start creating is locked until you log an account you just created.':''));
+  toast('Recorded as a failed creation ('+Math.round(secs/60)+' min, −0.5 QA).'+(st.n>=CR_STREAK?' That\'s '+CR_STREAK+' in a row — Start creating is locked until you log an account you just created.':''));
 }
 function crTake(){ var o=tmAll(), x=o['__create|c']; if(!x) return null; delete o['__create|c']; tmPut(o); return x.t; }
 /* VA's own day line in RcDaily (backend rc-2026-10-05b+) — fire-and-forget, only when a number changes */
@@ -6084,7 +6084,7 @@ var QA_RULES=[
   { k:'fast',       n:'Under 35% of the team time for that task (once it is learned)', d:0.5, u:'each · max 2' },
   { k:'cover',      n:'Portal time more than 30 minutes ahead of the tool timers', d:1, u:'' },
   { k:'overrun',    n:'Task timer left running past its time limit', d:0.5, u:'each · max 2' },
-  { k:'crfail',     n:'Creation timer ended with no account — cancelled after 2 minutes or ran out (shown with minutes and reasons)', d:0, u:'shown, no deduction' },
+  { k:'crfail',     n:'Creation timer ended with no account — cancelled after 2 minutes or ran out (Jeth, Oct 31: every failure counts)', d:0.5, u:'each · no cap' },
   { k:'typo',       n:'Username typo — the health check could not find the account until the owner corrected the name', d:0.5, u:'each · max 2' },
   { k:'fix_open',   n:'A username sent back for fixing is still not corrected (or marked banned)', d:1, u:'each, per day it stays open · max 3' }
 ];
@@ -6312,7 +6312,7 @@ function pqFlags(va, day, dr, L){
   if(ovr) F.push({ k:'overrun', t:ovr+' timer'+(ovr===1?'':'s')+' ran past the limit', d:Math.min(2, ovr*pqRule('overrun').d), c:'r' });
   var crf=((PQ.st&&PQ.st.rows)||[]).filter(function(x){ return String(x.va).toLowerCase()===va && x.kind==='crfail' && (x.secs==null || x.secs>=CR_FREE); });   // Oct 31
   if(crf.length){ var crm=Math.round(crf.reduce(function(s2,x){ return s2+(+x.secs||0); },0)/60);
-    F.push({ k:'crfail', t:crf.length+' creation'+(crf.length===1?'':'s')+' with no account · '+crm+' min', d:0, c:crf.length>=CR_STREAK?'r':'a',
+    F.push({ k:'crfail', t:crf.length+' creation'+(crf.length===1?'':'s')+' with no account · '+crm+' min', d:crf.length*pqRule('crfail').d, c:'r',
       tip:crf.map(function(x){ return fmtSecs(x.secs)+' — '+String(x.source||'').replace(/^cancel · /,''); }).join(' · ') }); }
   try{ var cv=pqCover(va, day, dr); if(cv && cv.tracked-cv.timed>1800) F.push({ k:'cover', t:'Portal '+hm(cv.tracked-cv.timed)+' ahead of the tool ('+hm(cv.timed)+' of '+hm(cv.tracked)+')', d:pqRule('cover').d, c:'r', tip:'The portal tracked '+hm(cv.tracked)+' but this tool\'s timers only covered '+hm(cv.timed)+' of it.' }); }catch(_cv){}
   var ps=CFG.process_start||'2026-10-01', untag=allRows().filter(function(r){ return owner(r)===va && !isDead(r) && !isParked(r) && (!methodOf(r) || !r.model || (cdateOf(r)>=ps && !r.device && phoneList(false, r.project).length)); });
