@@ -260,6 +260,7 @@ body::before{content:'';position:fixed;inset:-20% -10% auto;height:520px;z-index
 .c-ima .ipick{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0 2px;padding:9px 10px;border:1px dashed rgba(14,165,233,.45);border-radius:12px;background:rgba(14,165,233,.04)}
 .c-ima .im-run{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#831843,#6d28d9);color:#fce7f3;border-radius:16px;padding:12px 16px;margin:0 0 12px;box-shadow:0 18px 40px -22px rgba(109,40,217,.8)}
 .c-ima .im-run.done{background:linear-gradient(135deg,#065f46,#0e7490)}
+.c-ima .im-run.wave{background:linear-gradient(135deg,#9d174d,#7c3aed)}
 .c-ima .im-run.idle{background:var(--s1);color:var(--ink2);border:1px dashed var(--line2);box-shadow:none}
 .c-ima .im-run .ring{width:46px;height:46px;flex:none} .c-ima .im-run .ring svg{width:46px;height:46px;transform:rotate(-90deg)}
 .c-ima .im-run .ring .bg{fill:none;stroke:rgba(255,255,255,.18);stroke-width:4}
@@ -1513,7 +1514,7 @@ var HW_MAP={ imperium:{ p:'Imperium Agency', c:'IG Reels', def:'Account Warm Up'
   project2:{ p:'JMB Internal', c:'Project 2 (Ricardo)', def:'IG Reels Posting' }, threads:{ p:'Reddit - Altz', c:'Threads', def:'Threads Warmup' },
   ember:{ p:'Ember Management (YT)', c:'Snapchat', def:'VPS Monitoring' }, 'design-shopify':{ p:'Torchlight', c:'Graphics', def:'Shopify' },
   meadow:{ p:'Meadow', c:'TikTok Outreach', def:'Inbox & Replies' } };   // Oct 27: add a lead → Lead Sourcing · Messaged → Outreach Messages · inbox / replies → Inbox & Replies · report a number → Lead Reporting
-var IGP_TASK={ phone:'Account Creation', create:'Account Creation', pre:'Account Warm Up', scroll:'Account Warm Up', email:'Account Warm Up', pfp:'Account Warm Up', feed:'Account Warm Up', work:'Account Warm Up', reels:'IG Reels Posting', trial:'IG Reels Posting' };
+var IGP_TASK={ phone:'Account Creation', create:'Account Creation', pre:'Account Warm Up', scroll:'Account Warm Up', email:'Account Warm Up', pfp:'Account Warm Up', feed:'Account Warm Up', work:'Account Warm Up', reels:'IG Reels Posting', trial:'IG Reels Posting', wave:'IG Reels Posting' };   // Nov 1: a Slaybae wave (scroll + reels) is one task
 function hubWant(){
   var cl=HUB.cur(); if(!cl) return null; var M=HW_MAP[cl.id]; if(!M) return null;
   var task='', hold=true;
@@ -2106,6 +2107,14 @@ function IGPhones(CFG){
      Day 4 1 reel · Day 5 2 reels · Day 6 onward 3 reels, each posting day with the timed 15-minute scroll. No feed photos. Accounts already past day 4
      move to posting on the next refresh. Imperium has no sched and keeps SOP-02 (7-day warm-up, feed photos, reels day 13). */
   var SCH=CFG.sched||null;
+  /* Nov 1 (Jeth, for the Slaybae VA: "three waves only, one account per wave, and both warming/scrolling and IG Reels
+     posting combined in the same time-tracking workflow"). With CFG.waves a posting day runs as WAVES, one account per
+     wave (a phone's three accounts = three waves). ▶ Start wave runs ONE timer for the whole account: the 15-minute
+     scroll counts by itself once the wave has run 15 minutes, the reels are logged as they go up, and Finish wave
+     closes it. The portal files the whole wave under IG Reels Posting, so reels time no longer disappears inside a
+     15-minute scroll countdown, and nothing has to be stopped to switch from scrolling to posting. Imperium keeps the
+     separate 15:00 scroll. */
+  var WAVES=!!CFG.waves;
   /* Oct 21: the client's own plan applies from SCH.since; earlier days are judged by the plan that was in force then
      (so the month's scores and QA don't re-grade old days against a calendar nobody was working to). */
   function schFor(date){ return (SCH && String(date||today())>=(SCH.since||'')) ? SCH : null; }
@@ -2202,6 +2211,15 @@ function IGPhones(CFG){
     return out;
   }
   function planTotals(list){ var t=0, d=0; list.forEach(function(x){ t+=x.target; d+=x.done; }); return { t:t, d:d }; }
+  /* ── waves (CFG.waves) ── */
+  function wvOf(a, date){ return ((((a&&a.meta&&a.meta.log)||{})[date||today()])||{}).wave||null; }
+  function waveItems(a, date){ return plan(a, date).filter(function(x){ return x.k==='scroll' || x.k==='reels' || x.k==='trial'; }); }
+  function waveDue(a, date){ return WAVES && waveItems(a, date).length>0; }
+  function waveLeft(a, date){ return waveItems(a, date).some(function(x){ return x.done<x.target; }); }
+  function scrollDone(a, date){ var it=plan(a, date).filter(function(x){ return x.k==='scroll'; })[0]; return !it || it.done>=it.target; }
+  function waveAccts(pid, date){ return acctsOf(pid).filter(function(a){ return waveDue(a, date) || !!wvOf(a, date); }); }
+  function waveNo(a){ var L=waveAccts(a.meta.phone), i=L.map(function(x){ return x.id; }).indexOf(a.id); return { n:i<0?L.length+1:i+1, of:Math.max(L.length, i<0?L.length+1:1) }; }
+  function wdur(secs){ secs=Math.round(+secs||0); var h=Math.floor(secs/3600), m=Math.round(secs%3600/60); if(m===60){ h++; m=0; } return h?(h+'h '+m+'m'):(m+'m'); }
 
   /* ══════════ ⏱ WORK TIMER (Jeth, Oct 14 — JMB002: "her tool doesn't have any timer at all") ══════════
      Imperium is phone work — scrolling, posting, setting a phone up. Until now only a logged step (with its
@@ -2215,8 +2233,8 @@ function IGPhones(CFG){
      so the portal timer keeps going and the time counts as tool time. One timer at a time; switching steps on a
      phone carries on without a gap. It survives a reload. Owners never run it. */
   var TM={ run:null, tick:null, ask:null, restored:false, pick:'' };
-  var TLIM={ pre:20, phone:30, create:30, email:20, pfp:20, feed:20, reels:30, trial:30, work:20 };
-  var TNAME={ pre:'Pre-flight check', phone:'Phone setup', create:'Creating accounts', scroll:'Warm-up scroll', email:'Adding emails', pfp:'Profile photos', feed:'Feed photos', reels:'Reels', trial:'Trial reels', work:'Phone work' };
+  var TLIM={ pre:20, phone:30, create:30, email:20, pfp:20, feed:20, reels:30, trial:30, work:20, wave:30 };
+  var TNAME={ pre:'Pre-flight check', phone:'Phone setup', create:'Creating accounts', scroll:'Warm-up scroll', email:'Adding emails', pfp:'Profile photos', feed:'Feed photos', reels:'Reels', trial:'Trial reels', work:'Phone work', wave:'Wave · scroll + reels' };
   var SCROLL_MS=15*60*1000, ASK_MS=2*60*1000;
   function tmKey(){ return KP+'_run_'+me(); }
   function tmSave(){ try{ if(TM.run) localStorage.setItem(tmKey(), JSON.stringify(TM.run)); else localStorage.removeItem(tmKey()); }catch(e){} }
@@ -2260,9 +2278,10 @@ function IGPhones(CFG){
         else if(now-R.ends>=10*60e3){ var _w2=tmWho(R); scrollDrop(true); try{ toast('The finished scroll on '+_w2+' was not logged in 10 minutes — the timer moved to Phone work. You can still log the scroll.'); }catch(e){} return; }
       } else if(!TM.ask){
         if(!document.hidden) try{ ACT.last=now; }catch(_a){}
+        if(R.k==='wave' && !R.sc && now-R.start>=SCROLL_MS && now>=(R.scTry||0)){ R.sc=1; R.scTry=now+15000; tmSave(); waveScroll(R); }
         if(now-(R.chk||R.start) >= (TLIM[R.k]||20)*60000) tmAskOpen();
       } else if(now-TM.ask.at >= ASK_MS){
-        var lbl=tmLabel(R); tmAskClose(); TM.run=null; tmSave(); try{ toast('Timer stopped — no answer to “still working?” ('+lbl+').'); }catch(e){} try{ tbSend(true); }catch(e){} tmPaint(true); return;
+        var lbl=tmLabel(R), askAt=TM.ask.at; tmAskClose(); TM.run=null; tmSave(); if(R.k==='wave') waveRecord(R, askAt); try{ toast('Timer stopped — no answer to “still working?” ('+lbl+').'); }catch(e){} try{ tbSend(true); }catch(e){} tmPaint(true); return;
       }
       tmPaint(false);
     }, 1000);
@@ -2276,14 +2295,23 @@ function IGPhones(CFG){
         '<div class="tx"><small>'+(done?'Scroll finished':'Scrolling now')+'</small><b>'+esc(tmLabel(R))+'</b><span id="'+PX+'-run-clk">'+(done?'15:00 done — press Log the scroll':downClock(left)+' left · keep scrolling on this account')+'</span></div>'+
         (done?'<button class="btn sm" onclick="'+NS+'.log(\''+jsq(R.aid)+'\',\'scroll\')">＋ Log the scroll</button><button class="btn sec sm" style="margin-left:6px" title="Use this if the scroll is already logged" onclick="'+NS+'.scrollDrop()">Already logged</button>':'<button class="btn sec sm" onclick="'+NS+'.tmStop()">Stop</button>')+'</div>';
     }
+    if(R.k==='wave'){ var wa=rowById(R.aid);
+      return '<div class="im-run up wave"><span class="dot"></span><div class="tx"><small>Wave '+(R.n||1)+' of '+(R.of||1)+' · scroll + reels on one timer</small><b>'+esc(wa?wa.handle:'account')+'</b><span id="'+PX+'-run-clk">'+waveLine(R)+'</span></div><button class="btn sm" onclick="'+NS+'.waveFinish()">Finish wave</button><button class="btn sec sm" style="margin-left:6px" onclick="'+NS+'.tmStop()">Stop</button></div>'; }
     return '<div class="im-run up"><span class="dot"></span><div class="tx"><small>Timer running</small><b>'+esc(tmLabel(R))+'</b><span id="'+PX+'-run-clk">'+upLine(R)+'</span></div><button class="btn sec sm" onclick="'+NS+'.tmStop()">Stop</button></div>';
+  }
+  function waveLine(R){
+    var a=rowById(R.aid), el=Date.now()-R.start, out=[upClock(el)];
+    if(a){ var sd=scrollDone(a, R.d);
+      out.push(sd?'scroll 15:00 counted':('scroll counts at 15:00 · '+downClock(SCROLL_MS-el)+' left'));
+      waveItems(a, R.d).forEach(function(x){ if(x.k!=='scroll') out.push((x.k==='trial'?'trial reels ':'reels ')+x.done+'/'+x.target); }); }
+    return out.join(' · ');
   }
   function tmPaint(full){
     var box=$(''+PX+'-runbox'); if(!box) return;
     if(full){ box.innerHTML=runBanner(); try{ paint(); }catch(e){} return; }
     var R=TM.run, c=$(''+PX+'-run-clk'); if(!R || !c) return;
     if(R.ends){ var left=R.ends-Date.now(); if(left>0){ c.textContent=downClock(left)+' left · keep scrolling on this account'; var a=$(''+PX+'-run-arc'); if(a) a.style.strokeDashoffset=(119.4*(left/SCROLL_MS)).toFixed(1); } }
-    else c.textContent=upLine(R);
+    else c.textContent=(R.k==='wave'?waveLine(R):upLine(R));
   }
   function tmAskOpen(){
     var R=TM.run; if(!R) return; TM.ask={ at:Date.now() }; var o=$(''+PX+'-ask'); if(o) o.remove();
@@ -2298,7 +2326,7 @@ function IGPhones(CFG){
   function otherIG(){ try{ return (typeof IGP!=='undefined'?IGP:[]).filter(function(m){ return m.ns!==NS; }); }catch(e){ return []; } }
   function scrollElsewhere(){ var n=''; otherIG().forEach(function(m){ try{ m.timerOn(); var R=m._TM.run; if(!n && R && R.ends && R.ends>Date.now()) n=m.name; }catch(e){} }); return n; }
   function stopElsewhere(){ otherIG().forEach(function(m){ try{ m.tmQuiet(); }catch(e){} }); }
-  function tmQuiet(){ tmRestore(); var R=TM.run; if(!R || R.ends) return; TM.run=null; tmAskClose(); tmSave(); tmPaint(true); }
+  function tmQuiet(){ tmRestore(); var R=TM.run; if(!R || R.ends) return; TM.run=null; tmAskClose(); tmSave(); if(R.k==='wave') waveRecord(R, Date.now()); tmPaint(true); }
   /* Oct 14, evening (Jeth — JMB003's bar in slivers again): Imperium work happens on the phone, so the computer sits idle
      and the portal's 3-minute no-activity rule cut her timer between reels — she logged every reel but never pressed
      ⏱ Timer, so the hub told the portal "no task pressed yet". Now the timer starts BY ITSELF on the work she does here:
@@ -2311,6 +2339,7 @@ function IGPhones(CFG){
       tmRestore();
       var R=TM.run;
       if(R && R.ends) return;
+      if(R && R.k==='wave'){ tmTouch(); return; }   // Nov 1: a reel logged inside a wave stays in the wave
       if(R && R.pid===pid && R.k===k){ tmTouch(); return; }
       if(scrollElsewhere()) return; stopElsewhere();
       var now=Date.now(); tmAskClose();
@@ -2335,6 +2364,62 @@ function IGPhones(CFG){
     try{ hubWork('timer'); }catch(e){}
     toast('Scroll started on '+a.handle+' — 15 minutes.'); tmPaint(true);
   }
+  async function waveStart(aid){
+    if(isOwner() || !WAVES) return;
+    var a=rowById(aid); if(!a) return; var p=rowById(a.meta.phone);
+    if(p && !phoneOpen(p)){ toast('Log this session\'s pre-flight on '+phoneLabel(p)+' first.'); preflightOpen(p.id); return; }
+    if(!waveDue(a)){ toast('No wave due on '+a.handle+' today.'); return; }
+    tmRestore();
+    if(TM.run && TM.run.k==='wave' && TM.run.aid===aid) return;
+    if(TM.run && TM.run.ends){ toast(TM.run.ends>Date.now()?'A scroll is running on '+tmWho(TM.run)+' — finish or stop it first.':'Log the finished scroll on '+tmWho(TM.run)+' first.'); return; }
+    var _el=scrollElsewhere(); if(_el){ toast('A 15-minute scroll is running in '+_el+' — finish or stop it first.'); return; }
+    if(!(await linkGate(CL(), 'Starting the wave'))) return;
+    waveBegin(a, false);
+  }
+  function waveBegin(a, quiet){
+    stopElsewhere();
+    var now=Date.now(), R=TM.run, nw=waveNo(a);
+    if(R && R.k==='wave' && R.aid!==a.id) waveRecord(R, now);   // the wave before closes where this one starts — no gap
+    tmAskClose();
+    TM.run={ k:'wave', pid:a.meta.phone, aid:a.id, d:today(), start:now, chk:now, n:nw.n, of:nw.of, sc:scrollDone(a)?1:0 }; TM.pick=''; tmSave(); tmTickOn();
+    try{ hubWork('timer'); }catch(e){}
+    if(!quiet) toast('Wave '+nw.n+' of '+nw.of+' on '+a.handle+' — scroll 15 minutes and post its reels on this one timer. Press Finish wave when the account is done.');
+    tmPaint(true);
+  }
+  /* the 15-minute scroll of a wave logs itself; a save that didn't go through is tried again */
+  async function waveScroll(R){
+    try{
+      var a=rowById(R.aid); if(!a || scrollDone(a, R.d)) return;
+      await logTask(R.aid, 'scroll');
+      a=rowById(R.aid);
+      if(a && !scrollDone(a, R.d)){ if(TM.run && TM.run.k==='wave' && TM.run.aid===R.aid){ TM.run.sc=0; tmSave(); } return; }
+      try{ toast('15 minutes of scrolling counted on '+a.handle+' — keep posting its reels, then Finish wave.'); }catch(_t){}
+      try{ if(window.PFX && PFX.chime) PFX.chime(0.08); }catch(_c){}
+    }catch(e){ if(TM.run && TM.run.k==='wave'){ TM.run.sc=0; tmSave(); } }
+  }
+  /* the wave's time is kept on the account's day (owner view + QA): { n, secs, first, at, by } */
+  async function waveRecord(R, until){
+    try{
+      if(!R || R.k!=='wave' || !R.aid) return; var secs=Math.max(0, Math.round((until-R.start)/1000)); if(secs<5) return;
+      var d=R.d||today(), key=lockKey(R.aid), t0=Date.now();
+      while(S.busy[key] && Date.now()-t0<15000) await new Promise(function(r){ setTimeout(r, 300); });
+      await guarded(R.aid, function(){ return patchMeta(R.aid, function(m){ m.log=m.log||{}; var L=m.log[d]=m.log[d]||{};
+        var w=L.wave=L.wave||{ n:R.n||1, secs:0 }; w.secs=(+w.secs||0)+secs; w.n=R.n||w.n; w.at=new Date(until).toISOString(); w.by=w.by||me();
+        if(!w.first) w.first=new Date(R.start).toISOString(); }, null, ''); });
+    }catch(e){}
+  }
+  async function waveFinish(){
+    tmRestore(); var R=TM.run; if(!R || R.k!=='wave') return;
+    var a=rowById(R.aid), el=Date.now()-R.start;
+    if(a && !scrollDone(a, R.d) && el<SCROLL_MS && !confirm('The 15-minute scroll on '+a.handle+' isn\'t done yet ('+downClock(SCROLL_MS-el)+' left). Finish the wave anyway? The scroll won\'t count.')) return;
+    var now=Date.now(); tmAskClose(); TM.run=null; tmSave();
+    var nxt=waveAccts(R.pid).filter(function(x){ return x.id!==R.aid && waveLeft(x); })[0]||null;
+    if(nxt){ TM.run={ k:'work', pid:R.pid, start:now, chk:now, auto:1 }; tmSave(); tmTickOn(); }   // between waves the phone work stays timed
+    else { try{ tbSend(true); }catch(e){} }
+    tmPaint(true);
+    toast('Wave '+(R.n||1)+' done on '+(a?a.handle:'the account')+' · '+wdur((now-R.start)/1000)+'.'+(nxt?' Next: Start wave on '+nxt.handle+'.':' Every wave on this phone is done for today.'));
+    await waveRecord(R, now);
+  }
   async function tmStart(pid, k){
     if(isOwner()) return; var p=rowById(pid); if(!p || !TNAME[k] || k==='scroll') return;
     if(!/^(pre|phone|create)$/.test(k) && !phoneOpen(p)){ toast('Log this session\'s pre-flight on '+phoneLabel(p)+' first.'); return; }
@@ -2344,6 +2429,7 @@ function IGPhones(CFG){
     if(!(await linkGate(CL(), 'Starting the timer'))) return;
     stopElsewhere();
     var now=Date.now(), same=TM.run && TM.run.pid===pid && TM.run.k===k;
+    if(TM.run && TM.run.k==='wave') waveRecord(TM.run, now);
     tmAskClose(); TM.run={ k:k, pid:pid, start:same?TM.run.start:now, chk:now }; TM.pick=''; tmSave(); tmTickOn();
     try{ hubWork('timer'); }catch(e){}
     toast('⏱ '+tmLabel(TM.run)+' — timer running.'); tmPaint(true);
@@ -2351,7 +2437,7 @@ function IGPhones(CFG){
   function tmStop(){
     var R=TM.run; if(!R){ tmAskClose(); return; }
     if(R.ends && R.ends>Date.now() && !confirm('Stop the scroll now? It won\'t count — the full 15 minutes are needed.')) return;
-    TM.run=null; tmAskClose(); tmSave(); try{ tbSend(true); }catch(e){} tmPaint(true);
+    TM.run=null; tmAskClose(); tmSave(); if(R.k==='wave') waveRecord(R, Date.now()); try{ tbSend(true); }catch(e){} tmPaint(true);
   }
   function tmPick(pid){ TM.pick=(TM.pick===pid?'':pid); paint(); }
   function pickRow(p){
@@ -2361,8 +2447,8 @@ function IGPhones(CFG){
     if(v7 && A.length<MAX_ACCTS) ks.push('create');
     if(sd && !open) ks.push('pre');
     if(open){ var due={}; A.forEach(function(a){ plan(a).forEach(function(x){ if(x.done<x.target && x.k!=='scroll') due[x.k]=1; }); });
-      ['email','pfp','feed','reels','trial'].forEach(function(k){ if(due[k]) ks.push(k); }); }
-    if(!ks.length) return '<div class="ipick"><span class="muted">Nothing on this phone needs a timer right now'+(open&&(!SCH||SCH.scroll)?' — scrolls use ▶ Start 15:00 on the account.':'.')+'</span></div>';
+      ['email','pfp','feed','reels','trial'].forEach(function(k){ if(due[k] && !(WAVES && (k==='reels'||k==='trial'))) ks.push(k); }); }
+    if(!ks.length) return '<div class="ipick"><span class="muted">Nothing on this phone needs a timer right now'+(open&&WAVES?' — posting days use ▶ Start wave on each account.':(open&&(!SCH||SCH.scroll)?' — scrolls use ▶ Start 15:00 on the account.':'.'))+'</span></div>';
     return '<div class="ipick"><span class="muted">Time this phone for…</span>'+ks.map(function(k){ var on=TM.run && TM.run.pid===p.id && TM.run.k===k; return '<button class="itk'+(on?' run':'')+'" '+(on?'disabled':'')+' onclick="'+NS+'.tmStart(\''+jsq(p.id)+'\',\''+k+'\')">'+(on?'⏱ ':'▶ ')+esc(TNAME[k])+'</button>'; }).join('')+'</div>';
   }
   /* owner: who is timing this phone right now (from the VAs' heartbeats) */
@@ -2496,8 +2582,12 @@ function IGPhones(CFG){
     if(!it){ toast('That isn\'t due today on @'+String(a.handle).replace(/^@/,'')+' — the SOP calendar doesn\'t allow it yet.'); return; }
     if(it.done>=it.target){ toast('Today\'s '+(k==='reels'?'reels are':'step is')+' already done on '+a.handle+' — nothing ahead of the schedule.'); return; }
     if(k==='scroll' && !isOwner()){ tmRestore(); var R0=TM.run;   // Oct 14: the scroll is timed here — it counts once its 15 minutes are done
-      if(!(R0 && R0.ends && R0.aid===aid && R0.ends<=Date.now())){ toast(R0 && R0.ends && R0.aid===aid?('Keep scrolling — '+downClock(R0.ends-Date.now())+' left.'):('Press ▶ Start 15:00 on '+a.handle+' first — the scroll counts once the 15 minutes are done.')); return; } }
-    if(k!=='scroll' && p) tmAuto(p.id, k);   // Oct 14: the timer starts by itself
+      var inWave=R0 && R0.k==='wave' && R0.aid===aid && Date.now()-R0.start>=SCROLL_MS;   // Nov 1: a wave's first 15 minutes
+      if(!inWave && !(R0 && R0.ends && R0.aid===aid && R0.ends<=Date.now())){
+        if(WAVES){ toast(R0 && R0.k==='wave' && R0.aid===aid?('The scroll counts by itself at 15:00 — '+downClock(SCROLL_MS-(Date.now()-R0.start))+' left.'):('Press ▶ Start wave on '+a.handle+' — the scroll counts by itself once the wave has run 15 minutes.')); return; }
+        toast(R0 && R0.ends && R0.aid===aid?('Keep scrolling — '+downClock(R0.ends-Date.now())+' left.'):('Press ▶ Start 15:00 on '+a.handle+' first — the scroll counts once the 15 minutes are done.')); return; } }
+    if(WAVES && (k==='reels'||k==='trial') && !isOwner() && !(TM.run && (TM.run.k==='wave' || TM.run.ends))) waveBegin(a, true);   // Nov 1: posting starts the account's wave
+    else if(k!=='scroll' && p) tmAuto(p.id, k);   // Oct 14: the timer starts by itself
     if(!(await linkGate(CL(), 'Logging work'))) return;
     /* Oct 27: the step is counted (po_bump) only once it is saved on the account — a failed save used to leave the count in
        the portal with nothing on the board, and the VA's retry counted it twice */
@@ -2748,10 +2838,21 @@ function IGPhones(CFG){
       return '<button class="'+(it[2]||'')+'" onclick="this.closest(\'details\').removeAttribute(\'open\');'+it[1]+'">'+it[0]+'</button>';
     }).join('')+'</div></details>';
   }
+  function waveCtl(a, open){
+    if(!WAVES || !(waveDue(a) || wvOf(a))) return '';
+    var id=jsq(a.id), R=TM.run, w=wvOf(a), nw=waveNo(a), on=R && R.k==='wave' && R.aid===a.id;
+    if(isOwner()) return w?'<span class="ich ok" style="margin-right:6px">Wave '+(w.n||nw.n)+' · '+wdur(w.secs)+(w.by?' · '+esc(vaName(w.by).split(/[ ,]/)[0]):'')+'</span>':'<span class="ich mute" style="margin-right:6px">Wave '+nw.n+' · not started</span>';
+    if(on) return '<button class="itk go" onclick="'+NS+'.waveFinish()">Finish wave '+(R.n||nw.n)+'</button>';
+    if(!open) return '<button class="itk lock" disabled>🔒 Wave '+nw.n+'</button>';
+    if(w && !waveLeft(a)) return '<button class="itk done" disabled>✓ Wave '+(w.n||nw.n)+' · '+wdur(w.secs)+'</button>';
+    return '<button class="itk" onclick="'+NS+'.waveStart(\''+id+'\')">▶ '+(w?'Continue':'Start')+' wave '+nw.n+' of '+nw.of+' · scroll + reels</button>';
+  }
   function acctRow(a, open){
     var ph=phase(a), items=plan(a), id=jsq(a.id);
-    var tasks=items.map(function(x){
+    var tasks=waveCtl(a, open)+items.map(function(x){
       var full=x.done>=x.target, lbl=x.target>1||x.k==='reels'||x.k==='trial'?(x.label+' '+x.done+'/'+x.target):x.label;
+      if(WAVES && x.k==='scroll' && !full){ var Rw=TM.run, onw=Rw && Rw.k==='wave' && Rw.aid===a.id;   // Nov 1: the scroll is part of the wave
+        return '<button class="itk'+(onw?' run':' lock')+'" disabled>'+(onw?'⏱ Scroll · counts at 15:00 of the wave':'Scroll 15 min · inside the wave')+'</button>'; }
       if(x.k==='scroll' && !full && open && !isOwner()){ var R=TM.run;   // Oct 14: timed scroll
         if(R && R.ends && R.aid===a.id) return R.ends>Date.now()?'<button class="itk run" disabled>⏱ Scrolling… '+esc(lbl)+'</button>':'<button class="itk go" onclick="'+NS+'.log(\''+id+'\',\'scroll\')">＋ Log scroll (15:00 done)</button>';
         return '<button class="itk" onclick="'+NS+'.scrollStart(\''+id+'\')">▶ Start 15:00 · '+esc(lbl)+'</button>'; }
@@ -2896,7 +2997,7 @@ function IGPhones(CFG){
       '<div class="sopph"><b>🛫 Before every session</b>Maps · IP · Scamalytics (0–3), a screenshot of each, then the manager\'s go-ahead in the group. Log it here — the phone\'s accounts open for the shift once it\'s logged. Anything off → stop and tell a manager.</div>'+
       (SCH
         ?'<div class="sopph"><b>🌱 Days 1–'+(SCH.reels-1)+'</b>Day 1 create the account · Day 2 add the email · Day 3 add the profile picture. No feed photos on '+esc(PROJECT)+'.</div>'+
-         '<div class="sopph"><b>🎬 Posting</b>Day 4 → 1 reel · Day 5 → 2 reels · Day 6 onward → 3 reels a day. Every posting day: scroll 15 min on each account too (likes, a few comments, open profiles). Trial reels unlocked → flag it; the managers set the number.</div>'
+         '<div class="sopph"><b>🎬 Posting</b>Day 4 → 1 reel · Day 5 → 2 reels · Day 6 onward → 3 reels a day. '+(WAVES?'Every posting day runs in waves, one account per wave (three accounts, three waves): ▶ Start wave on the account, scroll 15 min (likes, a few comments, open profiles) and post its reels on the same timer, then Finish wave. The scroll counts by itself at 15:00.':'Every posting day: scroll 15 min on each account too (likes, a few comments, open profiles).')+' Trial reels unlocked → flag it; the managers set the number.</div>'
         :'<div class="sopph"><b>🌱 Warm-up</b>Day 1 create + scroll 15 min · Day 2 profile photo + scroll · Days 3–7 scroll naturally (likes, a few comments, open profiles) · Days 8–12 one feed photo from the model\'s Drive.</div>'+
          '<div class="sopph"><b>🎬 Reels ramp</b>1 a day for 3 days → 2 a day for 3 days → 3 a day from then on. Trial reels unlocked → flag it; the managers set the number.</div>')+
       '<div class="sopph"><b>✅ When you\'re done</b>Swipe Instagram closed to clear it.</div></div></details>';
@@ -2946,14 +3047,14 @@ function IGPhones(CFG){
     addAcct:addAcct, createStart:createStart, log:logTask, setStatus:setStatus, trialUnlocked:trialUnlocked, trialSet:trialSet, trialUndo:trialUndo, history:history, reassign:reassign, del:del,
     preflight:preflightOpen, pfClose:pfClose, pfPick:pfPick, pfClear:pfClear, pfAttach:pfAttach, pfCap:pfCap, pfRule:pfRule, pfSave:pfSave, pfReview:pfReview,
     qaSave:qaSave, qaDate:qaDateSet, qaShift:qaShift,
-    scrollStart:scrollStart, scrollDrop:function(){ scrollDrop(false); }, tmStart:tmStart, tmStop:tmStop, tmPick:tmPick, tmStill:tmStill, tmTouch:tmTouch, timerOn:timerOn, timerInfo:timerInfo, _TM:TM,
-    _t:{ dayN:dayN, plan:plan, phase:phase, reelTarget:reelTarget, pfOk:pfOk, qaRows:qaRows, phoneOpen:phoneOpen, setupDone:setupDone } };
+    scrollStart:scrollStart, scrollDrop:function(){ scrollDrop(false); }, waveStart:waveStart, waveFinish:waveFinish, tmStart:tmStart, tmStop:tmStop, tmPick:tmPick, tmStill:tmStill, tmTouch:tmTouch, timerOn:timerOn, timerInfo:timerInfo, _TM:TM,
+    _t:{ dayN:dayN, plan:plan, phase:phase, reelTarget:reelTarget, pfOk:pfOk, qaRows:qaRows, phoneOpen:phoneOpen, setupDone:setupDone, waveAccts:waveAccts, waveNo:waveNo, waveDue:waveDue, scrollDone:scrollDone, waveScroll:waveScroll, waveLine:waveLine, waves:WAVES } };
   SELF=api; IGP.push(api); return api;
 }
 var IGP=[];
 var IMA=IGPhones({ ns:'IMA', cid:'imperium', project:'Imperium', px:'ima', kp:'ima', phEx:'IMA-07', sop:'SOP-02 — Instagram setup &amp; warm-up (physical phone)' });
 var SLB=IGPhones({ ns:'SLB', cid:'slaybae',  project:'Slaybae',  px:'slb', kp:'slb', phEx:'SLB-01', sop:'Slaybae SOP — Instagram setup &amp; posting (physical phone) · updated Oct 20',
-  sched:{ since:'2026-10-20', email:2, pfp:3, reels:4, ramp:[1,2,3], scroll:1, from:'2026-10-19', lbl:{ 1:'Creation', 2:'Email', 3:'Profile picture' } } });
+  sched:{ since:'2026-10-20', email:2, pfp:3, reels:4, ramp:[1,2,3], scroll:1, from:'2026-10-19', lbl:{ 1:'Creation', 2:'Email', 3:'Profile picture' } }, waves:true });
 
 /* ═══════════ CLIENT: EMBER (Snapchat VPS Ops) — moved in from ember.html (Oct 9), same board, same data ═══════════
    Every card is one Snapchat account: Stock → Setting up → Live, with Needs fix and Banned / Locked off to the side.
@@ -3565,6 +3666,9 @@ var SKY=(function(){
    the portal's daily QA.  Store: pa_* (project "Project 2") — one row per Instagram account + one "va:<ID>" row per VA
    holding their last 10 days (steps, time, end-of-shift). */
 var P2=(function(){
+  /* Nov 1 (Jeth — "for the Ricardo project, the tool should reset every 6 AM"): the Ricardo morning shift starts at 6, so
+     Project 2's day rolls at 06:00 PHT (the hub's other tools keep 08:00). Every day key in this module uses this one. */
+  function today(){ try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(new Date(Date.now()-6*3600*1000)); }catch(e){ return new Date(Date.now()+2*3600*1000).toISOString().slice(0,10); } }
   var CID='project2', PROJECT='Project 2';
   var CL=function(){ return clientById(CID); };
   var T={ check:'IG Before-Shift Check', draft:'IG Content Drafting', eng:'IG Engagement (15 min)', call1:'Ricardo Approval Call 1', call2:'Ricardo Approval Call 2',
