@@ -2,7 +2,35 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<script id="jmb-touch-boot">
+/* ── iPad / touch boot (Nov 3, 2026 — Jeth uses an iPad 11 for approvals) ──
+   1) Safari cannot read "2026-11-03 22:30:00" (space instead of T) — new Date()/Date.parse give Invalid Date there,
+      while Chrome reads it. Every date the backends send in that shape now parses on Safari too (only patched when the
+      engine actually fails, so Chrome is untouched).
+   2) html.touch on touch screens (iPad Safari says "Macintosh", so maxTouchPoints decides) → the touch layer CSS.
+   3) iOS: no zoom-in when a field gets focus (pinch-zoom still works — Safari ignores maximum-scale for pinching). */
+(function(){
+  try{
+    var D=Date, bad=isNaN(new D('2026-01-02 03:04:05').getTime());
+    if(bad && typeof Reflect!=='undefined'){
+      var RX=/^(\d{4}-\d{2}-\d{2})[ ]+(\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?)\s*(Z|[+-]\d{2}:?\d{2})?$/;
+      var fix=function(s){ if(typeof s!=='string') return s; var m=s.trim().match(RX); if(!m) return s; var t=m[2]; if(t.length<5||t.charAt(1)===':') t='0'+t; return m[1]+'T'+t+(m[3]?(m[3].length===5?m[3].slice(0,3)+':'+m[3].slice(3):m[3]):''); };
+      var SD=function(){ var a=Array.prototype.slice.call(arguments); if(!new.target) return D(); if(a.length===1) a[0]=fix(a[0]); return Reflect.construct(D, a, new.target); };
+      SD.prototype=D.prototype; Object.setPrototypeOf(SD, D);
+      SD.parse=function(s){ return D.parse(fix(s)); }; SD.UTC=D.UTC; SD.now=D.now;
+      window.Date=SD;
+    }
+  }catch(e){}
+  try{
+    var de=document.documentElement, mtp=navigator.maxTouchPoints||0, ua=navigator.userAgent||'';
+    var touch=mtp>1 || (window.matchMedia && matchMedia('(pointer:coarse)').matches) || /[?&]touch=1\b/.test(location.search);
+    if(touch) de.classList.add('touch');
+    var ios=/iP(ad|hone|od)/.test(ua) || (/Macintosh/.test(ua) && mtp>1);
+    if(ios){ de.classList.add('ios'); var vm=document.querySelector('meta[name=viewport]'); if(vm && !/maximum-scale/.test(vm.content)) vm.content=vm.content+', maximum-scale=1'; }
+  }catch(e){}
+})();
+</script>
 <title>Reddit Central · JMB Aura</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
@@ -281,7 +309,7 @@ main{max-width:1320px;margin:0 auto;padding:20px 18px 80px}
 
 /* ── database grid ── */
 .tbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
-.tbl-w{overflow:auto;max-height:calc(100vh - 250px);border-radius:var(--r);border:1px solid var(--line);background:var(--s1);box-shadow:var(--sh1)}
+.tbl-w{overflow:auto;max-height:calc(100vh - 250px);max-height:calc(100dvh - 250px);border-radius:var(--r);border:1px solid var(--line);background:var(--s1);box-shadow:var(--sh1)}
 table.db{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
 table.db th{position:sticky;top:0;z-index:2;background:#f8f9fc;text-align:left;font-size:10.5px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;padding:10px 12px;border-bottom:1px solid var(--line2);white-space:nowrap;cursor:pointer;user-select:none}
 table.db th:hover{color:var(--ink)}
@@ -1167,10 +1195,29 @@ function scope(rows){
   return (rows||[]).filter(function(r){ return worksFor(r)===me || owner(r)===me; });
 }
 var _retryT=null, _loading=false;
-async function load(){
-  if(_loading) return; _loading=true;
+/* Nov 3 (iPad): the 60-second refresh and every return to this tab rebuilt the whole view — a QA score or note typed
+   but not saved yet was wiped (on the iPad that happens each time you come back from a Reddit profile). An automatic
+   refresh now leaves the view alone while a field in it is focused or holds an unsaved change; the data still updates
+   and the view repaints on the next tap / the next refresh. */
+function rcBusyEditing(){
   try{
-    try{ linkLoad(false).then(function(){ if(VIEW==='today') renderView(); }); if(isAdmin()) linkDayRows(false); }catch(_lk){}
+    var v=document.getElementById('view'); if(!v) return false;
+    var ae=document.activeElement; if(ae && v.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) && !(ae.closest && ae.closest('.search'))) return true;
+    var els=v.querySelectorAll('input,textarea,select');
+    for(var i=0;i<els.length;i++){ var el=els[i]; if(el.closest && el.closest('.search')) continue;
+      var ty=(el.type||'').toLowerCase(); if(ty==='button'||ty==='submit'||ty==='hidden'||ty==='file') continue;
+      if(ty==='checkbox'||ty==='radio'){ if(el.checked!==el.defaultChecked) return true; continue; }
+      if(el.tagName==='SELECT'){ var hasDef=false, j; for(j=0;j<el.options.length;j++){ if(el.options[j].defaultSelected){ hasDef=true; if(!el.options[j].selected) return true; } } if(!hasDef && el.selectedIndex>0) return true; continue; }
+      if(el.value!==el.defaultValue) return true;
+    }
+  }catch(e){}
+  return false;
+}
+async function load(auto){
+  if(_loading) return; _loading=true;
+  var _hold=function(){ return auto && rcBusyEditing(); };
+  try{
+    try{ linkLoad(false).then(function(){ if(VIEW==='today' && !_hold()) renderView(); }); if(isAdmin()) linkDayRows(false); }catch(_lk){}
     await loadCover();
     var d=await jget(API+'?'+qs({action:'pa_list', project:PROJECT})+'&_='+Date.now(), 10000);
     if(!d||!d.ok) throw new Error((d&&d.error)||'load');
@@ -1181,7 +1228,7 @@ async function load(){
     BASECOUNT[PROJECT]=(isAdmin()?rows:ROWS).filter(function(r){ return r.status!=='banned' && !isParked(r); }).length;   // banned + parked accounts never count in a total
     if(_retryT){ clearTimeout(_retryT); _retryT=null; }
     autoGraduate();
-    paintTop(); renderView();
+    paintTop(); if(!_hold()) renderView();
     try{ hoLoad(false); }catch(_ho){}
   }catch(e){
     if(ROWS.length) toast('Refresh failed — showing your last board. Retrying…');
@@ -1253,8 +1300,8 @@ async function pageWatch(){
 }
 setTimeout(pageWatch, 15000); setInterval(pageWatch, 120000);
 function smartPoll(){
-  setInterval(function(){ if(!document.hidden) load(); }, 60000);
-  document.addEventListener('visibilitychange', function(){ if(!document.hidden) load(); });
+  setInterval(function(){ if(!document.hidden) load(true); }, 60000);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) load(true); });
   if(isAdmin()) setInterval(function(){ if(!document.hidden) loadOff(); }, 5*60000);
 }
 
@@ -1301,6 +1348,10 @@ function rcFitTabs(){
     tb.classList.remove('stack'); if(t.scrollWidth>t.clientWidth+2) tb.classList.add('stack'); }catch(e){}
 }
 window.addEventListener('resize', function(){ clearTimeout(rcFitTabs._t); rcFitTabs._t=setTimeout(rcFitTabs, 120); });
+/* the header's real height (it wraps to two rows on an iPad) → --tbh, used by things that stick under it */
+function rcTbh(){ try{ var tb=document.querySelector('header.tb'); if(tb) document.documentElement.style.setProperty('--tbh', (tb.getBoundingClientRect().height+8)+'px'); }catch(e){} }
+try{ if(window.ResizeObserver){ var _tbo=new ResizeObserver(rcTbh); var _tbe=document.querySelector('header.tb'); if(_tbe) _tbo.observe(_tbe); else document.addEventListener('DOMContentLoaded', function(){ var x=document.querySelector('header.tb'); if(x) _tbo.observe(x); }); } }catch(_ro){}
+window.addEventListener('resize', rcTbh);
 try{ document.fonts && document.fonts.ready.then(function(){ rcFitTabs(); }); }catch(_fr){}
 function go(v){
   if(qzOn()) return;
@@ -1405,7 +1456,7 @@ function openModal(html){ var m=$('modal'); m.classList.remove('wide'); m.innerH
 function closeModal(v){ $('modal').classList.remove('on'); if(!$('drawer').classList.contains('on')) $('scrim').classList.remove('on'); if(_mResolve){ var r=_mResolve; _mResolve=null; r(v); } }
 function closeAll(){ closeModal(false); $('drawer').classList.remove('on'); $('scrim').classList.remove('on'); }
 document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeAll(); });
-document.addEventListener('click', function(e){ document.querySelectorAll('details.km[open]').forEach(function(d){ if(!d.contains(e.target)) d.removeAttribute('open'); }); });
+['click','pointerdown'].forEach(function(ev){ document.addEventListener(ev, function(e){ document.querySelectorAll('details.km[open]').forEach(function(d){ if(!d.contains(e.target)) d.removeAttribute('open'); }); }); });
 function confirmBox(title, body, okLbl, danger){
   return new Promise(function(res){
     _mResolve=res;
@@ -2041,10 +2092,13 @@ async function whereFix(who, kind){
    button while something is typed. `state` is the variable it writes (TD.q / DB.q). */
 function searchBox(id, val, ph, state, hits){
   var has=String(val||'').trim();
-  return '<div class="search'+(has?' has':'')+'">'+IC.search+'<input class="inp" id="'+id+'" placeholder="'+esc(ph)+'" value="'+esc(val||'')+'" oninput="'+state+'=this.value;renderView()" onkeydown="if(event.key===\'Escape\'){'+state+'=\'\';renderView();}" autocomplete="off" spellcheck="false">'+
+  return '<div class="search'+(has?' has':'')+'">'+IC.search+'<input class="inp" id="'+id+'" placeholder="'+esc(ph)+'" value="'+esc(val||'')+'" oninput="'+state+'=this.value;rcSearchSoon(event)" onkeydown="if(event.key===\'Escape\'){'+state+'=\'\';renderView();}" autocomplete="off" spellcheck="false">'+
     (has?(hits!=null?'<span class="hits">'+hits+' found</span>':'')+'<button class="clr" title="Clear search (Esc)" onclick="'+state+'=\'\';renderView();var e=document.getElementById(\''+id+'\');if(e)e.focus()">×</button>'
         :'<span class="kb" title="Press / to search">/</span>')+'</div>';
 }
+var _rcSrchT=0;
+function rcSearchSoon(ev){ clearTimeout(_rcSrchT); if(ev && ev.isComposing) return; _rcSrchT=setTimeout(function(){ renderView(); }, 180); }
+document.addEventListener('compositionend', function(e){ if(e.target && e.target.closest && e.target.closest('.search,.row')) rcSearchSoon(); });
 function tdMatch(q){ q=String(q||'').trim().toLowerCase(); return function(r){ return [r.handle,r.method,r.model,r.device,r.niche,vaName(owner(r)),vaName(worksFor(r))].join(' ').toLowerCase().indexOf(q)>=0; }; }
 document.addEventListener('keydown', function(e){
   if(e.key!=='/' || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -3992,7 +4046,7 @@ function vSubs(){
   var sorters={ posts:function(a,b){ return b.posts-a.posts || a.k.localeCompare(b.k); }, rate:function(a,b){ return b.rate-a.rate || b.posts-a.posts; }, up:function(a,b){ return b.up-a.up || b.posts-a.posts; }, last:function(a,b){ return a.last<b.last?1:(a.last>b.last?-1:0); }, ban:function(a,b){ return b.nBan-a.nBan || b.posts-a.posts; } };
   var list=S.list.filter(function(s){ return !q || s.k.indexOf(q)>=0; }).sort(sorters[SUBS.sort]||sorters.posts);
   var th=function(k,l,t){ return '<th style="cursor:pointer" title="'+esc(t||'Sort')+'" onclick="SUBS.sort=\''+k+'\';renderView()">'+l+(SUBS.sort===k?' <span class="ar">▼</span>':'')+'</th>'; };
-  h+='<div class="row" style="margin:16px 0 8px;gap:8px"><b style="font-size:14px">By subreddit</b><span class="muted" style="font-size:12px">'+list.length+' of '+S.list.length+'</span><div style="flex:1"></div><input class="inp" placeholder="Search a subreddit…" value="'+esc(SUBS.q)+'" oninput="SUBS.q=this.value;renderView()" style="width:220px" id="sub-q"></div>';
+  h+='<div class="row" style="margin:16px 0 8px;gap:8px"><b style="font-size:14px">By subreddit</b><span class="muted" style="font-size:12px">'+list.length+' of '+S.list.length+'</span><div style="flex:1"></div><input class="inp" placeholder="Search a subreddit…" value="'+esc(SUBS.q)+'" oninput="SUBS.q=this.value;rcSearchSoon(event)" style="width:220px" id="sub-q"></div>';
   h+='<div class="tbl-w"><table class="db"><thead><tr><th class="c1">Subreddit</th><th>Verdict</th>'+th('posts','Posts')+th('up','Stayed up')+'<th>Removed</th><th title="Caught by Reddit\'s or AutoModerator\'s spam filter">Spam filter</th><th title="Not checked yet — left out of the removal rate">Not checked</th>'+th('rate','Removal rate','Removed by mods + spam filter, as a share of the CHECKED posts')+'<th>Accounts</th>'+th('ban','Banned ≤3 days','Accounts banned within 3 days after posting here — a hint, not proof')+th('last','Last post')+(admin?'<th></th>':'')+'</tr></thead><tbody>'+
     list.map(function(s){ var vd=subVerdict(s), pc=Math.round(s.rate*100), av=subAvoidList().indexOf(s.k)>=0;
       return '<tr><td class="c1"><a href="https://www.reddit.com/'+esc(s.name)+'/" target="_blank" rel="noopener" style="color:inherit;font-weight:700">'+esc(s.name)+' ↗</a></td>'+
@@ -4464,8 +4518,8 @@ function delReview(){
 var UNDO=[], _undoing=false;
 function undoPush(e){ if(_undoing) return; UNDO.push(e); if(UNDO.length>25) UNDO.shift(); }
 function toastUndo(msg){
-  var t=$('toast'); t.innerHTML=esc(msg)+' <button onclick="undoLast()" style="margin-left:10px;border:none;background:rgba(255,255,255,.16);color:#fff;font-weight:800;border-radius:8px;padding:4px 10px;cursor:pointer">Undo</button> <span style="opacity:.55;font-size:11px;margin-left:4px">'+(/Mac|iPhone|iPad/.test(navigator.platform||'')?'⌘Z':'Ctrl+Z')+'</span>';
-  t.style.pointerEvents='auto'; t.classList.add('on'); clearTimeout(_tt); _tt=setTimeout(function(){ t.classList.remove('on'); t.style.pointerEvents=''; },6000);
+  var t=$('toast'); t.innerHTML=esc(msg)+' <button onclick="undoLast()" style="margin-left:10px;border:none;background:rgba(255,255,255,.16);color:#fff;font-weight:800;border-radius:8px;padding:4px 10px;cursor:pointer">Undo</button> <span style="opacity:.55;font-size:11px;margin-left:4px">'+(document.documentElement.classList.contains('touch')?'':(/Mac|iPhone|iPad/.test(navigator.platform||'')?'⌘Z':'Ctrl+Z'))+'</span>';
+  t.style.pointerEvents='auto'; t.classList.add('on'); clearTimeout(_tt); _tt=setTimeout(function(){ t.classList.remove('on'); t.style.pointerEvents=''; },document.documentElement.classList.contains('touch')?10000:6000);
 }
 async function undoLast(){
   if(_undoing) return;
@@ -5853,7 +5907,7 @@ function qrPanel(rows){
   var id=QR.list[QR.i], r=id?rowById(id):null;
   if(!r){ QR.review=true; qrSave(); return qrReviewPanel(); }
   var sm=stageMeta(r.status), lw=lastWorked(r), c=qrCount(), prev=QR.i>0?QR.ans[QR.list[QR.i-1]]:null, prevR=QR.i>0?rowById(QR.list[QR.i-1]):null;
-  return '<div class="card pad" style="margin-bottom:12px;border:2px solid #c4b5fd;position:sticky;top:110px;z-index:20">'+
+  return '<div class="card pad" style="margin-bottom:12px;border:2px solid #c4b5fd;position:sticky;top:var(--tbh,110px);z-index:20">'+
     '<div class="row" style="gap:10px;flex-wrap:wrap"><span class="muted" style="font-weight:800;font-size:12px">'+(QR.i+1)+' / '+QR.list.length+'</span>'+
       '<div class="prog" style="flex:1;max-width:260px"><i style="width:'+Math.round(QR.i/Math.max(1,QR.list.length)*100)+'%"></i></div><div class="sp"></div>'+
       (isAdmin()?(QR.t0?'<span class="muted" style="font-size:12px;font-weight:700">'+Math.floor((Date.now()-QR.t0)/60000)+':'+('0'+Math.floor((Date.now()-QR.t0)/1000)%60).slice(-2)+' elapsed</span>':''):hcClockChip())+
@@ -5918,11 +5972,11 @@ function qrAnswer(k){
   var nx=-1; for(var j=QR.i+1;j<QR.list.length;j++){ if(!QR.ans[QR.list[j]] && rowById(QR.list[j])){ nx=j; break; } }   // next one still unanswered
   if(nx<0){ QR.i=QR.list.length; QR.review=true; qrSave(); renderView(); return; }
   QR.i=nx;
-  qrSave(); renderView(); qrOpen();                                    // next profile opens at once (same tab)
+  qrSave(); qrOpen(); renderView();                                    // next profile opens at once (same tab) — opened first so Safari/iPad allows it
 }
-function qrBack(){ if(QR.sending) return; hcTouch(); if(QR.review){ QR.review=false; QR.i=Math.max(0, QR.list.length-1); } else if(QR.i>0) QR.i--; qrSave(); renderView(); qrOpen(); }
+function qrBack(){ if(QR.sending) return; hcTouch(); if(QR.review){ QR.review=false; QR.i=Math.max(0, QR.list.length-1); } else if(QR.i>0) QR.i--; qrSave(); qrOpen(); renderView(); }
 function qrToReview(){ QR.review=true; qrSave(); renderView(); }
-function qrContinue(){ hcTouch(); var i=QR.list.findIndex(function(id){ return !QR.ans[id] && rowById(id); }); QR.review=false; QR.i=i<0?QR.list.length:i; qrSave(); renderView(); if(i>=0) qrOpen(); }
+function qrContinue(){ hcTouch(); var i=QR.list.findIndex(function(id){ return !QR.ans[id] && rowById(id); }); QR.review=false; QR.i=i<0?QR.list.length:i; qrSave(); if(i>=0) qrOpen(); renderView(); }
 function qrSet(id, k){ if(QR.sending) return; if(k) QR.ans[id]=k; else delete QR.ans[id]; delete QR.fail[id]; qrSave(); renderView(); }
 async function qrSaveOne(r, k){
   if(k==='a') return await saveMeta(r,{ hcok:today(), hcby:USER.id, hcrep:null });
@@ -7335,6 +7389,51 @@ function qzKeyModal(){
     '<div style="max-height:60vh;overflow:auto;padding:0 2px">'+A.key.map(function(x,i){ return '<div class="qz-miss"><b>'+(i+1)+'. '+esc(x.q)+'</b>'+x.o.map(function(o,k){ return '<div style="padding:2px 0 2px 10px;'+(k===x.a?'color:#047857;font-weight:800':'color:var(--ink2)')+'">'+(k===x.a?'✓ ':'· ')+esc(o)+'</div>'; }).join('')+'<div class="muted" style="margin-top:4px;font-size:12px">'+esc(x.why)+'</div></div>'; }).join('')+'</div>'+
     '<div class="md-f"><button class="btn pri" onclick="closeModal(false)">Close</button></div>');
 }
+</script>
+<style id="rc-touch-css">
+/* ── iPad / touch layer (Nov 3, 2026 — Jeth reviews from an iPad 11). html.touch is set at boot (jmb-touch-boot). ── */
+html.touch{ -webkit-tap-highlight-color:rgba(124,58,237,.14); }
+html.touch button, html.touch a, html.touch summary, html.touch label, html.touch select, html.touch .chip, html.touch tr.r, html.touch input[type=checkbox]{ touch-action:manipulation; }
+html.touch .btn{ min-height:40px; }
+html.touch .btn.sm{ min-height:36px; padding:8px 13px; font-size:12.5px; }
+html.touch .lr .ses, html.touch .pk-b, html.touch .pchip, html.touch .chips .chip, html.touch .seg button, html.touch .tabs button, html.touch .bases button, html.touch .km .dd button, html.touch .dr-days button, html.touch .pq-sug{ min-height:36px; }
+html.touch .km>summary, html.touch .search .clr{ min-width:38px; min-height:38px; }
+html.touch .inp, html.touch .sel{ min-height:40px; }
+html.touch .stg, html.touch .hf{ min-height:34px; }
+html.touch input[type=checkbox], html.touch input[type=radio]{ width:22px; height:22px; }
+/* the tab row stays ONE line you can swipe, instead of wrapping into a tall header */
+html.touch .tb.stack .tabs{ flex-wrap:nowrap; overflow-x:auto; justify-content:flex-start; -webkit-overflow-scrolling:touch; }
+html.touch .tabs button{ flex:0 0 auto; }
+/* a tap leaves :hover on — no lifted cards */
+html.touch .kc:hover, html.touch .kpi:hover, html.touch .vd:hover, html.touch .ph-c:hover, html.touch .tp .va:hover{ transform:none !important; }
+/* modal + drawer fit above the keyboard / toolbar and scroll inside */
+html.touch #modal{ max-height:calc(100dvh - 24px); overflow-y:auto; -webkit-overflow-scrolling:touch; }
+html.touch #drawer{ max-height:100dvh; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+html.touch .tbl-w, html.touch .xf-wrap{ -webkit-overflow-scrolling:touch; }
+#tt-tip{ position:fixed; z-index:100060; left:12px; top:12px; max-width:min(360px, calc(100vw - 24px)); background:#1f2430; color:#fff; font:600 13px/1.45 Inter,system-ui,sans-serif; padding:10px 12px; border-radius:12px; box-shadow:0 16px 40px rgba(15,23,42,.35); white-space:pre-wrap; pointer-events:none; opacity:0; transition:opacity .15s; }
+#tt-tip.on{ opacity:1; }
+</style>
+<script id="rc-touch-js">
+/* touch only: tap anything that carries a hover tooltip (title) to read it — QA rule details, reasons, chart points */
+(function(){
+  if(!document.documentElement.classList.contains('touch')) return;
+  var tip=null, hideT=0;
+  function show(text, x, y){
+    if(!tip){ tip=document.createElement('div'); tip.id='tt-tip'; document.body.appendChild(tip); }
+    tip.textContent=text; tip.classList.add('on');
+    var w=tip.offsetWidth, h=tip.offsetHeight, L=Math.max(12, Math.min(x-w/2, innerWidth-w-12)), T=y-h-12; if(T<12) T=y+28;
+    tip.style.left=L+'px'; tip.style.top=T+'px'; clearTimeout(hideT); hideT=setTimeout(function(){ tip.classList.remove('on'); }, 4500);
+  }
+  document.addEventListener('click', function(e){
+    var t0=e.target; if(!t0 || !t0.closest) return;
+    var el=t0.closest('[title]'), txt='';
+    if(el){ if(el.closest('button,a,input,select,textarea,label,summary,[onclick],[role=button]')) el=null; else txt=el.getAttribute('title')||''; }
+    if(!el){ var sv=t0.closest('svg *'); if(sv){ var tt=null; for(var n=sv; n && n.tagName && n.tagName.toLowerCase()!=='svg'; n=n.parentNode){ for(var c=n.firstChild;c;c=c.nextSibling){ if(c.nodeName && c.nodeName.toLowerCase()==='title'){ tt=c; break; } } if(tt) break; } if(tt){ el=sv; txt=tt.textContent||''; } } }
+    if(!el || txt.length<2){ if(tip) tip.classList.remove('on'); return; }
+    var r=el.getBoundingClientRect(); show(txt, r.left+r.width/2, r.top);
+  }, true);
+  window.addEventListener('scroll', function(){ if(tip) tip.classList.remove('on'); }, true);
+})();
 </script>
 </body>
 </html>
