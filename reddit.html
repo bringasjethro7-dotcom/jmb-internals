@@ -832,7 +832,8 @@ function sxUnits(r, wk, ow){
     if(s1||s2) return { tot:2, done:s1+s2, k:'warm', late:sxDay(r)>=3, over:sxDay(r)>=4 };
     if(sxWarmAt(r)) return { tot:0, done:0, k:'warmed' };   // warmed on an earlier day (one session under the Oct 27 rule counts) — never reset
     if(sxDay(r)===1) return { tot:0, done:0, k:'day1' };   // Oct 31: created today — the warm-up is due from day 2, not before
-    return { tot:2, done:0, k:'warm', late:sxDay(r)>=3, over:sxDay(r)>=4 };   // Oct 31: no automatic "overdue" — the VA puts it on Standby when the client says so
+    if(!sxWarmWindow(r)) return { tot:0, done:0, k:'backlog', over:true };   // Nov 3 (Jeth): past day 3 and never warmed = backlog — not in today's target (one shift can't warm a week of accounts); warming it today counts, and then it owes both warm-ups
+    return { tot:2, done:0, k:'warm', late:sxDay(r)>=3, over:false };
   }
   if(r.status==='sxpost'){
     if(!sxAssign(r)) return { tot:s1+s2, done:s1+s2, k:'noassign' };
@@ -848,6 +849,7 @@ function sxToday(rows){
     var u=sxUnits(r, worksFor(r), owner(r)); if(!u) return;
     if(u.k==='standby'){ o.standby=(o.standby||0)+1; return; }
     if(u.k==='warm'){ o.warm++; if(u.done>=u.tot) o.warmDone++; else if(!u.done){ if(u.late) o.late++; if(u.over) o.over++; } }
+    else if(u.k==='backlog'){ o.backlog=(o.backlog||0)+1; }   // Nov 3: past day 3, never warmed — flagged, not in the target
     else if(u.k==='warmed'){ o.warmed++; if(sxDay(r)>=3) o.ready++; }
     else if(u.k==='noassign') o.noassign++;
     else if(u.k==='day1') return;
@@ -1864,10 +1866,10 @@ function vToday(){
   try{   // Oct 27: the Suicidal Operation's day — one warm-up per account (day 2, day 3 at the latest), posting needs an assignment
     var _sxRows=admin?(ALL[PROJECT]||ROWS).filter(function(r){ return !isParked(r); }):mineWork, _sx=sxToday(_sxRows);
     var _sxNoA=_sxRows.filter(function(r){ return isSX(r) && !isDead(r) && !isParked(r) && !sxAssign(r) && (r.status==='sxpost' || (r.status==='sxwarm' && sxDay(r)>=3)); }).length;
-    var _wLeft=_sx.warm-_sx.warmDone;
-    if(_wLeft) h+='<div class="banner '+(_sx.over?'bad':'warn')+'" style="border-color:'+SX_C+'55">'+IC.hour+'<div style="flex:1"><b>Suicidal Op warm-ups:</b> '+(_wLeft?_wLeft+' left today'+(_sx.warmDone?' ('+_sx.warmDone+' done)':'')+' — two 8–12 min sessions per account (Warm-up 1, then Warm-up 2 later the same day), then it owes nothing until it posts.':'none due today.')+
+    var _wLeft=_sx.warm-_sx.warmDone, _bl=_sx.backlog||0;
+    if(_wLeft || _bl) h+='<div class="banner '+(_bl?'bad':'warn')+'" style="border-color:'+SX_C+'55">'+IC.hour+'<div style="flex:1"><b>Suicidal Op warm-ups:</b> '+(_wLeft?_wLeft+' left today'+(_sx.warmDone?' ('+_sx.warmDone+' done)':'')+' — two 8–12 min sessions per account (Warm-up 1, then Warm-up 2 later the same day), then it owes nothing until it posts.':'none due today'+(_sx.warmDone?' ('+_sx.warmDone+' done)':'')+'.')+
       (_sx.late-_sx.over>0?' <b>'+(_sx.late-_sx.over)+'</b> '+((_sx.late-_sx.over)===1?'is':'are')+' on <b>day 3</b>.':'')+
-      (_sx.over?' <b style="color:#b91c1c">'+_sx.over+' '+(_sx.over===1?'is':'are')+' past day 3 and not warmed yet</b>.':'')+
+      (_bl?' <b style="color:#b91c1c">'+_bl+' '+(_bl===1?'is':'are')+' past day 3 and not warmed yet</b> — not in your target. Warming one today counts (both warm-ups).':'')+
       ' Not working '+(_wLeft===1?'it':'some of them')+' today on the client\'s advice? Tap <b>Standby</b> on the account — it leaves today\'s target until you put it back.'+
       (_sx.standby?' <span class="muted">('+_sx.standby+' on standby now.)</span>':'')+'</div></div>';
     if(_sxNoA) h+='<div class="banner info" style="border-color:'+SX_C+'55">'+IC.tag+'<div style="flex:1"><b>'+_sxNoA+' Suicidal Op account'+(_sxNoA===1?' is':'s are')+' on day 3+ with no posting assignment.</b> '+(admin?'The VA can\'t post '+(_sxNoA===1?'it':'them')+' until you record what the client assigned. They are kept out of the daily target until then.':'Ask the admin for the assignment before posting — until it is set, '+(_sxNoA===1?'it is':'they are')+' not in your target.')+'</div>'+
@@ -2236,7 +2238,7 @@ function sxProg(r){
     var lbl, col;
     if(u.k==='warm' && u.done===1 && u.tot===2){ lbl='Day '+sd+' · Warm-up 1 done · Warm-up 2 due today'; col='#b45309'; }
     else if(u.k==='warmed' || (u.k==='warm' && u.done)){ lbl='Day '+sd+' · warmed ✓'+(sd>=3?(asg?' · ready to post':' · ready — <span style="color:#b45309">no assignment yet</span>'):' · posting from day 3'); col='#047857'; }
-    else if(u.over){ lbl='Day '+sd+' · warm-up overdue'; col='#b91c1c'; }
+    else if(u.k==='backlog' || u.over){ lbl='Day '+sd+' · warm-up overdue · not in today\'s target'; col='#b91c1c'; }
     else if(u.late){ lbl='Day '+sd+' · warm-up today (last day)'; col='#b45309'; }
     else { lbl='Day '+sd+' · warm-up due'; col='var(--ink2)'; }
     return '<div class="gate" title="'+esc(p.plan||'')+'"><b style="color:'+col+'">'+lbl+'</b><div class="prog"><i style="width:'+Math.min(100,sd/3*100)+'%;background:'+SX_C+'"></i></div></div>';
@@ -3318,7 +3320,7 @@ function progWhy(va){
       (sxw.length?'<div class="card pad" style="margin-bottom:10px;border-color:'+SX_C+'40"><b style="color:'+SX_C+'">Suicidal Operation</b> — <b>'+sxD+'/'+sxT+'</b> by its own SOP: '+
         (sxN.warm?sxN.warm+' warm-up'+(sxN.warm===1?'':'s')+' due (2 sessions each, on the warm-up day)':'no warm-ups due')+
         (sxN.post?' · '+sxN.post+' posting × 2':'')+'.'+
-        '<div class="muted" style="font-size:12px">Not due: '+(sxN.warmed||0)+' already warmed (waiting for day 3 / posting)'+(sxN.noassign?' · '+sxN.noassign+' posting with no assignment yet':'')+(sxN.day1?' · '+sxN.day1+' created today (warm-up is day 2)':'')+(sxN.standby?' · '+sxN.standby+' on standby (the VA took them out of today\'s target on the client\'s advice)':'')+'.</div></div>':'')+
+        '<div class="muted" style="font-size:12px">Not due: '+(sxN.warmed||0)+' already warmed (waiting for day 3 / posting)'+(sxN.backlog?' · '+sxN.backlog+' past day 3 and never warmed (backlog — counted only when worked)':'')+(sxN.noassign?' · '+sxN.noassign+' posting with no assignment yet':'')+(sxN.day1?' · '+sxN.day1+' created today (warm-up is day 2)':'')+(sxN.standby?' · '+sxN.standby+' on standby (the VA took them out of today\'s target on the client\'s advice)':'')+'.</div></div>':'')+
       '<div class="card pad" style="margin-bottom:10px"><b>Creations counted this shift — '+cre.length+'</b> ('+cre.filter(function(x){ return x.c.done; }).length+' finished)'+
         (cre.length?'<div style="margin-top:6px">'+cre.map(function(x){ return '<span class="chip" style="margin:2px">'+esc(x.r.handle)+(x.c.done?' ✓':' · setup open')+(x.c.how==='time'?' · by time':'')+'</span>'; }).join('')+'</div>':'')+'</div>'+
       (miss.length?'<div class="card pad" style="border-color:#fed7aa"><b style="color:#9a3412">Logged in the last 36 h but NOT counted — '+miss.length+'</b>'+
