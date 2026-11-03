@@ -1425,6 +1425,13 @@ var SXPH=[
  {k:'sxpost', n:'Suicidal · Posting', c:'#0f766e', sx:true, plan:'Day 3 onward · posting, the way the client assigned the account.', task:'Reddit Posting'}
 ];
 var SX_STAGES=['sxwarm','sxpost'], SX_C='#0f766e';
+/* TRIAL POSTING PHASES (Nov 3) — side phases next to the ladder, a test trial for posting (one session a day). */
+var TRPH=[
+ {k:'extended', n:'Extended Posting', c:'#2563eb', side:true, plan:'Trial posting phase · one session a day · 10 min active browsing before posting · 2–5 NSFW comment replies on our posts · 4–5 posts, 3–5 min apart · 8–12 DM replies.', task:'Reddit Posting'},
+ {k:'long',     n:'Long Posting',     c:'#9333ea', side:true, plan:'Trial posting phase · one session a day · 20–25 min active browsing before posting · 2–5 NSFW comment replies on our posts · 4–5 posts, 3–5 min apart.', task:'Reddit Posting'}
+];
+var TR_STAGES=['extended','long'];
+function isTrial(k){ return TR_STAGES.indexOf(k)>=0; }
 var CXS={ sop:'std', range:30 };
 function isSX(r){ return !!r && ((r.meta&&r.meta.sop==='sx') || SX_STAGES.indexOf(r.status)>=0); }
 function sopOf(r){ return isSX(r)?'sx':'std'; }
@@ -1432,13 +1439,14 @@ function sxAssign(r){ return String(((r&&r.meta)||{}).sxa||'').trim(); }
 function sxAssignList(){ return (Array.isArray(CFG.sx_assign)&&CFG.sx_assign.length)?CFG.sx_assign.slice():['Location posting']; }
 function sxBadge(small){ return '<span class="pill" style="background:'+SX_C+'14;color:'+SX_C+(small?';font-size:10.5px;padding:2px 8px':'')+'">Suicidal Op</span>'; }
 function sxPosted(r){ return r.status==='sxpost' || ((r.meta||{}).prev==='sxpost'); }
-var ORDER=['new','creation','creationstandby','warming','comment','nsfw','day1','early','earlydm','medium','strong','superstrong','sxwarm','sxpost','recovery','tempban','onhold','archived','banned'];
+var ORDER=['new','creation','creationstandby','warming','comment','nsfw','day1','early','earlydm','medium','strong','superstrong','extended','long','sxwarm','sxpost','recovery','tempban','onhold','archived','banned'];
 var GROUPS=[
  {k:'new',  n:'New',       c:'#ff6b1a', st:['new']},
  {k:'cre',  n:'Creation',  c:'#f59e0b', st:['creation','creationstandby']},
  {k:'warm', n:'Warm-up',   c:'#f97316', st:['warming','comment','nsfw']},
  {k:'post', n:'Posting',   c:'#ec4899', st:['day1','early','earlydm','medium']},
  {k:'str',  n:'Strong',    c:'#8b5cf6', st:['strong','superstrong']},
+ {k:'trial',n:'Trial posting', c:'#2563eb', st:['extended','long']},
  {k:'sx',   n:'Suicidal Op', c:'#0f766e', st:['sxwarm','sxpost']},
  {k:'rec',  n:'Recovery',  c:'#0ea5e9', st:['recovery']},
  {k:'tb',   n:'Temp ban',  c:'#d97706', st:['tempban']},
@@ -1449,15 +1457,16 @@ var GROUPS=[
 var END_REASONS=['Permanently suspended','Shadowbanned','Locked — could not recover','Other'];
 /* Stage typed into the sheet as its display name ("Medium + DMs", "Spam Recovery")? Map it to the key
    so the card gets its colour, plan and session buttons. The backend does the same from rc-2026-10-04e. */
-var ST_ALIAS={ sxwarmup:'sxwarm', sxwarming:'sxwarm', suicidalwarmup:'sxwarm', suicidalwarm:'sxwarm', suicidewarmup:'sxwarm', suicidalwarming:'sxwarm', sxposting:'sxpost', suicidalposting:'sxpost', suicidalpost:'sxpost', suicideposting:'sxpost', newlycreated:'new', newcreated:'new', creationstage:'creation', standby:'creationstandby', warmup:'warming', warmingup:'warming',
+var ST_ALIAS={ extendedposting:'extended', extendedpost:'extended', extendedphase:'extended', extendedpostingphase:'extended', longposting:'long', longpost:'long', longphase:'long', longpostingphase:'long', sxwarmup:'sxwarm', sxwarming:'sxwarm', suicidalwarmup:'sxwarm', suicidalwarm:'sxwarm', suicidewarmup:'sxwarm', suicidalwarming:'sxwarm', sxposting:'sxpost', suicidalposting:'sxpost', suicidalpost:'sxpost', suicideposting:'sxpost', newlycreated:'new', newcreated:'new', creationstage:'creation', standby:'creationstandby', warmup:'warming', warmingup:'warming',
   commentfarm:'comment', commentfarming:'comment', comments:'comment', nsfwcomment:'nsfw', nsfwcomments:'nsfw', day1posting:'day1', dayone:'day1', dayoneposting:'day1',
   earlyposting:'early', earlydms:'earlydm', earlyplusdms:'earlydm', earlywithdms:'earlydm', mediumdm:'medium', mediumdms:'medium', mediumplusdms:'medium',
   spamrecovery:'recovery', spamfilter:'recovery', spamfilterrecovery:'recovery', spam:'recovery', tempbanned:'tempban', temporaryban:'tempban', temporarybanned:'tempban',
   temporarilybanned:'tempban', hold:'onhold', onhold:'onhold', paused:'onhold', archive:'archived', archived:'archived', retired:'archived', ban:'banned', permanentlybanned:'banned', permaban:'banned', suspended:'banned', dead:'banned' };
 function statusKey(v){ var raw=String(v==null?'':v).trim(), k=raw.toLowerCase().replace(/[^a-z0-9]/g,''); if(!k) return ''; if(ORDER.indexOf(k)>=0) return k; return ST_ALIAS[k]||raw.toLowerCase(); }
 function normRows(rows){ (rows||[]).forEach(function(r){ r.status=statusKey(r.status); }); return rows; }
-function phase(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return PH[i]; for(var j=0;j<SXPH.length;j++) if(SXPH[j].k===k) return SXPH[j]; return null; }
+function phase(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return PH[i]; for(var j=0;j<SXPH.length;j++) if(SXPH[j].k===k) return SXPH[j]; for(var t=0;t<TRPH.length;t++) if(TRPH[t].k===k) return TRPH[t]; return null; }
 function phaseIx(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return i; return -1; }
+function pIx(k){ return isTrial(k)?phaseIx('day1'):phaseIx(k); }   // Nov 3: trial posting phases count as posting
 function stageMeta(k){
   var p=phase(k); if(p) return {k:k,n:p.n,c:p.c};
   for(var i=0;i<EXTRA.length;i++) if(EXTRA[i].k===k) return EXTRA[i];
@@ -1586,7 +1595,7 @@ function plSummary(rows){
   var b7=rows.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<7; }).length;
   var s30=addDays(today(),-29), b30=rows.filter(function(r){ var e=endedAt(r); return e && phtDate(e)>=s30; }).length;
   var ex=rows.filter(function(r){ var e=endedAt(r); return !e || phtDate(e)>=s30; }).length;
-  var P1=phaseIx('day1'), post=rows.filter(function(r){ return isSX(r)?sxPosted(r):(phaseIx(r.status)>=P1 || phaseIx(M(r).prev)>=P1); }).length;
+  var P1=phaseIx('day1'), post=rows.filter(function(r){ return isSX(r)?sxPosted(r):(pIx(r.status)>=P1 || pIx(M(r).prev)>=P1); }).length;
   return { n:rows.length, alive:alive, c7:c7, b7:b7, net:c7-b7, rate30:ex?b30/ex:null, post:rows.length?post/rows.length:null };
 }
 /* ═══════════ INSIGHTS — owner only · rebuilt Oct 8 (live, reconciled, client-ready) ═══════════
@@ -1670,10 +1679,10 @@ var _fp={ key:'', map:{} };
 function insFirstPost(){
   insHist(); if(_fp.key===_ih.key) return _fp.map;
   var P1=phaseIx('day1'), m={};
-  insEv().forEach(function(e){ if(!e || !e.account_id) return; if(phaseIx(statusKey(e.to))>=P1){ var t=parseTs(e.at); if(t && (!m[e.account_id] || t<m[e.account_id])) m[e.account_id]=t; } else if(phaseIx(statusKey(e.from))>=P1 && !m[e.account_id]) m[e.account_id]=parseTs(e.at)||new Date(); });
+  insEv().forEach(function(e){ if(!e || !e.account_id) return; if(pIx(statusKey(e.to))>=P1){ var t=parseTs(e.at); if(t && (!m[e.account_id] || t<m[e.account_id])) m[e.account_id]=t; } else if(pIx(statusKey(e.from))>=P1 && !m[e.account_id]) m[e.account_id]=parseTs(e.at)||new Date(); });
   _fp={ key:_ih.key, map:m }; return m;
 }
-function reachedPost(r, fp){ var P1=phaseIx('day1'); return !!(fp||insFirstPost())[r.id] || phaseIx(r.status)>=P1 || phaseIx(insPhase(r).k)>=P1; }
+function reachedPost(r, fp){ var P1=phaseIx('day1'); return !!(fp||insFirstPost())[r.id] || pIx(r.status)>=P1 || pIx(insPhase(r).k)>=P1; }
 
 /* ═══ RESPONSIBILITY FOLLOWS THE TRANSFER (Jeth, Oct 9) ═══
    "When a VA created accounts, it counts on their name that day. When the account is transferred, from the transfer date the
@@ -2251,7 +2260,7 @@ function cxShort(ymd){ try { return new Date(ymd + 'T12:00:00+08:00').toLocaleDa
 var CX_G = [
   { k: 'setup', n: 'Setup',    c: '#f59e0b', st: ['new', 'creation', 'creationstandby'], d: 'Created and aging' },
   { k: 'warm',  n: 'Warm-up',  c: '#f97316', st: ['warming', 'comment', 'nsfw'],         d: 'Building trust & karma' },
-  { k: 'post',  n: 'Posting',  c: '#ec4899', st: ['day1', 'early', 'earlydm', 'medium'], d: 'Posting & messaging' },
+  { k: 'post',  n: 'Posting',  c: '#ec4899', st: ['day1', 'early', 'earlydm', 'medium', 'extended', 'long'], d: 'Posting & messaging' },
   { k: 'str',   n: 'Strong',   c: '#8b5cf6', st: ['strong', 'superstrong'],              d: 'Full output' }
 ];
 function cxModel(){
@@ -2264,7 +2273,7 @@ function cxModel(){
   });
   var live = days.map(function(d){ var n = 0; rows.forEach(function(r){ if ((!r.__cd || r.__cd <= d) && (!r.__ed || r.__ed > d)) n++; }); return n; });
   var alive = rows.filter(function(r){ return !isDead(r); }), P1 = phaseIx('day1');
-  var posting = alive.filter(function(r){ return phaseIx(r.status) >= P1; }).length;
+  var posting = alive.filter(function(r){ return pIx(r.status) >= P1; }).length;
   var sum = function(a, i, j){ var s = 0; for (var k = i; k <= j; k++) s += a[k] || 0; return s; };
   var c7 = sum(created, 23, 29), c7p = sum(created, 16, 22), b7 = sum(bans, 23, 29), b7p = sum(bans, 16, 22);
   var elig = rows.filter(function(r){ var c = createdAt(r); return c && dayDiff(c) >= 14; }), surv = elig.filter(function(r){ var a = ageDays(r); return !isDead(r) || (a != null && a > 14); }).length;
@@ -2272,7 +2281,7 @@ function cxModel(){
   var up7 = 0, toPost7 = 0, enter = {};
   ev.forEach(function(x){
     var t = parseTs(x.at); if (!t || t.getTime() < wk) return;
-    if (x.kind === 'stage'){ var a = phaseIx(x.from), b = phaseIx(x.to);
+    if (x.kind === 'stage'){ var a = pIx(x.from), b = pIx(x.to);
       if (b >= 0 && (b > a)) up7++; if (b >= P1 && a < P1) toPost7++; }
     if (x.kind === 'stage' || x.kind === 'create' || x.kind === 'reinstate'){
       CX_G.forEach(function(g){ if (g.st.indexOf(x.to) >= 0 && g.st.indexOf(x.from) < 0) enter[g.k] = (enter[g.k] || 0) + 1; }); }
@@ -2442,7 +2451,7 @@ function cxFeed(M){
     if (x.kind === 'create'){ t = '<em style="--pc:#f26716">New account</em>'; c = '#f26716'; }
     else if (x.kind === 'ban'){ t = '<em style="--pc:#e11d48">Banned</em>' + (r.end_reason ? '<span class="rs">' + esc(r.end_reason) + '</span>' : ''); c = '#e11d48'; }
     else if (x.kind === 'reinstate'){ t = '<em style="--pc:#10b981">Reinstated</em><span class="to">→ ' + esc(to.n) + '</span>'; c = '#10b981'; }
-    else { var up = phaseIx(x.to) > phaseIx(x.from); t = '<em style="--pc:' + to.c + '">' + (up ? 'Moved up' : 'Moved') + '</em><span class="to" style="color:' + to.c + '">→ ' + esc(to.n) + '</span>'; }
+    else { var up = pIx(x.to) > pIx(x.from); t = '<em style="--pc:' + to.c + '">' + (up ? 'Moved up' : 'Moved') + '</em><span class="to" style="color:' + to.c + '">→ ' + esc(to.n) + '</span>'; }
     var sub = [String(r.model || '').trim(), methodOf(r) || ''].filter(Boolean).map(esc).join(' · ');
     return '<div class="cx-tle" style="--ec:' + c + '" onclick="openRecC(\'' + jsq(r.id || '') + '\')"><i></i><div class="tx"><div class="l1"><span class="u">' + esc(r.handle || '—') + '</span>' + t + '</div>' +
       '<small>' + (sub ? sub + ' · ' : '') + (f.t ? esc(fmtDT(f.t)) : '') + '</small></div><span class="ag">' + (f.t ? esc(insAgo(Date.now() - f.t.getTime())) : '') + '</span></div>';
@@ -3038,7 +3047,7 @@ function vAccounts(){
   var kf=[DB.model, DB.meth!=='all'?DB.meth:''].filter(Boolean);
   var ks=src.filter(function(r){ return (DB.meth==='all' || methodOf(r)===DB.meth) && (!DB.model || String(r.model||'')===DB.model); });
   var live=ks.filter(function(r){ return !isDead(r) && !isParked(r); }), P1=phaseIx('day1');
-  var posting=live.filter(function(r){ return isSX(r)?r.status==='sxpost':phaseIx(r.status)>=P1; }).length, warm=live.filter(function(r){ return isSX(r)?(r.status==='new'||r.status==='sxwarm'):(phaseIx(r.status)>=0 && phaseIx(r.status)<P1); }).length;
+  var posting=live.filter(function(r){ return isSX(r)?r.status==='sxpost':pIx(r.status)>=P1; }).length, warm=live.filter(function(r){ return isSX(r)?(r.status==='new'||r.status==='sxwarm'):(pIx(r.status)>=0 && pIx(r.status)<P1); }).length;
   var b30=ks.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<30; }).length, c30=ks.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)<30; }).length;
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Accounts</h2><p>Every '+esc(BASES.map(function(b){ return b.n; }).join(' + '))+' account — its stage, method and model, from creation to ban. Click one for its full history.</p></div>'+
     '<div class="cl-live no-print" id="cl-live"></div><button class="btn sec no-print" onclick="exportCsvC()">'+IC.dl+' Export CSV</button></div>';

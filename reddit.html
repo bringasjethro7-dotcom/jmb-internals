@@ -772,6 +772,17 @@ var SXPH=[
  {k:'sxwarm', n:'Suicidal · Warm-up', c:'#14b8a6', sx:true, from:2, plan:'TWO warm-up sessions on the warm-up day — Warm-up 1, then Warm-up 2 later the same day (day 2, or day 3 at the latest) · 8–12 min browsing each · search 2–4 topics and read them · no upvotes · no joining · no posting yet. After both, nothing is due on the account until it posts — posting opens on day 3.', task:'Reddit Warmup'},
  {k:'sxpost', n:'Suicidal · Posting', c:'#0f766e', sx:true, from:3, plan:'Day 3 onward, once warmed · 2 sessions a day · post the way the client assigned this account (its assignment is on the card — e.g. Location posting). No assignment yet? Ask the admin before you post — until it is set the account is not in your target. Log every post at the end of the session.', task:'Reddit Posting'}
 ];
+/* ══ TRIAL POSTING PHASES (Jeth, Nov 3) — side phases next to the ladder, a test trial for posting ══
+   Not on the promote path: the VA moves an account in and out on their own from the stage menu. ONE session a day.
+   The stage it came from is kept (meta.trfrom) so the card offers a one-click way back when the trial ends. */
+var TRPH=[
+ {k:'extended', n:'Extended Posting', c:'#2563eb', side:true, one:true, plan:'Trial posting phase · one session a day. 10 min active browsing before posting (search topics, actually read posts on the subreddits) · reply to 2–5 NSFW comments on our posts · make 4–5 posts — after each post, scroll around and wait 3–5 min before the next · respond to 8–12 DMs.', task:'Reddit Posting', dms:12},
+ {k:'long',     n:'Long Posting',     c:'#9333ea', side:true, one:true, plan:'Trial posting phase · one session a day. 20–25 min active browsing before posting (search topics, actually read posts on the subreddits) · reply to 2–5 NSFW comments on our posts · make 4–5 posts — after each post, scroll around and wait 3–5 min before the next.', task:'Reddit Posting'}
+];
+var TR_STAGES=['extended','long'];
+function isTrial(k){ return TR_STAGES.indexOf(k)>=0; }
+function sesPerDay(r){ return isTrial(r&&r.status)?1:2; }   // trial phases: one session a day
+function pIx(k){ return isTrial(k)?phaseIx('day1'):phaseIx(k); }   // trial phases count as posting stages
 var SX_STAGES=['sxwarm','sxpost'];
 var SX_OK=['new','sxwarm','sxpost','recovery','tempban','onhold','archived','banned'];   // where a Suicidal Operation account can be
 var SX_C='#0f766e';
@@ -828,13 +839,14 @@ function sxToday(rows){
   return o;
 }
 var ERR_TXT={ SX_DAY3:'Posting opens on day 3 of the account (Suicidal Operation).', SX_LADDER:'A Suicidal Operation account can\'t go onto the ladder — ask the admin.', SX_OWNER_ONLY:'Only the admin can move an account onto the Suicidal Operation.', OWNER_ONLY:'Only the owner can do that.' };
-var ORDER=['new','creation','creationstandby','warming','comment','nsfw','day1','early','earlydm','medium','strong','superstrong','sxwarm','sxpost','recovery','tempban','onhold','archived','banned'];
+var ORDER=['new','creation','creationstandby','warming','comment','nsfw','day1','early','earlydm','medium','strong','superstrong','extended','long','sxwarm','sxpost','recovery','tempban','onhold','archived','banned'];
 var GROUPS=[
  {k:'new',  n:'New',       c:'#ff6b1a', st:['new']},
  {k:'cre',  n:'Creation',  c:'#f59e0b', st:['creation','creationstandby']},
  {k:'warm', n:'Warm-up',   c:'#f97316', st:['warming','comment','nsfw']},
  {k:'post', n:'Posting',   c:'#ec4899', st:['day1','early','earlydm','medium']},
  {k:'str',  n:'Strong',    c:'#8b5cf6', st:['strong','superstrong']},
+ {k:'trial',n:'Trial posting', c:'#2563eb', st:['extended','long']},
  {k:'sx',   n:'Suicidal Op', c:'#0f766e', st:['sxwarm','sxpost']},
  {k:'rec',  n:'Recovery',  c:'#0ea5e9', st:['recovery']},
  {k:'tb',   n:'Temp ban',  c:'#d97706', st:['tempban']},
@@ -845,14 +857,14 @@ var GROUPS=[
 var END_REASONS=['Permanently suspended','Shadowbanned','Locked — could not recover','Other'];
 /* Stage typed into the sheet as its display name ("Medium + DMs", "Spam Recovery")? Map it to the key
    so the card gets its colour, plan and session buttons. The backend does the same from rc-2026-10-04e. */
-var ST_ALIAS={ sxwarmup:'sxwarm', sxwarming:'sxwarm', suicidalwarmup:'sxwarm', suicidalwarm:'sxwarm', suicidewarmup:'sxwarm', suicidalwarming:'sxwarm', sxposting:'sxpost', suicidalposting:'sxpost', suicidalpost:'sxpost', suicideposting:'sxpost', newlycreated:'new', newcreated:'new', creationstage:'creation', standby:'creationstandby', warmup:'warming', warmingup:'warming',
+var ST_ALIAS={ extendedposting:'extended', extendedpost:'extended', extendedphase:'extended', extendedpostingphase:'extended', longposting:'long', longpost:'long', longphase:'long', longpostingphase:'long', sxwarmup:'sxwarm', sxwarming:'sxwarm', suicidalwarmup:'sxwarm', suicidalwarm:'sxwarm', suicidewarmup:'sxwarm', suicidalwarming:'sxwarm', sxposting:'sxpost', suicidalposting:'sxpost', suicidalpost:'sxpost', suicideposting:'sxpost', newlycreated:'new', newcreated:'new', creationstage:'creation', standby:'creationstandby', warmup:'warming', warmingup:'warming',
   commentfarm:'comment', commentfarming:'comment', comments:'comment', nsfwcomment:'nsfw', nsfwcomments:'nsfw', day1posting:'day1', dayone:'day1', dayoneposting:'day1',
   earlyposting:'early', earlydms:'earlydm', earlyplusdms:'earlydm', earlywithdms:'earlydm', mediumdm:'medium', mediumdms:'medium', mediumplusdms:'medium',
   spamrecovery:'recovery', spamfilter:'recovery', spamfilterrecovery:'recovery', spam:'recovery', tempbanned:'tempban', temporaryban:'tempban', temporarybanned:'tempban',
   temporarilybanned:'tempban', hold:'onhold', onhold:'onhold', paused:'onhold', archive:'archived', archived:'archived', retired:'archived', ban:'banned', permanentlybanned:'banned', permaban:'banned', suspended:'banned', dead:'banned' };
 function statusKey(v){ var raw=String(v==null?'':v).trim(), k=raw.toLowerCase().replace(/[^a-z0-9]/g,''); if(!k) return ''; if(ORDER.indexOf(k)>=0) return k; return ST_ALIAS[k]||raw.toLowerCase(); }
 function normRows(rows){ (rows||[]).forEach(function(r){ r.status=statusKey(r.status); }); return rows; }
-function phase(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return PH[i]; for(var j=0;j<SXPH.length;j++) if(SXPH[j].k===k) return SXPH[j]; return null; }
+function phase(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return PH[i]; for(var j=0;j<SXPH.length;j++) if(SXPH[j].k===k) return SXPH[j]; for(var t=0;t<TRPH.length;t++) if(TRPH[t].k===k) return TRPH[t]; return null; }
 function phaseIx(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return i; return -1; }
 function stageMeta(k){
   var p=phase(k); if(p) return {k:k,n:p.n,c:p.c};
@@ -1750,7 +1762,7 @@ function progOf(rows, worker){
     if(cr){ tot+=1; parts.cr+=1; if(cr.done) done+=1; }
     var sxu=(r.status==='sxwarm'||r.status==='sxpost')?sxUnits(r, wk, ow):null;   // Oct 27: the Suicidal Operation's own SOP
     if(sxu){ tot+=sxu.tot; done+=sxu.done; if(sxu.k==='standby') parts.sxsb=(parts.sxsb||0)+1; else parts[r.status==='sxwarm'?'sxw':'sxp']+=sxu.tot; return; }
-    if(isWorkable(r)){ tot+=2; parts.ladder+=2; if(markOkAny(m.s1,wk,ow)) done++; if(markOkAny(m.s2,wk,ow)) done++; return; }
+    if(isWorkable(r)){ var spd=sesPerDay(r), e=(markOkAny(m.s1,wk,ow)?1:0)+(markOkAny(m.s2,wk,ow)?1:0); tot+=spd; parts.ladder+=spd; done+=Math.min(spd,e); return; }   // Nov 3: trial phases are one session a day
     if(r.status==='new') return;
     if(r.status==='banned'||r.status==='tempban'){
       var e=(markOkAny(m.s1,wk,ow)?1:0)+(markOkAny(m.s2,wk,ow)?1:0); done+=e; tot+=e;
@@ -2055,14 +2067,15 @@ function rowHtml(r){
     prog=sxProg(r);   // Oct 27: one warm-up, then posting once warmed + assigned
     if(!held) act=sxActs(r);
   } else if(p){
-    var ix=phaseIx(st), next=PH[ix+1], km=karmaOf(r), can=true;
+    var ix=phaseIx(st), next=(ix>=0 && !p.side)?PH[ix+1]:null, km=karmaOf(r), can=true;   // trial phases: no "next" — the VA moves it back
     if(p.dur){ can=din>=p.dur; prog='<div class="gate" title="'+esc(p.plan)+'"><b style="color:'+(can?'#047857':'var(--ink2)')+'">Day '+Math.min(din+1,p.dur)+'/'+p.dur+(can?' · ready ✓':'')+'</b><div class="prog"><i style="width:'+Math.min(100,(din+1)/p.dur*100)+'%"></i></div></div>'; }
     else if(p.karma){ var kk=km||0; can=kk>=p.karma; var stuck=!can&&din>=p.maxDur;
       prog='<div class="gate" title="'+esc(p.plan)+'"><b style="color:'+(can?'#047857':(stuck?'#b91c1c':'var(--ink2)'))+'">'+kk+'/'+p.karma+' karma'+(can?' ✓':(stuck?' · 7d+':''))+'</b><div class="prog"><i style="width:'+Math.min(100,kk/p.karma*100)+'%"></i></div></div>'; }
     else prog='<span class="muted" title="'+esc(p.plan)+'" style="font-size:11.5px;font-weight:600">'+din+'d in stage'+(km!=null?' · '+km+' karma':'')+' · <u style="text-decoration-style:dotted;cursor:help">plan</u></span>';
+    if(p.side) prog='<span class="muted" title="'+esc(p.plan)+'" style="font-size:11.5px;font-weight:600">Trial · '+din+'d · one session a day · <u style="text-decoration-style:dotted;cursor:help">plan</u></span>';
     if(!held){
-      act=(p.task?sesBtn(r,1)+sesBtn(r,2):'')+
-        (p.dms?dmBtn(r):'')+
+      act=(p.task?(p.one?sesBtn(r,1,'Session'):sesBtn(r,1)+sesBtn(r,2)):'')+
+        (p.dms?dmBtn(r):'')+trialBackBtn(r)+
         (p.karma&&!can?'<button class="ses" onclick="setKarma(\''+id+'\')">'+IC.star+' Karma</button>':'')+
         (next&&can?'<button class="ses up" onclick="promote(\''+id+'\',\''+next.k+'\')" title="Promote to '+esc(next.n)+'">'+IC.up+' '+esc(next.n)+'</button>':'');
     }
@@ -2250,16 +2263,17 @@ function cardHtml(r){
       (held?'':'<div class="acts">'+(sb?'':sxActs(r))+sxSbBtn(r)+'</div>')+
       (!held && (isPostingStage(st)||pchkPending(r).length)?postsStrip(r):'');
   } else if(p){
-    var ix=phaseIx(st), next=PH[ix+1], din2=daysIn(r), km=karmaOf(r), can=true, gate='';
+    var ix=phaseIx(st), next=(ix>=0 && !p.side)?PH[ix+1]:null, din2=daysIn(r), km=karmaOf(r), can=true, gate='';   // trial phases: no "next" 
     if(p.dur){ can=din2>=p.dur; gate='<b style="color:'+(can?'#047857':'var(--ink2)')+'">Day '+Math.min(din2+1,p.dur)+'/'+p.dur+(can?' · ready ✓':'')+'</b><div class="prog"><i style="width:'+Math.min(100,(din2+1)/p.dur*100)+'%"></i></div>'; }
     else if(p.karma){ var kk=km||0; can=kk>=p.karma; var stuck=!can&&din2>=p.maxDur;
       gate='<b style="color:'+(can?'#047857':(stuck?'#b91c1c':'var(--ink2)'))+'">'+IC.star+' '+kk+'/'+p.karma+' karma · day '+(din2+1)+(can?' · ready ✓':(stuck?' · 7d — stays here':''))+'</b><div class="prog"><i style="width:'+Math.min(100,kk/p.karma*100)+'%"></i></div>'; }
-    else gate='<span>In this stage <b>'+din2+'d</b>'+(km!=null?' · '+IC.star+' <b>'+km+'</b> karma':'')+'</span>';
+    else gate='<span>'+(p.side?'Trial posting phase · ':'')+'In this stage <b>'+din2+'d</b>'+(p.one?' · <b>one session a day</b>':'')+(km!=null?' · '+IC.star+' <b>'+km+'</b> karma':'')+'</span>';
     var upLbl=next?(next.n+(p.karma?' (50 karma ✓)':(p.client?' (client approved)':''))):'';
     body='<div class="gate">'+gate+'</div>'+
       '<details class="plan"><summary>'+IC.doc+' Today\'s plan</summary><div>'+esc(p.plan)+'</div></details>'+
-      (held?'':'<div class="acts">'+(p.task?sesBtn(r,1)+sesBtn(r,2):'')+
-        (p.dms?dmBtn(r):'')+
+      (p.side?'<div class="note i">Trial posting phase — a test next to the ladder. Move it back from the stage menu (or the button below) when the trial ends.</div>':'')+
+      (held?'':'<div class="acts">'+(p.task?(p.one?sesBtn(r,1,'Session'):sesBtn(r,1)+sesBtn(r,2)):'')+
+        (p.dms?dmBtn(r):'')+trialBackBtn(r)+
         (p.karma&&!can?'<button class="ses" onclick="setKarma(\''+jsq(r.id)+'\')">'+IC.star+' Karma</button>':'')+
         (next&&can?'<button class="ses up" onclick="promote(\''+jsq(r.id)+'\',\''+next.k+'\')">'+IC.up+' '+esc(upLbl)+'</button>':'')+
       '</div>')+(!held && (isPostingStage(st)||pchkPending(r).length)?postsStrip(r):'');
@@ -2298,6 +2312,7 @@ function tmCount(){ return Object.keys(tmAll()).length; }
    and Productivity & QA counts it (−0.5 each, max 2 a day). A stopped timer also stops keeping the portal's
    10-minute tool rule alive, which is the point. */
 var TM_DEF_CAP={ session:30*60, dms:25*60, creation:45*60 };
+var TR_CAP={ extended:45*60, long:60*60 };   // trial posting phases — one long session
 /* ══════════ CREATION TIMER RULES (Jeth, Oct 31) ══════════
    "They start creating, let it run 27 minutes or more, then cancel it — deceiving the portal." A creation takes 10–15
    minutes, 20 at most, so:
@@ -2333,6 +2348,7 @@ function tmCapRaw(kind, stage, meth){
   if(caps[k]) return +caps[k];
   if(kind==='creation'){ var mx=0; Object.keys(caps).forEach(function(x){ if(x.indexOf('creation|')===0) mx=Math.max(mx,+caps[x]||0); }); if(mx) return mx; }
   var own=(CFG.targets||{})[k]; if(own) return tmCapFrom(own);
+  if(kind==='session' && TR_CAP[stage]) return TR_CAP[stage];   // Nov 3: trial phases run longer (10 / 20–25 min browsing + 3–5 min between posts)
   return TM_DEF_CAP[kind]||30*60;
 }
 function tmCapOf(key){
@@ -3175,11 +3191,12 @@ function progWhy(va){
     else why='not counted';
     miss.push({ r:r, why:why });
   });
+  var trN=work.filter(function(r){ return isTrial(r.status); }).length;   // Nov 3: trial phases are one session a day
   var s1=work.filter(function(r){ return markOkAny(M(r).s1,va,owner(r)); }).length, s2=work.filter(function(r){ return markOkAny(M(r).s2,va,owner(r)); }).length;
   var parked=rows.filter(function(r){ return r.project===PROJECT && isParked(r); }).length, standby=rows.filter(function(r){ return r.project===PROJECT && (r.status==='creation'||r.status==='creationstandby'); }).length;
   openModal('<div class="md-h"><h3>'+esc(vaName(va))+' · '+p.done+'/'+p.tot+'</h3><p>How this shift is counted — '+esc(SHIFTOF[va]==='night'?'night':'morning')+' shift, '+esc(fmtDT(w.start))+' → '+esc(fmtDT(w.end))+' ('+esc(vaKeyOf(va))+'). '+esc(baseOf(PROJECT).n)+' base.</p></div>'+
     '<div class="md-b" style="max-height:62vh;overflow:auto;font-size:13px;line-height:1.6">'+
-      '<div class="card pad" style="margin-bottom:10px"><b>Sessions</b> — '+work.length+' working account'+(work.length===1?'':'s')+' × 2 = <b>'+(work.length*2)+' due</b> · Session 1 done on '+s1+', Session 2 on '+s2+'.'+
+      '<div class="card pad" style="margin-bottom:10px"><b>Sessions</b> — '+work.length+' working account'+(work.length===1?'':'s')+(trN?' ('+trN+' on a trial phase — one session a day)':'')+' = <b>'+(work.length*2-trN)+' due</b> · Session 1 done on '+s1+', Session 2 on '+s2+'.'+
         '<div class="muted" style="font-size:12px">Not due: '+standby+' in Creation / standby (no sessions)'+(parked?' · '+parked+' on hold / archived':'')+'.</div></div>'+
       (sxw.length?'<div class="card pad" style="margin-bottom:10px;border-color:'+SX_C+'40"><b style="color:'+SX_C+'">Suicidal Operation</b> — <b>'+sxD+'/'+sxT+'</b> by its own SOP: '+
         (sxN.warm?sxN.warm+' warm-up'+(sxN.warm===1?'':'s')+' due (2 sessions each, on the warm-up day)':'no warm-ups due')+
@@ -3357,7 +3374,7 @@ async function karmaGate(r){
    backend). One post = { d: business day, n: session, r: 'r/Name' or 'u/Name', b: who, t: when, st: stage,
    x: 1 once removed, xt/xb: when/who tagged it }. The newest 150 per account are kept. The client portal
    never receives this key (its meta whitelist). */
-var PPS={ day1:1, early:2, earlydm:2, medium:3, strong:5, superstrong:7 };   // posts per session, from the SOP plans
+var PPS={ day1:1, early:2, earlydm:2, medium:3, strong:5, superstrong:7, extended:5, long:5 };   // posts per session, from the SOP plans
 var SUBS={ range:30, base:'all', q:'', sort:'posts', sop:'std' };
 function subNorm(raw){
   var s=String(raw==null?'':raw).trim().replace(/\s+/g,''); if(!s) return null;
@@ -4168,8 +4185,20 @@ async function changeStage(id, sel){
     if(!(await confirmBox('Post before day 3?', 'The Suicidal Operation opens posting on day 3 — '+esc(r.handle)+' is on day '+sxDay(r)+'. Move it anyway (owner override)?', 'Move anyway'))){ sel.value=prev; return; }
   }
   var extra={};
-  if(phase(next)){ extra.meta=JSON.stringify(Object.assign({}, M(r), { pstart:today() })); }
-  await moveTo(r, next, extra);
+  if(phase(next)){ var nm=Object.assign({}, M(r), { pstart:today() });
+    if(isTrial(next) && !isTrial(prev)) nm.trfrom=prev;   // Nov 3: trial phases remember the stage the account came from
+    else if(!isTrial(next)) delete nm.trfrom;
+    extra.meta=JSON.stringify(nm); }
+  await moveTo(r, next, extra, isTrial(next)?('Trial · '+stageMeta(next).n+' — one session a day'):undefined);
+}
+/* Nov 3: one click back from a trial posting phase to the stage it came from */
+function trialBackBtn(r){ if(!isTrial(r.status)) return ''; var f=String(M(r).trfrom||''); if(!f || phaseIx(f)<0) return '';
+  return '<button class="ses" onclick="trialBack(\''+jsq(r.id)+'\')" title="End the trial — back to '+esc(stageMeta(f).n)+'">'+IC.up+' Back to '+esc(stageMeta(f).n)+'</button>'; }
+async function trialBack(id){
+  var r=rowById(id); if(!r || !isTrial(r.status)) return; var f=String(M(r).trfrom||''); if(phaseIx(f)<0) return;
+  if(!(await confirmBox('End the trial for '+esc(r.handle)+'?', 'It goes back to <b>'+esc(stageMeta(f).n)+'</b> and its normal plan (two sessions a day).', 'Back to '+esc(stageMeta(f).n)))) return;
+  var m=Object.assign({}, M(r), { pstart:today() }); delete m.trfrom;
+  await moveTo(r, f, { meta:JSON.stringify(m) }, 'Trial ended · back to '+stageMeta(f).n);
 }
 /* ── Suicidal Operation: owner actions (Oct 25) ── */
 async function sxConvert(id, on){
@@ -4698,7 +4727,7 @@ function plSummary(rows){
   var b7=rows.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<7; }).length;
   var s30=addDays(today(),-29), b30=rows.filter(function(r){ var e=endedAt(r); return e && phtDate(e)>=s30; }).length;
   var ex=rows.filter(function(r){ var e=endedAt(r); return !e || phtDate(e)>=s30; }).length;
-  var P1=phaseIx('day1'), post=rows.filter(function(r){ return isSX(r)?sxPosted(r):(phaseIx(r.status)>=P1 || phaseIx(M(r).prev)>=P1); }).length;
+  var P1=phaseIx('day1'), post=rows.filter(function(r){ return isSX(r)?sxPosted(r):(pIx(r.status)>=P1 || pIx(M(r).prev)>=P1); }).length;
   return { n:rows.length, alive:alive, c7:c7, b7:b7, net:c7-b7, rate30:ex?b30/ex:null, post:rows.length?post/rows.length:null };
 }
 function vPipeline(){
@@ -4938,10 +4967,10 @@ var _fp={ key:'', map:{} };
 function insFirstPost(){
   insHist(); if(_fp.key===_ih.key) return _fp.map;
   var P1=phaseIx('day1'), m={};
-  insEv().forEach(function(e){ if(!e || !e.account_id) return; if(phaseIx(statusKey(e.to))>=P1){ var t=parseTs(e.at); if(t && (!m[e.account_id] || t<m[e.account_id])) m[e.account_id]=t; } else if(phaseIx(statusKey(e.from))>=P1 && !m[e.account_id]) m[e.account_id]=parseTs(e.at)||new Date(); });
+  insEv().forEach(function(e){ if(!e || !e.account_id) return; if(pIx(statusKey(e.to))>=P1){ var t=parseTs(e.at); if(t && (!m[e.account_id] || t<m[e.account_id])) m[e.account_id]=t; } else if(pIx(statusKey(e.from))>=P1 && !m[e.account_id]) m[e.account_id]=parseTs(e.at)||new Date(); });
   _fp={ key:_ih.key, map:m }; return m;
 }
-function reachedPost(r, fp){ var P1=phaseIx('day1'); return !!(fp||insFirstPost())[r.id] || phaseIx(r.status)>=P1 || phaseIx(insPhase(r).k)>=P1; }
+function reachedPost(r, fp){ var P1=phaseIx('day1'); return !!(fp||insFirstPost())[r.id] || pIx(r.status)>=P1 || phaseIx(insPhase(r).k)>=P1; }
 
 /* ═══ RESPONSIBILITY FOLLOWS THE TRANSFER (Jeth, Oct 9) ═══
    "When a VA created accounts, it counts on their name that day. When the account is transferred, from the transfer date the
@@ -5683,7 +5712,7 @@ function qrQueue(){
   var td=today(), P1=phaseIx('day1');
   var rows=(ALL[PROJECT]||ROWS).filter(function(r){ return !isDead(r) && !isParked(r) && String(M(r).hcok||'')!==td; });
   rows.sort(function(a,b){
-    var pa=QR.prio?(phaseIx(a.status)>=P1?0:(isWorkable(a)?1:2)):0, pb=QR.prio?(phaseIx(b.status)>=P1?0:(isWorkable(b)?1:2)):0;
+    var pa=QR.prio?(pIx(a.status)>=P1?0:(isWorkable(a)?1:2)):0, pb=QR.prio?(pIx(b.status)>=P1?0:(isWorkable(b)?1:2)):0;
     var x=String(M(a).hcok||''), y=String(M(b).hcok||'');
     return pa-pb || (x<y?-1:x>y?1:0) || String(a.handle).localeCompare(String(b.handle)); });
   return rows.map(function(r){ return r.id; });
@@ -5883,7 +5912,7 @@ function ccPrioSort(list){
      the first thing someone looks at the next day — then the live phases, as before */
   var P1=phaseIx('day1');
   return list.slice().sort(function(a,b){ var la=hcLast(a), lb=hcLast(b); if(la!==lb) return la<lb?-1:1;
-    var pa=phaseIx(a.status)>=P1?0:(isWorkable(a)?1:2), pb=phaseIx(b.status)>=P1?0:(isWorkable(b)?1:2); return pa-pb || String(a.handle).localeCompare(String(b.handle)); });
+    var pa=pIx(a.status)>=P1?0:(isWorkable(a)?1:2), pb=pIx(b.status)>=P1?0:(isWorkable(b)?1:2); return pa-pb || String(a.handle).localeCompare(String(b.handle)); });
 }
 function ccGuide(open){
   return '<details class="card pad"'+(open?' open':'')+' style="margin-bottom:14px"><summary style="cursor:pointer;font-weight:800;font-size:14px">How the daily health check works</summary>'+
@@ -6133,9 +6162,9 @@ function pqG(kind, stage, meth){
 }
 function pqTasks(){
   var t=[{ kind:'creation', stage:'', n:'Account creation', s:'Start creating → counted (+1)' }];
-  PH.forEach(function(p){ if(p.task) t.push({ kind:'session', stage:p.k, n:'Session · '+p.n, s:p.plan }); });
+  PH.concat(TRPH).forEach(function(p){ if(p.task) t.push({ kind:'session', stage:p.k, n:'Session · '+p.n, s:p.plan }); });
   t.push({ kind:'session', stage:'recovery', n:'Session · Spam recovery', s:'10 min browsing · replies · no upvotes' });
-  PH.forEach(function(p){ if(p.dms) t.push({ kind:'dms', stage:p.k, n:'DMs · '+p.n, s:'one DM round' }); });
+  PH.concat(TRPH).forEach(function(p){ if(p.dms) t.push({ kind:'dms', stage:p.k, n:'DMs · '+p.n, s:'one DM round' }); });
   t.push({ kind:'healthcheck', stage:'', n:'Health check · per account', s:'one profile look · the daily limit is 2.5× this per account × each VA\'s list (now '+hcPerSecs()+' s per account)', one:true });
   return t;
 }
