@@ -4594,7 +4594,7 @@ var RPT_ST={ warming:['🌱','Warming Phase'], comment:['💬','Comment Farming'
   recovery:['🔴','Spam Filter Recovery Phase'], tempban:['⏸️','Temp Banned'], banned:['⛔','Banned'], onhold:['⏸️','On Hold'] };
 var RPT_ORD=['extended','long','superstrong','strong','medium','earlydm','early','day1','sxpost','sxwarm','nsfw','comment','warming','recovery','tempban','banned','onhold'];
 var RPT_DM=['earlydm','medium','strong','superstrong'];
-function rptHeart(m){ var k=String(m||'').trim().toLowerCase(); if(!k) return ''; if(RPT_HEART[k]) return RPT_HEART[k];
+function rptHeart(m){ var P=mdlParts(m); if(P.length>1) return P.map(rptHeart).join(''); var k=String(m||'').trim().toLowerCase(); if(!k) return ''; if(RPT_HEART[k]) return RPT_HEART[k];
   var h=0; for(var i=0;i<k.length;i++) h=(h*31+k.charCodeAt(i))>>>0; return RPT_HEARTS[h%RPT_HEARTS.length]; }
 function rptDate(d){ var p=String(d||'').split('-'), MO=['January','February','March','April','May','June','July','August','September','October','November','December'];
   return (p.length===3 && MO[+p[1]-1])?(MO[+p[1]-1]+' '+p[2]+', '+p[0]):String(d||''); }
@@ -4621,7 +4621,7 @@ function rptBuild(va){
   if(!W.length && !C.length){ out.push('', 'Nothing logged in Reddit Central yet today.'); return out.join('\n'); }
   var models={}, mOrd=[];
   W.forEach(function(w){ var mn=String(w.r.model||'').trim()||'Other'; var key=mn.toLowerCase(); if(!models[key]){ models[key]={ name:mn, L:[] }; mOrd.push(key); } models[key].L.push(w); });
-  mOrd.sort(function(a,b){ return (a==='other')-(b==='other') || models[a].name.localeCompare(models[b].name); });
+  mOrd.sort(function(a,b){ return (a==='other')-(b==='other') || (mdlParts(models[a].name).length>1)-(mdlParts(models[b].name).length>1) || models[a].name.localeCompare(models[b].name); });   // Nov 4e: own models first, the pair after
   mOrd.forEach(function(key){
     var g=models[key], hz=rptHeart(key==='other'?'':g.name);
     out.push('', g.name+(hz?' '+hz:'')+' : '+g.L.length+' ACCOUNT'+(g.L.length===1?'':'S'));
@@ -4636,7 +4636,7 @@ function rptBuild(va){
         var spd=sesPerDay(w.r), ses='';
         if(spd>=2){ if(w.s1 && !w.s2) ses=' (1st session only)'; else if(!w.s1 && w.s2) ses=' (2nd session only)'; }
         if(!w.s1 && !w.s2) ses=' (session not finished yet)';
-        var line=rptPhone(w.r)+w.r.handle+(hz?' '+hz:'')+ses;
+        var line=rptPhone(w.r)+w.r.handle+(hz?' '+hz:'')+ses+((typeof pmOn==='function' && pmOn() && pmNeeds(w.r))?' (model not tagged)':'');
         if(post || w.posts){
           if(i) out.push('');
           out.push(line, 'POST MADE : '+w.posts, 'REMOVE : '+(w.rm+w.sp)+(w.sp?' (incl. '+w.sp+' spam filter)':'')+(w.nc?' · '+w.nc+' not checked yet':''));
