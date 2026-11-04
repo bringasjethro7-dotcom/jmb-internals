@@ -869,6 +869,23 @@ html.lite .pfx-flow::before,html.lite .pfx-flow::after,html.lite .pfx-hub,html.l
 .sb-n small{display:block;font-size:11.5px;color:var(--ink3);font-weight:600;margin-top:1px}
 .sb-c{display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end}.sb-c .pchip{cursor:default}
 .sb-h{margin:14px 0 2px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+
+/* ══ Nov 4b · floating timer only while the running account is off screen; one-timer box; subreddit rename; report ══ */
+#tmDock{opacity:0;transform:translateY(14px);pointer-events:none;visibility:hidden;transition:opacity .22s ease,transform .22s ease,visibility 0s linear .22s}
+#tmDock.on{opacity:1;transform:none;pointer-events:auto;visibility:visible;transition-delay:0s}
+#tmDock:not(.on)::before,#tmDock:not(.on) .tmd-dot{animation-play-state:paused}
+#tmDock .tmd-go{flex:none;font-size:10.5px;font-weight:900;letter-spacing:.08em;padding:4px 7px;border-radius:7px;background:#FF4500;color:#fff}
+.ses.run.tm-found,.btn.run.tm-found{animation:tmFound .45s ease-out 3}
+@keyframes tmFound{0%{transform:scale(1)}40%{transform:scale(1.15)}100%{transform:scale(1)}}
+.tm-busy{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;background:#171717;color:#fff}
+.tm-busy b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tm-busy .tmd-dot{flex:none;width:12px;height:12px;border-radius:50%;background:#FF4500;box-shadow:0 0 0 2px #fff;animation:tmBlink 1s steps(1,end) infinite}
+.tm-busy .tmd-t{flex:none;font:900 16px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:rgba(255,255,255,.14);border-radius:8px;padding:5px 8px}
+.sb-ed{flex:none;font-family:inherit;font-size:11.5px;font-weight:800;line-height:1;padding:7px 10px;border-radius:8px;border:1.5px solid var(--line2);background:#fff;color:var(--ink2);cursor:pointer}
+.sb-ed:hover{background:#171717;border-color:#171717;color:#fff}
+.sec-h .rpt-b{flex:none}
+.rpt-ta{display:block;width:100%;min-height:360px;max-height:58vh;resize:vertical;font:500 13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line2);background:#fff;color:var(--ink);white-space:pre;overflow:auto}
+@media (prefers-reduced-motion:reduce){ #tmDock{transition:none} .ses.run.tm-found,.btn.run.tm-found{animation:none} }
 </style>
 </head>
 <body>
@@ -2233,7 +2250,7 @@ function vToday(){
 
   /* FILTERS (owner, Oct 5): the method row is the one filter bar; Stage and VA are filtered from their
      column headers in the table, Airtable-style. (The old stage-chip row + "Everyone" box are gone.) */
-  h+='<div class="sec-h"><b>'+(admin?(TD.va==='all'?'All accounts':(TD.va==='mine'?'My accounts':esc(firstName(TD.va))+'\'s accounts')):'My accounts')+'</b><span>'+board.length+'</span><hr></div>';
+  h+='<div class="sec-h"><b>'+(admin?(TD.va==='all'?'All accounts':(TD.va==='mine'?'My accounts':esc(firstName(TD.va))+'\'s accounts')):'My accounts')+'</b><span>'+board.length+'</span><hr>'+((!admin || TD.va!=='all')?rptBtn():'')+'</div>';
   if(admin && TD.va!=='all' && TD.va!=='mine') h+=whereAre(TD.va);
   var mcount={}; board.forEach(function(r){ var m=methodOf(r)||''; mcount[m]=(mcount[m]||0)+1; });
   var mkeys=methodsList().concat(Object.keys(mcount).filter(function(m){ return m && methodsList().indexOf(m)<0; }));
@@ -2767,6 +2784,7 @@ function hcTouch(){
   if(!USER || isAdmin() || !tmOn()) return;
   hcSetNum('last', Date.now());
   if(hcTimer() || !hcListN()) return;
+  if(tmRunning().length){ tmHoldNote(); return; }   // Nov 4b: never alongside a session / DMs / creation timer
   if(hcOut()){ hcOutNote(); return; }
   tmStart('__hc','hc');
 }
@@ -3544,7 +3562,9 @@ function linkCardLine(va){
   if(!tracked && st.k!=='ok') return '';
   return '<div class="sb" style="margin-top:2px" title="Tracked in the portal today vs covered by this tool’s timers">⏱ '+hm(timed)+' / '+hm(tracked)+(pct!=null?' · <b style="color:'+covColor(pct)+'">'+pct+'%</b>':'')+(st.k==='ok'?'':' <span style="color:#382E22">· timer off</span>')+'</div>';
 }
-function tmStart(id,k){ var o=tmAll(); o[id+'|'+k]={ t:Date.now(), p:Object.keys(o).length, d:today() }; tmPut(o); tmEnsure(); }
+function tmStart(id,k){ var key=id+'|'+k;
+  if(tmIsWork(key)){ try{ if(tmGet('__hc','hc')) hcStop('switch'); }catch(_h){} try{ if(tmGet('__pc','pc')) pcStop('switch'); }catch(_p){} }   // Nov 4b: one timer at a time
+  var o=tmAll(); o[key]={ t:Date.now(), p:Object.keys(o).length, d:today() }; tmPut(o); tmEnsure(); }
 function tmStop(id,k){ var o=tmAll(), x=o[id+'|'+k]; if(!x) return null; delete o[id+'|'+k]; tmPut(o);
   return { secs:Math.round((Date.now()-x.t)/1000), start:x.t, parallel:Math.max(x.p||0, Object.keys(o).length) }; }
 function tmFmt(ms){ var s=Math.max(0,Math.floor(ms/1000)), h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60; return (h?h+':'+(m<10?'0':''):'')+m+':'+(x<10?'0':'')+x; }
@@ -3553,22 +3573,70 @@ function tmEnsure(){ if(_tmIv) return; _tmIv=setInterval(function(){
   var now=Date.now(); els.forEach(function(e){ e.textContent=tmFmt(now-parseInt(e.getAttribute('data-tm'),10)); }); }, 1000); }
 /* Nov 4 · RUNNING-TIMER DOCK — always on screen while a timer runs (colour-blind safe: black pill, moving stripes,
    blinking dot, the words TIMER RUNNING, a big clock). Tap it to jump to the running button. */
+/* Nov 4b (Jeth): ONE timer at a time — a session, DMs or a new account. Two running together counted the same
+   minutes twice. The health check / post check pause by themselves when one starts. */
+function tmIsWork(k){ k=String(k||''); return k.indexOf('__hc|')!==0 && k.indexOf('__pc|')!==0; }
+function tmLabel(k){ var p=String(k||'').split('|'), id=p[0], kk=p[1]||'';
+  if(id==='__create') return 'Creating an account'; if(id==='__hc') return 'Health check'; if(id==='__pc') return 'Post check';
+  var r=rowById(id); return (r?r.handle:'an account')+' · '+(kk==='dm'?'DMs':(/^s\d$/.test(kk)?'Session '+kk.slice(1):kk)); }
+function tmRunning(except){ var o=tmAll(); return Object.keys(o).filter(function(k){ return k!==except && o[k] && o[k].t && tmIsWork(k); })
+  .map(function(k){ return { k:k, t:+o[k].t, txt:tmLabel(k) }; }).sort(function(a,b){ return a.t-b.t; }); }
+function tmOneGate(key){
+  if(!tmOn()) return true;
+  var L=tmRunning(key); if(!L.length) return true;
+  var x=L[0];
+  openModal('<div class="md-h"><h3>One timer at a time</h3><p class="muted" style="margin-top:4px">A timer is already running. Press <b>Finish</b> on it (or the <b>✕</b> if it was started by mistake) before you start another one — two timers would count the same minutes twice.</p></div>'+
+    '<div class="md-b"><div class="tm-busy"><i class="tmd-dot"></i><b>'+esc(x.txt)+'</b><span class="tmd-t" data-tm="'+x.t+'">'+tmFmt(Date.now()-x.t)+'</span></div></div>'+
+    '<div class="md-f"><button class="btn sec" onclick="closeModal(null)">OK</button><button class="btn pri" onclick="closeModal(null);tmJump()">Go to the running timer</button></div>');
+  tmEnsure(); return false;
+}
+var _tmHN=0;
+function tmHoldNote(){ if(Date.now()-_tmHN<30000) return; _tmHN=Date.now(); var x=tmRunning()[0]; toast('Not timed: finish the running timer first'+(x?' ('+x.txt+')':'')+' — one timer at a time.'); }
+/* Nov 4b · the floating timer shows ONLY while the running account is off screen (scrolled away, another tab,
+   hidden by a filter). Tap it → the page scrolls to the account and the button pops. */
+var TMW={ io:null, raw:[], seen:[], iv:0 };
+function tmRunEl(){ var L=document.querySelectorAll('.ses.run,.btn.run'); for(var i=0;i<L.length;i++){ if(L[i].offsetParent!==null) return L[i]; } return null; }
+function tmJumpTo(b){
+  if(!b){ toast('The running account is hidden by a filter or search — clear it to see the account.'); return; }
+  try{ b.scrollIntoView({block:'center',behavior:'smooth'}); }catch(_s){ b.scrollIntoView(); }
+  b.classList.remove('tm-found'); void b.offsetWidth; b.classList.add('tm-found'); setTimeout(function(){ try{ b.classList.remove('tm-found'); }catch(_r){} }, 1500);
+}
+function tmJump(){
+  var b=tmRunEl(); if(b){ tmJumpTo(b); return; }
+  if(typeof VIEW!=='undefined' && VIEW!=='today'){ try{ go('today'); }catch(_g){} setTimeout(function(){ tmJumpTo(tmRunEl()); }, 450); return; }
+  tmJumpTo(null);
+}
+function tmInView(e){ if(!e || !e.isConnected || e.offsetParent===null) return false;
+  var r=e.getBoundingClientRect(), h=window.innerHeight||document.documentElement.clientHeight, top=Math.max(r.top,64), bot=Math.min(r.bottom,h);
+  return r.height>0 && (bot-top)>=r.height*0.55; }
+function tmDockShow(){ var el=document.getElementById('tmDock'); if(!el || el.style.display==='none') return;
+  var vis=TMW.seen.some(function(e){ return e.isConnected; }); el.classList.toggle('on', !vis); }
+function tmDockWatch(){
+  var raw=[].slice.call(document.querySelectorAll('.ses.run,.btn.run'));
+  var same=raw.length===TMW.raw.length && raw.every(function(e,i){ return e===TMW.raw[i]; });
+  if(!same){
+    if(TMW.io){ try{ TMW.io.disconnect(); }catch(_d){} TMW.io=null; }
+    TMW.raw=raw; TMW.seen=raw.filter(tmInView);
+    if(raw.length && typeof IntersectionObserver!=='undefined'){
+      TMW.io=new IntersectionObserver(function(en){ en.forEach(function(e){ var i=TMW.seen.indexOf(e.target), on=e.isIntersecting && e.intersectionRatio>=0.55;
+        if(on && i<0) TMW.seen.push(e.target); else if(!on && i>=0) TMW.seen.splice(i,1); }); tmDockShow(); }, { rootMargin:'-64px 0px 0px 0px', threshold:[0,0.55,1] });
+      raw.forEach(function(e){ TMW.io.observe(e); });
+    }
+  }
+  tmDockShow();
+  if(!TMW.iv) TMW.iv=setInterval(function(){ var d=document.getElementById('tmDock'); if(!d || d.style.display==='none'){ clearInterval(TMW.iv); TMW.iv=0; return; } tmDockWatch(); }, 1000);
+}
 function tmDock(){ try{
   var el=document.getElementById('tmDock');
-  if(!el){ el=document.createElement('div'); el.id='tmDock'; el.setAttribute('role','status'); el.title='Tap to jump to the running timer';
-    el.onclick=function(){ var b=document.querySelector('.ses.run,.btn.run'); if(b){ try{ b.scrollIntoView({block:'center',behavior:'smooth'}); }catch(_s){ b.scrollIntoView(); } } };
-    document.body.appendChild(el); }
+  if(!el){ el=document.createElement('div'); el.id='tmDock'; el.setAttribute('role','button'); el.title='Tap to scroll to the running timer';
+    el.onclick=function(){ tmJump(); }; document.body.appendChild(el); }
   if(typeof USER==='undefined' || !USER || !tmOn()){ el.style.display='none'; return; }
-  var o=tmAll(), L=[];
-  Object.keys(o).forEach(function(k){ var x=o[k]; if(!x||!x.t) return; var p=k.split('|'), id=p[0], kk=p[1]||'';
-    var lab=id==='__create'?'Creating an account':(((function(){ var r=rowById(id); return r?r.handle:'account'; })())+' · '+(kk==='dm'?'DMs':(/^s\d$/.test(kk)?'Session '+kk.slice(1):kk)));
-    L.push({ t:+x.t, txt:lab }); });
-  if(!L.length){ el.style.display='none'; el.innerHTML=''; return; }
-  L.sort(function(a,b){ return a.t-b.t; });
+  var L=tmRunning('');
+  if(!L.length){ el.style.display='none'; el.innerHTML=''; el.removeAttribute('data-sig'); el.classList.remove('on'); return; }
   var sig=L.map(function(x){ return x.t+x.txt; }).join('|');
   if(el.getAttribute('data-sig')!==sig){ el.setAttribute('data-sig', sig);
-    el.innerHTML='<i class="tmd-dot"></i><span class="tmd-l">TIMER RUNNING'+(L.length>1?' · '+L.length:'')+'</span><b>'+esc(L[0].txt)+'</b><span class="tmd-t" data-tm="'+L[0].t+'">'+tmFmt(Date.now()-L[0].t)+'</span>'; }
-  el.style.display='flex'; tmEnsure();
+    el.innerHTML='<i class="tmd-dot"></i><span class="tmd-l">TIMER RUNNING'+(L.length>1?' · '+L.length:'')+'</span><b>'+esc(L[0].txt)+'</b><span class="tmd-t" data-tm="'+L[0].t+'">'+tmFmt(Date.now()-L[0].t)+'</span><span class="tmd-go">SHOW</span>'; }
+  el.style.display='flex'; tmEnsure(); tmDockWatch();
 }catch(e){} }
 function tmOn(){ return !isAdmin(); }        // VAs time their work; the owner's ticks are corrections, not work
 /* fire-and-forget: one finished task → RcTasks (backend rc-2026-10-05c+) */
@@ -3582,6 +3650,7 @@ function tmLog(r, kind, t, extra){
 }
 async function sesStart(id, n){
   var r=rowById(id); if(!r) return;
+  if(!tmOneGate(id+'|s'+n)) return;           // Nov 4b: one timer at a time
   if(!(await fixGate())) return;              // username fixes come first (Oct 13)
   if(!(await linkGate('A session'))) return;  // the portal timer must be running on Reddit (Oct 6)
   if(!(await pchkGate(r))){ toast('Check the earlier posts first — then the session unlocks.'); return; }   // Oct 25: yesterday's posts get a verdict first
@@ -3592,7 +3661,7 @@ async function sesStart(id, n){
 function tmCancel(id, k){ var o=tmAll(); delete o[id+'|'+k]; tmPut(o); renderView(); toast('Timer cancelled — nothing was recorded.'); }
 /* creation: ▶ Start creating (hero) → Log new account → counted */
 function crGet(){ return tmGet('__create','c'); }
-async function crStart(){ if(crLocked()){ crLockedBox(); return; } if(!(await fixGate())) return; if(!(await linkGate('A creation'))) return; var _cm=crModel(); tmStart('__create','c'); try{ var _o=tmAll(); if(_o['__create|c'] && _cm){ _o['__create|c'].m=_cm; tmPut(_o); } }catch(_x){} renderView(); toast('Timer started for '+(_cm||'this account')+' — create the account on the iPhone, then press Log new account.'); }
+async function crStart(){ if(crLocked()){ crLockedBox(); return; } if(!tmOneGate('__create|c')) return; if(!(await fixGate())) return; if(!(await linkGate('A creation'))) return; var _cm=crModel(); tmStart('__create','c'); try{ var _o=tmAll(); if(_o['__create|c'] && _cm){ _o['__create|c'].m=_cm; tmPut(_o); } }catch(_x){} renderView(); toast('Timer started for '+(_cm||'this account')+' — create the account on the iPhone, then press Log new account.'); }
 /* Oct 31: Cancel is free only in the first 2 minutes; after that the timer ends as "Creation failed" with a reason */
 function crCancel(){
   var x=crGet(); if(!x) return;
@@ -4070,6 +4139,7 @@ function pcTouch(){
   if(!USER || isAdmin() || !tmOn()) return;
   pcSetNum('last', Date.now());
   if(pcTimer()) return;
+  if(tmRunning().length){ tmHoldNote(); return; }   // Nov 4b
   if(pcUsed()>=pcCap()){ pcOutNote(); return; }
   tmStart('__pc','pc');
 }
@@ -4129,6 +4199,7 @@ function pcHtml(){
 }
 async function pcOpen(){
   if(isAdmin()) return;
+  if(!tmOneGate('__pc|pc')) return;   // Nov 4b: one timer at a time
   var items=pcPending(); if(!items.length){ toast('Nothing to check — every post you logged this shift has a verdict.'); renderView(); return; }
   if(!(await linkGate('The post check'))) return;   // counts while the portal timer runs on Reddit
   PCK={ items:items, ans:{} }; pcTouch();
@@ -4390,17 +4461,127 @@ function subsOpen(id){
     var sc=g.ls==='up'?'up':(g.ls==='mod'?'rm':(g.ls==='spam'?'sp':'nc')), sl={ up:'Stayed up', rm:'Removed by mods', sp:'Spam filter', nc:'Not checked' }[sc];
     return '<div class="sb-r st-'+sc+'"><div class="sb-n"><b>'+esc(g.name)+'</b><small><span class="sb-st">'+sl+'</span> · latest post'+(g.last?' '+esc(g.last===td?'today':fmtDay(g.last)):'')+' · '+g.n+' post'+(g.n===1?'':'s')+'</small></div>'+
       '<div class="sb-c">'+(g.up?'<span class="pchip up">'+g.up+' up</span>':'')+(g.rm?'<span class="pchip rm">'+g.rm+' removed</span>':'')+
-      (g.sp?'<span class="pchip sp">'+g.sp+' spam filter</span>':'')+(g.nc?'<span class="pchip">'+g.nc+' not checked</span>':'')+'</div></div>'; }).join('');
+      (g.sp?'<span class="pchip sp">'+g.sp+' spam filter</span>':'')+(g.nc?'<span class="pchip">'+g.nc+' not checked</span>':'')+'</div>'+
+      '<button class="sb-ed" onclick="subRename(\''+jsq(r.id)+'\',\''+jsq(g.name)+'\')" title="Wrong name (copy-paste)? Fix it — every post logged under it moves to the new name">Edit name</button></div>'; }).join('');
   var lo=dAdd(td,-PCHK_DAYS), rec=[];
   ps.forEach(function(p,i){ if(p && p.r && String(p.d||'')>=lo) rec.push([p,i]); }); rec.reverse();
   var recH=rec.length?'<div class="sb-h">Last '+(PCHK_DAYS+1)+' days · tap a post to mark it</div><div class="posts-strip">'+rec.map(function(x){ var p=x[0], st=postState(p);
       var cls=st==='up'?' up':(st==='mod'?' rm':(st==='spam'?' sp':'')), lbl=st==='up'?' · up':(st==='mod'?' · removed':(st==='spam'?' · spam filter':''));
       return '<button class="pchip'+cls+'" onclick="postToggle(\''+jsq(r.id)+'\','+x[1]+')">'+esc(p.r)+(p.d===td?'':' <small>'+esc(fmtDay(p.d))+'</small>')+lbl+'</button>'; }).join('')+'</div>':'';
   var leg='<div class="sb-leg"><span class="st-up">Stayed up</span><span class="st-sp">Spam filter</span><span class="st-rm">Removed by mods</span><span class="st-nc">Not checked</span></div>';
-  openModal('<div class="md-h"><h3>Subreddits · '+esc(r.handle)+'</h3><p class="muted" style="margin-top:4px">'+L.length+' subreddit'+(L.length===1?'':'s')+' · '+total+' post'+(total===1?'':'s')+' logged on this account · the border shows how the latest post there did</p>'+leg+'</div>'+
+  openModal('<div class="md-h"><h3>Subreddits · '+esc(r.handle)+'</h3><p class="muted" style="margin-top:4px">'+L.length+' subreddit'+(L.length===1?'':'s')+' · '+total+' post'+(total===1?'':'s')+' logged on this account · the border shows how the latest post there did · wrong name? press <b>Edit name</b></p>'+leg+'</div>'+
     '<div class="md-b sb-list">'+(rows||'<div class="muted">No posts logged yet.</div>')+recH+'</div>'+
     '<div class="md-f"><button class="btn sec" onclick="closeModal(null)">Close</button></div>');
 }
+/* Nov 4b (Jeth): subreddits are copy-pasted and sometimes wrong — the name can be fixed afterwards. Every post on
+   this account logged under the old name moves to the new one (the first name is kept in p.rf, who/when in p.rb/p.rt). */
+async function subRename(id, old){
+  var r=rowById(id); if(!r) return;
+  var n=postsOf(r).filter(function(p){ return p && subKey(p.r)===subKey(old); }).length;
+  var idx={}; try{ idx=subIndex(); }catch(_i){}
+  var known=Object.keys(idx).map(function(k){ return idx[k]; }).sort(function(a,b){ return (b.posts||0)-(a.posts||0); }).slice(0,400);
+  var v=await new Promise(function(res){ _mResolve=res;
+    openModal('<div class="md-h"><h3>Fix the subreddit name</h3><p class="muted" style="margin-top:4px"><b>'+esc(r.handle)+'</b> · '+n+' post'+(n===1?'':'s')+' logged as <b>'+esc(old)+'</b>. Type the right name — every one of these posts moves to it, and the subreddit report follows.</p></div>'+
+      '<div class="md-b"><input id="sbr-in" class="inp" list="sbr-dl" autocomplete="off" value="'+esc(old)+'" onkeydown="if(event.key===\'Enter\'){event.preventDefault();subRenameOk();}" style="width:100%">'+
+      '<div id="sbr-err" style="display:none;font-size:12px;font-weight:700;color:#1C252B;margin-top:6px"></div>'+
+      '<datalist id="sbr-dl">'+known.map(function(x){ return '<option value="'+esc(x.name)+'">'; }).join('')+'</datalist></div>'+
+      '<div class="md-f"><button class="btn sec" onclick="closeModal(false)">Cancel</button><button class="btn pri" onclick="subRenameOk()">Save name</button></div>');
+    setTimeout(function(){ var i=$('sbr-in'); if(i){ try{ i.focus(); i.select(); }catch(_f){} } }, 90); });
+  if(typeof v!=='string' || v===old){ subsOpen(id); return; }
+  var arr=postsOf(r).map(function(p){ return Object.assign({}, p); }), k=0, who=myId(), t=phtStamp();
+  arr.forEach(function(p){ if(p && subKey(p.r)===subKey(old)){ if(!p.rf) p.rf=p.r; p.r=v; p.rb=who; p.rt=t; k++; } });
+  if(!k){ subsOpen(id); return; }
+  if(await saveMeta(r,{ posts:arr })){ toast(old+' → '+v+' · '+k+' post'+(k===1?'':'s')+' updated'); renderView(); subsOpen(id); }
+  else { toast('Could not save — try again.'); subsOpen(id); }
+}
+function subRenameOk(){ var i=$('sbr-in'), e=$('sbr-err'); if(!i) return; var v=subNorm(i.value);
+  if(!v){ if(e){ e.textContent='That is not a subreddit name — type it like r/AskReddit (or u/name for a post on the profile).'; e.style.display='block'; } return; }
+  closeModal(v); }
+/* ══ Nov 4b (Jeth): TASK DONE TODAY — the end-of-shift Telegram report in ONE click, one format for every VA.
+   Built from what was logged here today: accounts by model → phase, phone, sessions, posts made / removed,
+   DMs, and the accounts created. Copied straight away; editable in the window before pasting. ══ */
+var RPT_HEART={ stella:'💛', capri:'🩵' }, RPT_HEARTS=['💜','💚','🧡','🩷','💙','🤍','❤️','🤎','🖤'];
+var RPT_ST={ warming:['🌱','Warming Phase'], comment:['💬','Comment Farming'], nsfw:['💋','NSFW Comment Phase'],
+  day1:['🚀🟢','Day 1 Posting Phase'], early:['🚀🟡','Early Posting Phase'], earlydm:['🚀🟠','Early Posting + DMs'], medium:['🚀🔵','Medium Posting + DMs'],
+  strong:['🚀🟤','Strong Posting Phase'], superstrong:['🚀⭐','Super Strong Posting Phase'],
+  extended:['🚀🟦','Extended Posting Phase (one session)'], long:['🚀🟣','Long Posting Phase (one session)'],
+  sxwarm:['⚡','Suicidal Op · Warm-up'], sxpost:['⚡🚀','Suicidal Op · Posting'],
+  recovery:['🔴','Spam Filter Recovery Phase'], tempban:['⏸️','Temp Banned'], banned:['⛔','Banned'], onhold:['⏸️','On Hold'] };
+var RPT_ORD=['extended','long','superstrong','strong','medium','earlydm','early','day1','sxpost','sxwarm','nsfw','comment','warming','recovery','tempban','banned','onhold'];
+var RPT_DM=['earlydm','medium','strong','superstrong'];
+function rptHeart(m){ var k=String(m||'').trim().toLowerCase(); if(!k) return ''; if(RPT_HEART[k]) return RPT_HEART[k];
+  var h=0; for(var i=0;i<k.length;i++) h=(h*31+k.charCodeAt(i))>>>0; return RPT_HEARTS[h%RPT_HEARTS.length]; }
+function rptDate(d){ var p=String(d||'').split('-'), MO=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return (p.length===3 && MO[+p[1]-1])?(MO[+p[1]-1]+' '+p[2]+', '+p[0]):String(d||''); }
+function rptPhone(r){ var n=phNum(r.device); return n?('PHONE '+n+' · '):(r.device?(String(r.device).toUpperCase()+' · '):''); }
+function rptIsPost(k){ try{ if(isPostingStage(k)) return true; }catch(_e){} return isTrial(k) || k==='sxpost'; }
+function rptBuild(va){
+  va=String(va||'').toLowerCase(); var td=today(), W=[], T={ acc:0, posts:0, rm:0, cr:0 };
+  ROWS.forEach(function(r){
+    if(worksFor(r)!==va || isHeld(r)) return;
+    var m=M(r), s1=markOk(m.s1,va), s2=markOk(m.s2,va), dm=markOk(m.dm,va);
+    var ps=postsOf(r).filter(function(p){ return p && p.r && p.d===td && (!p.b || String(p.b).toLowerCase()===va); });
+    if(!s1 && !s2 && !dm && !ps.length) return;
+    var rm=0, sp=0, nc=0; ps.forEach(function(p){ var st=postState(p); if(st==='mod') rm++; else if(st==='spam') sp++; else if(st!=='up' && st!=='old') nc++; });
+    W.push({ r:r, s1:s1, s2:s2, dm:dm, posts:ps.length, rm:rm, sp:sp, nc:nc }); T.acc++; T.posts+=ps.length; T.rm+=rm+sp;
+  });
+  var C=[]; allRows().forEach(function(r){
+    if(isHeld(r)) return; var cb=String(r.created_by||'').toLowerCase(); if(cb ? cb!==va : worksFor(r)!==va) return;
+    var cr=null; try{ cr=creationOf(r, va, va); }catch(_c){} if(cr){ C.push({ r:r, done:!!cr.done }); T.cr++; } });
+  var out=['TASK DONE TODAY ✅', rptDate(td)];
+  var sum=[T.acc+' account'+(T.acc===1?'':'s')+' worked'];
+  if(T.posts) sum.push(T.posts+' post'+(T.posts===1?'':'s')+' made', T.rm+' removed');
+  if(T.cr) sum.push(T.cr+' created');
+  out.push(sum.join(' · '));
+  if(!W.length && !C.length){ out.push('', 'Nothing logged in Reddit Central yet today.'); return out.join('\n'); }
+  var models={}, mOrd=[];
+  W.forEach(function(w){ var mn=String(w.r.model||'').trim()||'Other'; var key=mn.toLowerCase(); if(!models[key]){ models[key]={ name:mn, L:[] }; mOrd.push(key); } models[key].L.push(w); });
+  mOrd.sort(function(a,b){ return (a==='other')-(b==='other') || models[a].name.localeCompare(models[b].name); });
+  mOrd.forEach(function(key){
+    var g=models[key], hz=rptHeart(key==='other'?'':g.name);
+    out.push('', g.name+(hz?' '+hz:'')+' : '+g.L.length+' ACCOUNT'+(g.L.length===1?'':'S'));
+    var ph={}, pOrd=[];
+    g.L.forEach(function(w){ var st=w.r.status, bl=/^blaze/i.test(methodOf(w.r)||''), pk=st+(bl?'|b':''); if(!ph[pk]){ ph[pk]={ st:st, bl:bl, L:[] }; pOrd.push(pk); } ph[pk].L.push(w); });
+    pOrd.sort(function(a,b){ var x=RPT_ORD.indexOf(ph[a].st), y=RPT_ORD.indexOf(ph[b].st); x=x<0?99:x; y=y<0?99:y; return x-y || (ph[a].bl-ph[b].bl); });
+    pOrd.forEach(function(pk){
+      var p=ph[pk], d=RPT_ST[p.st]||['•', stageMeta(p.st).n], post=rptIsPost(p.st);
+      out.push('', (p.bl?'🔥':'')+d[0]+' '+(p.bl?'Blaze ':'')+d[1]);
+      p.L.sort(function(a,b){ return (parseInt(phNum(a.r.device),10)||999)-(parseInt(phNum(b.r.device),10)||999) || String(a.r.handle).localeCompare(String(b.r.handle)); });
+      p.L.forEach(function(w, i){
+        var spd=sesPerDay(w.r), ses='';
+        if(spd>=2){ if(w.s1 && !w.s2) ses=' (1st session only)'; else if(!w.s1 && w.s2) ses=' (2nd session only)'; }
+        if(!w.s1 && !w.s2) ses=' (session not finished yet)';
+        var line=rptPhone(w.r)+w.r.handle+(hz?' '+hz:'')+ses;
+        if(post || w.posts){
+          if(i) out.push('');
+          out.push(line, 'POST MADE : '+w.posts, 'REMOVE : '+(w.rm+w.sp)+(w.sp?' (incl. '+w.sp+' spam filter)':'')+(w.nc?' · '+w.nc+' not checked yet':''));
+          if(RPT_DM.indexOf(p.st)>=0) out.push('DMS : '+(w.dm?'done ✅':'not done'));
+        } else out.push(line);
+      });
+    });
+  });
+  if(C.length){
+    out.push('', '🆕 ACCOUNT CREATIONS : '+C.length);
+    C.sort(function(a,b){ return String(a.r.handle).localeCompare(String(b.r.handle)); });
+    C.forEach(function(c){ var hz=rptHeart(c.r.model); out.push(rptPhone(c.r)+c.r.handle+(hz?' '+hz:'')+(c.done?'':' (setup not finished)')); });
+  }
+  return out.join('\n');
+}
+function rptBtn(){ return '<button class="btn sm dark rpt-b" onclick="rptOpen()" title="Builds the TASK DONE TODAY report for Telegram from what was logged here today, and copies it">Copy today\'s report</button>'; }
+function rptOpen(){
+  var va=isAdmin()?((typeof TD!=='undefined' && TD.va && TD.va!=='all')?(TD.va==='mine'?myId():TD.va):''):myId();
+  if(!va){ toast('Pick one VA on the board first — the report is per VA.'); return; }
+  var txt=rptBuild(va);
+  openModal('<div class="md-h"><h3>Task done today · report</h3><p class="muted" style="margin-top:4px">Built from what was logged in Reddit Central today and already copied — paste it in the Telegram group. You can edit it here first.</p></div>'+
+    '<div class="md-b"><textarea id="rpt-ta" class="rpt-ta" spellcheck="false"></textarea></div>'+
+    '<div class="md-f"><button class="btn sec" onclick="closeModal(null)">Close</button><button class="btn pri" onclick="rptCopy(this)">Copy report</button></div>');
+  try{ $('modal').classList.add('wide'); }catch(_w){}
+  var ta=$('rpt-ta'); if(ta){ ta.value=txt; try{ ta.scrollTop=0; }catch(_s){} }
+  rptCopyText(txt).then(function(ok){ toast(ok?'Report copied — paste it in Telegram.':'Press Copy report to copy it.'); });
+}
+function rptCopyOld(t){ try{ var ta=document.createElement('textarea'); ta.value=t; ta.setAttribute('readonly',''); ta.style.cssText='position:fixed;left:-9999px;top:0'; document.body.appendChild(ta); ta.select(); var ok=document.execCommand('copy'); ta.remove(); return !!ok; }catch(e){ return false; } }
+function rptCopyText(t){ try{ if(navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t).then(function(){ return true; }, function(){ return rptCopyOld(t); }); }catch(e){} return Promise.resolve(rptCopyOld(t)); }
+function rptCopy(btn){ var ta=$('rpt-ta'), t=ta?ta.value:''; rptCopyText(t).then(function(ok){ if(btn){ btn.textContent=ok?'Copied':'Copy failed — select the text and copy it'; setTimeout(function(){ try{ btn.textContent='Copy report'; }catch(_e){} }, 1800); } }); }
 function postFlag(p){
   var st=postState(p), td=today(), tip=(p.vb||p.xb)?esc('Checked '+(p.vt||p.xt||'')+' by '+vaName(p.vb||p.xb)):'';
   if(st==='up') return '<span class="flag g" title="'+tip+'">Stayed up</span>';
@@ -4734,7 +4915,7 @@ async function dmsDone(id){
   var r=rowById(id); if(!r) return;
   /* DM replies are part of the posting shift, not a separate deliverable — logged, never counted.
      Timed like a session: first press starts the clock, second press logs them. */
-  if(tmOn() && !tmGet(id,'dm') && !markOkAny(M(r).dm,worksFor(r),owner(r))){ if(!(await fixGate())) return; if(!(await linkGate('A DM round'))) return; tmStart(id,'dm'); renderView(); return; }
+  if(tmOn() && !tmGet(id,'dm') && !markOkAny(M(r).dm,worksFor(r),owner(r))){ if(!tmOneGate(id+'|dm')) return; if(!(await fixGate())) return; if(!(await linkGate('A DM round'))) return; tmStart(id,'dm'); renderView(); return; }
   var t=tmOn()?tmStop(id,'dm'):null;
   if(await saveMeta(r,{ dm:vaKeyOf(USER.id) })){ if(t) tmLog(r,'dms',t); toast('DMs logged for today ✓'); renderView(); }
 }
@@ -6387,6 +6568,7 @@ function qrUrl(r){ return 'https://www.reddit.com/user/'+encodeURIComponent(Stri
 var _qrWin=null;
 function qrOpen(){ qrOpenId(QR.list[QR.i]); }
 function qrStart(list){
+  if(!tmOneGate('__hc|hc')) return;   // Nov 4b: one timer at a time
   var dr=qrDraft();
   if(dr){
     var ids=(list&&list.length)?list:qrQueue(); dr.list=dr.list.concat(ids.filter(function(x){ return dr.list.indexOf(x)<0; }));   // anything new since the draft goes at the end
