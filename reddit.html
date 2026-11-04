@@ -958,11 +958,13 @@ var IC={
  x:SI('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',16)
 };
 
-/* ── time: JMB business day resets 8:00 AM PHT; night VAs' window is keyed by its start date ── */
+/* ── time: JMB business day resets 7:00 AM PHT (Nov 4 — was 8:00, which filed a morning VA's 7:15–8:00 work under yesterday);
+      night VAs' window is keyed by its start date and flips at 7:00 PM ── */
+var BIZ_FLIP_H=7;
 function phtDate(d){ try{ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila'}).format(d||new Date()); }catch(e){ return new Date((d||new Date()).getTime()+8*3600000).toISOString().slice(0,10); } }
-function today(){ return phtDate(new Date(Date.now()-8*3600*1000)); }
+function today(){ return phtDate(new Date(Date.now()-BIZ_FLIP_H*3600*1000)); }
 function vaKeyOf(empId){
-  if(SHIFTOF[String(empId||'').toLowerCase()]==='night') return phtDate(new Date(Date.now()-20*3600*1000))+'·PM';
+  if(SHIFTOF[String(empId||'').toLowerCase()]==='night') return phtDate(new Date(Date.now()-(BIZ_FLIP_H+12)*3600*1000))+'·PM';
   return today()+'·AM';
 }
 function markOk(v, empId){
@@ -973,10 +975,10 @@ function markOk(v, empId){
      setting hadn't loaded yet reads D·AM or D — same night, so it counts (Oct 5, Rhussel's 0%). */
   var d=k.slice(0,10); return v===d+'·AM' || v===d;
 }
-/* The worker's current shift window: morning = business day D 08:00 → D+1 08:00; night = D 20:00 → D+1 20:00. */
+/* The worker's current shift window: morning = business day D 07:00 → D+1 07:00; night = D 19:00 → D+1 19:00. */
 function shiftWindow(empId){
   var night=SHIFTOF[String(empId||'').toLowerCase()]==='night', d=vaKeyOf(empId).slice(0,10);
-  var s=new Date(d+'T'+(night?'20':'08')+':00:00+08:00'); return { start:s, end:new Date(s.getTime()+24*3600000) };
+  var s=new Date(d+'T'+(night?'19':'07')+':00:00+08:00'); return { start:s, end:new Date(s.getTime()+24*3600000) };
 }
 function markOkAny(v, a, b){ return markOk(v,a) || (b && markOk(v,b)); }
 function parseTs(s){
@@ -3570,7 +3572,7 @@ function subStats(range, base, sop){
   /* Oct 25 (post check): every post has a state — up · mod · spam · unk (not checked yet) · old (before checks began,
      untagged: counted as stayed up like before). Removal rates are taken over the CHECKED posts only (up + removed),
      so a post nobody looked at never makes a subreddit look better than it is. days = the day-by-day table. */
-  var start=range?phtDate(new Date(Date.now()-8*3600000-(range-1)*86400000)):'';
+  var start=range?phtDate(new Date(Date.now()-BIZ_FLIP_H*3600000-(range-1)*86400000)):'';
   var by={}, tot={ posts:0, up:0, removed:0, spam:0, unk:0, old:0, unkToday:0, accts:{} }, removed=[], days={}, td=today();
   subRows(base).forEach(function(r){
     if(sop && sopOf(r)!==sop) return;   // the report shows one SOP at a time (Oct 25); the avoid hints use every post
@@ -6294,7 +6296,7 @@ var QA_RULES=[
 ];
 function pqRule(k){ for(var i=0;i<QA_RULES.length;i++) if(QA_RULES[i].k===k) return QA_RULES[i]; return { d:0 }; }
 function dAdd(d,n){ var x=new Date(d+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+n); return x.toISOString().slice(0,10); }
-function bizDayOf(ts){ var t=(ts instanceof Date)?ts:parseTs(ts); return t?phtDate(new Date(t.getTime()-8*3600000)):''; }
+function bizDayOf(ts){ var t=(ts instanceof Date)?ts:parseTs(ts); return t?phtDate(new Date(t.getTime()-BIZ_FLIP_H*3600000)):''; }
 function pqFrom(){ var ps=CFG.process_start||'2026-10-01'; if(PQ.range==='all') return ps; var f=dAdd(today(), -(parseInt(PQ.range,10)-1)); return f<ps?ps:f; }
 function fmtSecs(s){ if(s==null||isNaN(s)) return '—'; s=Math.round(s); return s<60?(s+'s'):tmFmt(s*1000); }
 function parseSecs(v){ v=String(v||'').trim(); if(!v) return null; var m=v.match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/);
