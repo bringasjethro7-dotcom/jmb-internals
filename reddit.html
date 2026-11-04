@@ -4616,7 +4616,7 @@ function rptBuild(va){
   var out=['TASK DONE TODAY ✅', rptDate(td), '', 'ACCOUNTS WORKED : '+T.acc, 'POSTS MADE : '+T.posts, 'REMOVED : '+T.rm];
   if(T.cr) out.push('ACCOUNTS CREATED : '+T.cr);
   if(!W.length && !C.length){ out.push('', 'Nothing logged in Reddit Central yet today.'); return out.join('\n'); }
-  var byPhone=function(a,b){ return (parseInt(phNum(a.r.device),10)||999)-(parseInt(phNum(b.r.device),10)||999) || String(a.r.handle).localeCompare(String(b.r.handle)); };
+  var byPhone=function(a,b){ return String(a.r.handle).toLowerCase().localeCompare(String(b.r.handle).toLowerCase()); };   // alphabetical
   var models={}, mOrd=[];
   W.forEach(function(w){ var mn=String(w.r.model||'').trim()||'Other'; var key=mn.toLowerCase(); if(!models[key]){ models[key]={ name:mn, L:[] }; mOrd.push(key); } models[key].L.push(w); });
   mOrd.sort(function(a,b){ return (a==='other')-(b==='other') || (mdlParts(models[a].name).length>1)-(mdlParts(models[b].name).length>1) || models[a].name.localeCompare(models[b].name); });   // own models first, the pair after
@@ -4635,9 +4635,7 @@ function rptBuild(va){
         if(spd>=2){ if(w.s1 && !w.s2) note=' (1st session only)'; else if(!w.s1 && w.s2) note=' (2nd session only)'; }
         if(!w.s1 && !w.s2) note=' (session not finished yet)';
         if(typeof pmOn==='function' && pmOn() && pmNeeds(w.r)) note+=' (model not tagged)';
-        var pl=rptPhone(w.r);
-        if(post && i) out.push('');
-        if(pl && pl!==last) out.push(pl); last=pl;
+        if(post && i) out.push('');   // Nov 4h (Jeth): no phone line — each VA works one device
         out.push(w.r.handle+note);
         if(post || w.posts){
           var ex=[]; if(w.sp) ex.push(w.sp+' spam filter'); if(w.nc) ex.push(w.nc+' not checked yet');
@@ -4649,8 +4647,8 @@ function rptBuild(va){
   });
   if(C.length){
     out.push('', '🆕 Account Creations : '+C.length);
-    C.sort(byPhone); var lastC=null;
-    C.forEach(function(c){ var pl=rptPhone(c.r); if(pl && pl!==lastC) out.push(pl); lastC=pl; out.push(c.r.handle+(c.done?'':' (setup not finished)')); });
+    C.sort(byPhone);
+    C.forEach(function(c){ out.push(c.r.handle+(c.done?'':' (setup not finished)')); });
   }
   return out.join('\n');
 }
