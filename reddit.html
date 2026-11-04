@@ -981,6 +981,28 @@ function shiftWindow(empId){
   var s=new Date(d+'T'+(night?'19':'07')+':00:00+08:00'); return { start:s, end:new Date(s.getTime()+24*3600000) };
 }
 function markOkAny(v, a, b){ return markOk(v,a) || (b && markOk(v,b)); }
+/* ── ARCHIVED NOTICES (Nov 4, Jeth: "archive this stuff, it's always here every day") ──
+   The owner can archive an everyday notice on the Today board. It stays archived (synced through Settings once the
+   backend is rc-2026-11-04c, and on this device right away) until "Show" → "Unarchive". VAs' own notices are untouched. */
+var BN_SHOW=false, BN_HID=0;
+function bnArch(){ var o={}; try{ (JSON.parse(localStorage.getItem('rc_bn_arch')||'[]')||[]).forEach(function(k){ o[k]=1; }); }catch(e){} try{ (CFG.ui_hidden||[]).forEach(function(k){ o[k]=1; }); }catch(e){} return o; }
+function bnWrap(key, html){
+  if(!html || !isAdmin()) return html;
+  var a=bnArch(); if(a[key] && !BN_SHOW){ BN_HID++; return ''; }
+  var b='<button class="btn sm sec" style="flex:none" title="'+(a[key]?'Show this notice again every day':'Hide this notice — it stays archived until you bring it back')+'" onclick="bnToggle(\''+key+'\')">'+(a[key]?'Unarchive':'Archive')+'</button>';
+  return html.replace(/<\/div>\s*$/, b+'</div>');
+}
+async function bnToggle(key){
+  var a=bnArch(), on=!a[key], L=[];
+  try{ L=JSON.parse(localStorage.getItem('rc_bn_arch')||'[]')||[]; }catch(e){ L=[]; }
+  L=L.filter(function(k){ return k!==key; }); if(on) L.push(key);
+  try{ localStorage.setItem('rc_bn_arch', JSON.stringify(L)); }catch(e){}
+  try{ var C=(CFG.ui_hidden||[]).filter(function(k){ return k!==key; }); if(on) C.push(key); CFG.ui_hidden=C; }catch(e){}
+  if(!on && !Object.keys(bnArch()).length) BN_SHOW=false;
+  renderView(); toast(on?'Archived — it won\'t show again until you bring it back.':'Back on the Today board.');
+  if(BE_BUILD && BE_BUILD>='rc-2026-11-04c'){ try{ await cfgWrite(function(c){ var x=Array.isArray(c.ui_hidden)?c.ui_hidden.slice():[]; x=x.filter(function(k){ return k!==key; }); if(on) x.push(key); c.ui_hidden=x; }); }catch(e){} }
+}
+function bnShowToggle(){ BN_SHOW=!BN_SHOW; renderView(); }
 function parseTs(s){
   if(!s) return null; s=String(s).trim();
   var m=s.match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2})(?::(\d{2}))?)?/);
@@ -1906,8 +1928,9 @@ function vToday(){
     if(gk.length) h+='<div class="banner bad">'+IC.swap+'<div style="flex:1"><b>'+gk.map(function(k){ return esc(vaName(k)); }).join(', ')+'</b> '+(gk.length===1?'is':'are')+' deactivated in the admin console but still '+(gk.length===1?'owns':'own')+' <b>'+gk.reduce(function(s,k){ return s+gh[k].length; },0)+' live account'+(gk.reduce(function(s,k){ return s+gh[k].length; },0)===1?'':'s')+'</b> on '+esc(baseOf(PROJECT).n)+'. Move them to an active VA.</div>'+
       gk.map(function(k){ return '<button class="btn sm dark" onclick="xferOpen(\''+jsq(k)+'\')">Move '+esc(firstName(k))+'\'s '+gh[k].length+'</button>'; }).join('')+'</div>';
   }
+  BN_HID=0;
   if(admin){ var _pk=(ALL[PROJECT]||ROWS).filter(isParked), _ph=_pk.filter(function(r){ return r.status==='onhold'; }).length, _pa=_pk.length-_ph;
-    if(_pk.length) h+='<div class="banner info">'+IC.pause+'<div style="flex:1"><b>'+_ph+' on hold'+(_pa?' · '+_pa+' archived':'')+'</b> for clients on '+esc(baseOf(PROJECT).n)+' — out of every board and every number until you release them.</div><button class="btn sm dark" onclick="DB.life=\'hold\';if(!DB.groupBy)DB.groupBy=\'client\';go(\'accounts\')">See them</button></div>'; }
+    if(_pk.length) h+=bnWrap('hold', '<div class="banner info">'+IC.pause+'<div style="flex:1"><b>'+_ph+' on hold'+(_pa?' · '+_pa+' archived':'')+'</b> for clients on '+esc(baseOf(PROJECT).n)+' — out of every board and every number until you release them.</div><button class="btn sm dark" onclick="DB.life=\'hold\';if(!DB.groupBy)DB.groupBy=\'client\';go(\'accounts\')">See them</button></div>'); }
   if(admin) h+=wrongBaseBanner(ALL[PROJECT]||ROWS);
   if(admin) h+=hcBanner()+hcMissBanner();
   if(admin){ var _dq=delReqs(); if(_dq.length) h+='<div class="banner bad">'+IC.trash+'<div style="flex:1"><b>'+_dq.length+' deletion request'+(_dq.length===1?'':'s')+'</b> waiting for you — VAs can\'t delete a recorded account without your approval.</div><button class="btn sm dark" onclick="delReview()">Review</button></div>'; }
@@ -1920,14 +1943,15 @@ function vToday(){
     var _sxRows=admin?(ALL[PROJECT]||ROWS).filter(function(r){ return !isParked(r); }):mineWork, _sx=sxToday(_sxRows);
     var _sxNoA=_sxRows.filter(function(r){ return isSX(r) && !isDead(r) && !isParked(r) && !sxAssign(r) && (r.status==='sxpost' || (r.status==='sxwarm' && sxDay(r)>=3)); }).length;
     var _wLeft=_sx.warm-_sx.warmDone, _bl=_sx.backlog||0;
-    if(_wLeft || _bl) h+='<div class="banner '+(_bl?'bad':'warn')+'" style="border-color:'+SX_C+'55">'+IC.hour+'<div style="flex:1"><b>Suicidal Op warm-ups:</b> '+(_wLeft?_wLeft+' left today'+(_sx.warmDone?' ('+_sx.warmDone+' done)':'')+' — two 8–12 min sessions per account (Warm-up 1, then Warm-up 2 later the same day), then it owes nothing until it posts.':'none due today'+(_sx.warmDone?' ('+_sx.warmDone+' done)':'')+'.')+
+    if(_wLeft || _bl) h+=bnWrap('sxwarm', '<div class="banner '+(_bl?'bad':'warn')+'" style="border-color:'+SX_C+'55">'+IC.hour+'<div style="flex:1"><b>Suicidal Op warm-ups:</b> '+(_wLeft?_wLeft+' left today'+(_sx.warmDone?' ('+_sx.warmDone+' done)':'')+' — two 8–12 min sessions per account (Warm-up 1, then Warm-up 2 later the same day), then it owes nothing until it posts.':'none due today'+(_sx.warmDone?' ('+_sx.warmDone+' done)':'')+'.')+
       (_sx.late-_sx.over>0?' <b>'+(_sx.late-_sx.over)+'</b> '+((_sx.late-_sx.over)===1?'is':'are')+' on <b>day 3</b>.':'')+
       (_bl?' <b style="color:#b91c1c">'+_bl+' '+(_bl===1?'is':'are')+' past day 3 and not warmed yet</b> — not in your target. Warming one today counts (both warm-ups).':'')+
       ' Not working '+(_wLeft===1?'it':'some of them')+' today on the client\'s advice? Tap <b>Standby</b> on the account — it leaves today\'s target until you put it back.'+
-      (_sx.standby?' <span class="muted">('+_sx.standby+' on standby now.)</span>':'')+'</div></div>';
-    if(_sxNoA) h+='<div class="banner info" style="border-color:'+SX_C+'55">'+IC.tag+'<div style="flex:1"><b>'+_sxNoA+' Suicidal Op account'+(_sxNoA===1?' is':'s are')+' on day 3+ with no posting assignment.</b> '+(admin?'The VA can\'t post '+(_sxNoA===1?'it':'them')+' until you record what the client assigned. They are kept out of the daily target until then.':'Ask the admin for the assignment before posting — until it is set, '+(_sxNoA===1?'it is':'they are')+' not in your target.')+'</div>'+
-      (admin?'<button class="btn sm dark" onclick="DB.sop=\'sx\';go(\'accounts\')">Set assignments</button>':'')+'</div>';
+      (_sx.standby?' <span class="muted">('+_sx.standby+' on standby now.)</span>':'')+'</div></div>');
+    if(_sxNoA) h+=bnWrap('sxassign', '<div class="banner info" style="border-color:'+SX_C+'55">'+IC.tag+'<div style="flex:1"><b>'+_sxNoA+' Suicidal Op account'+(_sxNoA===1?' is':'s are')+' on day 3+ with no posting assignment.</b> '+(admin?'The VA can\'t post '+(_sxNoA===1?'it':'them')+' until you record what the client assigned. They are kept out of the daily target until then.':'Ask the admin for the assignment before posting — until it is set, '+(_sxNoA===1?'it is':'they are')+' not in your target.')+'</div>'+
+      (admin?'<button class="btn sm dark" onclick="DB.sop=\'sx\';go(\'accounts\')">Set assignments</button>':'')+'</div>');
   }catch(_sxb){}
+  if(admin && (BN_HID || BN_SHOW)) h+='<div style="display:flex;justify-content:flex-end;margin:-4px 2px 10px;font-size:12px;color:var(--ink3)">'+(BN_SHOW?'Showing archived notices · <a href="#" onclick="bnShowToggle();return false" style="margin-left:4px;font-weight:700">Hide them</a>':(BN_HID+' archived notice'+(BN_HID===1?'':'s')+' · <a href="#" onclick="bnShowToggle();return false" style="margin-left:4px;font-weight:700">Show</a>'))+'</div>';
   var covering=mineWork.filter(function(r){ return owner(r)!==me; });
   if(covering.length){
     var whose={}; covering.forEach(function(r){ var o=owner(r); whose[o]=(whose[o]||0)+1; });
