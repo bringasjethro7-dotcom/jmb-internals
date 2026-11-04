@@ -1429,7 +1429,7 @@ function start(){
   try{ want=window.__RC_VIEW || (new URLSearchParams(location.search)).get("tab") || sessionStorage.getItem("rc_view"); }catch(e){}
   if(want==='coverage'){ SETSUB='coverage'; want='settings'; }
   VIEW=(want && tabsFor().some(function(t){ return t[0]===want; }))?want:'today';
-  try{ api({ action:'rc_build' }).then(function(d){ BE_BUILD=(d&&d.build)||'';
+  try{ api({ action:'rc_build' }).then(function(d){ BE_BUILD=(d&&d.build)||''; try{ setTimeout(tcHistLoad, 1500); }catch(_th){}
     /* Oct 31: once the backend with the Suicidal Op session fix (31a) is live, the owner's page asks it once to recount
        the days since Oct 25 (it runs inside the day close catch-up, then republishes the scorecard). */
     try{ if(isAdmin() && BE_BUILD>='rc-2026-10-31e' && !localStorage.getItem('rc_sxrc_31e')){ localStorage.setItem('rc_sxrc_31e','1');
@@ -3087,7 +3087,32 @@ function tcLastCreated(){
     var m=M(r); if(!m.cdone && !m.added) return; var d=parseTs(m.cdoneAt||r.created_at), t=d?d.getTime():0; if(t>bt){ bt=t; best=mm; } }); }catch(e){}
   return best;
 }
-function tcWorkModel(){ return tcLastToday() || tcMainModel(); }
+/* Nov 4 (Jeth): health checks and post checks bill the VA's OWN model. The check list is shuffled across everybody's
+   accounts, so "the model most of today's list belongs to" sent a Capri VA's check time to Easy / Lila. Now the tool
+   learns which models she really worked — her sessions, DMs and creations over the last 14 days (rc_my_models) —
+   and bills checks to those. A model she worked earlier today wins if it is one of hers; otherwise her top model. */
+var TCH={ day:'', list:null, at:0 };
+function tcHistKey(){ return 'rc_tch_'+PROJECT+'_'+myId(); }
+function tcHistLoad(){
+  if(!USER || isAdmin()) return;
+  if(TCH.day===today() && TCH.list) return;
+  try{ var c=JSON.parse(localStorage.getItem(tcHistKey())||'null'); if(c && c.day===today() && c.list){ TCH=c; return; } }catch(e){}
+  if(!(BE_BUILD && BE_BUILD>='rc-2026-11-04b')) return;
+  if(Date.now()-TCH.at<10*60000) return; TCH.at=Date.now();
+  jget(API+'?'+qs({ action:'rc_my_models', by:USER.id, va:myId(), days:14 })+'&_='+Date.now(), 0).then(function(d){
+    if(!d || !d.ok) return;
+    TCH={ day:today(), list:(d.models||[]).map(function(x){ return String(x.m||''); }).filter(Boolean), at:Date.now() };
+    try{ localStorage.setItem(tcHistKey(), JSON.stringify(TCH)); }catch(_s){}
+  }).catch(function(){});
+}
+function tcMyModels(){ tcHistLoad(); var out=[]; (TCH.list||[]).forEach(function(m){ var ok=tcModelOk(m); if(ok && out.indexOf(ok)<0) out.push(ok); }); return out; }
+function tcHomeModel(){
+  var L=tcMyModels(), last=tcLastToday();
+  if(last && L.indexOf(last)>=0) return last;
+  if(L.length) return L[0];
+  return last || tcMainModel();
+}
+function tcWorkModel(){ return tcLastToday() || tcHomeModel(); }
 /* creation: the model this creation is for */
 function crmKey(){ return 'rc_crm_'+PROJECT+'_'+myId(); }
 function crModel(){ var x=crGet(); if(x && x.m) return x.m; var s=''; try{ s=localStorage.getItem(crmKey())||''; }catch(e){} return tcModelOk(s) || tcLastCreated() || tcWorkModel(); }
@@ -3106,8 +3131,8 @@ function tcWant(){
   var parts=best.split('|'), id=parts[0], key=parts[1]||'';
   w.idle=false;
   if(id==='__create'){ w.k='creation'; w.m=String(o[best].m||'')||crModel()||w.m; w.v=String(NA.method||''); w.lbl='Creating an account'; tcLastSet(w.m); return w; }
-  if(id==='__hc'){ w.k='warmup'; w.lbl='Health check'; try{ w.m=tcTally(ccMine())||w.m; }catch(_c){} return w; }   // Oct 31: the model most of today's check list belongs to
-  if(id==='__pc'){ w.k='posting'; w.lbl='Post check'; try{ w.m=tcTally(pcMine().map(function(x){ return x.r; }))||w.m; }catch(_p){} return w; }   // Oct 31: the model of the posts being checked
+  if(id==='__hc'){ w.k='warmup'; w.lbl='Health check'; try{ w.m=tcHomeModel()||w.m; }catch(_c){} return w; }   // Nov 4: the VA's own model — never the shuffled check list's
+  if(id==='__pc'){ w.k='posting'; w.lbl='Post check'; try{ var _pm=tcModelOk(tcTally(pcMine().map(function(x){ return x.r; }))), _my=tcMyModels(); w.m=(_pm && _my.indexOf(_pm)>=0)?_pm:(tcHomeModel()||w.m); }catch(_p){} return w; }   // Nov 4: the posts' model only when it is one of hers, else her own model
   var r=null; try{ r=rowById(id); }catch(e){}
   if(!r){ w.lbl='Task'; return w; }
   w.p=r.project||PROJECT; w.m=String(r.model||'').trim()||w.m; w.v=methodOf(r); tcLastSet(w.m);
