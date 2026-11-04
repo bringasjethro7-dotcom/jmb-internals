@@ -898,6 +898,14 @@ html.lite .pfx-flow::before,html.lite .pfx-flow::after,html.lite .pfx-hub,html.l
 .pm-opt:hover{border-color:#171717;transform:translateY(-1px)}
 .pm-opt.on{border-color:#171717;box-shadow:inset 0 0 0 2px #171717}
 .pm-opt small{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
+
+/* ══ Nov 5 · a paused timer (portal stopped — lunch): calm, not animated, still clearly "yours" ══ */
+.ses.run.pzd,.btn.run.pzd{background:#37322D!important;border-color:#37322D!important;box-shadow:0 0 0 3px rgba(195,184,152,.6),0 8px 18px -8px rgba(0,0,0,.45)!important}
+.ses.run.pzd::before,.btn.run.pzd::before{animation:none!important;opacity:.35}
+.ses.run.pzd .sq,.btn.run.pzd .sq{animation:none!important;background:#C3B898!important;border-radius:2px!important;box-shadow:none!important}
+#tmDock.pzd{background:#37322D;box-shadow:0 0 0 3px rgba(195,184,152,.6),0 16px 34px -14px rgba(0,0,0,.6)}
+#tmDock.pzd::before{animation:none}
+#tmDock.pzd .tmd-dot{animation:none;background:#C3B898;border-radius:3px}
 </style>
 </head>
 <body>
@@ -2141,7 +2149,7 @@ function vToday(){
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>'+greet+', <span class="gtxt">'+esc(nm)+'</span></h2>'+
     '<p>'+esc(baseOf(PROJECT).n)+' base · '+new Date().toLocaleDateString('en-US',{timeZone:'Asia/Manila',weekday:'long',month:'long',day:'numeric'})+
     ' · '+(tmOn()?'press <b>Start</b> when a task begins and <b>Finish</b> when it ends':'tick each session as you finish it')+' — no screenshots needed.</p></div>'+
-    (tmOn()?(crGet()?'<button class="btn run" onclick="newAccount()" title="Account exists on the phone? Log it — the timer stops when it is counted"><span class="sq"></span> Creating… <span class="tmv" data-tm="'+crGet().t+'">'+tmFmt(Date.now()-crGet().t)+'</span></button><button class="btn sec sm" onclick="crCancel()" title="Cancel — free in the first 2 minutes; after that it is recorded as a failed creation">'+IC.x+'</button>'+crPickHtml()
+    (tmOn()?(crGet()?'<button class="btn run" onclick="newAccount()" title="Account exists on the phone? Log it — the timer stops when it is counted"><span class="sq"></span> Creating… <span class="tmv"'+(crGet().ps?'':' data-tm="'+tmVStart(crGet())+'"')+'>'+tmFmt(tmEl(crGet()))+(crGet().ps?' · paused':'')+'</span></button><button class="btn sec sm" onclick="crCancel()" title="Cancel — free in the first 2 minutes; after that it is recorded as a failed creation">'+IC.x+'</button>'+crPickHtml()
       :(crLocked()?'<button class="btn sec" onclick="crLockedBox()" title="Locked: '+CR_STREAK+' creation timers in a row ended without an account" style="opacity:.6">Start creating · locked</button>'
         :'<button class="btn sec" onclick="crStart()" title="Press when you START creating an account on the iPhone (stops by itself at '+Math.round(tmCapSecs('creation','','')/60)+' min)">▶ Start creating</button>'+crPickHtml())):'')+
     '<button class="btn pri" onclick="newAccount()">'+IC.plus+' Log new account</button></div>';
@@ -2544,7 +2552,8 @@ function sesBtn(r, n, lbl){   // lbl (Oct 27): a named single session, e.g. the 
   if(locked) return '<button class="ses" disabled title="Finish Session 1 first"><span class="bx"></span>'+esc(L)+'</button>';
   if(!tmOn()) return '<button class="ses" onclick="doSession(\''+jsq(r.id)+'\','+n+',this)"><span class="bx"></span>'+esc(L)+'</button>';
   var t=tmGet(r.id,'s'+n);
-  if(t) return '<button class="ses run" onclick="doSession(\''+jsq(r.id)+'\','+n+',this)" title="Press when the session is finished — this timer stops by itself at '+Math.round(tmCapSecs('session',r.status,methodOf(r))/60)+' minutes"><span class="sq"></span>Finish '+esc(Ls)+' <small data-tm="'+t.t+'">'+tmFmt(Date.now()-t.t)+'</small></button>'+
+  if(t && t.ps) return tmPausedBtn(r.id, 's'+n, Ls, t);   // Nov 5
+  if(t) return '<button class="ses run" onclick="doSession(\''+jsq(r.id)+'\','+n+',this)" title="Press when the session is finished — this timer stops by itself at '+Math.round(tmCapSecs('session',r.status,methodOf(r))/60)+' minutes"><span class="sq"></span>Finish '+esc(Ls)+' <small data-tm="'+tmVStart(t)+'">'+tmFmt(tmEl(t))+'</small></button>'+
     '<button class="ses x" onclick="tmCancel(\''+jsq(r.id)+'\',\'s'+n+'\')" title="Cancel this timer (started by mistake)">'+IC.x+'</button>';
   var pk=pchkPending(r).length;
   if(pk) return '<button class="ses go" onclick="sesStart(\''+jsq(r.id)+'\','+n+')" title="First mark what happened to the '+pk+' earlier post'+(pk===1?'':'s')+' — then the session starts"><span class="pl"></span>Start '+esc(Ls)+' <small>check '+pk+' post'+(pk===1?'':'s')+' first</small></button>';
@@ -2657,10 +2666,16 @@ function setupBtn(r,k,l){ var on=!!((M(r).setup||{})[k]); return '<button class=
    seconds after starting are flagged for QA, not rewarded. Timers live in this browser (localStorage),
    survive a reload, and expire after 3 hours. The owner/admin ticks without timers. */
 var TM_MAX=3*3600*1000, _tmIv=null;
+/* Nov 5 (Jeth): timers can PAUSE (portal timer stopped — lunch, a break) and carry on later. x.t = start,
+   x.pz = paused ms so far, x.ps = paused since (while paused), x.pw = why ('portal' | 'sleep'). */
+var TM_PZMAX=4*3600*1000;   // a timer paused for more than 4 hours is dropped
+function tmEl(x){ if(!x || !x.t) return 0; var now=Date.now(); return Math.max(0, now-(+x.t)-(+x.pz||0)-(x.ps?Math.max(0,now-(+x.ps)):0)); }
+function tmVStart(x){ return Date.now()-tmEl(x); }   // the start the clock shows (paused time removed)
+function tmClock(x, cls){ return x && x.ps ? '<'+'small class="'+(cls||'')+'">'+tmFmt(tmEl(x))+'</small>' : '<'+'small class="'+(cls||'')+'" data-tm="'+tmVStart(x)+'">'+tmFmt(tmEl(x))+'</small>'; }
 function tmKey(){ return 'rc_tm_'+myId(); }
 function tmAll(){
   var o={}; try{ o=JSON.parse(localStorage.getItem(tmKey())||'{}')||{}; }catch(e){ o={}; }
-  var now=Date.now(), ch=false; for(var k in o){ if(!o[k] || !o[k].t || now-o[k].t>TM_MAX){ delete o[k]; ch=true; } }
+  var now=Date.now(), ch=false; for(var k in o){ if(!o[k] || !o[k].t || tmEl(o[k])>TM_MAX || (o[k].ps && now-o[k].ps>TM_PZMAX)){ delete o[k]; ch=true; } }
   if(ch) tmPut(o); return o;
 }
 function tmPut(o){ try{ localStorage.setItem(tmKey(), JSON.stringify(o)); }catch(e){} setTimeout(function(){ try{ tmDock(); }catch(_d){} }, 0); try{ TB.act=Date.now(); setTimeout(function(){ tbSend(true); }, 50); }catch(_b){} }
@@ -2724,14 +2739,16 @@ function tmCapOf(key){
 }
 function tmCapCheck(){
   try{ if(!USER || !tmOn()) return; }catch(e){ return; }
+  try{ tmGapFix(); }catch(_g){}   // Nov 5: a sleeping computer / frozen tab is not work time
   try{ hcCheck(); }catch(_hc){}   // the health check has its own limit (accounts × max per account)
   try{ pcCheckTick(); }catch(_pc){}   // Oct 27: the end-of-shift post check too (posts × 1 min)
   var o=tmAll(), now=Date.now(), hit=[];
   var cx=o['__create|c'], cCap=tmCapSecs('creation','','');   // Oct 31: warn 5 minutes before the creation timer stops
-  if(cx && cx.t && !cx.w && (now-cx.t)/1000>=cCap-CR_WARN_BEFORE && (now-cx.t)/1000<cCap){ cx.w=1; tmPut(o);
-    tmCapNote('The creation timer stops at '+Math.round(cCap/60)+' minutes — '+Math.max(1,Math.round((cCap-(now-cx.t)/1000)/60))+' min left. Account made? Log it now. Didn\'t work? Press ✕ and mark it failed.'); }
-  Object.keys(o).forEach(function(key){ var x=o[key]; if(!x || !x.t || key.indexOf('__hc|')===0 || key.indexOf('__pc|')===0) return; var c=tmCapOf(key); if((now-x.t)/1000>=c.secs) hit.push({ key:key, x:x, c:c }); });
+  if(cx && cx.t && !cx.ps && !cx.w && tmEl(cx)/1000>=cCap-CR_WARN_BEFORE && tmEl(cx)/1000<cCap){ cx.w=1; tmPut(o);
+    tmCapNote('The creation timer stops at '+Math.round(cCap/60)+' minutes — '+Math.max(1,Math.round((cCap-tmEl(cx)/1000)/60))+' min left. Account made? Log it now. Didn\'t work? Press ✕ and mark it failed.'); }
+  Object.keys(o).forEach(function(key){ var x=o[key]; if(!x || !x.t || x.ps || key.indexOf('__hc|')===0 || key.indexOf('__pc|')===0) return; var c=tmCapOf(key); if(tmEl(x)/1000>=c.secs) hit.push({ key:key, x:x, c:c }); });
   if(!hit.length) return;
+  if(tmCapLinkHold(hit)) return;   // Nov 5: portal stopped (lunch) → pause, never throw the task away
   hit.forEach(function(h){
     var o2=tmAll(); delete o2[h.key]; tmPut(o2);
     try{ tmLog(h.c.r, 'overrun', { secs:h.c.secs, start:h.x.t, parallel:h.x.p||0 }, { stage:h.c.r?h.c.r.status:'', source:'cap · '+h.c.kind }); }catch(e){}
@@ -2872,8 +2889,8 @@ function dgRemindAt(capSecs){ var first=capSecs>1800?Math.round(capSecs/2):Math.
 function dgRemindTick(){
   var o=tmAll(), now=Date.now(), ch=false, live={};
   Object.keys(o).forEach(function(key){
-    var x=o[key]; if(!x || !x.t) return; var m=key.match(/^(.+)\|(s1|s2|dm)$/); if(!m || m[1].indexOf('__')===0) return;
-    var id=m[1], k=m[2], r=rowById(id), c=tmCapOf(key), el=(now-x.t)/1000, at=dgRemindAt(c.secs), ck='fin|'+key; live[ck]=1;
+    var x=o[key]; if(!x || !x.t || x.ps) return; var m=key.match(/^(.+)\|(s1|s2|dm)$/); if(!m || m[1].indexOf('__')===0) return;
+    var id=m[1], k=m[2], r=rowById(id), c=tmCapOf(key), el=tmEl(x)/1000, at=dgRemindAt(c.secs), ck='fin|'+key; live[ck]=1;
     var what=(k==='dm'?'DMs':'Session '+k.slice(1))+(r?' · '+r.handle:'');
     var fin=(k==='dm')?'dmsDone(\''+jsq(id)+'\')':'doSession(\''+jsq(id)+'\','+k.slice(1)+')';
     var mk=function(late){ return { tone:late?'warn':'', flash:'Is this session done?',
@@ -3336,7 +3353,7 @@ function tbActive(){ try{ if(Object.keys(tmAll()).length>0) return true; }catch(
   try{ if(VIEW==='health' && !isAdmin() && hcOut()) return false; }catch(_h){}
   return !document.hidden && (Date.now()-TB.act)<90000; }
 function tbInfo(){ var o={}; try{ o=tmAll(); }catch(e){}
-  var best=null; Object.keys(o).forEach(function(k){ if(o[k] && o[k].t && (!best || o[k].t<o[best].t)) best=k; });
+  var best=null; Object.keys(o).forEach(function(k){ if(o[k] && o[k].t && !o[k].ps && (!best || o[k].t<o[best].t)) best=k; });
   var lbl=''; if(best){ var parts=best.split('|'), id=parts[0], k=parts[1]||'', r=null; try{ r=rowById(id); }catch(e){}
     lbl = id==='__create' ? 'Creating an account' : id==='__hc' ? 'Health check' : id==='__pc' ? 'Post check' : ((/^s\d/.test(k) ? 'Session '+k.slice(1) : (k==='c' ? 'Creation' : 'Task'))+(r&&r.handle?' · '+r.handle:'')); }
   var n=Object.keys(o).length; if(n>1) lbl+=' (+'+(n-1)+' more)';
@@ -3415,7 +3432,7 @@ function crPickHtml(){ var L=[]; try{ L=modelsAllowed(PROJECT).slice(); }catch(e
     L.map(function(x){ return '<option'+(x===cur?' selected':'')+'>'+esc(x)+'</option>'; }).join('')+'</select></label>'; }
 function tcWant(){
   var o={}; try{ o=tmAll(); }catch(e){}
-  var best=null; Object.keys(o).forEach(function(k){ if(o[k] && o[k].t && (!best || o[k].t<o[best].t)) best=k; });
+  var best=null; Object.keys(o).forEach(function(k){ if(o[k] && o[k].t && !o[k].ps && (!best || o[k].t<o[best].t)) best=k; });
   var w={ p:PROJECT, m:tcWorkModel(), k:'warmup', v:'', idle:true, lbl:'Reddit Central open', at:new Date().toISOString() };
   if(!best) return w;
   var parts=best.split('|'), id=parts[0], key=parts[1]||'';
@@ -3491,7 +3508,7 @@ function tlKey(){ return 'rc_tl_'+String(USER&&USER.id||'x').toUpperCase()+'_'+t
 function tlAdd(start, end){ try{ var L=JSON.parse(localStorage.getItem(tlKey())||'[]'); L.push([Math.round(start), Math.round(end)]); if(L.length>600) L=L.slice(-600); localStorage.setItem(tlKey(), JSON.stringify(L)); }catch(e){} }
 function timedToday(){
   var iv=[]; try{ iv=JSON.parse(localStorage.getItem(tlKey())||'[]'); }catch(e){ iv=[]; }
-  try{ var o=tmAll(), now=Date.now(); Object.keys(o).forEach(function(k){ var x=o[k]; if(x && x.t && x.d===today() && now-x.t<3*3600000) iv.push([x.t, now]); }); }catch(e){}
+  try{ var o=tmAll(), now=Date.now(); Object.keys(o).forEach(function(k){ var x=o[k]; if(x && x.t && !x.ps && x.d===today() && tmEl(x)<3*3600000) iv.push([tmVStart(x), now]); }); }catch(e){}
   iv=iv.filter(function(x){ return x && x[1]>x[0] && x[1]-x[0]>=20000 && x[1]-x[0]<=3*3600000; }).sort(function(a,b){ return a[0]-b[0]; });
   var tot=0, cur=null; iv.forEach(function(x){ if(!cur || x[0]>cur[1]){ if(cur) tot+=cur[1]-cur[0]; cur=[x[0],x[1]]; } else if(x[1]>cur[1]) cur[1]=x[1]; }); if(cur) tot+=cur[1]-cur[0];
   return Math.round(tot/1000);
@@ -3579,7 +3596,7 @@ function tmStart(id,k){ var key=id+'|'+k;
   if(tmIsWork(key)){ try{ if(tmGet('__hc','hc')) hcStop('switch'); }catch(_h){} try{ if(tmGet('__pc','pc')) pcStop('switch'); }catch(_p){} }   // Nov 4b: one timer at a time
   var o=tmAll(); o[key]={ t:Date.now(), p:Object.keys(o).length, d:today() }; tmPut(o); tmEnsure(); }
 function tmStop(id,k){ var o=tmAll(), x=o[id+'|'+k]; if(!x) return null; delete o[id+'|'+k]; tmPut(o);
-  return { secs:Math.round((Date.now()-x.t)/1000), start:x.t, parallel:Math.max(x.p||0, Object.keys(o).length) }; }
+  return { secs:Math.round(tmEl(x)/1000), start:x.t, parallel:Math.max(x.p||0, Object.keys(o).length) }; }   // Nov 5: paused time never counts
 function tmFmt(ms){ var s=Math.max(0,Math.floor(ms/1000)), h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60; return (h?h+':'+(m<10?'0':''):'')+m+':'+(x<10?'0':'')+x; }
 function tmEnsure(){ if(_tmIv) return; _tmIv=setInterval(function(){
   var els=document.querySelectorAll('[data-tm]'); if(!els.length) return;
@@ -3593,13 +3610,13 @@ function tmLabel(k){ var p=String(k||'').split('|'), id=p[0], kk=p[1]||'';
   if(id==='__create') return 'Creating an account'; if(id==='__hc') return 'Health check'; if(id==='__pc') return 'Post check';
   var r=rowById(id); return (r?r.handle:'an account')+' · '+(kk==='dm'?'DMs':(/^s\d$/.test(kk)?'Session '+kk.slice(1):kk)); }
 function tmRunning(except){ var o=tmAll(); return Object.keys(o).filter(function(k){ return k!==except && o[k] && o[k].t && tmIsWork(k); })
-  .map(function(k){ return { k:k, t:+o[k].t, txt:tmLabel(k) }; }).sort(function(a,b){ return a.t-b.t; }); }
+  .map(function(k){ return { k:k, t:tmVStart(o[k]), el:tmEl(o[k]), pz:!!o[k].ps, txt:tmLabel(k)+(o[k].ps?' · paused':'') }; }).sort(function(a,b){ return a.t-b.t; }); }
 function tmOneGate(key){
   if(!tmOn()) return true;
   var L=tmRunning(key); if(!L.length) return true;
   var x=L[0];
   openModal('<div class="md-h"><h3>One timer at a time</h3><p class="muted" style="margin-top:4px">A timer is already running. Press <b>Finish</b> on it (or the <b>✕</b> if it was started by mistake) before you start another one — two timers would count the same minutes twice.</p></div>'+
-    '<div class="md-b"><div class="tm-busy"><i class="tmd-dot"></i><b>'+esc(x.txt)+'</b><span class="tmd-t" data-tm="'+x.t+'">'+tmFmt(Date.now()-x.t)+'</span></div></div>'+
+    '<div class="md-b"><div class="tm-busy"><i class="tmd-dot"></i><b>'+esc(x.txt)+'</b><span class="tmd-t"'+(x.pz?'':' data-tm="'+x.t+'"')+'>'+tmFmt(x.el)+'</span></div></div>'+
     '<div class="md-f"><button class="btn sec" onclick="closeModal(null)">OK</button><button class="btn pri" onclick="closeModal(null);tmJump()">Go to the running timer</button></div>');
   tmEnsure(); return false;
 }
@@ -3646,9 +3663,10 @@ function tmDock(){ try{
   if(typeof USER==='undefined' || !USER || !tmOn()){ el.style.display='none'; return; }
   var L=tmRunning('');
   if(!L.length){ el.style.display='none'; el.innerHTML=''; el.removeAttribute('data-sig'); el.classList.remove('on'); return; }
-  var sig=L.map(function(x){ return x.t+x.txt; }).join('|');
+  var sig=L.map(function(x){ return x.k+(x.pz?'|p':'|'+x.t); }).join('|');
   if(el.getAttribute('data-sig')!==sig){ el.setAttribute('data-sig', sig);
-    el.innerHTML='<i class="tmd-dot"></i><span class="tmd-l">TIMER RUNNING'+(L.length>1?' · '+L.length:'')+'</span><b>'+esc(L[0].txt)+'</b><span class="tmd-t" data-tm="'+L[0].t+'">'+tmFmt(Date.now()-L[0].t)+'</span><span class="tmd-go">SHOW</span>'; }
+    el.classList.toggle('pzd', !!L[0].pz);
+    el.innerHTML='<i class="tmd-dot"></i><span class="tmd-l">'+(L[0].pz?'TIMER PAUSED':'TIMER RUNNING')+(L.length>1?' · '+L.length:'')+'</span><b>'+esc(L[0].txt)+'</b><span class="tmd-t"'+(L[0].pz?'':' data-tm="'+L[0].t+'"')+'>'+tmFmt(L[0].el)+'</span><span class="tmd-go">SHOW</span>'; }
   el.style.display='flex'; tmEnsure(); tmDockWatch();
 }catch(e){} }
 /* ══ Nov 4c (Jeth): ONE MODEL PER POSTING ACCOUNT. Accounts are made for a pair (Capri/Stella · Izzy/Layla ·
@@ -3722,6 +3740,82 @@ async function pmTagAll(){
   }
   renderView();
 }
+/* ══ Nov 5 (Jeth): PAUSE & RESUME — a long posting session that runs into lunch is no longer thrown away.
+   The portal timer stops at lunch (or a break / End of Day / another task) → the running timer here pauses within a
+   minute. When the portal timer runs on Reddit again it carries on from where it stopped. A computer that slept or a
+   frozen tab (no tick for 5+ min) skips that stretch. Paused time is never counted. ══ */
+var TMG={ k:'' };
+function tmTickKey(){ return 'rc_tmtick_'+myId(); }
+function tmGapFix(){
+  if(!USER || !tmOn()) return;
+  var now=Date.now(), last=0; try{ last=+localStorage.getItem(tmTickKey())||0; }catch(e){}
+  try{ localStorage.setItem(tmTickKey(), String(now)); }catch(e){}
+  if(!last || now-last<5*60000) return;
+  var o=tmAll(), gap=now-last-30000, ch=false;
+  Object.keys(o).forEach(function(k){ var x=o[k]; if(!tmIsWork(k) || !x || !x.t || x.ps) return; if(+x.t>=last) return; x.pz=(+x.pz||0)+gap; ch=true; });
+  if(ch){ tmPut(o); tmCapNote('This page was asleep for '+Math.round(gap/60000)+' min — your timer skipped that time and carries on from where it was.'); try{ renderView(); }catch(e){} }
+}
+function tmPauseAll(why, note){
+  var o=tmAll(), now=Date.now(), ch=false;
+  Object.keys(o).forEach(function(k){ var x=o[k]; if(tmIsWork(k) && x && x.t && !x.ps){ x.ps=now; x.pw=why||'portal'; ch=true; } });
+  if(ch){ tmPut(o); if(note) tmCapNote(note); try{ renderView(); }catch(e){} }
+  return ch;
+}
+function tmResumeAuto(){
+  var o=tmAll(), now=Date.now(), ch=false, lbl='';
+  Object.keys(o).forEach(function(k){ var x=o[k]; if(tmIsWork(k) && x && x.ps && x.pw==='portal'){ x.pz=(+x.pz||0)+Math.max(0,now-x.ps); delete x.ps; delete x.pw; ch=true; lbl=tmLabel(k)+' at '+tmFmt(tmEl(x)); } });
+  if(ch){ tmPut(o); toast('Welcome back — '+lbl+' carries on where it stopped.'); try{ renderView(); }catch(e){} }
+}
+function tmPauseTick(){
+  try{
+    if(!USER || !tmOn()) return;
+    tmGapFix();
+    var o=tmAll(), any=Object.keys(o).some(function(k){ return tmIsWork(k) && o[k] && o[k].t && (!o[k].ps || o[k].pw==='portal'); });
+    if(!any) return;
+    linkLoad(true).then(function(){
+      var st=linkState(LINK.me);
+      if(st.k==='off' || st.k==='other') tmPauseAll('portal', 'Timer paused — '+st.why+'. Nothing is lost: it carries on from where it stopped once your portal timer runs on Reddit again.');
+      else if(st.k==='ok') tmResumeAuto();
+    });
+  }catch(e){}
+}
+setInterval(tmPauseTick, 30000);   // keeps running in a background tab (about once a minute)
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) setTimeout(tmPauseTick, 700); });
+setTimeout(tmPauseTick, 4000);
+/* the limit check found timers past their limit: if the portal is not on Reddit (lunch), pause instead of throwing the task
+   away — frozen 5 minutes before its limit so the VA can still finish it */
+var _tmCapFresh=0;
+function tmCapLinkHold(hit){
+  try{
+    if(Date.now()-(LINK.at||0)>45000 && Date.now()-_tmCapFresh>45000){ _tmCapFresh=Date.now(); linkLoad(true).then(function(){ try{ tmCapCheck(); }catch(_e){} }); return true; }
+    var st=linkState(LINK.me);
+    if(st.k==='off' || st.k==='other'){
+      var o=tmAll(), now=Date.now(), ch=false;
+      hit.forEach(function(h){ var x=o[h.key]; if(!x || x.ps) return; var keep=Math.max(0, h.c.secs*1000-5*60000), el=tmEl(x); if(el>keep) x.pz=(+x.pz||0)+(el-keep); x.ps=now; x.pw='portal'; ch=true; });
+      if(ch){ tmPut(o); tmCapNote('Timer paused — '+st.why+'. It was not thrown away: it carries on when your portal timer runs on Reddit again.'); try{ renderView(); }catch(e){} }
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+function tmPausedBtn(id, k, L, t){
+  return '<button class="ses run pzd" onclick="event.stopPropagation();tmPausedBox(\''+jsq(id)+'\',\''+k+'\')" title="Paused — tap to resume or finish it"><span class="sq"></span>Paused '+esc(L)+' '+tmClock(t)+'</button>'+
+    '<button class="ses x" onclick="tmCancel(\''+jsq(id)+'\',\''+k+'\')" title="Cancel this timer">'+IC.x+'</button>';
+}
+function tmPausedBox(id, k){
+  var key=id+'|'+k, x=tmAll()[key]; if(!x) return;
+  openModal('<div class="md-h"><h3>'+esc(tmLabel(key))+' is paused</h3><p class="muted" style="margin-top:4px">Stopped at <b>'+tmFmt(tmEl(x))+'</b>'+(x.pw==='portal'?' when your portal timer stopped (lunch or a break)':'')+'. Nothing is lost — carry on from here, or finish it if the work is already done. Paused time is not counted.</p></div>'+
+    '<div class="md-f"><button class="btn sec" onclick="closeModal(null)">Close</button><span style="flex:1"></span>'+
+    '<button class="btn sec" onclick="closeModal(null);tmPausedFinish(\''+jsq(id)+'\',\''+k+'\')">It\'s done — Finish</button>'+
+    '<button class="btn pri" onclick="closeModal(null);tmResumeAsk(\''+jsq(key)+'\')">Resume</button></div>');
+}
+async function tmResumeAsk(key){
+  if(!(await linkGate('The timer'))) return;
+  var o=tmAll(), x=o[key]; if(!x) return;
+  if(x.ps){ x.pz=(+x.pz||0)+Math.max(0,Date.now()-x.ps); delete x.ps; delete x.pw; tmPut(o); }
+  renderView(); toast('Resumed — carrying on from '+tmFmt(tmEl(x))+'.');
+}
+function tmPausedFinish(id, k){ if(k==='dm') return dmsDone(id); var n=parseInt(String(k).replace(/^s/,''),10)||1; return doSession(id, n, null); }
 function tmOn(){ return !isAdmin(); }        // VAs time their work; the owner's ticks are corrections, not work
 /* fire-and-forget: one finished task → RcTasks (backend rc-2026-10-05c+) */
 function tmLog(r, kind, t, extra){
@@ -3750,12 +3844,12 @@ async function crStart(){ if(crLocked()){ crLockedBox(); return; } if(!tmOneGate
 /* Oct 31: Cancel is free only in the first 2 minutes; after that the timer ends as "Creation failed" with a reason */
 function crCancel(){
   var x=crGet(); if(!x) return;
-  var el=Math.round((Date.now()-x.t)/1000);
+  var el=Math.round(tmEl(x)/1000);
   if(el<CR_FREE || !tmOn()){ var o=tmAll(); delete o['__create|c']; tmPut(o);
     if(tmOn() && el>=20){ try{ tmLog(null, 'crfail', { secs:el, start:x.t, parallel:x.p||0 }, { source:'cancel · started by mistake' }); }catch(e){} }
     renderView(); toast('Creation timer cancelled.'); return; }
   var R=['Reddit blocked the sign-up','Verification code or email never came','iPhone or app problem','Proxy / connection problem','Other'];
-  openModal('<div class="md-h"><h3>The account didn\'t get made?</h3><p>This creation timer has run '+tmFmt(Date.now()-x.t)+'. Cancel is only free in the first 2 minutes — after that it is recorded as a failed creation, with your reason: the admin sees it and it takes 0.5 off your QA score for the day.</p></div>'+
+  openModal('<div class="md-h"><h3>The account didn\'t get made?</h3><p>This creation timer has run '+tmFmt(tmEl(x))+'. Cancel is only free in the first 2 minutes — after that it is recorded as a failed creation, with your reason: the admin sees it and it takes 0.5 off your QA score for the day.</p></div>'+
     '<div class="md-b"><div class="fld"><label>What happened?</label><div class="seg" id="crf-r" style="flex-wrap:wrap">'+R.map(function(t){ return '<button type="button" data-r="'+esc(t)+'" onclick="crFailPick(this)">'+esc(t)+'</button>'; }).join('')+'</div></div>'+
       '<div class="fld" id="crf-o" style="display:none"><label>Tell us what happened</label><input class="inp" id="crf-t" maxlength="60" placeholder="e.g. the app crashed twice"></div>'+
       '<div class="hint">The account exists after all? Close this and press <b>Creating…</b> to log it instead.</div></div>'+
@@ -3768,7 +3862,7 @@ function crFailSave(){
   if(why==='Other'){ why=(($('crf-t')||{}).value||'').trim(); if(why.length<4){ toast('Type what happened.'); return; } }
   var o=tmAll(), x=o['__create|c']; if(!x){ closeModal(); renderView(); return; }
   delete o['__create|c']; tmPut(o);
-  var secs=Math.round((Date.now()-x.t)/1000), st=crFailLog(x, secs, 'cancel · '+why);
+  var secs=Math.round(tmEl(x)/1000), st=crFailLog(x, secs, 'cancel · '+why);
   _crfR=''; closeModal(); renderView();
   toast('Recorded as a failed creation ('+Math.round(secs/60)+' min, −0.5 QA).'+(st.n>=CR_STREAK?' That\'s '+CR_STREAK+' in a row — Start creating is locked until you log an account you just created.':''));
 }
@@ -5011,7 +5105,8 @@ async function dmsDone(id){
 function dmBtn(r){
   var id=jsq(r.id), done=markOkAny(M(r).dm,worksFor(r),owner(r)), t=tmOn()&&!done?tmGet(r.id,'dm'):null;
   if(done) return '<button class="ses done" disabled><span class="bx">'+IC.check+'</span>DMs</button>';
-  if(t) return '<button class="ses run" onclick="dmsDone(\''+id+'\')"><span class="sq"></span>Finish DMs <small data-tm="'+t.t+'">'+tmFmt(Date.now()-t.t)+'</small></button><button class="ses x" onclick="tmCancel(\''+id+'\',\'dm\')" title="Cancel this timer">'+IC.x+'</button>';
+  if(t && t.ps) return tmPausedBtn(r.id, 'dm', 'DMs', t);   // Nov 5
+  if(t) return '<button class="ses run" onclick="dmsDone(\''+id+'\')"><span class="sq"></span>Finish DMs <small data-tm="'+tmVStart(t)+'">'+tmFmt(tmEl(t))+'</small></button><button class="ses x" onclick="tmCancel(\''+id+'\',\'dm\')" title="Cancel this timer">'+IC.x+'</button>';
   return '<button class="ses dm" onclick="dmsDone(\''+id+'\')" title="'+(tmOn()?'Press when you START replying to DMs — press again when done':'Log DMs')+'">'+IC.mail+' '+(tmOn()?'Start DMs':'DMs')+'</button>';
 }
 async function setKarma(id){
@@ -5327,7 +5422,7 @@ async function naSave(){
   if(ctime) meta.ctime=ctime;
   if(NA.sop==='sx') meta.sop='sx';   // Suicidal Operation (Oct 25) — for life
   if(!NA.seed){ meta.setup=setup; if(full){ meta.cdone=1; meta.cstamp=vaKeyOf(USER.id); meta.cdoneAt=phtStamp(); } }
-  var cgo=(!NA.seed && tmOn())?(crGet()||{}).t:null; if(cgo) meta.cgo=cgo;   // creation timer → finished when it is counted
+  var cgo=(!NA.seed && tmOn() && crGet())?tmVStart(crGet()):null; if(cgo) meta.cgo=cgo;   // creation timer → finished when it is counted
   var b=$('na-go'); b.disabled=true; b.textContent='Saving…';
   try{
     var d=await api({ action:'pa_add', project:PROJECT, handle:u, status:st, method:NA.method, model:model, device:dev, niche:niche, meta:JSON.stringify(meta), employee_id:USER.id, by:USER.id });
