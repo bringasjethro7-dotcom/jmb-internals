@@ -4601,20 +4601,21 @@ function rptDate(d){ var p=String(d||'').split('-'), MO=['January','February','M
 function rptPhone(r){ var n=phNum(r.device); return n?('PHONE '+n):(r.device?String(r.device).toUpperCase():''); }
 function rptIsPost(k){ try{ if(isPostingStage(k)) return true; }catch(_e){} return isTrial(k) || k==='sxpost'; }
 function rptBuild(va){
-  va=String(va||'').toLowerCase(); var td=today(), W=[], T={ acc:0, posts:0, rm:0, cr:0 };
+  va=String(va||'').toLowerCase(); var td=today(), W=[], T={ acc:0, posts:0, rm:0, cr:0, ses:0 };
   ROWS.forEach(function(r){
     if(worksFor(r)!==va || isHeld(r)) return;
     var m=M(r), s1=markOk(m.s1,va), s2=markOk(m.s2,va), dm=markOk(m.dm,va);
     var ps=postsOf(r).filter(function(p){ return p && p.r && p.d===td && (!p.b || String(p.b).toLowerCase()===va); });
-    if(!s1 && !s2 && !dm && !ps.length) return;
+    if(!s1 && !s2 && !dm) return;   // Nov 5 (Jeth): only finished work — a session still running is not in the report
     var rm=0, sp=0, nc=0; ps.forEach(function(p){ var st=postState(p); if(st==='mod') rm++; else if(st==='spam') sp++; else if(st!=='up' && st!=='old') nc++; });
-    W.push({ r:r, s1:s1, s2:s2, dm:dm, posts:ps.length, rm:rm, sp:sp, nc:nc }); T.acc++; T.posts+=ps.length; T.rm+=rm+sp;
+    W.push({ r:r, s1:s1, s2:s2, dm:dm, posts:ps.length, rm:rm, sp:sp, nc:nc }); T.acc++; T.posts+=ps.length; T.rm+=rm+sp; T.ses+=(s1?1:0)+(s2?1:0);
   });
   var C=[]; allRows().forEach(function(r){
     if(isHeld(r)) return; var cb=String(r.created_by||'').toLowerCase(); if(cb ? cb!==va : worksFor(r)!==va) return;
     var cr=null; try{ cr=creationOf(r, va, va); }catch(_c){} if(cr){ C.push({ r:r, done:!!cr.done }); T.cr++; } });
   /* Nov 5 (Jeth): a total only shows when there is something to report — no "ACCOUNTS CREATED : 0" lines */
   var out=['TASK DONE TODAY ✅', rptDate(td), ''];
+  if(T.ses) out.push('SESSIONS DONE : '+T.ses);
   if(T.acc) out.push('ACCOUNTS WORKED : '+T.acc);
   if(T.posts) out.push('POSTS MADE : '+T.posts, 'REMOVED : '+T.rm);
   if(T.cr) out.push('ACCOUNTS CREATED : '+T.cr);
@@ -4636,8 +4637,7 @@ function rptBuild(va){
       p.L.sort(byPhone);
       p.L.forEach(function(w, i){
         var spd=sesPerDay(w.r), note='';
-        if(spd>=2){ if(w.s1 && !w.s2) note=' (1st session only)'; else if(!w.s1 && w.s2) note=' (2nd session only)'; }
-        if(!w.s1 && !w.s2) note=' (session not finished yet)';
+        if(spd>=2){ if(w.s1 && !w.s2) note=' (1st session)'; else if(!w.s1 && w.s2) note=' (2nd session)'; }   // what was done, never what is missing
         if(typeof pmOn==='function' && pmOn() && pmNeeds(w.r)) note+=' (model not tagged)';
         if(post && i) out.push('');   // Nov 4h (Jeth): no phone line — each VA works one device
         out.push(w.r.handle+note);
