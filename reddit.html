@@ -4613,8 +4613,12 @@ function rptBuild(va){
   var C=[]; allRows().forEach(function(r){
     if(isHeld(r)) return; var cb=String(r.created_by||'').toLowerCase(); if(cb ? cb!==va : worksFor(r)!==va) return;
     var cr=null; try{ cr=creationOf(r, va, va); }catch(_c){} if(cr){ C.push({ r:r, done:!!cr.done }); T.cr++; } });
-  var out=['TASK DONE TODAY ✅', rptDate(td), '', 'ACCOUNTS WORKED : '+T.acc, 'POSTS MADE : '+T.posts, 'REMOVED : '+T.rm];
+  /* Nov 5 (Jeth): a total only shows when there is something to report — no "ACCOUNTS CREATED : 0" lines */
+  var out=['TASK DONE TODAY ✅', rptDate(td), ''];
+  if(T.acc) out.push('ACCOUNTS WORKED : '+T.acc);
+  if(T.posts) out.push('POSTS MADE : '+T.posts, 'REMOVED : '+T.rm);
   if(T.cr) out.push('ACCOUNTS CREATED : '+T.cr);
+  if(out.length===3) out.pop();
   if(!W.length && !C.length){ out.push('', 'Nothing logged in Reddit Central yet today.'); return out.join('\n'); }
   var byPhone=function(a,b){ return String(a.r.handle).toLowerCase().localeCompare(String(b.r.handle).toLowerCase()); };   // alphabetical
   var models={}, mOrd=[];
