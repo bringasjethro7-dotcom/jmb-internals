@@ -3282,9 +3282,9 @@ function drcCss(){
 /* a = [posted, stayed up, moderators, spam filters, not checked] → shares of the CHECKED posts */
 function drcVs(a){ var c=a[1]+a[2]+a[3], dn=a[2]+a[3]; if(!c) return null; var pd=Math.round(dn/c*100); return { c:c, dn:dn, up:a[1], pd:pd, pu:100-pd }; }
 function drcBar(v){ return v?'<div class="cx-dr-bar" title="'+v.dn+' taken down · '+v.up+' stayed up"><i class="cx-vs-dn" style="width:'+v.pd+'%"></i><i class="cx-vs-up" style="width:'+v.pu+'%"></i></div>':'<div class="cx-dr-bar"></div>'; }
-function drcList(obj, lab){
-  var M={}; Object.keys(obj||{}).forEach(function(k){ var l=lab?lab(k):k, a=obj[k]||[], b=M[l]||(M[l]=[0,0,0,0,0]); for(var i=0;i<5;i++) b[i]+=(+a[i]||0); });   // "Arya/Kaia" + "Arya & Kaia" → one row
-  var L=Object.keys(M).map(function(k){ return { k:k, a:M[k], v:drcVs(M[k]) }; }).sort(function(x,y){ return (y.a[0]-x.a[0]) || (x.k<y.k?-1:1); });
+function drcList(obj, lab, ord){
+  var M={}, O={}; Object.keys(obj||{}).forEach(function(k){ var l=lab?lab(k):k, a=obj[k]||[], b=M[l]||(M[l]=[0,0,0,0,0]); for(var i=0;i<5;i++) b[i]+=(+a[i]||0); if(ord && O[l]==null) O[l]=ord(k); });   // "Arya/Kaia" + "Arya & Kaia" → one row
+  var L=Object.keys(M).map(function(k){ return { k:k, o:O[k]||0, a:M[k], v:drcVs(M[k]) }; }).sort(function(x,y){ return (x.o-y.o) || (y.a[0]-x.a[0]) || (x.k<y.k?-1:1); });
   if(!L.length) return '<div style="font-size:12.5px;color:var(--ink3)">No posts this day.</div>';
   return L.map(function(x){ var a=x.a, v=x.v;
     return '<div class="cx-dr-r"><div class="nm" title="'+esc(x.k)+'">'+esc(x.k)+'<small>'+a[0]+' post'+(a[0]===1?'':'s')+(v?' · '+v.dn+' down · '+v.up+' up':'')+(a[4]?' · '+a[4]+' not checked':'')+'</small></div>'+
@@ -3413,7 +3413,7 @@ function cxDailyRemovals(){
       '<div class="cx-dr-sub">'+(v?'<b>'+v.dn+'</b> of '+v.c+' checked posts taken down ('+a[2]+' by moderators · '+a[3]+' by spam filters) · <b>'+v.up+'</b> stayed up':'No checked posts yet')+' · '+a[0]+' posted'+(a[4]?' · '+a[4]+' still to check':'')+'</div>'+
       '<div class="cx-dr-lg"><span><i class="cx-vs-dn"></i>Taken down — moderators or spam filters</span><span><i class="cx-vs-up"></i>Stayed up — survived</span></div></div>'+
       '</div>'+drTrendHtml(tpts, day, td, "DRC.day='{d}';renderView()", 'taken down')+
-    '<div class="cx-dr-cols"><div><h4>By model</h4>'+drcList(D.model, subModelLabel)+'</div><div><h4>By method</h4>'+drcList(D.method, subMethodLabel)+'</div>'+(sops.length>1?'<div><h4>By SOP</h4>'+drcList(D.sop)+'</div>':'')+'</div></section>';
+    '<div class="cx-dr-cols"><div><h4>By model</h4>'+drcList(D.model, subModelLabel)+'</div>'+(D.pace?'<div><h4>By pace</h4>'+drcList(D.pace, subStageLabel, stageOrd)+'</div>':'<div><h4>By method</h4>'+drcList(D.method, subMethodLabel)+'</div>')+(sops.length>1?'<div><h4>By SOP</h4>'+drcList(D.sop)+'</div>':'')+'</div></section>';
 }
 function subPct(a, b){ return b?Math.round(a/b*100):0; }
 function subDay(d){ if(!/^\d{4}-\d{2}-\d{2}$/.test(String(d||''))) return String(d||'—'); var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return M[+d.slice(5,7)-1]+' '+(+d.slice(8,10)); }

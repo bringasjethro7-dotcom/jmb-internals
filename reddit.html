@@ -751,6 +751,11 @@ table.db tr.grp td{background:linear-gradient(90deg,#fff1e6,#fbfaf7 60%);color:#
 html.lite .view.vin>*{animation:none!important}
 html.lite .pfx-flow::before,html.lite .pfx-flow::after,html.lite .pfx-hub,html.lite .ins-dot.on{animation:none!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
+/* Nov 4: Today — removal rate 3/4 · KPI cards stacked in the last 1/4 */
+.td-top{display:grid;grid-template-columns:minmax(0,3fr) minmax(230px,1fr);gap:14px;align-items:stretch;margin-bottom:14px}
+.td-top>.td-dr{min-width:0;display:flex}.td-top>.td-dr>.dr{flex:1;margin-bottom:0}
+.td-top>.kpis.kv{display:flex;flex-direction:column;gap:12px;margin:0}.td-top>.kpis.kv>.card.kpi{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center}
+@media (max-width:1100px){.td-top{grid-template-columns:1fr}.td-top>.kpis.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}}
 </style>
 </head>
 <body>
@@ -1998,7 +2003,8 @@ function vToday(){
     '<button class="btn pri" onclick="newAccount()">'+IC.plus+' Log new account</button></div>';
   h+=pcBanner();   // Oct 27: end-of-shift post check (before EOD)
   try{ h+=phBanner(); }catch(_pb){}   // Oct 29: open iPhone problems (proxy · license key · Cloud+ · Apple ID)
-  try{ h+=drCard(ALL[PROJECT]||ROWS, baseOf(PROJECT).n); }catch(_dr){}   // Oct 27: the daily removal rate — the main highlight
+  var _drH=''; try{ _drH=drCard(ALL[PROJECT]||ROWS, baseOf(PROJECT).n); }catch(_dr){}   // Oct 27: the daily removal rate — the main highlight
+  if(_drH) h+='\u0001DRTOP\u0001';   // Nov 4: the removal card takes 3/4 of the row, the KPI cards stack in the last 1/4 (filled in below)
   h+=hoBanner();
   h+=fixBanner();
   h+=tmCapBanner()+gapBanner();
@@ -2067,13 +2073,15 @@ function vToday(){
   var active=scopeRows.filter(function(r){ return !isDead(r); }).length;
   var att=scopeRows.filter(needsAttention).length;
   var bannedWk=scopeRows.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<7; }).length;
-  h+='<div class="kpis">'+
+  var _kp='<div class="kpis">'+
     '<div class="card kpi"><div class="ringw"><div class="ring" style="--v:'+p.pct+'" data-t="'+p.pct+'%"></div><div><div class="k-l">'+(admin&&TD.va==='all'?'Team sessions':'Sessions today')+'</div><div class="k-v">'+p.done+'<span style="font-size:15px;color:var(--ink3)"> / '+p.tot+'</span></div><div class="k-s">'+progParts(p)+' · resets at your shift start</div></div></div></div>'+
     kpi('Created this shift', createdToday, 'setup finished & counted', '#ff6b1a')+
     kpi('Active accounts', active, 'in play — banned, on hold and archived are left out', '#a855f7')+
     kpi('Needs attention', att, 'recovery · temp ban · unfinished · stuck karma', att?'#ef4444':'#10b981')+
     (admin?kpi('Banned · 7 days', bannedWk, 'see Insights for the pattern', '#64748b'):'')+
   '</div>';
+  if(_drH && h.indexOf('\u0001DRTOP\u0001')>=0) h=h.replace('\u0001DRTOP\u0001', function(){ return '<div class="td-top"><div class="td-dr">'+_drH+'</div>'+_kp.replace('<div class="kpis">','<div class="kpis kv">')+'</div>'; });
+  else h+=_kp;
 
   // team progress — owner only
   if(admin){
@@ -4020,7 +4028,7 @@ async function pcSave(btn){
   else { PCK.items=pcPending(); PCK.ans={}; try{ $('modal').innerHTML=pcHtml(); }catch(e){} }
 }
 
-/* ═══════════ DAILY REMOVAL RATE — by model and by method (Jeth + the client, Oct 27) ═══════════
+/* ═══════════ DAILY REMOVAL RATE — by model and by posting pace (Jeth + the client, Oct 27 · pace instead of method Nov 4) ═══════════
    "The daily removal percentage for each model and for each method … that is the main highlight." Posts by the
    business day they went up (morning + night shift together, both checked at the end of their shift):
    removal rate = (removed by mods + spam filter) ÷ checked posts. Not-checked posts are shown apart, never counted
@@ -4028,7 +4036,7 @@ async function pcSave(btn){
 var DRV={ day:'' };
 function drStats(rows, nDays){
   var td=today(), days={}, order=[];
-  for(var i=0;i<(nDays||14);i++){ var d=dAdd(td,-i); if(d<PCHK_FROM) break; days[d]={ d:d, t:[0,0,0,0,0], model:{}, method:{}, shift:{} }; order.push(d); }
+  for(var i=0;i<(nDays||14);i++){ var d=dAdd(td,-i); if(d<PCHK_FROM) break; days[d]={ d:d, t:[0,0,0,0,0], model:{}, method:{}, pace:{}, shift:{} }; order.push(d); }
   function add(a, st){ a[0]++; a[st==='mod'?2:(st==='spam'?3:(st==='unk'?4:1))]++; }
   /* one model however it was typed ("Arya/Kaia" = "Arya & Kaia" = "Kaia + Arya") — labelled by its most used spelling */
   function mParts(v){ return String(v||'').split(/\s*(?:[\/⁄∕\\|&+,;]|\s(?:and|x)\s)\s*/i).map(function(x){ return x.replace(/\s+/g,' ').trim(); }).filter(Boolean); }
@@ -4040,7 +4048,8 @@ function drStats(rows, nDays){
     var mo=mLab[mKey(r.model)]||String(r.model||'').trim()||'No model', me=methodOf(r)||'No method';
     postsOf(r).forEach(function(p){ if(!p || !p.r) return; var D=days[String(p.d||'')]; if(!D) return; var st=postState(p); if(st==='old') st='up';
       var sh=SHIFTOF[String(p.b||'').toLowerCase()]==='night'?'Night shift':'Morning shift';
-      add(D.t, st); add(D.model[mo]||(D.model[mo]=[0,0,0,0,0]), st); add(D.method[me]||(D.method[me]=[0,0,0,0,0]), st); add(D.shift[sh]||(D.shift[sh]=[0,0,0,0,0]), st); });
+      var pk=statusKey(p.st||r.status)||'unknown';   // Nov 4: the posting pace the account was on when it posted (Early, Extended, Long …)
+      add(D.t, st); add(D.model[mo]||(D.model[mo]=[0,0,0,0,0]), st); add(D.method[me]||(D.method[me]=[0,0,0,0,0]), st); add(D.pace[pk]||(D.pace[pk]=[0,0,0,0,0]), st); add(D.shift[sh]||(D.shift[sh]=[0,0,0,0,0]), st); });
   });
   return { days:days, order:order };
 }
@@ -4073,8 +4082,10 @@ function drCss(){
 /* a = [posted, stayed up, moderators, spam filter, not checked] → shares of the CHECKED posts */
 function drVs(a){ var c=a[1]+a[2]+a[3], dn=a[2]+a[3]; if(!c) return null; var pd=Math.round(dn/c*100); return { c:c, dn:dn, up:a[1], pd:pd, pu:100-pd }; }
 function drVsBar(v){ return v?'<div class="dr-bar" title="'+v.dn+' removed · '+v.up+' stayed up"><i class="vdn" style="width:'+v.pd+'%"></i><i class="vup" style="width:'+v.pu+'%"></i></div>':'<div class="dr-bar"></div>'; }
-function drList(obj){
-  var L=Object.keys(obj).map(function(k){ return { k:k, a:obj[k], v:drVs(obj[k]) }; }).sort(function(x,y){ return (y.a[0]-x.a[0]) || (x.k<y.k?-1:1); });
+/* lab(k) → the name shown · ord(k) → a fixed order (the pace ladder) instead of most posts first */
+function drPaceLab(k){ return (!k || k==='unknown')?'Not recorded':stageMeta(k).n; }
+function drList(obj, lab, ord){
+  var L=Object.keys(obj).map(function(k){ return { k:lab?lab(k):k, o:ord?ord(k):0, a:obj[k], v:drVs(obj[k]) }; }).sort(function(x,y){ return (x.o-y.o) || (y.a[0]-x.a[0]) || (x.k<y.k?-1:1); });
   if(!L.length) return '<div class="muted" style="font-size:12px">No posts.</div>';
   return L.map(function(x){ var a=x.a, v=x.v;
     return '<div class="dr-r"><div class="nm" title="'+esc(x.k)+'">'+esc(x.k)+'<small>'+a[0]+' post'+(a[0]===1?'':'s')+(v?' · '+v.dn+' removed'+(a[3]?' ('+a[3]+' spam)':'')+' · '+v.up+' up':'')+(a[4]?' · '+a[4]+' not checked':'')+'</small></div>'+
@@ -4201,7 +4212,7 @@ function drCard(rows, label){
       '<div class="dr-sub">'+(chk?'<b>'+(a[2]+a[3])+'</b> of '+chk+' checked posts removed ('+a[2]+' by mods · '+a[3]+' spam filter) · <b>'+a[1]+'</b> stayed up':'No checked posts yet')+' · '+a[0]+' posted'+(a[4]?' · <b style="color:#c2410c">'+a[4]+' still to check</b>':'')+'</div>'+
       '<div class="dr-lg"><span><i class="vdn"></i>Removed — mods or spam filter</span><span><i class="vup"></i>Stayed up</span></div></div>'+
     '</div>'+drTrendHtml(tpts, day, td, "DRV.day='{d}';renderView()", 'removed')+
-    '<div class="dr-cols"><div><h4>By model</h4>'+drList(D.model)+'</div><div><h4>By method</h4>'+drList(D.method)+'</div>'+(isAdmin()?'<div><h4>By shift (who posted)</h4>'+drList(D.shift)+'</div>':'')+'</div>'+
+    '<div class="dr-cols"><div><h4>By model</h4>'+drList(D.model)+'</div><div><h4>By pace</h4>'+drList(D.pace, drPaceLab, stageOrd)+'</div>'+(isAdmin()?'<div><h4>By shift (who posted)</h4>'+drList(D.shift)+'</div>':'')+'</div>'+
     '<div class="muted" style="font-size:11.5px;margin-top:10px">Morning and night shift together · each post is checked at the end of the shift that posted it · rate = removed by mods + spam filter, of the checked posts. The client sees the same numbers in their portal.</div></div>';
 }
 
