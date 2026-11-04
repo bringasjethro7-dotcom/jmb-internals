@@ -886,6 +886,18 @@ html.lite .pfx-flow::before,html.lite .pfx-flow::after,html.lite .pfx-hub,html.l
 .sec-h .rpt-b{flex:none}
 .rpt-ta{display:block;width:100%;min-height:360px;max-height:58vh;resize:vertical;font:500 13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line2);background:#fff;color:var(--ink);white-space:pre;overflow:auto}
 @media (prefers-reduced-motion:reduce){ #tmDock{transition:none} .ses.run.tm-found,.btn.run.tm-found{animation:none} }
+
+/* ══ Nov 4c · one model per posting account ══ */
+.pm-tag{font-family:inherit;font-size:12px;font-weight:800;line-height:1.1;padding:5px 9px;border-radius:8px;border:1.5px solid var(--line2);background:#fff;color:var(--ink);cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pm-tag:hover{border-color:#171717}
+.pm-tag.need{background:#171717;border-color:#171717;color:#fff;box-shadow:0 0 0 3px rgba(255,69,0,.28)}
+.pm-tag.need:hover{background:#37322D}
+.pm-need-t{color:#E03D00;font-weight:900}
+.pm-pick{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.pm-opt{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:84px;padding:14px;border-radius:14px;border:2px solid var(--line2);background:#fff;font-family:inherit;font-size:20px;font-weight:900;letter-spacing:-.01em;color:var(--ink);cursor:pointer}
+.pm-opt:hover{border-color:#171717;transform:translateY(-1px)}
+.pm-opt.on{border-color:#171717;box-shadow:inset 0 0 0 2px #171717}
+.pm-opt small{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}
 </style>
 </head>
 <body>
@@ -1309,7 +1321,7 @@ function methodPill(m, small){ var c=methodColor(m); return '<span class="pill" 
 /* An account whose MODEL belongs to the other base (e.g. a Casey account typed into the Altz rows of the
    sheet). Model → base comes from Settings → Models per base, plus the base's own name ("Casey"). */
 function modelBaseMap(){
-  var m={}; BASES.forEach(function(b){ ((CFG.models||{})[b.id]||[]).forEach(function(x){ m[String(x).toLowerCase().trim()]=b.id; }); m[b.n.toLowerCase()]=b.id; });
+  var m={}; BASES.forEach(function(b){ ((CFG.models||{})[b.id]||[]).forEach(function(x){ m[String(x).toLowerCase().trim()]=b.id; mdlParts(x).forEach(function(p){ var k=p.toLowerCase(); if(!(k in m)) m[k]=b.id; }); }); m[b.n.toLowerCase()]=b.id; });
   delete m['altz']; return m;
 }
 function wrongBase(r){ var mb=modelBaseMap()[String(r.model||'').toLowerCase().trim()]; return (mb && r.project && mb!==r.project)?mb:''; }
@@ -1754,12 +1766,12 @@ function mdlCanon(v, project){ var k=mdlKey(v); if(!k) return String(v||'').trim
 function phLive(L){ return allRows().filter(function(r){ return String(r.device||'')===L && !isDead(r) && !isParked(r); }); }
 function phMain(L){
   var S=PHN.sec[L]||{}, set=String(S.mdl||'').split(/\s*[,;]\s*/).map(function(x){ return x.trim(); }).filter(Boolean)[0];
-  var c={}, rows=phLive(L); rows.forEach(function(r){ var m=mdlCanon(r.model, r.project)||'(no model)'; c[m]=(c[m]||0)+1; });
+  var c={}, rows=phLive(L); rows.forEach(function(r){ var m=rGroup(r)||'(no model)'; c[m]=(c[m]||0)+1; });
   if(set){ var n=mdlCanon(set); return { n:n, c:c[n]||0, set:1 }; }
   var best=null; Object.keys(c).forEach(function(k){ if(k!=='(no model)' && (!best || c[k]>best.c)) best={ n:k, c:c[k] }; });
   return best;
 }
-function phStrays(L){ var m=phMain(L); if(!m) return []; return phLive(L).filter(function(r){ var x=mdlCanon(r.model, r.project); return x && x!==m.n; }); }
+function phStrays(L){ var m=phMain(L); if(!m) return []; return phLive(L).filter(function(r){ var x=rGroup(r); return x && x!==m.n; }); }
 function phModels(L){ var m=phMain(L); return m?[m]:[]; }
 function phModelHtml(L){
   var m=phMain(L); if(!m) return '<span class="muted" style="font-size:12px">no live accounts on it yet</span>';
@@ -1771,7 +1783,7 @@ function phFixPlan(){
   var retag=[], moves=[], lost=[], byModel={};
   phoneList(false).forEach(function(p){ var m=phMain(p.label); if(m){ (byModel[m.n]=byModel[m.n]||[]).push({ L:p.label, c:m.c }); } });
   allRows().forEach(function(r){ if(isDead(r) || isParked(r)) return; var raw=String(r.model||'').trim(), cn=mdlCanon(raw, r.project); if(raw && cn!==raw) retag.push({ r:r, to:cn }); });
-  phoneList(false).forEach(function(p){ phStrays(p.label).forEach(function(r){ var cn=mdlCanon(r.model, r.project), T=(byModel[cn]||[]).filter(function(x){ return x.L!==p.label; }).sort(function(a,b){ return b.c-a.c; })[0];
+  phoneList(false).forEach(function(p){ phStrays(p.label).forEach(function(r){ var cn=rGroup(r), T=(byModel[cn]||[]).filter(function(x){ return x.L!==p.label; }).sort(function(a,b){ return b.c-a.c; })[0];
     if(T) moves.push({ r:r, from:p.label, to:T.L, m:cn }); else lost.push({ r:r, from:p.label, m:cn }); }); });
   return { retag:retag, moves:moves, lost:lost };
 }
@@ -1797,9 +1809,9 @@ async function phFixAll(btn){
   toast('Fixed '+ok+(bad?' · '+bad+' could not be saved — try again':'')+'.'); renderView();
 }
 /* when a VA puts an account on a device that runs another model: offer the right device */
-function phDevFor(model, project){ var cn=mdlCanon(model, project), best=null; phoneList(false).forEach(function(p){ var m=phMain(p.label); if(m && m.n===cn && (!best || m.c>best.c)) best={ L:p.label, c:m.c }; }); return best?best.L:''; }
+function phDevFor(model, project){ var cn=mdlGroup(model, project), best=null; phoneList(false).forEach(function(p){ var m=phMain(p.label); if(m && m.n===cn && (!best || m.c>best.c)) best={ L:p.label, c:m.c }; }); return best?best.L:''; }
 function phDevCheck(model, dev, project){
-  if(!dev || !model) return dev; var m=phMain(dev), cn=mdlCanon(model, project); if(!m || m.n===cn) return dev;
+  if(!dev || !model) return dev; var m=phMain(dev), cn=mdlGroup(model, project); if(!m || m.n===cn) return dev;
   var alt=phDevFor(model, project);
   if(alt && alt!==dev) return confirm(phDev(dev)+' runs '+m.n+', but this account is '+cn+'.\n'+phDev(alt)+' runs '+cn+'.\n\nOK = put it on '+phDev(alt)+'\nCancel = keep '+phDev(dev))?alt:dev;
   return confirm(phDev(dev)+' runs '+m.n+', but this account is '+cn+'. One model per device — save it here anyway?')?dev:null;
@@ -2250,6 +2262,7 @@ function vToday(){
 
   /* FILTERS (owner, Oct 5): the method row is the one filter bar; Stage and VA are filtered from their
      column headers in the table, Airtable-style. (The old stage-chip row + "Everyone" box are gone.) */
+  h+=pmBanner(board);   // Nov 4c
   h+='<div class="sec-h"><b>'+(admin?(TD.va==='all'?'All accounts':(TD.va==='mine'?'My accounts':esc(firstName(TD.va))+'\'s accounts')):'My accounts')+'</b><span>'+board.length+'</span><hr>'+((!admin || TD.va!=='all')?rptBtn():'')+'</div>';
   if(admin && TD.va!=='all' && TD.va!=='mine') h+=whereAre(TD.va);
   var mcount={}; board.forEach(function(r){ var m=methodOf(r)||''; mcount[m]=(mcount[m]||0)+1; });
@@ -2370,7 +2383,7 @@ function rowHtml(r){
   var age=ageDays(r), din=daysIn(r);
   var cv=coverOf(r), me=myId(), ow=owner(r);
   var tag=cv==='__hold__'?' · <span style="color:#595959">on hold today</span>':(cv?' · <span style="color:#382E22">'+esc(cv===me?('covering for '+firstName(ow)):(ow===me?('with '+firstName(cv)+' today'):(firstName(ow)+' → '+firstName(cv))))+'</span>':'');
-  var sub=[r.model, r.device, r.niche].filter(Boolean).map(esc).join(' · ');
+  var sub=[r.model, r.device, r.niche].filter(Boolean).map(esc).join(' · ')+((pmOn() && pmNeeds(r))?' · <b class="pm-need-t">model not tagged</b>':'');
   var prog='', act='';
   if(isParked(r)){
     var pk=m.park||{};
@@ -2420,7 +2433,7 @@ function rowHtml(r){
     '<div class="cell c-acc"><div class="an" onclick="openRec(\''+id+'\')" title="Open record">'+esc(r.handle)+'</div><div class="sub"><span class="msub" style="color:'+methodColor(methodOf(r))+';font-weight:800">'+esc(methodOf(r)||'no method')+' · </span>'+(isSX(r)?'<b style="color:'+SX_C+'">Suicidal Op'+(sxAssign(r)?' · '+esc(sxAssign(r)):'')+'</b> · ':'')+(sub||'<span style="opacity:.6">—</span>')+tag+'</div></div>'+
     '<div class="cell c-stg">'+stageSelect(r)+'</div>'+
     '<div class="cell c-meth">'+(methodOf(r)?methodPill(methodOf(r),true):'<span class="chip" style="background:rgba(182,157,128,.20);color:#382E22;cursor:pointer;font-size:10.5px" onclick="editRec(\''+id+'\')">set method</span>')+'</div>'+
-    '<div class="cell c-va">'+(admin?esc(firstName(ow)):esc(r.model||'—'))+'</div>'+
+    '<div class="cell c-va">'+(admin?esc(firstName(ow)):pmCell(r))+'</div>'+
     '<div class="cell c-age num" title="'+esc(createdAt(r)?'Created '+fmtDT(createdAt(r)):'')+'">'+(age!=null?age+'d':'—')+'</div>'+
     '<div class="cell c-prog">'+prog+'</div>'+
     '<div class="cell c-act"><div class="acts">'+act+'</div>'+(!held && (isPostingStage(st)||pchkPending(r).length)?postsStrip(r):'')+'</div>'+
@@ -3345,7 +3358,7 @@ function tbInfo(){ var o={}; try{ o=tmAll(); }catch(e){}
      · health check → the model most of today's check list belongs to
      · post check   → the model most of the posts being checked belong to
      · idle / open  → the model she last worked on today (a session or a creation), then her main model */
-function tcTally(list){ var cnt={}, best='', n=0; (list||[]).forEach(function(r){ var m=String((r&&r.model)||'').trim(); if(!m) return; cnt[m]=(cnt[m]||0)+1; if(cnt[m]>n){ n=cnt[m]; best=m; } }); return best; }
+function tcTally(list){ var cnt={}, best='', n=0; (list||[]).forEach(function(r){ var m=r?rGroup(r):''; if(!m) return; cnt[m]=(cnt[m]||0)+1; if(cnt[m]>n){ n=cnt[m]; best=m; } }); return best; }
 function tcMainModel(){
   var me=myId(), L=[];
   try{ (ROWS||[]).forEach(function(r){ if(!r || isParked(r) || isDead(r)) return; if(worksFor(r)!==me) return; L.push(r); }); }catch(e){}
@@ -3360,7 +3373,7 @@ function tcLastToday(){ try{ var x=JSON.parse(localStorage.getItem(tcLastKey())|
 /* the model of the last account this VA logged as a creation */
 function tcLastCreated(){
   var me=myId(), best='', bt=0;
-  try{ (ROWS||[]).forEach(function(r){ if(!r || String(r.created_by||'').toLowerCase()!==me) return; var mm=tcModelOk(r.model); if(!mm) return;
+  try{ (ROWS||[]).forEach(function(r){ if(!r || String(r.created_by||'').toLowerCase()!==me) return; var mm=tcModelOk(rGroup(r)); if(!mm) return;
     var m=M(r); if(!m.cdone && !m.added) return; var d=parseTs(m.cdoneAt||r.created_at), t=d?d.getTime():0; if(t>bt){ bt=t; best=mm; } }); }catch(e){}
   return best;
 }
@@ -3382,7 +3395,7 @@ function tcHistLoad(){
     try{ localStorage.setItem(tcHistKey(), JSON.stringify(TCH)); }catch(_s){}
   }).catch(function(){});
 }
-function tcMyModels(){ tcHistLoad(); var out=[]; (TCH.list||[]).forEach(function(m){ var ok=tcModelOk(m); if(ok && out.indexOf(ok)<0) out.push(ok); }); return out; }
+function tcMyModels(){ tcHistLoad(); var out=[]; (TCH.list||[]).forEach(function(m){ var ok=tcModelOk(m)||tcModelOk(mdlGroup(m)); if(ok && out.indexOf(ok)<0) out.push(ok); }); return out; }
 function tcHomeModel(){
   var L=tcMyModels(), last=tcLastToday();
   if(last && L.indexOf(last)>=0) return last;
@@ -3412,7 +3425,7 @@ function tcWant(){
   if(id==='__pc'){ w.k='posting'; w.lbl='Post check'; try{ var _pm=tcModelOk(tcTally(pcMine().map(function(x){ return x.r; }))), _my=tcMyModels(); w.m=(_pm && _my.indexOf(_pm)>=0)?_pm:(tcHomeModel()||w.m); }catch(_p){} return w; }   // Nov 4: the posts' model only when it is one of hers, else her own model
   var r=null; try{ r=rowById(id); }catch(e){}
   if(!r){ w.lbl='Task'; return w; }
-  w.p=r.project||PROJECT; w.m=String(r.model||'').trim()||w.m; w.v=methodOf(r); tcLastSet(w.m);
+  w.p=r.project||PROJECT; w.m=rGroup(r)||w.m;   // Nov 4c: the portal bills the pair (Capri/Stella), not the account's own model w.v=methodOf(r); tcLastSet(w.m);
   if(/^s\d/.test(key)){ var ph=phase(r.status), t=(r.status==='recovery')?'Reddit Warmup':(ph&&ph.task); w.k=(t==='Reddit Posting')?'posting':'warmup'; w.lbl='Session '+key.slice(1)+' · '+(r.handle||''); }
   else if(key==='dm'){ w.k='posting'; w.lbl='DMs · '+(r.handle||''); }
   else { w.k='warmup'; w.lbl='Task · '+(r.handle||''); }
@@ -3638,6 +3651,77 @@ function tmDock(){ try{
     el.innerHTML='<i class="tmd-dot"></i><span class="tmd-l">TIMER RUNNING'+(L.length>1?' · '+L.length:'')+'</span><b>'+esc(L[0].txt)+'</b><span class="tmd-t" data-tm="'+L[0].t+'">'+tmFmt(Date.now()-L[0].t)+'</span><span class="tmd-go">SHOW</span>'; }
   el.style.display='flex'; tmEnsure(); tmDockWatch();
 }catch(e){} }
+/* ══ Nov 4c (Jeth): ONE MODEL PER POSTING ACCOUNT. Accounts are made for a pair (Capri/Stella · Izzy/Layla ·
+   Arya/Kaia/Jade); once an account posts, the client's Google Sheet says which model it is for and the VA tags it
+   here. r.model becomes that one model — every report splits by it — and the pair stays its group (meta.grp):
+   the device, the portal billing and the base checks keep using the pair. Single-model bases (Nikki) never ask. ══ */
+function pmOn(){ return !!(BE_BUILD && BE_BUILD>='rc-2026-11-04d'); }
+function mdlGroup(v, project){
+  var raw=String(v||'').trim(); if(!raw) return '';
+  var cn=mdlCanon(raw, project), L=[]; try{ L=modelsAllowed(project||PROJECT); }catch(e){}
+  if(L.indexOf(cn)>=0) return cn;
+  var p=mdlParts(raw); if(p.length===1){ var k=p[0].toLowerCase();
+    for(var i=0;i<L.length;i++){ var q=mdlParts(L[i]); if(q.length>1 && q.some(function(x){ return x.toLowerCase()===k; })) return L[i]; } }
+  return cn;
+}
+function rGroup(r){ if(!r) return ''; var g=String((M(r)||{}).grp||'').trim(); return g?mdlCanon(g, r.project):mdlGroup(r.model, r.project); }
+function pmParts(r){ return mdlParts(rGroup(r)); }
+function pmIsPost(k){ try{ if(isPostingStage(k)) return true; }catch(_e){} try{ if(isTrial(k)) return true; }catch(_t){} return k==='sxpost'; }
+function pmNeeds(r){ if(!r || isDead(r) || isParked(r) || !pmIsPost(r.status)) return false; return mdlParts(r.model).length>1; }
+function pmOrList(P){ return P.length<2?P.join(''):(P.slice(0,-1).join(', ')+' or '+P[P.length-1]); }
+function pmEditList(project){ var out=[]; (modelsAllowed(project)||[]).forEach(function(x){ if(out.indexOf(x)<0) out.push(x); var p=mdlParts(x); if(p.length>1) p.forEach(function(y){ if(out.indexOf(y)<0) out.push(y); }); }); return out; }
+function pmAsk(r, step){
+  var P=pmParts(r), cur=mdlParts(r.model).length===1?String(r.model):'';
+  return new Promise(function(res){ _mResolve=res;
+    openModal('<div class="md-h"><h3>Which model is this account for?</h3><p class="muted" style="margin-top:4px">'+(step?'<b>'+esc(step)+'</b> · ':'')+
+      '<b>'+esc(r.handle)+'</b> · '+esc(stageMeta(r.status).n)+(r.device?' · '+esc(phDev(r.device)):'')+' · made for '+esc(rGroup(r))+'. Look it up in the client\'s Google Sheet and pick the model this account posts for — the reports count it under that model from now on.</p></div>'+
+      '<div class="md-b"><div class="pm-pick">'+P.map(function(x){ return '<button class="pm-opt'+(x===cur?' on':'')+'" onclick="closeModal(\''+jsq(x)+'\')">'+esc(x)+(x===cur?'<small>now</small>':'')+'</button>'; }).join('')+'</div></div>'+
+      '<div class="md-f">'+(step?'<button class="btn sec" onclick="closeModal(\'__skip\')">Skip this one</button>':'')+'<span style="flex:1"></span><button class="btn sec" onclick="closeModal(null)">'+(step?'Stop':'Not now')+'</button></div>');
+  }).then(function(v){ return typeof v==='string'&&v?v:null; });
+}
+async function pmSet(r, m){
+  var prev=r.model, grp=rGroup(r), pm0=M(r), meta=Object.assign({}, pm0, { grp:grp, pmBy:myId(), pmAt:phtStamp() });
+  patchLocal(r.id, { model:m, meta:meta }); r.model=m; r.meta=meta; renderView();
+  var d=null; try{ d=await upd(r.id, { model:m, meta_patch:JSON.stringify({ grp:grp, pmBy:myId(), pmAt:phtStamp() }) }); }catch(e){ d=null; }
+  if(d && d.ok){ toast(r.handle+' → '+m); return true; }
+  patchLocal(r.id, { model:prev, meta:pm0 }); r.model=prev; r.meta=pm0; renderView();
+  toast((d && d.error==='MODEL_NOT_ALLOWED')?(m+' is not on this base\'s model list — ask the admin.'):'Could not save the model — try again.');
+  return false;
+}
+async function pmTag(id, why){
+  var r=rowById(id); if(!r || pmParts(r).length<2) return;
+  if(why==='moved' && !pmNeeds(r)) return;
+  var m=await pmAsk(r); if(!m || m==='__skip' || m===r.model) return;
+  await pmSet(r, m);
+}
+async function pmGate(r){
+  if(!pmOn() || !tmOn() || !pmNeeds(r)) return true;
+  var m=await pmAsk(r); if(!m || m==='__skip'){ toast('Tag the model first — the client\'s sheet says which one.'); return false; }
+  return await pmSet(r, m);
+}
+function pmCell(r){
+  var P=pmParts(r); if(!pmOn() || P.length<2 || isDead(r)) return esc(r.model||'—');
+  if(pmNeeds(r)) return '<button class="pm-tag need" onclick="event.stopPropagation();pmTag(\''+jsq(r.id)+'\')" title="Which model does it post for? The client\'s Google Sheet says.">'+esc(pmOrList(P))+'?</button>';
+  if(mdlParts(r.model).length===1) return '<button class="pm-tag" onclick="event.stopPropagation();pmTag(\''+jsq(r.id)+'\')" title="Posting for '+esc(r.model)+' (made for '+esc(rGroup(r))+') — tap to change">'+esc(r.model)+'</button>';
+  return esc(r.model||'—');
+}
+function pmBanner(rows){
+  if(!pmOn()) return ''; var L=(rows||[]).filter(pmNeeds); if(!L.length) return '';
+  var G={}; L.forEach(function(r){ G[rGroup(r)]=1; });
+  return '<div class="banner warn pm-ban">'+IC.user+'<div style="flex:1"><b>'+L.length+' posting account'+(L.length===1?' needs':'s need')+' its model.</b> '+
+    'Made for '+esc(Object.keys(G).join(', '))+' — the client\'s Google Sheet says which model each one posts for. Tag them so every report counts the right model; a session can\'t start until it\'s tagged.</div>'+
+    '<button class="btn sm dark" onclick="pmTagAll()">Tag them now</button></div>';
+}
+async function pmTagAll(){
+  var me=myId(), admin=isAdmin();
+  var L=ROWS.filter(function(r){ return pmNeeds(r) && (admin || worksFor(r)===me); });
+  for(var i=0;i<L.length;i++){
+    var r=L[i]; if(!pmNeeds(r)) continue;
+    var m=await pmAsk(r, (i+1)+' of '+L.length); if(m===null) break; if(m==='__skip') continue;
+    await pmSet(r, m);
+  }
+  renderView();
+}
 function tmOn(){ return !isAdmin(); }        // VAs time their work; the owner's ticks are corrections, not work
 /* fire-and-forget: one finished task → RcTasks (backend rc-2026-10-05c+) */
 function tmLog(r, kind, t, extra){
@@ -3654,6 +3738,7 @@ async function sesStart(id, n){
   if(!(await fixGate())) return;              // username fixes come first (Oct 13)
   if(!(await linkGate('A session'))) return;  // the portal timer must be running on Reddit (Oct 6)
   if(!(await pchkGate(r))){ toast('Check the earlier posts first — then the session unlocks.'); return; }   // Oct 25: yesterday's posts get a verdict first
+  if(!(await pmGate(r))) return;             // Nov 4c: which model it posts for (client's sheet) — before the clock starts
   if(!(await karmaGate(r))) return;          // today's karma first — then the clock starts
   if(!(await phGate(r))) return;             // Oct 29: first session on this iPhone this shift → is its proxy working?
   tmStart(id,'s'+n); renderView();
@@ -4915,7 +5000,7 @@ async function dmsDone(id){
   var r=rowById(id); if(!r) return;
   /* DM replies are part of the posting shift, not a separate deliverable — logged, never counted.
      Timed like a session: first press starts the clock, second press logs them. */
-  if(tmOn() && !tmGet(id,'dm') && !markOkAny(M(r).dm,worksFor(r),owner(r))){ if(!tmOneGate(id+'|dm')) return; if(!(await fixGate())) return; if(!(await linkGate('A DM round'))) return; tmStart(id,'dm'); renderView(); return; }
+  if(tmOn() && !tmGet(id,'dm') && !markOkAny(M(r).dm,worksFor(r),owner(r))){ if(!tmOneGate(id+'|dm')) return; if(!(await pmGate(r))) return; if(!(await fixGate())) return; if(!(await linkGate('A DM round'))) return; tmStart(id,'dm'); renderView(); return; }
   var t=tmOn()?tmStop(id,'dm'):null;
   if(await saveMeta(r,{ dm:vaKeyOf(USER.id) })){ if(t) tmLog(r,'dms',t); toast('DMs logged for today ✓'); renderView(); }
 }
@@ -4946,6 +5031,7 @@ async function moveTo(r, next, extra, msg){
   var d=null; try{ d=await upd(r.id, Object.assign({ status:next }, extra||{})); }catch(e){ d=null; }
   if(d && d.ok){
     EVENTS_AT=0;
+    try{ if(pmOn() && pmNeeds(r)) setTimeout(function(){ pmTag(r.id, 'moved'); }, 450); }catch(_pm){}   // Nov 4c
     if(prev.status!==next){
       var pm=prev.meta||{}, nm=patch.meta||{}, keys={};
       Object.keys(pm).concat(Object.keys(nm)).forEach(function(k){ if(patch.meta && JSON.stringify(pm[k])!==JSON.stringify(nm[k])) keys[k]=1; });
@@ -5451,7 +5537,7 @@ function editRec(id){
     (admin?'<div class="fld"><label>Username</label><input class="inp" id="ed-h" value="'+esc(r.handle)+'"></div>':'')+
     '<div class="fld"><label>Method</label><select class="sel" id="ed-me"><option value="">— not tagged —</option>'+methodsList().concat(methodOf(r)&&methodsList().indexOf(methodOf(r))<0?[methodOf(r)]:[]).map(function(m){ return '<option'+(methodOf(r)===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select></div>'+
     '<div class="f2"><div class="fld"><label>Model</label>'+(
-      (function(){ var al=modelsAllowed(r.project), cur=String(r.model||''); var known=al.some(function(x){ return x.toLowerCase()===cur.toLowerCase(); });
+      (function(){ var al=pmEditList(r.project), cur=String(r.model||''); var known=al.some(function(x){ return x.toLowerCase()===cur.toLowerCase(); });
           return '<select class="sel" id="ed-m">'+(cur&&!known?'<option value="'+esc(cur)+'" selected>'+esc(cur)+' (not on the list)</option>':(cur?'':'<option value="" selected>— pick the model —</option>'))+
             al.map(function(x){ return '<option'+(x.toLowerCase()===cur.toLowerCase()?' selected':'')+'>'+esc(x)+'</option>'; }).join('')+'</select><div class="hint">'+(admin?'The list is Settings → Models per base.':'Only the owner can add models.')+'</div>'; })())+'</div>'+
     (phones.length||r.device?'<div class="fld"><label>Created on (iPhone)</label><input class="inp" id="ed-d" list="ed-dl" value="'+esc(r.device||'')+'"><datalist id="ed-dl">'+phones.map(function(x){ return '<option value="'+esc(x.label)+'">'; }).join('')+'</datalist></div>':'')+'</div>'+
