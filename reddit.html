@@ -4517,7 +4517,7 @@ function drCss(){
   s.textContent='.dr{position:relative;overflow:hidden;border:1px solid rgba(255,69,0,.18);background:linear-gradient(135deg,var(--s1) 0%,var(--s1) 55%,var(--s2) 100%);margin-bottom:14px}'+
     '.dr-h{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap}.dr-k{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#E03D00}'+
     '.dr-t{font-size:17px;font-weight:800;color:var(--ink);margin-top:2px}.dr-days{display:flex;gap:5px;flex-wrap:wrap;margin-left:auto}'+
-    '.dr-days button{border:1px solid var(--line2);background:var(--s1);border-radius:100px;padding:5px 10px;font:700 11.5px/1 inherit;font-family:inherit;color:var(--ink2);cursor:pointer}.dr-days button.on{background:var(--o);border-color:var(--o);color:#fff}'+
+    '.dr-days button{border:1px solid var(--line2);background:var(--s1);border-radius:100px;padding:5px 10px;font:700 11.5px/1 inherit;font-family:inherit;color:var(--ink2);cursor:pointer}.dr-days button.on{background:var(--o);border-color:var(--o);color:#fff}.dr-days button.crr-b{background:#171717;border-color:#171717;color:#fff;margin-left:4px}'+
     '.dr-top{display:flex;gap:18px;align-items:flex-end;flex-wrap:wrap;margin:12px 0 4px}.dr-big b{font-size:44px;line-height:1;font-weight:900;letter-spacing:-.03em}.dr-big span{display:block;font-size:12.5px;color:var(--ink2);font-weight:700;margin-top:4px}.dr-big small{display:block;font-size:11.5px;color:var(--ink3);margin-top:2px}'+
     '.dr-tr{flex:1;min-width:220px;display:flex;align-items:flex-end;gap:4px;height:58px}.dr-tr div{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}.dr-tr i{display:block;width:100%;max-width:22px;border-radius:5px 5px 2px 2px;min-height:3px}.dr-tr div.on i{outline:2px solid #171717;outline-offset:1px}.dr-tr small{font-size:9.5px;color:var(--ink3);font-weight:700}'+
     '.dr-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:12px}.dr-cols h4{margin:0 0 6px;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}'+
@@ -4653,6 +4653,7 @@ function drTrendHtml(pts, sel, today0, pick, word){
 function drCard(rows, label){
   drCss();
   var S=drStats(rows, 14); if(!S.order.length) return '';
+  DRV.rows=rows; DRV.label=label||'';   // Nov 5d: the client report uses exactly what this card shows
   var td=today(), yd=dAdd(td,-1);
   var has=function(d){ var D=S.days[d]; return D && D.t[0]>0; };
   var day=DRV.day && S.days[DRV.day] ? DRV.day : (has(yd)?yd:td);
@@ -4662,7 +4663,7 @@ function drCard(rows, label){
   var tpts=S.order.slice().reverse().map(function(d){ var x=S.days[d].t; return { d:d, w:drVs(x), nc:x[4] }; });
   var v=drVs(a);
   return '<div class="card pad dr"><div class="dr-h"><div><div class="dr-k">Daily removal rate'+(label?' · '+esc(label):'')+'</div><div class="dr-t">'+esc(lbl(day))+(day===td||day===yd?' <span class="muted" style="font-size:12px;font-weight:600">'+esc(fmtDay(day))+'</span>':'')+'</div></div>'+
-    '<div class="dr-days"><button class="'+(day===td?'on':'')+'" onclick="DRV.day=\''+td+'\';renderView()">Today</button><button class="'+(day===yd?'on':'')+'" onclick="DRV.day=\''+yd+'\';renderView()">Yesterday</button></div></div>'+
+    '<div class="dr-days"><button class="'+(day===td?'on':'')+'" onclick="DRV.day=\''+td+'\';renderView()">Today</button><button class="'+(day===yd?'on':'')+'" onclick="DRV.day=\''+yd+'\';renderView()">Yesterday</button>'+(isAdmin()?'<button class="crr-b" onclick="crrOpen(\''+day+'\')" title="The day\'s removal rate as text for the client group chat — no VA names">Client report</button>':'')+'</div></div>'+
     '<div class="dr-top">'+(v?'<div class="dr-donut" style="--d:'+v.pd+'%" title="'+v.dn+' removed · '+v.up+' stayed up"><b>'+v.c+'</b><small>checked</small></div>':'')+
       '<div class="dr-vs"><div class="dr-nums"><div class="dr-n dn"><b>'+(v?v.pd+'%':'—')+'</b><span>Removed</span></div><div class="dr-n up"><b>'+(v?v.pu+'%':'—')+'</b><span>Stayed up</span></div>'+(a[4]?'<div class="dr-n nc"><b>'+a[4]+'</b><span>Not checked yet</span></div>':'')+'</div>'+
       (v?'<div class="dr-bigbar"><i class="vdn" style="width:'+v.pd+'%">'+(v.pd>=14?'<em>'+v.dn+' removed</em>':'')+'</i><i class="vup" style="width:'+v.pu+'%">'+(v.pu>=14?'<em>'+v.up+' up</em>':'')+'</i></div>':'<div class="dr-bigbar"></div>')+
@@ -4671,6 +4672,87 @@ function drCard(rows, label){
     '</div>'+drTrendHtml(tpts, day, td, "DRV.day='{d}';renderView()", 'removed')+
     '<div class="dr-cols"><div><h4>By model</h4>'+drList(D.model)+'</div><div><h4>By pace</h4>'+drList(D.pace, drPaceLab, stageOrd)+'</div>'+(isAdmin()?'<div><h4>By shift (who posted)</h4>'+drList(D.shift)+'</div>':'')+'</div>'+
     '<div class="muted" style="font-size:11.5px;margin-top:10px">Morning and night shift together · each post is checked at the end of the shift that posted it · rate = removed by mods + spam filter, of the checked posts. The client sees the same numbers in their portal.</div></div>';
+}
+
+/* ══ Nov 5d (Jeth): CLIENT REMOVAL REPORT — "a generated report like the VAs' one, but for me, to send to the
+   clients' group chat: the removal % for each model and each pace". Built from the same numbers as the card above
+   (posts by the day they went up, morning + night together; rate = removed by mods + spam filter ÷ checked).
+   Never any VA name, phone or shift. Copied straight away and editable before pasting. ══ */
+function crrPct(a){ var c=a[1]+a[2]+a[3]; return c?Math.round((a[2]+a[3])/c*100):null; }
+function crrLine(name, a){
+  var c=a[1]+a[2]+a[3], dn=a[2]+a[3], pc=crrPct(a);
+  if(!c) return name+' : not checked yet ('+a[0]+' posted)';
+  return name+' : '+pc+'% removed ('+dn+' of '+c+')'+(a[4]?' + '+a[4]+' not checked yet':'');
+}
+function crrBuild(day){
+  var S=drStats(DRV.rows||ROWS, 14), D=S.days[day];
+  var out=['REMOVAL RATE REPORT 📊', rptDate(day)+(day===today()?' (so far)':'')];
+  if(DRV.label && DRV.label!=='all bases') out.push(String(DRV.label));
+  if(!D || !D.t[0]){ out.push('', 'No posts logged for this day.'); return out.join('\n'); }
+  var a=D.t, c=a[1]+a[2]+a[3], pc=crrPct(a);
+  out.push('', 'POSTS MADE : '+a[0]);
+  if(c){ out.push('REMOVED : '+pc+'% ('+(a[2]+a[3])+' of '+c+' checked)', 'Removed by mods : '+a[2], 'Spam filter : '+a[3], 'Stayed up : '+a[1]+' ('+(100-pc)+'%)'); }
+  if(a[4]) out.push('Not checked yet : '+a[4]);
+  var nm=function(k){ return String(k).replace(/ · not tagged$/, ' (not tagged yet)'); };
+  var mk=Object.keys(D.model).sort(function(x,y){ var u=/not tagged$/.test(x)-/not tagged$/.test(y); return u || (D.model[y][0]-D.model[x][0]) || (x<y?-1:1); });
+  if(mk.length){ out.push('', 'BY MODEL'); mk.forEach(function(k){ out.push(crrLine(nm(k), D.model[k])); }); }
+  var pk=Object.keys(D.pace).sort(function(x,y){ return stageOrd(x)-stageOrd(y) || (x<y?-1:1); });
+  if(pk.length){ out.push('', 'BY PACE'); pk.forEach(function(k){ out.push(crrLine(drPaceLab(k), D.pace[k])); }); }
+  out.push('', 'Removed = taken down by the subreddit mods or caught by the spam filter, out of the posts checked.');
+  return out.join('\n');
+}
+function crrOpen(day){
+  if(!isAdmin()) return;
+  var td=today(), yd=dAdd(td,-1); day=day||yd;
+  var txt=crrBuild(day);
+  openModal('<div class="md-h"><h3>Removal report · for the client</h3><p class="muted" style="margin-top:4px">The removal rate by model and by pace, ready for the client group chat. No VA names, phones or shifts. Already copied — you can edit it here first.</p>'+
+      '<div class="dr-days" style="margin:10px 0 0;justify-content:flex-start"><button class="'+(day===td?'on':'')+'" onclick="crrOpen(\''+td+'\')">Today</button><button class="'+(day===yd?'on':'')+'" onclick="crrOpen(\''+yd+'\')">Yesterday</button>'+(day!==td&&day!==yd?'<button class="on">'+esc(fmtDay(day))+'</button>':'')+'</div></div>'+
+    '<div class="md-b"><textarea id="crr-ta" class="rpt-ta" spellcheck="false" style="white-space:pre-wrap"></textarea></div>'+
+    '<div class="md-f"><button class="btn sec" onclick="closeModal(null)">Close</button><button class="btn pri" onclick="crrCopy(this)">Copy report</button></div>');
+  try{ $('modal').classList.add('wide'); }catch(_w){}
+  var ta=$('crr-ta'); if(ta){ ta.value=txt; try{ ta.scrollTop=0; ta.scrollLeft=0; ta.setSelectionRange(0,0); }catch(_s){} }
+  rptCopyText(txt).then(function(ok){ toast(ok?'Client report copied — paste it in the group chat.':'Press Copy report to copy it.'); });
+}
+function crrCopy(btn){ var ta=$('crr-ta'), t=ta?ta.value:''; rptCopyText(t).then(function(ok){ if(btn){ btn.textContent=ok?'Copied':'Copy failed — select the text and copy it'; setTimeout(function(){ try{ btn.textContent='Copy report'; }catch(_e){} }, 1800); } }); }
+/* ══ Nov 5d (Jeth): WEEKLY SUBREDDIT REPORT for the client — the subreddits that worked (70–100% of the checked posts
+   stayed up) and the worst ones (half or more removed), over the last 7 / 14 / 30 full days (ending yesterday, so
+   every post has been checked). Only subreddits with 3+ checked posts are listed. No VA names. ══ */
+var WSR_MIN=3;
+function wsrBuild(n){
+  n=n||7; var end=dAdd(today(),-1), start=dAdd(end,-(n-1)), base=(isAdmin()&&SUBS.base)||'all';
+  var by={}, T={ p:0, up:0, mod:0, spam:0, unk:0 };
+  subRows(base).forEach(function(r){ postsOf(r).forEach(function(p){
+    if(!p || !p.r) return; var d=String(p.d||''); if(!d || d<start || d>end) return;
+    var st=postState(p); if(st==='old') st='up'; if(st!=='up' && st!=='mod' && st!=='spam') st='unk';
+    var k=subKey(p.r), s=by[k]||(by[k]={ name:p.r, last:'', p:0, up:0, mod:0, spam:0, unk:0 });
+    s.p++; s[st]++; T.p++; T[st]++; if(d>=s.last){ s.last=d; s.name=p.r; } }); });
+  var L=Object.keys(by).map(function(k){ var s=by[k]; s.chk=s.up+s.mod+s.spam; s.rm=s.mod+s.spam; return s; });
+  var good=L.filter(function(s){ return s.chk>=WSR_MIN && s.up/s.chk>=0.7; }).sort(function(a,b){ return (b.up/b.chk-a.up/a.chk) || (b.chk-a.chk) || (a.name<b.name?-1:1); }).slice(0,15);
+  var bad=L.filter(function(s){ return s.chk>=WSR_MIN && s.rm/s.chk>=0.5; }).sort(function(a,b){ return (b.rm/b.chk-a.rm/a.chk) || (b.rm-a.rm) || (a.name<b.name?-1:1); }).slice(0,15);
+  var chk=T.up+T.mod+T.spam, pc=function(x, of){ return of?Math.round(x/of*100):0; };
+  var out=[(n===7?'WEEKLY SUBREDDIT REPORT':'SUBREDDIT REPORT (LAST '+n+' DAYS)')+' 📊', rptDate(start)+' to '+rptDate(end)];
+  if(base!=='all') out.push(baseOf(base).n);
+  out.push('', 'POSTS MADE : '+T.p);
+  if(chk) out.push('STAYED UP : '+T.up+' ('+pc(T.up,chk)+'%)', 'REMOVED : '+(T.mod+T.spam)+' ('+pc(T.mod+T.spam,chk)+'%)', 'Removed by mods : '+T.mod, 'Spam filter : '+T.spam);
+  if(T.unk) out.push('Not checked : '+T.unk);
+  out.push('SUBREDDITS POSTED IN : '+L.length);
+  out.push('', '✅ WORKING WELL (70% to 100% stayed up)');
+  if(good.length) good.forEach(function(s){ out.push(s.name+' : '+pc(s.up,s.chk)+'% stayed up ('+s.up+' of '+s.chk+')'); }); else out.push('None this period.');
+  out.push('', '⛔ WORST (half or more removed)');
+  if(bad.length) bad.forEach(function(s){ out.push(s.name+' : '+pc(s.rm,s.chk)+'% removed ('+s.rm+' of '+s.chk+(s.spam?', '+s.spam+' spam filter':'')+')'); }); else out.push('None this period.');
+  out.push('', 'Only subreddits with '+WSR_MIN+' or more checked posts are listed. Removed = taken down by the mods or caught by the spam filter.');
+  return out.join('\n');
+}
+function wsrOpen(n){
+  if(!isAdmin()) return; n=n||7;
+  var txt=wsrBuild(n);
+  openModal('<div class="md-h"><h3>Subreddit report · for the client</h3><p class="muted" style="margin-top:4px">The subreddits that worked and the worst ones, over full days ending yesterday'+(SUBS.base&&SUBS.base!=='all'?' · '+esc(baseOf(SUBS.base).n)+' only':' · all bases')+'. No VA names. Already copied — you can edit it here first.</p>'+
+      '<div class="dr-days" style="margin:10px 0 0;justify-content:flex-start">'+[[7,'Last 7 days'],[14,'Last 14 days'],[30,'Last 30 days']].map(function(x){ return '<button class="'+(n===x[0]?'on':'')+'" onclick="wsrOpen('+x[0]+')">'+x[1]+'</button>'; }).join('')+'</div></div>'+
+    '<div class="md-b"><textarea id="crr-ta" class="rpt-ta" spellcheck="false" style="white-space:pre-wrap"></textarea></div>'+
+    '<div class="md-f"><button class="btn sec" onclick="closeModal(null)">Close</button><button class="btn pri" onclick="crrCopy(this)">Copy report</button></div>');
+  try{ $('modal').classList.add('wide'); }catch(_w){}
+  var ta=$('crr-ta'); if(ta){ ta.value=txt; try{ ta.scrollTop=0; ta.scrollLeft=0; ta.setSelectionRange(0,0); }catch(_s){} }
+  rptCopyText(txt).then(function(ok){ toast(ok?'Subreddit report copied — paste it in the group chat.':'Press Copy report to copy it.'); });
 }
 
 /* one post, any time: set or change its verdict (chips on the board, the record's Posts list) */
@@ -4896,6 +4978,7 @@ function vSubs(){
   window._SUBIX=subIndex();
   var rl=SUBS.range?('last '+SUBS.range+' days'):'all time';
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Sub<span class="gtxt">reddits</span></h2><p>Every post logged at the end of a posting session — and, from 25 Oct, checked the next day: stayed up, removed by the moderators, or caught by a spam filter. Keep posting where our content stays up — drop the subreddits that keep removing it. The client sees the same numbers (no names) in their portal.</p></div>'+
+    (admin?'<button class="btn sm dark" onclick="wsrOpen(7)" title="The worst subreddits and the ones that worked, as text for the client group chat">Weekly client report</button>':'')+
     (admin?'<select class="sel" onchange="SUBS.base=this.value;renderView()"><option value="all">All bases</option>'+BASES.map(function(b){ return '<option value="'+esc(b.id)+'"'+(SUBS.base===b.id?' selected':'')+'>'+esc(b.n)+'</option>'; }).join('')+'</select>':'')+
     '<div class="seg" style="width:auto">'+[[7,'7d'],[30,'30d'],[90,'90d'],[0,'All']].map(function(x){ return '<button class="'+(SUBS.range===x[0]?'on':'')+'" onclick="SUBS.range='+x[0]+';renderView()">'+x[1]+'</button>'; }).join('')+'</div>'+
     (nSXs?'<div class="seg" style="width:auto"><button class="'+(SUBS.sop!=='sx'?'on':'')+'" onclick="SUBS.sop=\'std\';renderView()">Original SOP</button><button class="'+(SUBS.sop==='sx'?'on':'')+'" onclick="SUBS.sop=\'sx\';renderView()" style="color:'+SX_C+'">Suicidal Operation</button></div>':'')+'</div>';
