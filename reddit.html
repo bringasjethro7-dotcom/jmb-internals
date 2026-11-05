@@ -2298,6 +2298,7 @@ function vToday(){
   /* FILTERS (owner, Oct 5): the method row is the one filter bar; Stage and VA are filtered from their
      column headers in the table, Airtable-style. (The old stage-chip row + "Everyone" box are gone.) */
   h+=pmBanner(board);   // Nov 4c
+  setTimeout(pmAutoAsk, 0);   // Nov 5c
   h+='<div class="sec-h"><b>'+(admin?(TD.va==='all'?'All accounts':(TD.va==='mine'?'My accounts':esc(firstName(TD.va))+'\'s accounts')):'My accounts')+'</b><span>'+board.length+'</span><hr>'+((!admin || TD.va!=='all')?rptBtn():'')+'</div>';
   if(admin && TD.va!=='all' && TD.va!=='mine') h+=whereAre(TD.va);
   var mcount={}; board.forEach(function(r){ var m=methodOf(r)||''; mcount[m]=(mcount[m]||0)+1; });
@@ -3771,6 +3772,29 @@ function pmBanner(rows){
     'Made for '+esc(Object.keys(G).join(', '))+' — the client\'s Google Sheet says which model each one posts for. Tag them so every report counts the right model; a session can\'t start until it\'s tagged.</div>'+
     '<button class="btn sm dark" onclick="pmTagAll()">Tag them now</button></div>';
 }
+/* Nov 5c: re-read the backend build now and then — a page opened before a backend deploy switches the new parts on by itself */
+var _beAt=0;
+function beRecheck(force){
+  if(!force && Date.now()-_beAt<5*60000) return; _beAt=Date.now();
+  try{ api({ action:'rc_build' }).then(function(d){ var b=(d&&d.build)||''; if(b && b!==BE_BUILD){ BE_BUILD=b; try{ renderView(); }catch(_r){} } }).catch(function(){}); }catch(e){}
+}
+setInterval(function(){ if(!document.hidden) beRecheck(false); }, 60000);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) beRecheck(false); });
+/* Nov 5c: accounts still on a pair that posted today or yesterday → ask the VA straight away (once per page per day) */
+function pmPostedRecently(r){ var td=today(), yd=dAdd(td,-1); return postsOf(r).some(function(p){ return p && p.r && (p.d===td || p.d===yd); }); }
+var _pmAuto='';
+function pmAutoAsk(){
+  try{
+    if(!pmOn() || isAdmin() || !USER || VIEW!=='today') return;
+    var key=today()+'|'+myId(); if(_pmAuto===key) return;
+    if($('modal').classList.contains('on')) return;
+    try{ if(tmRunning('').length) return; }catch(_t){}
+    var me=myId(), L=ROWS.filter(function(r){ return pmNeeds(r) && worksFor(r)===me && pmPostedRecently(r); });
+    if(!L.length) return;
+    _pmAuto=key;
+    setTimeout(function(){ if(!$('modal').classList.contains('on')) pmTagAll(); }, 1200);
+  }catch(e){}
+}
 async function pmTagAll(){
   var me=myId(), admin=isAdmin();
   var L=ROWS.filter(function(r){ return pmNeeds(r) && (admin || worksFor(r)===me); });
@@ -4476,7 +4500,7 @@ function drStats(rows, nDays){
   function mKey(v){ var p=mParts(v); return p.length?p.map(function(x){ return x.toLowerCase(); }).sort().join('|'):''; }
   var mCnt={}, mLab={};
   (rows||[]).forEach(function(r){ var raw=String(r.model||'').trim(), k=mKey(raw); if(!k) return; var c=mCnt[k]||(mCnt[k]={}); c[raw]=(c[raw]||0)+1; });
-  Object.keys(mCnt).forEach(function(k){ var best='', n=-1; Object.keys(mCnt[k]).forEach(function(s){ if(mCnt[k][s]>n){ n=mCnt[k][s]; best=s; } }); var p=mParts(best); mLab[k]=p.length>1?p.join(' & '):best; });
+  Object.keys(mCnt).forEach(function(k){ var best='', n=-1; Object.keys(mCnt[k]).forEach(function(s){ if(mCnt[k][s]>n){ n=mCnt[k][s]; best=s; } }); var p=mParts(best); mLab[k]=p.length>1?(p.join(' or ')+' · not tagged'):best; });   // Nov 5c: a pair here = accounts nobody tagged yet
   (rows||[]).forEach(function(r){
     var mo=mLab[mKey(r.model)]||String(r.model||'').trim()||'No model', me=methodOf(r)||'No method';
     postsOf(r).forEach(function(p){ if(!p || !p.r) return; var D=days[String(p.d||'')]; if(!D) return; var st=postState(p); if(st==='old') st='up';
