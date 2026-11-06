@@ -1021,7 +1021,7 @@ table.db thead th{background:var(--s2)}
 .cx-subtabs{margin:0 0 14px}.cx-subtabs .seg button{padding:8px 16px;font-size:13px}
 .cx-sopbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;font-size:12.5px}
 .cx-sopbar>span:first-child{font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:11px;color:var(--ink3,#595959)}
-.sx-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:6px}
+.sx-steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:6px}
 .sx-steps>div{border:1px solid rgba(195,184,152,.22);background:rgba(195,184,152,.05);border-radius:14px;padding:12px 14px}
 .sx-steps b{display:block;color:#675F51;font-size:13px;letter-spacing:.04em;text-transform:uppercase}
 .sx-steps span{display:block;margin-top:4px;font-size:13px}
@@ -1497,9 +1497,10 @@ var EXTRA=[
 var SXPH=[
  {k:'sxwarm', n:'Suicidal · Warm-up', c:'#675F51', sx:true, plan:'Day 2 (or day 3 at the latest) · browsing only — no upvotes, no joining, no posting yet.', task:'Reddit Warmup'},
  {k:'sxsetup', n:'Suicidal · Account setup', c:'#675F51', sx:true, plan:'After the warm-up · one session setting up the profile (display name, bio, avatar, banner) — no posting yet.', task:'Reddit Warmup'},
+ {k:'sxcomment', n:'Suicidal · Commenting', c:'#675F51', sx:true, plan:'After the account setup · one commenting session of 10 comments on the account.', task:'Reddit Warmup'},
  {k:'sxpost', n:'Suicidal · Posting', c:'#675F51', sx:true, plan:'Day 3 onward · posting, the way the client assigned the account.', task:'Reddit Posting'}
 ];
-var SX_STAGES=['sxwarm','sxsetup','sxpost'], SX_C='#675F51';
+var SX_STAGES=['sxwarm','sxsetup','sxcomment','sxpost'], SX_C='#675F51';
 /* TRIAL POSTING PHASES (Nov 3) — side phases next to the ladder, a test trial for posting (one session a day). */
 var TRPH=[
  {k:'extended', n:'Extended Posting', c:'#595959', side:true, plan:'Trial posting phase · one session a day · 10 min active browsing before posting · 2–5 NSFW comment replies on our posts · 4–5 posts, 3–5 min apart · 8–12 DM replies.', task:'Reddit Posting'},
@@ -1514,7 +1515,7 @@ function sxAssign(r){ return String(((r&&r.meta)||{}).sxa||'').trim(); }
 function sxAssignList(){ return (Array.isArray(CFG.sx_assign)&&CFG.sx_assign.length)?CFG.sx_assign.slice():['Location posting']; }
 function sxBadge(small){ return '<span class="pill" style="background:'+SX_C+'14;color:'+SX_C+(small?';font-size:10.5px;padding:2px 8px':'')+'">Suicidal Op</span>'; }
 function sxPosted(r){ return r.status==='sxpost' || ((r.meta||{}).prev==='sxpost'); }
-var ORDER=['new','creation','creationstandby','warming','comment','nsfw','day1','early','earlydm','medium','strong','superstrong','extended','long','sxwarm','sxsetup','sxpost','recovery','tempban','onhold','archived','banned'];
+var ORDER=['new','creation','creationstandby','warming','comment','nsfw','day1','early','earlydm','medium','strong','superstrong','extended','long','sxwarm','sxsetup','sxcomment','sxpost','recovery','tempban','onhold','archived','banned'];
 var GROUPS=[
  {k:'new',  n:'New',       c:'#382E22', st:['new']},
  {k:'cre',  n:'Creation',  c:'#382E22', st:['creation','creationstandby']},
@@ -1522,7 +1523,7 @@ var GROUPS=[
  {k:'post', n:'Posting',   c:'#1C252B', st:['day1','early','earlydm','medium']},
  {k:'str',  n:'Strong',    c:'#37322D', st:['strong','superstrong']},
  {k:'trial',n:'Trial posting', c:'#595959', st:['extended','long']},
- {k:'sx',   n:'Suicidal Op', c:'#675F51', st:['sxwarm','sxsetup','sxpost']},
+ {k:'sx',   n:'Suicidal Op', c:'#675F51', st:['sxwarm','sxsetup','sxcomment','sxpost']},
  {k:'rec',  n:'Recovery',  c:'#595959', st:['recovery']},
  {k:'tb',   n:'Temp ban',  c:'#382E22', st:['tempban']},
  {k:'hold', n:'On hold',   c:'#595959', st:['onhold']},
@@ -1532,7 +1533,7 @@ var GROUPS=[
 var END_REASONS=['Permanently suspended','Shadowbanned','Locked — could not recover','Other'];
 /* Stage typed into the sheet as its display name ("Medium + DMs", "Spam Recovery")? Map it to the key
    so the card gets its colour, plan and session buttons. The backend does the same from rc-2026-10-04e. */
-var ST_ALIAS={ extendedposting:'extended', extendedpost:'extended', extendedphase:'extended', extendedpostingphase:'extended', longposting:'long', longpost:'long', longphase:'long', longpostingphase:'long', sxwarmup:'sxwarm', sxwarming:'sxwarm', suicidalwarmup:'sxwarm', suicidalwarm:'sxwarm', suicidewarmup:'sxwarm', suicidalwarming:'sxwarm', sxaccountsetup:'sxsetup', suicidalsetup:'sxsetup', suicidalaccountsetup:'sxsetup', suicidesetup:'sxsetup', sxposting:'sxpost', suicidalposting:'sxpost', suicidalpost:'sxpost', suicideposting:'sxpost', newlycreated:'new', newcreated:'new', creationstage:'creation', standby:'creationstandby', warmup:'warming', warmingup:'warming',
+var ST_ALIAS={ extendedposting:'extended', extendedpost:'extended', extendedphase:'extended', extendedpostingphase:'extended', longposting:'long', longpost:'long', longphase:'long', longpostingphase:'long', sxwarmup:'sxwarm', sxwarming:'sxwarm', suicidalwarmup:'sxwarm', suicidalwarm:'sxwarm', suicidewarmup:'sxwarm', suicidalwarming:'sxwarm', sxcommenting:'sxcomment', sxcomments:'sxcomment', suicidalcommenting:'sxcomment', suicidalcomment:'sxcomment', suicidalcomments:'sxcomment', suicidecommenting:'sxcomment', sxaccountsetup:'sxsetup', suicidalsetup:'sxsetup', suicidalaccountsetup:'sxsetup', suicidesetup:'sxsetup', sxposting:'sxpost', suicidalposting:'sxpost', suicidalpost:'sxpost', suicideposting:'sxpost', newlycreated:'new', newcreated:'new', creationstage:'creation', standby:'creationstandby', warmup:'warming', warmingup:'warming',
   commentfarm:'comment', commentfarming:'comment', comments:'comment', nsfwcomment:'nsfw', nsfwcomments:'nsfw', day1posting:'day1', dayone:'day1', dayoneposting:'day1',
   earlyposting:'early', earlydms:'earlydm', earlyplusdms:'earlydm', earlywithdms:'earlydm', mediumdm:'medium', mediumdms:'medium', mediumplusdms:'medium',
   spamrecovery:'recovery', spamfilter:'recovery', spamfilterrecovery:'recovery', spam:'recovery', tempbanned:'tempban', temporaryban:'tempban', temporarybanned:'tempban',
@@ -2770,7 +2771,7 @@ function sxCountC(){ return allRowsAll().filter(function(r){ return isSX(r) && !
 function sopBarC(){
   var n=sxCountC(); if(!n){ CXS.sop='std'; return ''; }
   return '<div class="cx-sopbar no-print"><span>Operation</span><div class="seg" style="width:auto"><button class="'+(CXS.sop==='std'?'on':'')+'" onclick="cxSop(\'std\')">Original SOP</button><button class="'+(CXS.sop==='sx'?'on':'')+'" onclick="cxSop(\'sx\')" style="color:'+SX_C+'">Suicidal Operation <small>'+n+'</small></button></div>'+
-    '<span class="muted">'+(CXS.sop==='sx'?'Day 1 created · day 2–3 warm-up · account setup · posting from day 3 — reported on its own':'The ladder — Suicidal Operation accounts are not in these numbers')+'</span></div>';
+    '<span class="muted">'+(CXS.sop==='sx'?'Day 1 created · day 2–3 warm-up · account setup · commenting · posting from day 3 — reported on its own':'The ladder — Suicidal Operation accounts are not in these numbers')+'</span></div>';
 }
 function cxSop(k){ CXS.sop=k; DB.grp=''; if(k==='sx' && VIEW==='insights') VIEW='pipeline'; if(VIEW==='subs' && !subsD()) VIEW='accounts'; paintTabs(); renderView(); }
 function subsD(){ return CXS.sop==='sx'?SUBSD_SX:SUBSD; }
@@ -2864,7 +2865,7 @@ function vSettingsC(){
       '</tbody></table></div><div class="muted" style="font-size:12px;margin-top:8px">'+ph.length+' iPhone'+(ph.length===1?'':'s')+' · '+withIc+' with an iCloud listed. Addresses only — no passwords are kept here.</div>'
      :'<div class="muted" style="padding:10px 0">No iPhones listed yet.</div>')+'</div>';
   h+='<div class="card pad" style="margin-top:12px"><div class="ch-h"><b>Suicidal Operation</b><span>a second, faster SOP — reported on its own, never mixed with the ladder</span></div>'+
-    '<div class="sx-steps">'+[['Day 1','The account is created'],['Day 2 – 3','Warm-up · browsing only, no posting'],['After the warm-up','Account setup · name, bio, avatar, banner'],['Day 3 onward','Posting, the way you assign it']].map(function(x){ return '<div><b>'+esc(x[0])+'</b><span>'+esc(x[1])+'</span></div>'; }).join('')+'</div>'+
+    '<div class="sx-steps">'+[['Day 1','The account is created'],['Day 2 – 3','Warm-up · browsing only, no posting'],['After the warm-up','Account setup · name, bio, avatar, banner'],['After the setup','Commenting · one session of 10 comments'],['Day 3 onward','Posting, the way you assign it']].map(function(x){ return '<div><b>'+esc(x[0])+'</b><span>'+esc(x[1])+'</span></div>'; }).join('')+'</div>'+
     '<div class="lbl" style="margin:14px 0 6px">Posting assignments</div><div class="chips">'+L.map(function(x){ return '<span class="chip" style="background:'+SX_C+'12;color:'+SX_C+'">'+esc(x)+'</span>'; }).join('')+'</div>'+
     '<div class="muted" style="font-size:12px;margin-top:8px">Tell your JMB account manager which assignment each account should get — it shows on the account in Accounts, and the Suicidal Operation numbers are split by it.</div></div>';
   var ms=[]; Object.keys(CFG.models||{}).forEach(function(b){ (CFG.models[b]||[]).forEach(function(m){ if(ms.indexOf(m)<0) ms.push(m); }); });
@@ -3122,7 +3123,7 @@ function vAccounts(){
   var kf=[DB.model, DB.meth!=='all'?DB.meth:''].filter(Boolean);
   var ks=src.filter(function(r){ return (DB.meth==='all' || methodOf(r)===DB.meth) && (!DB.model || String(r.model||'')===DB.model); });
   var live=ks.filter(function(r){ return !isDead(r) && !isParked(r); }), P1=phaseIx('day1');
-  var posting=live.filter(function(r){ return isSX(r)?r.status==='sxpost':pIx(r.status)>=P1; }).length, warm=live.filter(function(r){ return isSX(r)?(r.status==='new'||r.status==='sxwarm'||r.status==='sxsetup'):(pIx(r.status)>=0 && pIx(r.status)<P1); }).length;
+  var posting=live.filter(function(r){ return isSX(r)?r.status==='sxpost':pIx(r.status)>=P1; }).length, warm=live.filter(function(r){ return isSX(r)?(r.status==='new'||r.status==='sxwarm'||r.status==='sxsetup'||r.status==='sxcomment'):(pIx(r.status)>=0 && pIx(r.status)<P1); }).length;
   var b30=ks.filter(function(r){ var e=endedAt(r); return e && dayDiff(e)<30; }).length, c30=ks.filter(function(r){ var c=createdAt(r); return c && dayDiff(c)<30; }).length;
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Accounts</h2><p>Every '+esc(BASES.map(function(b){ return b.n; }).join(' + '))+' account — its stage, method and model, from creation to ban. Click one for its full history.</p></div>'+
     '<div class="cl-live no-print" id="cl-live"></div><button class="btn sec no-print" onclick="exportCsvC()">'+IC.dl+' Export CSV</button></div>';
@@ -3230,11 +3231,11 @@ function sxInsightsHtml(rows, range, open){
   rows=rows.filter(function(r){ return isSX(r) && !isParked(r); });
   var X=sxEvIdx(), end=phtDate(new Date()), start=range?addDays(end,-(range-1)):'0000-00-00', rl=range?('last '+range+' days'):'all time';
   var inR=function(d){ return d && phtDate(d)>=start; };
-  var live=rows.filter(function(r){ return !isDead(r); }), warm=live.filter(function(r){ return r.status==='new'||r.status==='sxwarm'; }), setupN=live.filter(function(r){ return r.status==='sxsetup'; }).length, post=live.filter(function(r){ return r.status==='sxpost'; });
+  var live=rows.filter(function(r){ return !isDead(r); }), warm=live.filter(function(r){ return r.status==='new'||r.status==='sxwarm'; }), setupN=live.filter(function(r){ return r.status==='sxsetup'; }).length, cmtN=live.filter(function(r){ return r.status==='sxcomment'; }).length, post=live.filter(function(r){ return r.status==='sxpost'; });
   var created=rows.filter(function(r){ return inR(createdAt(r)); }), bans=rows.filter(function(r){ return isDead(r) && inR(endedAt(r)); });
   var lives=bans.map(function(r){ return ageDays(r); }).filter(function(x){ return x!=null; }), med=median(lives);
   var reached=created.filter(function(r){ return sxReached(r, X); }).length, noAsg=post.filter(function(r){ return !sxAssign(r); }).length;
-  var h='<div class="kpis" style="margin-top:12px">'+kpi('Live now',live.length,warm.length+' warming up · '+(setupN?setupN+' in account setup · ':'')+post.length+' posting',SX_C)+kpi('Created',created.length,rl,'#B69D80')+
+  var h='<div class="kpis" style="margin-top:12px">'+kpi('Live now',live.length,warm.length+' warming up · '+(setupN?setupN+' in account setup · ':'')+(cmtN?cmtN+' commenting · ':'')+post.length+' posting',SX_C)+kpi('Created',created.length,rl,'#B69D80')+
     kpi('Banned',bans.length,rl,'#1C252B')+kpi('Median life',med==null?'—':med+'d','created → banned · '+rl,'#A8ACAB')+
     kpi('Reached posting',created.length?Math.round(reached/created.length*100)+'%':'—','of the accounts created · '+rl,'#1C252B')+
     kpi('Banned by day 3',lives.length?Math.round(lives.filter(function(x){ return x<=2; }).length/lives.length*100)+'%':'—','of the bans · '+rl,'#B69D80')+'</div>';
@@ -3249,7 +3250,7 @@ function sxInsightsHtml(rows, range, open){
       '<div title="Banned"><i style="display:inline-block;height:9px;border-radius:5px;background:#1C252B;width:'+Math.max(w.x?4:0, w.x/mx*100)+'%;vertical-align:middle"></i> <b style="font-size:11.5px;color:#1C252B">'+(w.x||'')+'</b></div></div>'; }).join('')+
     '<div class="muted" style="font-size:11px;margin-top:6px"><i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:'+SX_C+'"></i> created &nbsp; <i style="display:inline-block;width:9px;height:9px;border-radius:3px;background:#1C252B"></i> banned</div></div>';
   h+='<div class="card pad s6"><div class="ch-h"><b>Where they are now</b><span>live accounts by stage</span></div>'+
-    [['new','Created (day 1)'],['sxwarm','Warm-up (day 2–3)'],['sxsetup','Account setup'],['sxpost','Posting (day 3+)'],['recovery','Spam recovery'],['tempban','Temp banned']].map(function(x){ var n=live.filter(function(r){ return r.status===x[0]; }).length, sm=stageMeta(x[0]);
+    [['new','Created (day 1)'],['sxwarm','Warm-up (day 2–3)'],['sxsetup','Account setup'],['sxcomment','Commenting'],['sxpost','Posting (day 3+)'],['recovery','Spam recovery'],['tempban','Temp banned']].map(function(x){ var n=live.filter(function(r){ return r.status===x[0]; }).length, sm=stageMeta(x[0]);
       return '<div style="display:flex;align-items:center;gap:10px;margin:7px 0"><span class="pill" style="background:'+sm.c+'16;color:'+sm.c+';min-width:150px">'+esc(x[1])+'</span><div style="flex:1;height:9px;border-radius:5px;background:var(--s2,var(--s2));overflow:hidden"><i style="display:block;height:100%;background:'+sm.c+';width:'+(live.length?n/live.length*100:0)+'%"></i></div><b style="min-width:26px;text-align:right">'+n+'</b></div>'; }).join('')+'</div>';
   h+='<div class="card pad"><div class="ch-h"><b>By posting assignment</b><span>every Suicidal Operation account · the assignment comes from the client</span></div>'+sxTable(rows, function(r){ return sxAssign(r)||'(no assignment yet)'; }, 'Assignment', X)+'</div>';
   h+='<div class="card pad s6"><div class="ch-h"><b>By model</b><span>every Suicidal Operation account</span></div>'+sxTable(rows, function(r){ return r.model||'(no model)'; }, 'Model', X)+'</div>';
@@ -3268,10 +3269,10 @@ function vPipeline(){
   var ml=methodsList(), lanes=ml.slice();
   all.forEach(function(r){ var m=methodOf(r); if(m && lanes.indexOf(m)<0) lanes.push(m); });
   var byM={}; lanes.forEach(function(m){ byM[m]=all.filter(function(r){ return methodOf(r)===m; }); });
-  var cols=CXS.sop==='sx'?['new','sxwarm','sxsetup','sxpost','recovery','tempban','banned']:ORDER.filter(function(k){ return k!=='creationstandby' && k!=='onhold' && k!=='archived' && SX_STAGES.indexOf(k)<0; });
+  var cols=CXS.sop==='sx'?['new','sxwarm','sxsetup','sxcomment','sxpost','recovery','tempban','banned']:ORDER.filter(function(k){ return k!=='creationstandby' && k!=='onhold' && k!=='archived' && SX_STAGES.indexOf(k)<0; });
   var S={}; lanes.forEach(function(m){ S[m]=plSummary(byM[m]); });
   var mark={};
-  (CXS.sop==='sx'?['sxwarm','sxsetup','recovery','tempban']:PL_PROGRESS).forEach(function(k){
+  (CXS.sop==='sx'?['sxwarm','sxsetup','sxcomment','recovery','tempban']:PL_PROGRESS).forEach(function(k){
     var v=ml.map(function(m){ var l=plStageRows(byM[m]||[],k); return { m:m, a:l.length>=2?plAvg(l):null }; }).filter(function(x){ return x.a!=null; });
     if(v.length<2) return; var lo=Math.min.apply(null,v.map(function(x){ return x.a; })), hi=Math.max.apply(null,v.map(function(x){ return x.a; })); if(hi-lo<1) return;
     v.forEach(function(x){ if(x.a===lo) mark[k+'|'+x.m]='fast'; else if(x.a===hi) mark[k+'|'+x.m]='slow'; });
