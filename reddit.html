@@ -1221,14 +1221,63 @@ var BIZ_FLIP_H=7;
    on every call cost ~0.1–0.3 ms on the VAs' laptops — and a board calls this over a thousand times per draw. */
 function phtDate(d){ d=d||new Date(); return new Date(d.getTime()+8*3600000).toISOString().slice(0,10); }
 function today(){ return phtDate(new Date(Date.now()-BIZ_FLIP_H*3600*1000)); }
-function vaKeyOf(empId){
-  if(SHIFTOF[String(empId||'').toLowerCase()]==='night') return phtDate(new Date(Date.now()-(BIZ_FLIP_H+12)*3600*1000))+'·PM';
-  return today()+'·AM';
+/* Nov 7 (Jeth): "Joana is on night shift but still shows as morning · the new VA is red for morning but works nights ·
+   the tool resets at 7 AM while the night shift is still on overtime — and their report to the client gets ruined."
+   The SHIFT and the WORK DAY now come from the VA's own portal time-in (attendance: date + shift + still clocked in),
+   read from Supabase (rpc rc_att_now, refreshed every 5 min) — not from the profile field, which was stale.
+   A VA's work day = the date of the shift they are clocked into. A night VA's day is the night they clocked in: it does
+   NOT move at 7 AM; it moves when they clock in for their next shift. With no time-in data it falls back to the old
+   window (morning: 7 AM → 7 AM · night: 7 PM → 7 PM). */
+var ATT={}, ATT_AT=0, _WD={}, _WDm=0;
+function shiftWinDay(empId){ return SHIFTOF[String(empId||'').toLowerCase()]==='night' ? phtDate(new Date(Date.now()-(BIZ_FLIP_H+12)*3600*1000)) : today(); }
+function wdayOf(empId){
+  var k=String(empId||'').toLowerCase(), m=Math.floor(Date.now()/60000);
+  if(m!==_WDm){ _WD={}; _WDm=m; }
+  var c=_WD[k]; if(c!==undefined) return c;
+  var f=shiftWinDay(k), a=ATT[k], r=f;
+  if(a && a.open && /^\d{4}-\d{2}-\d{2}$/.test(a.d||'') && a.d>=dAdd(f,-1) && a.d<=dAdd(f,1)) r=a.d;   // clocked in now → that shift's date
+  _WD[k]=r; return r;
 }
+function myDay(){ return wdayOf(myId()); }
+function wdayReset(){ _WD={}; _WDm=0; }
+function shiftApply(){ var ch=false; Object.keys(ATT).forEach(function(k){ var sh=ATT[k].sh; if((sh==='night'||sh==='morning') && SHIFTOF[k]!==sh){ SHIFTOF[k]=sh; ch=true; } }); if(ch) wdayReset(); return ch; }
+async function attLoad(){
+  if(typeof SB_URL==='undefined' || typeof SB_KEY==='undefined'){ setTimeout(attLoad, 800); return; }
+  try{
+    var r=await fetch(SB_URL+'/rest/v1/rpc/rc_att_now', { method:'POST', headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json' }, body:'{}' });
+    if(!r.ok) return; var L=await r.json(); if(!Array.isArray(L)) return;
+    var A={}; L.forEach(function(x){ var k=String(x.employee_id||'').toLowerCase(); if(k) A[k]={ d:String(x.d||'').slice(0,10), sh:String(x.shift||'').toLowerCase(), open:!!x.open }; });
+    var was=JSON.stringify(ATT); ATT=A; ATT_AT=Date.now(); wdayReset();
+    var ch=shiftApply();
+    if((ch || was!==JSON.stringify(ATT)) && USER){ try{ renderView(); }catch(_r){} }
+    setTimeout(nightFixMarks, 4000);
+  }catch(e){}
+}
+/* Nov 7 · one-time repair, on the night VA's own page: sessions / posts stamped as the NEXT morning's day while their
+   shift was wrongly read as morning (07:00–19:00 the day after they clocked in) belong to the night they clocked in. */
+var _nfx='';
+async function nightFixMarks(){
+  try{
+    if(!USER || isAdmin() || !ROWS || !ROWS.length) return; var me=myId(); if(SHIFTOF[me]!=='night' || !ATT[me]) return;
+    var D=wdayOf(me), X=dAdd(D,1), key=me+'|'+D; if(_nfx===key) return; _nfx=key;
+    var lo=X+' 07:00', hi=X+' 19:00', S=[['s1','s1t'],['s2','s2t'],['sxsu','sxsut'],['sxcm','sxcmt']];
+    for(var i=0;i<ROWS.length;i++){ var r=ROWS[i]; if(worksFor(r)!==me) continue;
+      var m=M(r), patch={}, n=0;
+      S.forEach(function(x){ var v=String(m[x[0]]||''), t=String(m[x[1]]||''); if((v===X+'·AM' || v===X) && t>=lo && t<hi){ patch[x[0]]=D+'·PM'; n++; } });
+      var ps=postsOf(r), moved=0; if(ps.length){ var arr=ps.map(function(p){ if(p && p.d===X && String(p.b||'').toLowerCase()===me && String(p.t||'')>=lo && String(p.t||'')<hi){ moved++; return Object.assign({}, p, { d:D }); } return p; }); if(moved){ patch.posts=arr; n++; } }
+      if(n){ try{ await saveMeta(r, patch); }catch(_s){} }
+    }
+    try{ renderView(); }catch(_r){}
+  }catch(e){}
+}
+setTimeout(attLoad, 0);
+setInterval(function(){ if(!document.hidden) attLoad(); }, 5*60000);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden && Date.now()-ATT_AT>60000) attLoad(); });
+function vaKeyOf(empId){ return wdayOf(empId)+(SHIFTOF[String(empId||'').toLowerCase()]==='night'?'·PM':'·AM'); }
 function markOk(v, empId){
   if(!v) return false;
   var k=vaKeyOf(empId); if(v===k) return true;
-  if(SHIFTOF[String(empId||'').toLowerCase()]!=='night') return v===today();
+  if(SHIFTOF[String(empId||'').toLowerCase()]!=='night'){ var dm=k.slice(0,10); return v===dm || v===dm+'·PM'; }   // legacy plain-date marks
   /* Night VA: their window is keyed by the night it started (D·PM). A stamp written while their shift
      setting hadn't loaded yet reads D·AM or D — same night, so it counts (Oct 5, Rhussel's 0%). */
   var d=k.slice(0,10); return v===d+'·AM' || v===d;
@@ -1454,7 +1503,7 @@ function goneHolders(rows){ var g={}; (rows||[]).forEach(function(r){ var o=owne
 async function loadNames(){
   try{
     var c=JSON.parse(sessionStorage.getItem('jmb_empdir')||'null');
-    if(c && c.N && c.G && (Date.now()-c.t)<30*60*1000){ NAMES=c.N; SHIFTOF=c.S||{}; PHOTOOF=c.P||{}; GONE=c.G||{}; DIR_READY=true; }
+    if(c && c.N && c.G && (Date.now()-c.t)<30*60*1000){ NAMES=c.N; SHIFTOF=c.S||{}; PHOTOOF=c.P||{}; GONE=c.G||{}; DIR_READY=true; shiftApply(); wdayReset(); }
   }catch(e){}
   try{
     var d=await jget(API+'?action=emp_dir&_='+Date.now(), 60000);
@@ -1467,6 +1516,7 @@ async function loadNames(){
     });
     DIR_READY=true;
     try{ sessionStorage.setItem('jmb_empdir', JSON.stringify({N:NAMES,S:SHIFTOF,P:PHOTOOF,G:GONE,t:Date.now()})); }catch(_p){}
+    shiftApply(); wdayReset();   // Nov 7: the portal time-in shift wins over the profile field
     paintTop(); renderView();
   }catch(e){ setTimeout(loadNames, 15000); }
 }
@@ -1757,6 +1807,9 @@ function start(){
   if(isAdmin()){ try{ var _dk='rc_dc_'+today(); if(!localStorage.getItem(_dk)){ localStorage.setItem(_dk,'1');
     // Day close runs from the owner's page in the background (05i) — never inside a VA's request.
     api({ action:'rc_day_close', by:USER.id, catchup:'1' }).then(function(d){ if(d&&d.ok&&d.closed&&d.closed.length){ toast('Closed '+d.closed.length+' day'+(d.closed.length===1?'':'s')+' → scorecard updated.'); if(VIEW==='prod'){ PQ.st=null; PQ.sc=null; renderView(); } } }).catch(function(){ try{ localStorage.removeItem(_dk); }catch(_r){} }); } }catch(_dc){} }
+  /* Nov 7: night shifts work overtime past 7 AM — after 4 PM the server counts it into last night (rc-2026-11-07a) */
+  if(isAdmin()){ try{ var _nk='rc_dcn_'+today(); if(+phtStamp().slice(11,13)>=16 && !localStorage.getItem(_nk)){ localStorage.setItem(_nk,'1');
+    api({ action:'rc_day_close', by:USER.id, catchup:'1' }).catch(function(){ try{ localStorage.removeItem(_nk); }catch(_r){} }); } }catch(_dn){} }
   if(VIEW==='insights') insLoad(true).then(renderView);
 }
 
@@ -2160,7 +2213,7 @@ function maybeSnap(p){
   try{
     if(!p.tot) return; var k=PROJECT+'|'+vaKeyOf(USER.id)+'|'+p.done+'/'+p.tot;
     if(_snapK===k || sessionStorage.getItem('rc_snap')===k) return; _snapK=k; sessionStorage.setItem('rc_snap',k);
-    fetch(API+'?'+qs({action:'po_snap', employee_id:USER.id, project:PROJECT, task:'📋 Board Completion', done:p.done, total:p.tot, date:today()})+'&_='+Date.now()).catch(function(){});
+    fetch(API+'?'+qs({action:'po_snap', employee_id:USER.id, project:PROJECT, task:'📋 Board Completion', done:p.done, total:p.tot, date:myDay()})+'&_='+Date.now()).catch(function(){});
   }catch(e){}
 }
 function progParts(p){ var P=p.parts||{}, L=[];
@@ -3579,11 +3632,11 @@ function linkState(p){
   return { k:'ok', since:p.task_since||'', tracked:+p.tracked_secs||0, trackedProj:+p.tracked_proj_secs||0, task:p.task };
 }
 /* seconds this page's own timers have covered today, as wall-clock (union of intervals) */
-function tlKey(){ return 'rc_tl_'+String(USER&&USER.id||'x').toUpperCase()+'_'+today(); }
+function tlKey(){ return 'rc_tl_'+String(USER&&USER.id||'x').toUpperCase()+'_'+myDay(); }
 function tlAdd(start, end){ try{ var L=JSON.parse(localStorage.getItem(tlKey())||'[]'); L.push([Math.round(start), Math.round(end)]); if(L.length>600) L=L.slice(-600); localStorage.setItem(tlKey(), JSON.stringify(L)); }catch(e){} }
 function timedToday(){
   var iv=[]; try{ iv=JSON.parse(localStorage.getItem(tlKey())||'[]'); }catch(e){ iv=[]; }
-  try{ var o=tmAll(), now=Date.now(); Object.keys(o).forEach(function(k){ var x=o[k]; if(x && x.t && !x.ps && x.d===today() && tmEl(x)<3*3600000) iv.push([tmVStart(x), now]); }); }catch(e){}
+  try{ var o=tmAll(), now=Date.now(); Object.keys(o).forEach(function(k){ var x=o[k]; if(x && x.t && !x.ps && (x.d===myDay() || x.d===today()) && tmEl(x)<3*3600000) iv.push([tmVStart(x), now]); }); }catch(e){}
   iv=iv.filter(function(x){ return x && x[1]>x[0] && x[1]-x[0]>=20000 && x[1]-x[0]<=3*3600000; }).sort(function(a,b){ return a[0]-b[0]; });
   var tot=0, cur=null; iv.forEach(function(x){ if(!cur || x[0]>cur[1]){ if(cur) tot+=cur[1]-cur[0]; cur=[x[0],x[1]]; } else if(x[1]>cur[1]) cur[1]=x[1]; }); if(cur) tot+=cur[1]-cur[0];
   return Math.round(tot/1000);
@@ -3669,7 +3722,7 @@ function linkCardLine(va){
 }
 function tmStart(id,k){ var key=id+'|'+k;
   if(tmIsWork(key)){ try{ if(tmGet('__hc','hc')) hcStop('switch'); }catch(_h){} try{ if(tmGet('__pc','pc')) pcStop('switch'); }catch(_p){} }   // Nov 4b: one timer at a time
-  var o=tmAll(); o[key]={ t:Date.now(), p:Object.keys(o).length, d:today() }; tmPut(o); tmEnsure(); }
+  var o=tmAll(); o[key]={ t:Date.now(), p:Object.keys(o).length, d:myDay() }; tmPut(o); tmEnsure(); }
 function tmStop(id,k){ var o=tmAll(), x=o[id+'|'+k]; if(!x) return null; delete o[id+'|'+k]; tmPut(o);
   return { secs:Math.round(tmEl(x)/1000), start:x.t, parallel:Math.max(x.p||0, Object.keys(o).length) }; }   // Nov 5: paused time never counts
 function tmFmt(ms){ var s=Math.max(0,Math.floor(ms/1000)), h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60; return (h?h+':'+(m<10?'0':''):'')+m+':'+(x<10?'0':'')+x; }
@@ -4198,10 +4251,10 @@ async function finishCreation(id, btn){
 /* The day's numbers gate: before the first session of the business day the VA records the karma
    Reddit shows right now. Feeds the Account Center trend lines. */
 async function karmaGate(r){
-  var m=M(r); if(String(m.mday||'')===today()) return true;
+  var m=M(r), _kd=wdayOf(worksFor(r)); if(String(m.mday||'')===_kd || String(m.mday||'')===today()) return true;   // Nov 7: once per work day — no second ask at 7 AM on a night shift
   var v=await askNumber('Karma check-in', 'Before the first session today: what karma does <b>'+esc(r.handle)+'</b> show right now?', m.karma);
   if(v==null){ toast('Log today\'s karma first — then the session unlocks.'); return false; }
-  if(!(await saveMeta(r,{ mday:today(), karma:v }))){ toast('Could not save the number — try again.'); return false; }
+  if(!(await saveMeta(r,{ mday:_kd, karma:v }))){ toast('Could not save the number — try again.'); return false; }
   return true;
 }
 /* ═══════════ SUBREDDIT TRACKING (Jeth, Oct 13) ═══════════
@@ -4310,7 +4363,7 @@ function askSubs(r, n){
   }).then(function(v){ return Array.isArray(v)&&v.length?v:null; });
 }
 function postsWith(r, subs, n){
-  var arr=postsOf(r).slice(), d=today(), b=myId(), t=phtStamp();
+  var arr=postsOf(r).slice(), d=myDay(), b=myId(), t=phtStamp();   // Nov 7: the VA's work day (night overtime stays on the night)
   subs.forEach(function(s){ arr.push({ d:d, n:n, r:s, b:b, t:t, st:r.status }); });
   return arr.slice(-150);
 }
@@ -4334,7 +4387,7 @@ function postState(p){
 /* indexes of the posts this account must check before its next session: not checked, posted before today, within 3 days */
 function pchkPending(r){
   var ps=postsOf(r); if(!ps.length) return [];
-  var td=today(), lo=dAdd(td,-PCHK_DAYS), out=[];
+  var td=wdayOf(worksFor(r)), lo=dAdd(td,-PCHK_DAYS), out=[];   // Nov 7: posts from the shift you are still on are never "earlier" posts
   ps.forEach(function(p,i){ if(!p || !p.r) return; var d=String(p.d||''); if(d>=td || d<lo || d<PCHK_FROM) return; if(postState(p)==='unk') out.push(i); });
   return out;
 }
@@ -4405,7 +4458,7 @@ function pcPerSecs(){ var v=+((CFG&&CFG.pc_per)||0); return v>0?Math.round(v):PC
 function pcRowsAll(){ var seen={}, out=[]; allRows().concat(ROWS||[]).forEach(function(r){ if(r && r.id && !seen[r.id]){ seen[r.id]=1; out.push(r); } }); return out; }
 function pcMine(){
   if(!USER || isAdmin()) return [];
-  var me=myId(), lo=Date.now()-PC_WIN, td=today(), out=[];
+  var me=myId(), lo=Date.now()-PC_WIN, td=myDay(), out=[];
   pcRowsAll().forEach(function(r){
     postsOf(r).forEach(function(p,i){
       if(!p || !p.r || String(p.b||'').toLowerCase()!==me) return;
@@ -4416,7 +4469,7 @@ function pcMine(){
   return out;
 }
 function pcPending(){ return pcMine().filter(function(x){ return postState(x.p)==='unk'; }); }
-function pcKey(k){ return 'rc_pc'+k+'_'+myId()+'_'+today(); }
+function pcKey(k){ return 'rc_pc'+k+'_'+myId()+'_'+myDay(); }
 function pcNum(k){ try{ return +localStorage.getItem(pcKey(k))||0; }catch(e){ return 0; } }
 function pcSetNum(k,v){ try{ localStorage.setItem(pcKey(k), String(Math.round(v))); }catch(e){} }
 function pcTimer(){ return tmGet('__pc','pc'); }
@@ -4424,7 +4477,7 @@ function pcCap(){ return pcMine().length*pcPerSecs(); }
 function pcUsed(){ return pcNum('used'); }
 function pcSpent(){ var x=pcTimer(); return pcUsed()+(x&&x.t?Math.round((Date.now()-x.t)/1000):0); }
 var _pcOutSaid='';
-function pcOutNote(){ var k=today(); if(_pcOutSaid===k) return; _pcOutSaid=k;
+function pcOutNote(){ var k=myDay(); if(_pcOutSaid===k) return; _pcOutSaid=k;
   tmCapNote('Your post-check time is used up ('+fmtMS(pcCap())+' = '+pcMine().length+' post'+(pcMine().length===1?'':'s')+' × '+Math.round(pcPerSecs()/60*10)/10+' min). Finish the check — the extra time is not counted.'); }
 /* every answer calls this: (re)starts the timer while there is allowance left */
 function pcTouch(){
@@ -4890,11 +4943,12 @@ function rptDate(d){ var p=String(d||'').split('-'), MO=['January','February','M
 function rptPhone(r){ var n=phNum(r.device); return n?('PHONE '+n):(r.device?String(r.device).toUpperCase():''); }
 function rptIsPost(k){ try{ if(isPostingStage(k)) return true; }catch(_e){} return isTrial(k) || k==='sxpost'; }
 function rptBuild(va){
-  va=String(va||'').toLowerCase(); var td=today(), W=[], T={ acc:0, posts:0, rm:0, cr:0, ses:0 };
+  va=String(va||'').toLowerCase(); var td=wdayOf(va), W=[], T={ acc:0, posts:0, rm:0, cr:0, ses:0 };   // Nov 7: the VA's own work day — a night shift keeps its whole night, overtime included
+  var _nt=SHIFTOF[va]==='night', _td1=dAdd(td,1), inDay=function(p){ return p.d===td || (_nt && p.d===_td1 && String(p.t||'')<_td1+' 19:00'); };   // posts stamped after 7 AM before this fix
   ROWS.forEach(function(r){
     if(worksFor(r)!==va || isHeld(r)) return;
     var m=M(r), s1=markOk(m.s1,va), s2=markOk(m.s2,va), dm=markOk(m.dm,va), su=markOk(m.sxsu,va), cm=markOk(m.sxcm,va);   // su (Nov 5b): the account setup · cm (Nov 6a): commenting
-    var ps=postsOf(r).filter(function(p){ return p && p.r && p.d===td && (!p.b || String(p.b).toLowerCase()===va); });
+    var ps=postsOf(r).filter(function(p){ return p && p.r && inDay(p) && (!p.b || String(p.b).toLowerCase()===va); });
     if(!s1 && !s2 && !dm && !su && !cm) return;   // Nov 5 (Jeth): only finished work — a session still running is not in the report
     var rm=0, sp=0, nc=0; ps.forEach(function(p){ var st=postState(p); if(st==='mod') rm++; else if(st==='spam') sp++; else if(st!=='up' && st!=='old') nc++; });
     W.push({ r:r, s1:s1, s2:s2, dm:dm, su:su, cm:cm, posts:ps.length, rm:rm, sp:sp, nc:nc }); T.acc++; T.posts+=ps.length; T.rm+=rm+sp; T.ses+=(s1?1:0)+(s2?1:0)+(su?1:0)+(cm?1:0);
@@ -5275,14 +5329,14 @@ async function doSession(id, n, btn){
   /* Oct 13: a posting session asks which subreddit each post went to (the subreddit report) */
   var subs=null;
   if(task==='Reddit Posting'){ subs=await askSubs(r, n);
-    if(!subs){ if(t){ var o0=tmAll(); o0[id+'|s'+n]={ t:t.start, p:t.parallel, d:today() }; tmPut(o0); } renderView(); toast('Session not saved — add the subreddits to finish it.'); return; } }
+    if(!subs){ if(t){ var o0=tmAll(); o0[id+'|s'+n]={ t:t.start, p:t.parallel, d:myDay() }; tmPut(o0); } renderView(); toast('Session not saved — add the subreddits to finish it.'); return; } }
   if(btn){ btn.disabled=true; btn.innerHTML='<span class="bx"></span>Saving…'; }
   var patch=(n===4)?{ sxcm:vaKeyOf(USER.id), sxcmt:phtStamp(), last:vaKeyOf(USER.id) }:(n===3)?{ sxsu:vaKeyOf(USER.id), sxsut:phtStamp(), last:vaKeyOf(USER.id) }:((n===2)?{ s2:vaKeyOf(USER.id), s2t:phtStamp(), last:vaKeyOf(USER.id) }:{ s1:vaKeyOf(USER.id), s1t:phtStamp() });   // n 3 (Nov 5b): the account setup
   var sxWarm=(r.status==='sxwarm' && n===1);   // Oct 27: the Suicidal Operation's one warm-up session — remembered for good
   if(sxWarm){ patch.sxw=vaKeyOf(USER.id); patch.last=vaKeyOf(USER.id); }
   if(subs) patch.posts=postsWith(r, subs, n);
   var ok=await saveMeta(r, patch);
-  if(!ok){ if(t){ var o=tmAll(); o[id+'|s'+n]={ t:t.start, p:t.parallel, d:today() }; tmPut(o); } toast('Could not save the session — try again.'); renderView(); return; }
+  if(!ok){ if(t){ var o=tmAll(); o[id+'|s'+n]={ t:t.start, p:t.parallel, d:myDay() }; tmPut(o); } toast('Could not save the session — try again.'); renderView(); return; }
   tmLog(r, 'session', t);
   if(task) await bump(task,1);
   if(n===4) toast('Commenting done for '+r.handle+' ✓ — 10 comments. Nothing more is due on it until the next commenting phase.');
@@ -5313,7 +5367,7 @@ async function setKarma(id){
   var r=rowById(id); if(!r) return;
   var v=await askNumber('Update karma', 'Current karma for <b>'+esc(r.handle)+'</b>:', karmaOf(r));
   if(v==null) return;
-  if(await saveMeta(r,{ karma:v, mday:today() })){ toast('Karma '+v+(v>=50&&r.status==='comment'?' — 50 reached, NSFW unlocked!':'')); renderView(); }
+  if(await saveMeta(r,{ karma:v, mday:wdayOf(worksFor(r)) })){ toast('Karma '+v+(v>=50&&r.status==='comment'?' — 50 reached, NSFW unlocked!':'')); renderView(); }
 }
 async function moveTo(r, next, extra, msg){
   /* Optimistic: the row moves to its new stage at once (and glides there — see flipRows); the save
