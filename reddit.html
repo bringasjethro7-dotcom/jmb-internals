@@ -1045,14 +1045,24 @@ var TRPH=[
 ];
 var TR_STAGES=['extended','long'];
 function isTrial(k){ return TR_STAGES.indexOf(k)>=0; }
-function sesPerDay(r){ return (isTrial(r&&r.status) || (r&&r.status)==='sxsetup' || (r&&r.status)==='sxcomment')?1:2; }   // trial phases + the Suicidal account setup: one session   // trial phases: one session a day
+function sesPerDay(r){ return (isTrial(r&&r.status) || (r&&r.status)==='sxsetup' || (r&&r.status)==='sxcomment' || (r&&r.status)==='story')?1:2; }   // trial phases + the Suicidal account setup: one session   // trial phases: one session a day
 function pIx(k){ return isTrial(k)?phaseIx('day1'):phaseIx(k); }   // trial phases count as posting stages
 var SX_STAGES=['sxwarm','sxsetup','sxcomment','sxpost'];   // Nov 6a: + commenting
 function isSXSt(k){ return SX_STAGES.indexOf(k)>=0; }   // Nov 5b
 var SX_OK=['new','sxwarm','sxsetup','sxcomment','sxpost','recovery','tempban','onhold','archived','banned'];   // where a Suicidal Operation account can be
 var SX_C='#675F51';
 function isSX(r){ return !!r && ((r.meta&&r.meta.sop==='sx') || SX_STAGES.indexOf(r.status)>=0); }
-function sopOf(r){ return isSX(r)?'sx':'std'; }
+/* Nov 9 (Jeth): STORY OPS — the 3rd SOP (Nicolle · Arya), separate from the original ladder and the Suicidal Operation.
+   Create the account → 24 hours after creation it moves to Story Ops → ONE session a day: post the stories and send the DMs
+   the way the client asks, then Done. No numbers to hit, the session is the unit. meta.sop="st" for life. */
+var ST_C='#4E5D78', ST_STAGES=['story'], ST_VAS=/^(jmb010)$/i;
+var STPH=[{k:'story', n:'Story Ops · Stories + DMs', c:ST_C, st:true, one:true, plan:'Story Ops (3rd SOP): the account can be used 24 hours after it was created · then ONE session a day — post the stories and send the DMs the way the client asks, then tap Done.', task:'Reddit Posting'}];
+function isST(r){ return !!r && ((M(r)||{}).sop==='st' || ST_STAGES.indexOf(r.status)>=0); }
+function stReadyAt(r){ var c=null; try{ c=createdAt(r); }catch(e){} return c ? new Date(c.getTime()+24*3600000) : null; }
+function stReady(r){ var a=stReadyAt(r); return !a || Date.now()>=a.getTime(); }
+function stReadyLbl(r){ var a=stReadyAt(r); return a ? fmtDT(a) : ''; }
+function canST(){ try{ return isAdmin() || ST_VAS.test(String(myId()||'')); }catch(e){ return false; } }
+function sopOf(r){ return isSX(r)?'sx':(isST(r)?'st':'std'); }
 function sxDay(r){ var cd=cdateOf(r); if(!/^\d{4}-\d{2}-\d{2}$/.test(cd)) return 0; return Math.round((Date.parse(today()+'T00:00:00Z')-Date.parse(cd+'T00:00:00Z'))/86400000)+1; }   // creation day = day 1
 function sxAssign(r){ return String(((r&&r.meta)||{}).sxa||'').trim(); }
 function sxAssignList(){ return (Array.isArray(CFG.sx_assign)&&CFG.sx_assign.length)?CFG.sx_assign.slice():['Location posting']; }
@@ -1141,7 +1151,7 @@ function sxToday(rows){
   return o;
 }
 var ERR_TXT={ SX_DAY3:'Posting opens on day 3 of the account (Suicidal Operation).', SX_LADDER:'A Suicidal Operation account can\'t go onto the ladder — ask the admin.', SX_OWNER_ONLY:'Only the admin can move an account onto the Suicidal Operation.', OWNER_ONLY:'Only the owner can do that.' };
-var ORDER=['new','creation','creationstandby','warming','comment','nsfw','day1','early','earlydm','medium','strong','superstrong','extended','long','sxwarm','sxsetup','sxcomment','sxpost','recovery','tempban','onhold','archived','banned'];
+var ORDER=['new','creation','creationstandby','warming','comment','nsfw','day1','early','earlydm','medium','strong','superstrong','extended','long','sxwarm','sxsetup','sxcomment','sxpost','story','recovery','tempban','onhold','archived','banned'];
 var GROUPS=[
  {k:'new',  n:'New',       c:'#382E22', st:['new']},
  {k:'cre',  n:'Creation',  c:'#382E22', st:['creation','creationstandby']},
@@ -1150,6 +1160,7 @@ var GROUPS=[
  {k:'str',  n:'Strong',    c:'#37322D', st:['strong','superstrong']},
  {k:'trial',n:'Trial posting', c:'#595959', st:['extended','long']},
  {k:'sx',   n:'Suicidal Op', c:'#675F51', st:['sxwarm','sxsetup','sxcomment','sxpost']},
+ {k:'st',   n:'Story Ops',   c:'#4E5D78', st:['story']},
  {k:'rec',  n:'Recovery',  c:'#595959', st:['recovery']},
  {k:'tb',   n:'Temp ban',  c:'#382E22', st:['tempban']},
  {k:'hold', n:'On hold',   c:'#595959', st:['onhold']},
@@ -1159,14 +1170,14 @@ var GROUPS=[
 var END_REASONS=['Permanently suspended','Shadowbanned','Locked — could not recover','Other'];
 /* Stage typed into the sheet as its display name ("Medium + DMs", "Spam Recovery")? Map it to the key
    so the card gets its colour, plan and session buttons. The backend does the same from rc-2026-10-04e. */
-var ST_ALIAS={ extendedposting:'extended', extendedpost:'extended', extendedphase:'extended', extendedpostingphase:'extended', longposting:'long', longpost:'long', longphase:'long', longpostingphase:'long', sxwarmup:'sxwarm', sxwarming:'sxwarm', suicidalwarmup:'sxwarm', suicidalwarm:'sxwarm', suicidewarmup:'sxwarm', suicidalwarming:'sxwarm', sxcommenting:'sxcomment', sxcomments:'sxcomment', suicidalcommenting:'sxcomment', suicidalcomment:'sxcomment', suicidalcomments:'sxcomment', suicidecommenting:'sxcomment', sxaccountsetup:'sxsetup', suicidalsetup:'sxsetup', suicidalaccountsetup:'sxsetup', suicidesetup:'sxsetup', sxposting:'sxpost', suicidalposting:'sxpost', suicidalpost:'sxpost', suicideposting:'sxpost', newlycreated:'new', newcreated:'new', creationstage:'creation', standby:'creationstandby', warmup:'warming', warmingup:'warming',
+var ST_ALIAS={ storyops:'story', storyop:'story', storyposting:'story', stories:'story', storydms:'story', extendedposting:'extended', extendedpost:'extended', extendedphase:'extended', extendedpostingphase:'extended', longposting:'long', longpost:'long', longphase:'long', longpostingphase:'long', sxwarmup:'sxwarm', sxwarming:'sxwarm', suicidalwarmup:'sxwarm', suicidalwarm:'sxwarm', suicidewarmup:'sxwarm', suicidalwarming:'sxwarm', sxcommenting:'sxcomment', sxcomments:'sxcomment', suicidalcommenting:'sxcomment', suicidalcomment:'sxcomment', suicidalcomments:'sxcomment', suicidecommenting:'sxcomment', sxaccountsetup:'sxsetup', suicidalsetup:'sxsetup', suicidalaccountsetup:'sxsetup', suicidesetup:'sxsetup', sxposting:'sxpost', suicidalposting:'sxpost', suicidalpost:'sxpost', suicideposting:'sxpost', newlycreated:'new', newcreated:'new', creationstage:'creation', standby:'creationstandby', warmup:'warming', warmingup:'warming',
   commentfarm:'comment', commentfarming:'comment', comments:'comment', nsfwcomment:'nsfw', nsfwcomments:'nsfw', day1posting:'day1', dayone:'day1', dayoneposting:'day1',
   earlyposting:'early', earlydms:'earlydm', earlyplusdms:'earlydm', earlywithdms:'earlydm', mediumdm:'medium', mediumdms:'medium', mediumplusdms:'medium',
   spamrecovery:'recovery', spamfilter:'recovery', spamfilterrecovery:'recovery', spam:'recovery', tempbanned:'tempban', temporaryban:'tempban', temporarybanned:'tempban',
   temporarilybanned:'tempban', hold:'onhold', onhold:'onhold', paused:'onhold', archive:'archived', archived:'archived', retired:'archived', ban:'banned', permanentlybanned:'banned', permaban:'banned', suspended:'banned', dead:'banned' };
 function statusKey(v){ var raw=String(v==null?'':v).trim(), k=raw.toLowerCase().replace(/[^a-z0-9]/g,''); if(!k) return ''; if(ORDER.indexOf(k)>=0) return k; return ST_ALIAS[k]||raw.toLowerCase(); }
 function normRows(rows){ (rows||[]).forEach(function(r){ r.status=statusKey(r.status); }); return rows; }
-function phase(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return PH[i]; for(var j=0;j<SXPH.length;j++) if(SXPH[j].k===k) return SXPH[j]; for(var t=0;t<TRPH.length;t++) if(TRPH[t].k===k) return TRPH[t]; return null; }
+function phase(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return PH[i]; for(var j=0;j<SXPH.length;j++) if(SXPH[j].k===k) return SXPH[j]; for(var t=0;t<TRPH.length;t++) if(TRPH[t].k===k) return TRPH[t]; for(var u=0;u<STPH.length;u++) if(STPH[u].k===k) return STPH[u]; return null; }
 function phaseIx(k){ for(var i=0;i<PH.length;i++) if(PH[i].k===k) return i; return -1; }
 var _SMC={};   /* Nov 4 (speed): cleared at the start of every draw */
 function stageMeta(k){ var c=_SMC[k]; if(c) return {k:c.k,n:c.n,c:c.c}; c=stageMeta0(k); _SMC[k]=c; return {k:c.k,n:c.n,c:c.c}; }
@@ -1623,11 +1634,11 @@ var _grad={};
 function autoGraduate(){
   ROWS.forEach(function(r){
     if(r.status!=='new' || _grad[r.id] || !M(r).cdone) return;
-    if(daysIn(r)<1) return;
+    if(isST(r) ? !stReady(r) : daysIn(r)<1) return;   // Nov 9: Story Ops opens 24 h after creation
     var m=M(r), wk=worksFor(r), ow=owner(r);
     if(markOkAny(m.cstamp,wk,ow) || markOkAny(m.added,wk,ow)) return;   // its shift is still running (night VAs cross midnight) — graduate after it ends
     _grad[r.id]=1;
-    upd(r.id, isSX(r)?{ status:'sxwarm', by:'auto', meta_patch:JSON.stringify({ pstart:today() }) }:{ status:'creation', by:'auto' }).catch(function(){});   // Suicidal Operation: day 2 = warm-up (Oct 25)
+    upd(r.id, isST(r)?{ status:'story', by:'auto', meta_patch:JSON.stringify({ pstart:today() }) }:(isSX(r)?{ status:'sxwarm', by:'auto', meta_patch:JSON.stringify({ pstart:today() }) }:{ status:'creation', by:'auto' })).catch(function(){});   // Nov 9: Story Ops   // Suicidal Operation: day 2 = warm-up (Oct 25)
   });
 }
 /* SELF-REFRESH (Oct 7): the page watches its own ETag on Netlify. When a new reddit.html is published, every open
@@ -2194,6 +2205,7 @@ function progOf(rows, worker){
     if(!worker) cr=creationOf(r, crBy||wk, crBy||ow);
     else if(!crBy || crBy===wk) cr=creationOf(r, wk, ow);
     if(cr){ tot+=1; parts.cr+=1; if(cr.done) done+=1; }
+    if(r.status==='story'){ var sdn=markOkAny(m.s1,wk,ow)?1:0; if(!stReady(r) && !sdn) return; tot+=1; parts.st=(parts.st||0)+1; done+=sdn; return; }   // Nov 9: Story Ops — one session a day once 24 h old
     var sxu=isSXSt(r.status)?sxUnits(r, wk, ow):null;   // Oct 27: the Suicidal Operation's own SOP
     if(sxu){ tot+=sxu.tot; done+=sxu.done; if(sxu.k==='standby') parts.sxsb=(parts.sxsb||0)+1; else parts[r.status==='sxwarm'?'sxw':(r.status==='sxsetup'?'sxs':(r.status==='sxcomment'?'sxc':'sxp'))]+=sxu.tot; return; }
     if(isWorkable(r)){ var spd=sesPerDay(r), e=(markOkAny(m.s1,wk,ow)?1:0)+(markOkAny(m.s2,wk,ow)?1:0); tot+=spd; parts.ladder+=spd; done+=Math.min(spd,e); return; }   // Nov 3: trial phases are one session a day
@@ -2217,7 +2229,7 @@ function maybeSnap(p){
   }catch(e){}
 }
 function progParts(p){ var P=p.parts||{}, L=[];
-  if(P.ladder) L.push('Ladder '+P.ladder); if(P.sxw) L.push('Suicidal warm-up '+P.sxw); if(P.sxs) L.push('Suicidal setup '+P.sxs); if(P.sxc) L.push('Suicidal commenting '+P.sxc); if(P.sxp) L.push('Suicidal posting '+P.sxp); if(P.cr) L.push('New accounts '+P.cr);
+  if(P.ladder) L.push('Ladder '+P.ladder); if(P.sxw) L.push('Suicidal warm-up '+P.sxw); if(P.sxs) L.push('Suicidal setup '+P.sxs); if(P.sxc) L.push('Suicidal commenting '+P.sxc); if(P.sxp) L.push('Suicidal posting '+P.sxp); if(P.st) L.push('Story Ops '+P.st); if(P.cr) L.push('New accounts '+P.cr);
   if(P.sxsb) L.push(P.sxsb+' on standby (not counted)');
   return L.length?L.join(' · '):'2 per account'; }
 function needsAttention(r){
@@ -2499,7 +2511,7 @@ function rowHtml(r){
     if(admin) act='<button class="ses ok2" onclick="resumeAcct(\''+id+'\')">'+IC.up+' Resume → '+esc(stageMeta(m.prev&&!/^(onhold|archived)$/.test(m.prev)?m.prev:'creation').n)+'</button>';
   } else if(st==='new'){
     var ok3=!!(m.setup||{}).cred;
-    if(m.cdone) prog='<span class="note g">'+IC.check+' Counted · to '+(isSX(r)?'Suicidal warm-up':'Creation')+' tomorrow</span>';
+    if(m.cdone) prog=isST(r)?'<span class="note g">'+IC.check+' Counted · Story Ops opens '+esc(stReadyLbl(r))+' (24 h after creation)</span>':'<span class="note g">'+IC.check+' Counted · to '+(isSX(r)?'Suicidal warm-up':'Creation')+' tomorrow</span>';
     else { prog='<span class="note w">Save the login in the credential store, then count it</span>';
       act=setupBtn(r,'cred','Login saved')+'<button class="ses up" '+(ok3?'onclick="finishCreation(\''+id+'\',this)"':'disabled title="Tick Login saved first"')+'>'+IC.check+' Mark created (+1)</button>'; }
   } else if(st==='creation'||st==='creationstandby'){
@@ -2515,6 +2527,11 @@ function rowHtml(r){
   } else if(st==='recovery'){
     prog='<span class="note i" title="10 min browsing · reply to 2–3 comments · no upvotes. Nothing left to reply to? Comment in the location subreddits. No posting until clear.">Recovery — browse and reply only (no upvotes)</span>';
     act=held?'':sesBtn(r,1)+sesBtn(r,2)+'<button class="ses ok2" onclick="liftBack(\''+id+'\')">'+IC.check+' Cleared</button>';
+  } else if(p && p.st){   // Nov 9: Story Ops (3rd SOP) — one session a day of stories + DMs, 24 h after creation
+    var srdy=stReady(r);
+    prog=srdy?'<span class="muted" title="'+esc(p.plan)+'" style="font-size:11.5px;font-weight:600;color:'+ST_C+'">Story Ops · one session a day · stories + DMs · <u style="text-decoration-style:dotted;cursor:help">plan</u></span>'
+             :'<span class="note i" title="'+esc(p.plan)+'">Story Ops opens '+esc(stReadyLbl(r))+' (24 h after creation)</span>';
+    if(!held) act=srdy?sesBtn(r,1,'Stories + DMs'):'<button class="ses" disabled title="Usable 24 hours after creation">Stories + DMs · '+esc(stReadyLbl(r))+'</button>';
   } else if(p && p.sx){   // Suicidal Operation (Oct 25)
     prog=sxProg(r);   // Oct 27: one warm-up, then posting once warmed + assigned
     if(!held) act=sxActs(r);
@@ -2752,6 +2769,11 @@ function cardHtml(r){
     body='<details class="plan"><summary>'+IC.doc+' Recovery plan</summary><div>10 min browsing · reply to 2–3 comments · <b>no upvotes</b>. If nothing is left to reply to, comment in the location subreddits. No posting until clear.</div></details>'+
       (held?'':'<div class="acts">'+sesBtn(r,1)+sesBtn(r,2)+'<button class="ses ok2" onclick="liftBack(\''+jsq(r.id)+'\')">'+IC.check+' Cleared → '+esc(stageMeta(m.prev||(isSX(r)?'sxwarm':'warming')).n)+'</button></div>')+
       (!held && pchkPending(r).length?postsStrip(r):'');
+  } else if(p && p.st){   // Nov 9: Story Ops (3rd SOP)
+    var srdy2=stReady(r);
+    body=(srdy2?'<div class="note" style="border-color:'+ST_C+'55">Story Ops · one session a day: post the stories and send the DMs the way the client asks, then tap Done.</div>'
+               :'<div class="note i">Story Ops opens '+esc(stReadyLbl(r))+' — 24 hours after the account was created.</div>')+
+      (held?'':'<div class="acts">'+(srdy2?sesBtn(r,1,'Stories + DMs'):'<button class="ses" disabled title="Usable 24 hours after creation">Stories + DMs · '+esc(stReadyLbl(r))+'</button>')+'</div>');
   } else if(p && p.sx){   // Suicidal Operation (Oct 25)
     var asg2=sxAssign(r), u2=sxUnits(r, worksFor(r), owner(r))||{};
     var sb=sxStandby(r);
@@ -4932,9 +4954,9 @@ var RPT_ST={ warming:['🌱','Warming Phase'], comment:['💬','Comment Farming'
   day1:['🚀🟢','Day 1 Posting Phase'], early:['🚀🟡','Early Posting Phase'], earlydm:['🚀🟠','Early Posting + DMs'], medium:['🚀🔵','Medium Posting + DMs'],
   strong:['🚀🟤','Strong Posting Phase'], superstrong:['🚀⭐','Super Strong Posting Phase'],
   extended:['🚀🟦','Extended Posting Phase (one session)'], long:['🚀🟣','Long Posting Phase (one session)'],
-  sxwarm:['⚡','Suicidal Op · Warm-up'], sxsetup:['⚡🛠️','Suicidal Op · Account Setup'], sxcomment:['⚡💬','Suicidal Op · Commenting'], sxpost:['⚡🚀','Suicidal Op · Posting'],
+  sxwarm:['⚡','Suicidal Op · Warm-up'], sxsetup:['⚡🛠️','Suicidal Op · Account Setup'], sxcomment:['⚡💬','Suicidal Op · Commenting'], sxpost:['⚡🚀','Suicidal Op · Posting'], story:['📖','Story Ops · Stories + DMs'],
   recovery:['🔴','Spam Filter Recovery Phase'], tempban:['⏸️','Temp Banned'], banned:['⛔','Banned'], onhold:['⏸️','On Hold'] };
-var RPT_ORD=['extended','long','superstrong','strong','medium','earlydm','early','day1','sxpost','sxcomment','sxsetup','sxwarm','nsfw','comment','warming','recovery','tempban','banned','onhold'];
+var RPT_ORD=['extended','long','superstrong','strong','medium','earlydm','early','day1','story','sxpost','sxcomment','sxsetup','sxwarm','nsfw','comment','warming','recovery','tempban','banned','onhold'];
 var RPT_DM=['earlydm','medium','strong','superstrong'];
 function rptHeart(m){ var P=mdlParts(m); if(P.length>1) return P.map(rptHeart).join(''); var k=String(m||'').trim().toLowerCase(); if(!k) return ''; if(RPT_HEART[k]) return RPT_HEART[k];
   var h=0; for(var i=0;i<k.length;i++) h=(h*31+k.charCodeAt(i))>>>0; return RPT_HEARTS[h%RPT_HEARTS.length]; }
@@ -5634,7 +5656,7 @@ function newAccount(){
   openModal('<div class="md-h"><h3>Log new account</h3><p>Do this the moment the account exists on the phone. Creation date and time are stamped automatically.</p></div>'+
     '<div class="md-b">'+
       '<div class="seg" style="margin-bottom:14px"><button id="na-s0" class="on" onclick="naSeed(false)">Just created</button><button id="na-s1" onclick="naSeed(true)">Already existing account</button></div>'+
-      '<div class="fld"><label>SOP</label><div class="seg" id="na-sop"><button type="button" class="on" data-s="std" onclick="naSop(this)">Original SOP (ladder)</button><button type="button" data-s="sx" onclick="naSop(this)" style="color:'+SX_C+'">Suicidal Operation</button></div><div class="hint" id="na-sop-h">'+esc(naSopHint('std'))+'</div></div>'+
+      '<div class="fld"><label>SOP</label><div class="seg" id="na-sop"><button type="button" class="on" data-s="std" onclick="naSop(this)">Original SOP (ladder)</button><button type="button" data-s="sx" onclick="naSop(this)" style="color:'+SX_C+'">Suicidal Operation</button>'+(canST()?'<button type="button" data-s="st" onclick="naSop(this)" style="color:'+ST_C+'">Story Ops</button>':'')+'</div><div class="hint" id="na-sop-h">'+esc(naSopHint('std'))+'</div></div>'+
       '<div class="fld"><label>Reddit username</label><input class="inp" id="na-u" placeholder="u/username" autocomplete="off"></div>'+
       '<div class="fld"><label>Method — how this account is run</label><div class="seg" id="na-meth">'+methodsList().map(function(m){ return '<button type="button" data-m="'+esc(m)+'" onclick="naMeth(this)" style="color:'+methodColor(m)+'">'+esc(m)+'</button>'; }).join('')+'</div></div>'+
       '<div class="f2"><div class="fld"><label>Model</label>'+
@@ -5653,8 +5675,8 @@ function newAccount(){
     '<div class="md-f"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn pri" id="na-go" onclick="naSave()">'+IC.plus+' Save account</button></div>');
   naModel();
 }
-function naSopHint(k){ return k==='sx'?'Day 1 created · day 2 (or 3) warm-up · account setup · commenting · posting from day 3, the way the client assigns. Kept out of the ladder\'s numbers.':'The usual ladder: creation standby → warming → comment farm → NSFW → posting.'; }
-function naStageOpts(k){ var L=k==='sx'?['sxwarm','sxsetup','sxcomment','sxpost','recovery','tempban']:ORDER.filter(function(x){ return x!=='new'&&x!=='creationstandby'&&x!=='banned'&&SX_STAGES.indexOf(x)<0; }); return L.map(function(x){ return '<option value="'+x+'">'+esc(stageMeta(x).n)+'</option>'; }).join(''); }
+function naSopHint(k){ if(k==='st') return 'Story Ops (3rd SOP): create the account — 24 hours after creation it moves to Story Ops: one session a day of stories + DMs. Kept out of the ladder\'s and the Suicidal Op\'s numbers.'; return k==='sx'?'Day 1 created · day 2 (or 3) warm-up · account setup · commenting · posting from day 3, the way the client assigns. Kept out of the ladder\'s numbers.':'The usual ladder: creation standby → warming → comment farm → NSFW → posting.'; }
+function naStageOpts(k){ var L=k==='st'?['story','recovery','tempban']:k==='sx'?['sxwarm','sxsetup','sxcomment','sxpost','recovery','tempban']:ORDER.filter(function(x){ return x!=='new'&&x!=='creationstandby'&&x!=='banned'&&SX_STAGES.indexOf(x)<0; }); return L.map(function(x){ return '<option value="'+x+'">'+esc(stageMeta(x).n)+'</option>'; }).join(''); }
 function naSop(b){ NA.sop=b.getAttribute('data-s'); document.querySelectorAll('#na-sop button').forEach(function(x){ x.classList.toggle('on', x===b); }); var h=$('na-sop-h'); if(h) h.textContent=naSopHint(NA.sop); var s=$('na-st'); if(s) s.innerHTML=naStageOpts(NA.sop); }
 function naMeth(b){ NA.method=b.getAttribute('data-m'); document.querySelectorAll('#na-meth button').forEach(function(x){ x.classList.toggle('on', x===b); }); }
 function naSeed(on){ NA.seed=on; $('na-s0').classList.toggle('on',!on); $('na-s1').classList.toggle('on',on); $('na-seed').style.display=on?'block':'none'; $('na-chk').style.display=on?'none':'block'; }
@@ -5669,12 +5691,13 @@ async function naSave(){
   if(!dev && !NA.seed && phoneList(true, PROJECT).length){ toast('Pick the iPhone it was created on.'); return; }
   if(dev){ var dv=phDevCheck(model, dev, PROJECT); if(dv===null) return; if(dv!==dev){ dev=dv; try{ $('na-d').value=dv; }catch(_d){} } }   // Oct 29e: one model per device
   var st='new', cd=today(), ctime=phtStamp().slice(11,16), setup={};
-  if(NA.seed){ st=$('na-st').value||(NA.sop==='sx'?'sxwarm':'creation'); cd=$('na-cd').value||today(); ctime=''; }
+  if(NA.seed){ st=$('na-st').value||(NA.sop==='sx'?'sxwarm':(NA.sop==='st'?'story':'creation')); cd=$('na-cd').value||today(); ctime=''; }
   else setup={ cred:$('na-c1').checked };
   var full=!NA.seed && setup.cred;
   var meta={ cdate:cd, pstart:(st==='new'||st==='creation')?cd:today(), added:vaKeyOf(USER.id) };
   if(ctime) meta.ctime=ctime;
   if(NA.sop==='sx') meta.sop='sx';   // Suicidal Operation (Oct 25) — for life
+  if(NA.sop==='st') meta.sop='st';   // Story Ops (Nov 9) — for life
   if(!NA.seed){ meta.setup=setup; if(full){ meta.cdone=1; meta.cstamp=vaKeyOf(USER.id); meta.cdoneAt=phtStamp(); } }
   var cgo=(!NA.seed && tmOn() && crGet())?tmVStart(crGet()):null; if(cgo) meta.cgo=cgo;   // creation timer → finished when it is counted
   var b=$('na-go'); b.disabled=true; b.textContent='Saving…';
@@ -5686,7 +5709,7 @@ async function naSave(){
       if(cgo){ crTake(); if(full) tmLog({ id:d.id||'', handle:u, project:PROJECT, method:NA.method, device:dev, status:'new' },'creation',{ secs:Math.round((Date.now()-cgo)/1000), start:cgo, parallel:0 }); }
       if(full) await bump('Reddit Account Creation',1);
       closeModal();
-      toast((NA.sop==='sx'?'Suicidal Operation · ':'')+(full?'Saved · +1 Reddit Account Creation counted':(NA.seed?'Saved → '+stageMeta(st).n:'Saved to Newly created — tick Login saved to count it')));
+      toast((NA.sop==='sx'?'Suicidal Operation · ':(NA.sop==='st'?'Story Ops · ':''))+(full?'Saved · +1 Reddit Account Creation counted':(NA.seed?'Saved → '+stageMeta(st).n:'Saved to Newly created — tick Login saved to count it')));
       if(model && !modelsFor(PROJECT).some(function(x){ return x.toLowerCase()===model.toLowerCase(); })){ (CFG.models[PROJECT]=CFG.models[PROJECT]||[]).push(model); }
       load();
     } else {
@@ -5743,7 +5766,7 @@ function vAccounts(){
   var rows=dbRows();
   var col=COLS.filter(function(c){ return c.k===DB.sort; })[0]||COLS[8];
   rows.sort(function(a,b){ var x=col.v(a), y=col.v(b); return (x<y?-1:x>y?1:0)*DB.dir || String(a.handle).localeCompare(String(b.handle)); });
-  var anySX=src.some(isSX);
+  var anySX=src.some(isSX) || src.some(isST);
   var cols=COLS.filter(function(c){ return (!c.admin || admin) && (!c.all || (admin && DB.all)) && (!c.hold || DB.life==='hold' || DB.life==='arch') && (!c.sx || anySX); });
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Accounts</h2><p>'+(admin?'Every account, every stage, from creation to ban — click a row for its full history.':'Your accounts — click a row for its full history.')+'</p></div>'+
     (admin?'<button class="btn sec" onclick="exportCsv()">'+IC.dl+' Export CSV</button>':'')+
@@ -5753,7 +5776,7 @@ function vAccounts(){
     '<div class="seg" style="width:auto">'+[['alive','Alive'],['hold','On hold'],['arch','Archived'],['dead','Banned'],['all','All']].map(function(x){ return '<button class="'+(DB.life===x[0]?'on':'')+'" onclick="DB.life=\''+x[0]+'\';'+((x[0]==='hold'||x[0]==='arch')?'if(!DB.groupBy)DB.groupBy=\'client\';':'if(DB.groupBy===\'client\')DB.groupBy=\'\';')+'renderView()">'+x[1]+(x[0]==='hold'||x[0]==='arch'?' <small>'+src.filter(x[0]==='hold'?function(r){ return r.status==='onhold'; }:isArchived).length+'</small>':'')+'</button>'; }).join('')+'</div>'+
     '<select class="sel" onchange="DB.grp=this.value;renderView()"><option value="">All stages</option>'+GROUPS.map(function(g){ return '<option value="'+g.k+'"'+(DB.grp===g.k?' selected':'')+'>'+g.n+'</option>'; }).join('')+'</select>'+
     '<select class="sel" onchange="DB.meth=this.value;renderView()"><option value="all">All methods</option>'+methodsList().map(function(m){ return '<option'+(DB.meth===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'<option value=""'+(DB.meth===''?' selected':'')+'>Not tagged</option></select>'+
-    (anySX||DB.sop!=='all'?'<select class="sel" onchange="DB.sop=this.value;renderView()" title="Which SOP"><option value="all">Both SOPs</option><option value="std"'+(DB.sop==='std'?' selected':'')+'>Original SOP</option><option value="sx"'+(DB.sop==='sx'?' selected':'')+'>Suicidal Operation</option></select>':'')+
+    (anySX||DB.sop!=='all'?'<select class="sel" onchange="DB.sop=this.value;renderView()" title="Which SOP"><option value="all">Both SOPs</option><option value="std"'+(DB.sop==='std'?' selected':'')+'>Original SOP</option><option value="sx"'+(DB.sop==='sx'?' selected':'')+'>Suicidal Operation</option><option value="st"'+(DB.sop==='st'?' selected':'')+'>Story Ops</option></select>':'')+
     '<select class="sel" onchange="DB.model=this.value;renderView()"><option value="">All models</option>'+models.map(function(m){ return '<option'+(DB.model===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select>'+
     '<select class="sel" onchange="DB.phone=this.value;renderView()"><option value="">All phones</option>'+phones.map(function(m){ return '<option'+(DB.phone===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select>'+
     (admin?'<select class="sel" onchange="DB.va=this.value;renderView()"><option value="all">All VAs</option>'+vaOptions(DB.va,false)+'</select>':'')+
