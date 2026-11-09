@@ -2331,7 +2331,7 @@ function vToday(){
       hc_assigned:_cm.length, hc_done:_cm.filter(function(r){ return !!ccState(r); }).length };
       // portal time vs tool time, in 5-minute steps so the snapshot is not resent on every repaint (Oct 6)
       if(_ls.k!=='unknown' && LINK.me && LINK.me.tracked_secs!==undefined){ _snap.tracked_secs=Math.floor(((+LINK.me.tracked_proj_secs)||(+LINK.me.tracked_secs)||0)/300)*300; _snap.timed_secs=Math.floor(timedToday()/300)*300; }
-      daySnap(_snap); }catch(_ds){} }
+      daySnap(_snap); }catch(_ds){} try{ eaSoon(); }catch(_ea){} }
   var createdToday=scopeRows.filter(function(r){ var m=M(r); return m.cdone && (markOkAny(m.cstamp,worksFor(r),owner(r))); }).length;
   var active=scopeRows.filter(function(r){ return !isDead(r); }).length;
   var att=scopeRows.filter(needsAttention).length;
@@ -4064,6 +4064,45 @@ function daySnap(f){
   try{ fetch(API+'?'+qs(o)+'&_='+Date.now()).catch(function(){}); }catch(e){}
 }
 
+/* ══════════ END-OF-DAY CHECKLIST (Jeth, Nov 9 — "No approved EOD, no pay") ══════════
+   The portal's End of Day reads each VA's day from here before it lets the EOD through: karma not recorded today on
+   accounts that have work today, health checks left, sessions left, posts without a verdict. Reddit Central saves it
+   to Supabase rc_eod_audit (one row per VA per work day) whenever it changes and every 4 minutes while it is open,
+   so the portal always sees the same numbers the VA sees here. Posts are also checked on the backend (pc_eod). */
+var _eaK='', _eaAt=0, _eaBusy=false;
+function eaKarmaDone(r){ var m=M(r), kd=wdayOf(worksFor(r)); return String(m.mday||'')===kd || String(m.mday||'')===today(); }
+function eaHasWork(r, me){   // the account has sessions in today's target
+  if(isHeld(r) || isParked(r) || isDead(r)) return false;
+  if(r.status==='story') return stReady(r);
+  if(isSXSt(r.status)){ var u=null; try{ u=sxUnits(r, me, owner(r)); }catch(e){} return !!(u && u.tot>0 && u.k!=='standby'); }
+  return isWorkable(r);
+}
+function eodAudit(){
+  if(!USER || isAdmin() || !DIR_READY || !ALL_AT || Object.keys(ALL_ERR||{}).length) return null;
+  var me=myId(); if(!me) return null;
+  var plan=null; try{ plan=ccPlan(); }catch(e){ return null; } if(!plan || plan.loading) return null;
+  var rows=allRows().filter(function(r){ return worksFor(r)===me && !isParked(r); });
+  var p=progOf(rows, me);
+  var km=rows.filter(function(r){ return eaHasWork(r, me) && !eaKarmaDone(r); });
+  var hl=[]; try{ hl=ccMineLeft(); }catch(e){}
+  var hcA=0; try{ hcA=ccMine().length; }catch(e){}
+  var pu=0; try{ pu=pcPending().length; }catch(e){}
+  return { employee_id:me.toUpperCase(), day:vaKeyOf(USER.id).slice(0,10), due:p.tot, done:p.done, sessions_left:Math.max(0,p.tot-p.done),
+    karma_missing:km.length, karma_list:km.slice(0,40).map(function(r){ return r.handle; }),
+    hc_assigned:hcA, hc_left:hl.length, hc_list:hl.slice(0,40).map(function(r){ return r.handle; }), posts_unchecked:pu };
+}
+function eaPush(force){
+  if(_eaBusy) return; var o=eodAudit(); if(!o) return;
+  var k=JSON.stringify(o); if(!force && k===_eaK && Date.now()-_eaAt<4*60000) return;
+  _eaBusy=true;
+  fetch(SB_URL+'/rest/v1/rc_eod_audit?on_conflict=employee_id,day', { method:'POST',
+    headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json', Prefer:'resolution=merge-duplicates,return=minimal' },
+    body:k }).then(function(r){ if(r.ok){ _eaK=k; _eaAt=Date.now(); } }).catch(function(){}).then(function(){ _eaBusy=false; });
+}
+var _eaQ=0; function eaSoon(){ if(_eaQ) return; _eaQ=setTimeout(function(){ _eaQ=0; try{ eaPush(false); }catch(e){} }, 1500); }
+setInterval(function(){ try{ eaPush(false); }catch(e){} }, 60000);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden){ try{ eaSoon(); }catch(e){} } });
+
 /* ═══════════ COUNTED CREATIONS — one rule for the card, the breakdown and the day close ═══════════
    An account counts as a creation of THIS shift when it is a real creation (status New, or it has the
    setup / was counted) and either
@@ -4475,7 +4514,7 @@ async function pchkSave(btn){
    asks the Reddit backend (pc_eod, rc-2026-10-27a) and waits for it. Time: 1 minute per post (fixed — cfg.pc_per
    changes it), on its own task timer that files under Reddit Posting; the shift's allowance = posts × 1 min, it
    pauses after 3 minutes with no answer. Whatever is still unchecked falls back to the next session's check. */
-var PC_PER=60, PC_IDLE=3*60000, PC_WIN=18*3600000;
+var PC_PER=60, PC_IDLE=3*60000, PC_WIN=36*3600000;   // Nov 9: 18 h → 36 h (long, double and night shifts) — same as the backend
 function pcPerSecs(){ var v=+((CFG&&CFG.pc_per)||0); return v>0?Math.round(v):PC_PER; }
 function pcRowsAll(){ var seen={}, out=[]; allRows().concat(ROWS||[]).forEach(function(r){ if(r && r.id && !seen[r.id]){ seen[r.id]=1; out.push(r); } }); return out; }
 function pcMine(){
