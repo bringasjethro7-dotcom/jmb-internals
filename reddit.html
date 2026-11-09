@@ -1033,7 +1033,7 @@ var EXTRA=[
 var SXPH=[
  {k:'sxwarm', n:'Suicidal · Warm-up', c:'#675F51', sx:true, from:2, plan:'TWO warm-up sessions on the warm-up day — Warm-up 1, then Warm-up 2 later the same day (day 2, or day 3 at the latest) · 8–12 min browsing each · search 2–4 topics and read them · no upvotes · no joining · no posting yet. After both, nothing is due on the account until it posts — posting opens on day 3.', task:'Reddit Warmup'},
  {k:'sxsetup', n:'Suicidal · Account setup', c:'#675F51', sx:true, from:2, plan:'ONE session once the warm-up is done (Warm-up 1 and 2) — set the profile up the way the client wants it: display name, bio, avatar and banner. No posting yet. When it is done, nothing more is due on the account until it posts — posting opens on day 3, once the client\'s assignment is set.', task:'Reddit Warmup'},
- {k:'sxcomment', n:'Suicidal · Commenting', c:'#675F51', sx:true, from:2, plan:'After the account setup · ONE commenting session: 10 comments on the account, following the client\'s commenting instructions. When it is done, nothing more is due on the account until the next commenting phase (the admin will switch it on) — or it can move to Posting from day 3, once the client\'s assignment is set.', task:'Reddit Warmup'},
+ {k:'sxcomment', n:'Suicidal · Commenting', c:'#675F51', sx:true, from:2, plan:'EVERY DAY after the account setup: one commenting session of 10 comments on the account, following the client\'s commenting instructions. A new session is due each day (the day resets at 7 AM).', task:'Reddit Warmup'},
  {k:'sxpost', n:'Suicidal · Posting', c:'#675F51', sx:true, from:3, plan:'Day 3 onward, once warmed · 2 sessions a day · post the way the client assigned this account (its assignment is on the card — e.g. Location posting). No assignment yet? Ask the admin before you post — until it is set the account is not in your target. Log every post at the end of the session.', task:'Reddit Posting'}
 ];
 /* ══ TRIAL POSTING PHASES (Jeth, Nov 3) — side phases next to the ladder, a test trial for posting ══
@@ -1092,7 +1092,7 @@ function sxUnits0(r, wk, ow){
     var cm=sxCommentToday(r, wk, ow)?1:0, e3=s1+s2;
     if(sxStandby(r)) return { tot:e3+cm, done:e3+cm, k:'standby' };
     if(cm) return { tot:e3+1, done:e3+1, k:'cmt' };
-    if(sxCommentAt(r)) return { tot:e3, done:e3, k:'cmtdone' };   // done on an earlier day — nothing owed until the next commenting phase
+    /* Nov 9 (Jeth): commenting is DAILY — 10 comments per account every day; the day flips at 7 AM (BIZ_FLIP_H), so it is due again each morning */
     return { tot:e3+1, done:e3, k:'cmt' };
   }
   if(r.status==='sxsetup'){
@@ -2290,7 +2290,7 @@ function vToday(){
       (_sx.standby?' <span class="muted">('+_sx.standby+' on standby now.)</span>':'')+'</div></div>');
     var _cmLeft=_sx.cmt-_sx.cmtDone;   // Nov 6a: commenting, after the setup
     if(_cmLeft || _sx.toCmt) h+=bnWrap('sxcomment', '<div class="banner '+(_cmLeft?'warn':'info')+'" style="border-color:'+SX_C+'55">'+IC.tag+'<div style="flex:1"><b>Suicidal Op commenting:</b> '+
-      (_cmLeft?_cmLeft+' left today'+(_sx.cmtDone?' ('+_sx.cmtDone+' done)':'')+' — one session of 10 comments per account.':(_sx.cmtDone?_sx.cmtDone+' done today.':''))+
+      (_cmLeft?_cmLeft+' left today'+(_sx.cmtDone?' ('+_sx.cmtDone+' done)':'')+' — 10 comments per account, every day (resets 7 AM).':(_sx.cmtDone?_sx.cmtDone+' done today.':''))+
       (_sx.toCmt?' <b>'+_sx.toCmt+'</b> set-up account'+(_sx.toCmt===1?' is':'s are')+' ready for it — tap <b>Commenting</b> on the account to move it there and start the timer. '+(_sx.toCmt===1?'It joins':'Each one joins')+' your target when you start it.':'')+'</div></div>');
     var _suLeft=_sx.setup-_sx.setupDone;   // Nov 5b: the account setup, after the warm-up
     if(_suLeft || _sx.toSetup) h+=bnWrap('sxsetup', '<div class="banner '+(_suLeft?'warn':'info')+'" style="border-color:'+SX_C+'55">'+IC.tag+'<div style="flex:1"><b>Suicidal Op account setup:</b> '+
@@ -2671,12 +2671,12 @@ function sxActs(r){
   if(st==='sxsetup'){   // Nov 5b: ONE setup session, then posting (day 3+)
     var setDone=sxSetupToday(r, wk, ow), setBefore=!setDone && !!sxSetupAt(r);
     var b=setBefore?'<button class="ses done" disabled title="Set up ('+esc(String(sxSetupAt(r)).replace('·',' '))+')"><span class="bx">'+IC.check+'</span>Set up</button>':sesBtn(r,3,'Account setup');
-    if(setDone || setBefore) b+='<button class="ses up" onclick="sxCommentGo(\''+id+'\')" title="Set up — next is commenting (one session of 10 comments). Moves the account to Commenting and starts its timer.">'+IC.up+' Commenting</button>';   // Nov 6a
+    if(setDone || setBefore) b+='<button class="ses up" onclick="sxCommentGo(\''+id+'\')" title="Set up — next is commenting (10 comments a day). Moves the account to Commenting and starts its timer.">'+IC.up+' Commenting</button>';   // Nov 6a
     return b;
   }
   if(st==='sxcomment'){   // Nov 6a: ONE commenting session (10 comments), then the next phase / posting (day 3+)
-    var cDone=sxCommentToday(r, wk, ow), cBefore=!cDone && !!sxCommentAt(r);
-    var c=cBefore?'<button class="ses done" disabled title="10 comments done ('+esc(String(sxCommentAt(r)).replace('·',' '))+')"><span class="bx">'+IC.check+'</span>10 comments</button>':sesBtn(r,4,'10 comments');
+    var cDone=sxCommentToday(r, wk, ow), cBefore=!cDone && !!sxCommentAt(r);   // Nov 9: a new session of 10 comments every day (resets 7 AM)
+    var c=sesBtn(r,4,'10 comments today');
     if(cDone || cBefore) c+=(sd>=3)
       ? '<button class="ses up" onclick="promote(\''+id+'\',\'sxpost\')" title="Commenting done and on day '+sd+' — start posting">'+IC.up+' Posting</button>'
       : '<button class="ses" disabled title="Posting opens on day 3 of the account">'+IC.up+' Posting · day 3</button>';
@@ -2701,10 +2701,10 @@ async function sxSbSet(id, on){
 function sxProg(r){
   var st=r.status, sd=sxDay(r), asg=sxAssign(r), u=sxUnits(r, worksFor(r), owner(r))||{}, p=phase(st)||{};
   if(st==='sxcomment'){   // Nov 6a
-    var okc=u.k==='cmtdone' || sxCommentToday(r), lbc, clc;
+    var okc=sxCommentToday(r), lbc, clc;   // Nov 9: daily
     if(u.k==='standby'){ lbc='Day '+sd+' · commenting · on standby'; clc='#595959'; }
-    else if(okc){ lbc='Day '+sd+' · 10 comments ✓ · waiting for the next commenting phase'; clc='#675F51'; }
-    else { lbc='Day '+sd+' · commenting due · 10 comments'; clc='#382E22'; }
+    else if(okc){ lbc='Day '+sd+' · 10 comments today ✓ · next 10 tomorrow (resets 7 AM)'; clc='#675F51'; }
+    else { lbc='Day '+sd+' · commenting due today · 10 comments'; clc='#382E22'; }
     return '<div class="gate" title="'+esc(p.plan||'')+'"><b style="color:'+clc+'">'+lbc+'</b><div class="prog"><i style="width:'+Math.min(100,sd/3*100)+'%;background:'+SX_C+'"></i></div></div>';
   }
   if(st==='sxsetup'){   // Nov 5b
@@ -2759,8 +2759,8 @@ function cardHtml(r){
       ((st==='sxwarm'||st==='sxsetup'||st==='sxcomment')?sxProg(r):'<div class="gate">'+sxProg(r)+'</div>')+   // Oct 27: one warm-up, then posting once warmed + assigned
       (st==='sxpost' && !asg2?'<div class="note w">No posting assignment yet — the client decides it (e.g. Location posting). Ask the admin before you post. Until it is set, this account is not in your target.</div>':'')+
       (st==='sxwarm' && !sb && sxWarmDone(r)?'<div class="note g">Warm-up done — next is the <b>account setup</b> (one session). Tap <b>Account setup</b> to move it there and start the timer.</div>':'')+
-      (st==='sxsetup' && !sb && sxSetupDone(r)?'<div class="note g">Account set up — next is <b>commenting</b> (one session of 10 comments). Tap <b>Commenting</b> to move it there and start the timer.</div>':'')+
-      (st==='sxcomment' && !sb && u2.k==='cmtdone'?'<div class="note g">First commenting session done — nothing more is due on this account until the next commenting phase'+(sxDay(r)>=3?(asg2?'. It can also move to Posting.':'. Posting needs its assignment from the admin first.'):'.')+'</div>':'')+
+      (st==='sxsetup' && !sb && sxSetupDone(r)?'<div class="note g">Account set up — next is <b>commenting</b> (10 comments a day). Tap <b>Commenting</b> to move it there and start the timer.</div>':'')+
+      (st==='sxcomment' && !sb && sxCommentToday(r)?'<div class="note g">10 comments done today — the next 10 are due tomorrow (the day resets at 7 AM)'+(sxDay(r)>=3?(asg2?'. It can also move to Posting.':'. Posting needs its assignment from the admin first.'):'.')+'</div>':'')+
       '<details class="plan"><summary>'+IC.doc+' Today\'s plan · Suicidal Operation</summary><div>'+esc(p.plan)+'</div></details>'+
       (held?'':'<div class="acts">'+(sb?'':sxActs(r))+sxSbBtn(r)+'</div>')+
       (!held && (isPostingStage(st)||pchkPending(r).length)?postsStrip(r):'');
@@ -4092,7 +4092,7 @@ function progWhy(va){
         '<div class="muted" style="font-size:12px">Not due: '+standby+' in Creation / standby (no sessions)'+(parked?' · '+parked+' on hold / archived':'')+'.</div></div>'+
       (sxw.length?'<div class="card pad" style="margin-bottom:10px;border-color:'+SX_C+'40"><b style="color:'+SX_C+'">Suicidal Operation</b> — <b>'+sxD+'/'+sxT+'</b> by its own SOP: '+
         (sxN.warm?sxN.warm+' warm-up'+(sxN.warm===1?'':'s')+' due (2 sessions each, on the warm-up day)':'no warm-ups due')+
-        (sxN.setup?' · '+sxN.setup+' account setup'+(sxN.setup===1?'':'s')+' (1 session each)':'')+(sxN.cmt?' · '+sxN.cmt+' commenting (1 session of 10 comments each)':'')+(sxN.post?' · '+sxN.post+' posting × 2':'')+'.'+
+        (sxN.setup?' · '+sxN.setup+' account setup'+(sxN.setup===1?'':'s')+' (1 session each)':'')+(sxN.cmt?' · '+sxN.cmt+' commenting (10 comments each, every day)':'')+(sxN.post?' · '+sxN.post+' posting × 2':'')+'.'+
         '<div class="muted" style="font-size:12px">Not due: '+(sxN.warmed||0)+' already warmed (waiting for their account setup)'+(sxN.setupdone?' · '+sxN.setupdone+' set up (commenting is next)':'')+(sxN.cmtdone?' · '+sxN.cmtdone+' commented (waiting for the next commenting phase)':'')+(sxN.backlog?' · '+sxN.backlog+' past day 3 and never warmed (backlog — counted only when worked)':'')+(sxN.noassign?' · '+sxN.noassign+' posting with no assignment yet':'')+(sxN.day1?' · '+sxN.day1+' created today (warm-up is day 2)':'')+(sxN.standby?' · '+sxN.standby+' on standby (the VA took them out of today\'s target on the client\'s advice)':'')+'.</div></div>':'')+
       '<div class="card pad" style="margin-bottom:10px"><b>Creations counted this shift — '+cre.length+'</b> ('+cre.filter(function(x){ return x.c.done; }).length+' finished)'+
         (cre.length?'<div style="margin-top:6px">'+cre.map(function(x){ return '<span class="chip" style="margin:2px">'+esc(x.r.handle)+(x.c.done?' ✓':' · setup open')+(x.c.how==='time'?' · by time':'')+'</span>'; }).join('')+'</div>':'')+'</div>'+
@@ -5339,7 +5339,7 @@ async function doSession(id, n, btn){
   if(!ok){ if(t){ var o=tmAll(); o[id+'|s'+n]={ t:t.start, p:t.parallel, d:myDay() }; tmPut(o); } toast('Could not save the session — try again.'); renderView(); return; }
   tmLog(r, 'session', t);
   if(task) await bump(task,1);
-  if(n===4) toast('Commenting done for '+r.handle+' ✓ — 10 comments. Nothing more is due on it until the next commenting phase.');
+  if(n===4) toast('Commenting done for '+r.handle+' ✓ — 10 comments today. The next 10 are due tomorrow (resets 7 AM).');
   else if(n===3) toast('Account setup done for '+r.handle+' ✓ — next is commenting (10 comments). Tap Commenting on the account.');
   else if(r.status==='sxwarm' && n===1) toast('Warm-up 1 done for '+r.handle+' ✓ — do Warm-up 2 later today.');
   else if(r.status==='sxwarm') toast('Warm-up 2 done for '+r.handle+' ✓ — warm-up complete; next is the account setup.');
