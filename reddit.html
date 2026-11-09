@@ -1575,6 +1575,7 @@ async function load(auto){
     await loadCover();
     var d=await jget(API+'?'+qs({action:'pa_list', project:PROJECT})+'&_='+Date.now(), 10000);
     if(!d||!d.ok) throw new Error((d&&d.error)||'load');
+    window._rcLoadedAt=Date.now();   // Nov 10: tab-switch refresh throttle
     var _rsig=''; try{ _rsig=JSON.stringify(d.rows||[]); }catch(_js){}
     if(auto && _rsig && _rsig===_rowsSig[PROJECT] && ALL[PROJECT] && ROWS.length){   // Nov 4 (speed): same rows as last minute — skip the re-read
       if(_retryT){ clearTimeout(_retryT); _retryT=null; }
@@ -1659,8 +1660,11 @@ async function pageWatch(){
 }
 setTimeout(pageWatch, 15000); setInterval(pageWatch, 120000);
 function smartPoll(){
-  setInterval(function(){ if(!document.hidden) load(true); }, 60000);
-  document.addEventListener('visibilitychange', function(){ if(!document.hidden) load(true); });
+  /* Nov 10 (everything slow at night): every open tab re-pulled the 1.4 MB board each minute AND on every switch back to
+     the tab. Now every 2 minutes, and a tab switch only refreshes when the board is over a minute old. Your own changes
+     still show at once (they are applied on the page as you make them). */
+  setInterval(function(){ if(!document.hidden) load(true); }, 120000);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden && Date.now()-(window._rcLoadedAt||0)>60000) load(true); });
   if(isAdmin()) setInterval(function(){ if(!document.hidden) loadOff(); }, 5*60000);
 }
 
