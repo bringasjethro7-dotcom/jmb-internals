@@ -2643,8 +2643,10 @@ function menuItems(r){
     if(r.status!=='recovery') it.push(['Spam filter → Recovery',"toRecovery('"+jsq(r.id)+"')",IC.buoy]);
     if(r.status!=='tempban') it.push(['Temporary ban',"toTempBan('"+jsq(r.id)+"')",IC.hour]);
     it.push(['Banned…',"banAcct('"+jsq(r.id)+"')",IC.ban]);
+    if(isAdmin() && wrongTag(r)) it.push(["It's alive — clear the health-check report","aliveClear('"+jsq(r.id)+"')",IC.check]);
   } else {
-    it.push(['Reinstate (rare)',"reinstate('"+jsq(r.id)+"')",IC.up]);
+    if(isAdmin()) it.push(['Restore… (tagged banned by mistake)',"restoreAcct('"+jsq(r.id)+"')",IC.up]);
+    else it.push(['Reinstate (rare)',"reinstate('"+jsq(r.id)+"')",IC.up]);
   }
   it.push('---');
   var dq=M(r).delreq;
@@ -5564,6 +5566,34 @@ async function reinstate(id){
   if(!(await confirmBox('Reinstate '+r.handle+'?', 'Only if Reddit actually restored the account. It goes back to '+esc(stageMeta(rb).n)+' and the ban stays in its history.', 'Reinstate'))) return;
   await moveTo(r, rb, { meta:JSON.stringify(Object.assign({}, M(r), { pstart:today() })) });
 }
+/* ══ Nov 10 (Jeth): "This one has been incorrectly tagged as banned. As an admin I should have the option to restore it." ══
+   · a banned account → Restore… puts it back in the stage it was banned from (or one the owner picks); the ban stays in
+     its history as Banned → Restored, and its health-check flags are cleared.
+   · a live account a teammate reported "not found" / "banned" in the health check (it locks its creator's timers until the
+     username is fixed) → It's alive — clear the report: the report and the fix request go, the account counts as checked today. */
+function wrongTag(r){ var m=M(r); return !isDead(r) && !!(m.fix || m.hcrep); }
+async function aliveClear(id){
+  var r=rowById(id); if(!r || !isAdmin()) return;
+  if(await saveMeta(r,{ fix:null, hcrep:null, fixgone:null, hcok:today(), hcby:USER.id })){ toast(r.handle+' — alive, report cleared'); renderView(); if($('drawer').classList.contains('on') && $('drawer').getAttribute('data-id')===r.id) openRec(r.id); }
+  else toast('Could not save — try again.');
+}
+function restoreStages(r){ var sx=isSX(r); return ORDER.filter(function(k){ return k!=='banned' && k!=='new' && k!=='creationstandby' && (sx ? SX_OK.indexOf(k)>=0 : SX_STAGES.indexOf(k)<0); }); }
+async function restoreAcct(id){
+  var r=rowById(id); if(!r || !isAdmin() || !isDead(r)) return;
+  var L=restoreStages(r), back='';
+  try{ var all=await loadEvents(); var b=(all||[]).filter(function(e){ return e.account_id===id && e.kind==='ban' && e.from && e.from!=='banned'; }).sort(function(a,c){ return String(a.at).localeCompare(String(c.at)); }).pop(); if(b) back=b.from; }catch(e){}
+  if(L.indexOf(back)<0){ var p=M(r).prev; back=(p && L.indexOf(p)>=0)?p:(isSX(r)?'sxwarm':'warming'); }
+  openModal('<div class="md-h"><h3>Restore '+esc(r.handle)+'</h3><p>For an account tagged banned by mistake, or one Reddit gave back. It returns to the board in the stage below; the ban stays in its history.</p></div>'+
+    '<div class="md-b">'+(r.end_reason?'<div class="note" style="margin-bottom:10px">Tagged banned: '+esc(r.end_reason)+(endedAt(r)?' · '+esc(fmtD(endedAt(r))):'')+'</div>':'')+
+    '<div class="fld"><label>Back to</label><select class="inp" id="rs-st">'+L.map(function(k){ return '<option value="'+k+'"'+(k===back?' selected':'')+'>'+esc(stageMeta(k).n)+(k===back?' (where it was)':'')+'</option>'; }).join('')+'</select></div></div>'+
+    '<div class="md-f"><button class="btn sec" onclick="closeModal()">Cancel</button><button class="btn pri" onclick="restoreGo(\''+jsq(id)+'\')">'+IC.up+' Restore</button></div>');
+}
+async function restoreGo(id){
+  var r=rowById(id); if(!r) return; var st=($('rs-st')||{}).value; if(!st) return; closeModal();
+  var mp={ fix:null, hcrep:null, fixgone:null, hcok:today(), hcby:USER.id, pstart:today(), restored:{ at:phtStamp(), by:USER.id, was:String(r.end_reason||'').slice(0,120) } };
+  var m=Object.assign({}, M(r)); Object.keys(mp).forEach(function(k){ if(mp[k]===null) delete m[k]; else m[k]=mp[k]; }); r.meta=m; patchLocal(r.id,{ meta:m });
+  await moveTo(r, st, { meta_patch:JSON.stringify(mp) }, r.handle+' restored → '+stageMeta(st).n);
+}
 function banAcct(id){
   var r=rowById(id); if(!r) return;
   openModal('<div class="md-h"><h3>Mark '+esc(r.handle)+' as banned</h3><p>It leaves the active pool; outputs already earned stay. The reason feeds the ban analysis — pick what Reddit actually showed.</p></div>'+
@@ -5929,6 +5959,10 @@ function drawRec(r, evs){
     '<div class="dr-b">'+
       (M(r).delreq?'<div class="banner warn" style="margin-bottom:12px">'+IC.trash+'<div style="flex:1"><b>Deletion requested</b> by '+esc(vaName(M(r).delreq.by))+' · '+esc(fmtDT(parseTs(M(r).delreq.at)))+'<br><q>'+esc(M(r).delreq.reason||'')+'</q>'+(isAdmin()?'':'<br><span class="muted">Waiting for the admin — the account stays until then.</span>')+'</div>'+
         (isAdmin()?'<button class="btn sm dark" onclick="delDecide(\''+jsq(r.id)+'\',\'approve\')">Approve delete</button><button class="btn sm sec" onclick="delDecide(\''+jsq(r.id)+'\',\'decline\')">Decline</button>':'')+'</div>':'')+
+      (wrongTag(r)?'<div class="banner warn" style="margin-bottom:12px">'+IC.ban+'<div style="flex:1">'+(function(){ var m=M(r), x=m.hcrep, fx=m.fix;
+          if(fx) return '<b>Reported not found on Reddit</b> in the health check'+(fx.src?' · '+esc(String(fx.src).replace(/^health check · /,'by ')):'')+' · '+esc(fmtDT(parseTs(fx.at)))+'<br><span class="muted">Sent to '+esc(vaName(fixTo(r)))+' to fix the username — their timers stay locked until it is done.</span>';
+          return '<b>Reported '+(x.res==='n'?'not found':'banned')+'</b> in the health check by '+esc(vaName(x.by))+' · '+esc(fmtDT(parseTs(x.at)))+'<br><span class="muted">Waiting for the admin to confirm.</span>'; })()+'</div>'+
+        (isAdmin()?'<button class="btn sm pri" onclick="aliveClear(\''+jsq(r.id)+'\')" title="The account is fine — clear the report and the fix request">It\'s alive — clear</button>':'')+'</div>':'')+
       '<div class="facts">'+
         (isSX(r)?f('SOP', sxBadge(true)+' <span class="muted">· day '+sxDay(r)+'</span>')+f('Posting assignment', sxAssign(r)?'<b style="color:'+SX_C+'">'+esc(sxAssign(r))+'</b>':'<span style="color:#382E22;font-weight:700">not assigned yet</span>'):'')+
         f('Model', esc(r.model||'—'))+f('Created on', esc(r.device||'—'))+
@@ -5942,6 +5976,7 @@ function drawRec(r, evs){
       (r.notes?'<div class="note g" style="margin-bottom:12px">'+esc(r.notes)+'</div>':'')+
       '<div class="row" style="margin-bottom:16px">'+(canEdit?'<button class="btn sm sec" onclick="editRec(\''+jsq(r.id)+'\')">'+IC.edit+' Edit details</button>':'')+
         (!isDead(r)&&canEdit?'<button class="btn sm sec" onclick="banAcct(\''+jsq(r.id)+'\')">'+IC.ban+' Banned…</button>':'')+
+        (isDead(r)&&isAdmin()?'<button class="btn sm pri" onclick="restoreAcct(\''+jsq(r.id)+'\')" title="Tagged banned by mistake, or Reddit gave it back">'+IC.up+' Restore…</button>':'')+
         (isAdmin()?'<button class="btn sm sec" onclick="xferOpen(null,[\''+jsq(r.id)+'\'])">'+IC.swap+' Transfer…</button>':'')+
         (isAdmin()&&isSX(r)&&!isDead(r)?'<button class="btn sm sec" style="color:'+SX_C+'" onclick="sxAssignAsk(\''+jsq(r.id)+'\')">'+IC.tag+' Posting assignment…</button>':'')+
         (canEdit?'<button class="btn sm sec" style="color:#1C252B" onclick="delAcct(\''+jsq(r.id)+'\')">'+IC.trash+' Delete</button>':'')+'</div>'+
