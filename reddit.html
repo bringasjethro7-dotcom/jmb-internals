@@ -2846,7 +2846,10 @@ function tmCount(){ return Object.keys(tmAll()).length; }
    and Productivity & QA counts it (−0.5 each, max 2 a day). A stopped timer also stops keeping the portal's
    10-minute tool rule alive, which is the point. */
 var TM_DEF_CAP={ session:30*60, dms:25*60, creation:45*60 };
-var TR_CAP={ extended:45*60, long:60*60 };   // trial posting phases — one long session
+/* Nov 10 (Jeth): "for the long and extended posting it will take around 40 minutes to 1 hour" — the old 45 / 60-minute
+   limits cut real sessions (Nov 8–9: extended sessions stopped at 45, a long one at 60) and the "Is this session done?" card
+   came at 22–30 minutes, which read as the timer stopping. Now 75 / 90 minutes, and a learned team time can only raise them. */
+var TR_CAP={ extended:75*60, long:90*60 };   // trial posting phases — one long session
 /* ══════════ CREATION TIMER RULES (Jeth, Oct 31) ══════════
    "They start creating, let it run 27 minutes or more, then cancel it — deceiving the portal." A creation takes 10–15
    minutes, 20 at most, so:
@@ -2879,6 +2882,7 @@ function tmCapKey(kind, stage, meth){ return kind+'|'+((kind==='creation'||kind=
 function tmCapSecs(kind, stage, meth){ var v=tmCapRaw(kind, stage, meth); return kind==='creation'?Math.min(CR_MAX, v):v; }   // Oct 31: creation never more than 20 min
 function tmCapRaw(kind, stage, meth){
   var caps=CFG.task_caps||{}, k=tmCapKey(kind,stage,meth);
+  if(kind==='session' && TR_CAP[stage]){ var own0=(CFG.targets||{})[k]; return Math.max(TR_CAP[stage], +caps[k]||0, own0?tmCapFrom(own0):0); }   // Nov 10: trial phases never below their floor
   if(caps[k]) return +caps[k];
   if(kind==='creation'){ var mx=0; Object.keys(caps).forEach(function(x){ if(x.indexOf('creation|')===0) mx=Math.max(mx,+caps[x]||0); }); if(mx) return mx; }
   var own=(CFG.targets||{})[k]; if(own) return tmCapFrom(own);
@@ -3039,7 +3043,7 @@ function dgPaintCards(){
 function dgShow(k, card, loud){ var fresh=!DG.cards[k]; DG.cards[k]=card; dgPaintCards(); if(fresh && loud) dgChime(); }
 function dgClose(k){ var c=DG.cards[k]; delete DG.cards[k]; dgPaintCards(); if(c && c.onClose) try{ c.onClose(); }catch(e){} }
 /* ── 1 · the forgotten Finish ── */
-function dgRemindAt(capSecs){ var first=capSecs>1800?Math.round(capSecs/2):Math.min(900, capSecs-300), second=capSecs-300; return { first:Math.max(300,first), second:second }; }
+function dgRemindAt(capSecs){ var first=capSecs>=3600?capSecs-1800:(capSecs>1800?Math.round(capSecs/2):Math.min(900, capSecs-300)), second=capSecs-300; return { first:Math.max(300,first), second:second }; }   // Nov 10: long trial sessions are asked 30 min before their limit (75 → at 45 min, 90 → at 60), not halfway
 function dgRemindTick(){
   var o=tmAll(), now=Date.now(), ch=false, live={};
   Object.keys(o).forEach(function(key){
