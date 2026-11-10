@@ -932,8 +932,13 @@ var CLIENTS=[
   { id:'threads', name:'Threads Alts', client:'Altz', kind:'Threads · text posting', project:'Reddit - Altz › Threads', match:/thread/i,
     wlProj:/altz/i, wlTask:/thread/i, wlDays:21,
     c:'#1e293b', g:'linear-gradient(135deg,#64748b,#1e293b 55%,#020617)', icon:'thr', live:true, mod:'THR' },
+  /* Nov 10: Meadow · X — the ALTR X / Twitter Growth Playbook (SOPX01), VA Joana (JMB028). Portal: Meadows › X / Twitter.
+     Listed BEFORE Meadow so a timer on an X task opens this tab, not the TikTok one. */
+  { id:'meadowx', name:'Meadow · X', client:'Meadow', kind:'X / Twitter · growth', project:'Meadows › X / Twitter', match:/twitter/i,
+    wlProj:/meadow/i, wlTask:/twitter|\bx\b/i, wlDays:30,
+    c:'#0f172a', g:'linear-gradient(135deg,#94a3b8,#334155 55%,#0f172a)', icon:'thr', live:true, mod:'MX' },
   /* Oct 27: Meadow — TikTok outreach (VA: Hamto). Its portal project is "Meadow", category TikTok Outreach. */
-  { id:'meadow', name:'Meadow', client:'Meadow', kind:'TikTok · outreach', project:'Meadow', match:/meadow/i,
+  { id:'meadow', name:'Meadow', client:'Meadow', kind:'TikTok · outreach', project:'Meadow', match:/meadow/i, wlTask:/tiktok|outreach|inbox|lead|\bdm/i,
     c:'#0f766e', g:'linear-gradient(135deg,#2dd4bf,#0d9488 55%,#115e59)', icon:'lead', live:true, mod:'MDW' },
   /* Nov 9: NewFans wall posting & PPV (VA: Hamto), rebuilt from the HUNTER Wall Posting SOP. Tracked in the portal as
      Newfans LLC › Wallpost › Uploading (older rows: Newfans › Wallpost) — the Newfans project also held CRM / outreach work, so the
@@ -5593,9 +5598,481 @@ var WP=(function(){
            _t:{ dayStats:dayStats, state:state, runway:runway, nextD:nextD, needAsk:needAsk, needTell:needTell, msgFor:msgFor, capKey:capKey, capDup:capDup, estToday:estToday } };
 })();
 
+/* ═══════════ CLIENT: MEADOW · X (Jeth, Nov 10 — from the ALTR X / Twitter Growth Playbook, SOPX01) ═══════════
+   VA: Joana (JMB028). One creator runs as ONE main account + 2–3 burners. The playbook, as the tool runs it:
+     1) setup before anything: profile picture (her strongest asset), display name, bio, link (main → OF, burner → the main);
+     2) 3-day warm-up: replies only (5–10 a day under the ALTR reply-target list), ZERO posts — the tool refuses a post;
+     3) live: main 2–3 posts a day (min 1), each burner 3–4; every post is bait / question / trend / winner and must
+        demand a reply; burner posts that start moving get a pinned reply to the main; reply to the people who replied;
+     4) trend-jacking: log a trend the moment it is spotted, post it on every account within 15–30 min;
+     5) winners: mark the posts that beat the baseline — they are reused (same photo, same words) on every new account;
+     6) flags: embed test (preview shows = clean, bare link = flagged) on winners, trends and anything that stalls;
+     7) day-14 gate: one post broke the baseline → pass; otherwise restart (the account is archived, a new one warms up).
+   Credentials, proxies and devices are NOT kept here. Timer: the hub work timer (starts on the first step).
+   Data: pa_* rows, project "Meadow X".
+     account → handle '@name', status warmup | live | restart, meta { kind:'acct', role:'main'|'burner', cr:'creator',
+               setup:{ pfp,name,bio,link }, ws:'YYYY-MM-DD' (warm-up start, business day), rep:{ day:n }, rr:[day…],
+               posts:[{ at, bd, by, ty:'bait'|'question'|'trend'|'winner', cap, u, pin, emb:'clean'|'flag'|'', win, imp }],
+               gate:{ at, by, res:'pass'|'fail', note } }
+     trends  → one row, handle 'trends', status 'log', meta { kind:'trends', list:[{ id, n, at, bd, by, v24 }] } */
+var MX=(function(){
+  var CID='meadowx', PROJECT='Meadow X', PO='Meadows';
+  var CL=function(){ return clientById(CID); };
+  var TY={ bait:'Bait', question:'Question', trend:'Trend', winner:'Winner repost' };
+  var TGT={ main:[2,3], burner:[3,4] };
+  var S={ rows:[], loaded:false, err:'', day:'', filter:'all', busy:{}, pan:null };
+  try{ S.filter=sessionStorage.getItem('dc_va_'+PROJECT)||'all'; }catch(e){}
+
+  function me(){ return String((USER&&USER.id)||'').toUpperCase(); }
+  function meL(){ return me().toLowerCase(); }
+  function ownerOf(r){ return String(r.assigned_to||r.created_by||'').toLowerCase(); }
+  function rowById(id){ return S.rows.filter(function(x){ return x.id===id; })[0]; }
+  function Mt(r){ return r.meta||{}; }
+  function isTrendRow(r){ return Mt(r).kind==='trends' || String(r.handle||'').toLowerCase()==='trends'; }
+  function accts(){ return S.rows.filter(function(r){ return !isTrendRow(r); }); }
+  function trendRow(){ return S.rows.filter(isTrendRow)[0]||null; }
+  function trends(){ var t=trendRow(); return ((t&&Mt(t).list)||[]).slice().sort(function(a,b){ return String(b.at).localeCompare(String(a.at)); }); }
+  function day(){ return S.day||today(); }
+  function dDiff(a, b){ return Math.round((Date.parse(b+'T00:00:00Z')-Date.parse(a+'T00:00:00Z'))/864e5); }
+  var MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function sdate(ds){ if(!/^\d{4}-\d{2}-\d{2}$/.test(String(ds||''))) return String(ds||''); return MO[+ds.slice(5,7)-1]+' '+(+ds.slice(8,10)); }
+  function tm(iso){ var t=Date.parse(iso||''); if(!t) return ''; try{ return new Date(t).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }); }catch(e){ return ''; } }
+  function role(r){ return Mt(r).role==='main'?'main':'burner'; }
+  function posts(r){ return Mt(r).posts||[]; }
+  function repOn(r, d){ return +((Mt(r).rep||{})[d||today()]||0); }
+  function wuDay(r){ var ws=Mt(r).ws; return ws?dDiff(ws, today())+1:1; }                   // warm-up day 1, 2, 3 …
+  function wuDone(r){ var ws=Mt(r).ws; if(!ws) return 0; var n=0; for(var i=0;i<3;i++){ if(repOn(r, hubDayAdd(ws,i))>=5) n++; } return n; }
+  function canLaunch(r){ return r.status==='warmup' && wuDay(r)>=4 && wuDone(r)>=3 && setupOk(r); }
+  function setupOk(r){ var s=Mt(r).setup||{}; return !!(s.pfp && s.name && s.bio && s.link); }
+  function firstPost(r){ var a=posts(r).map(function(p){ return p.bd; }).sort(); return a[0]||''; }
+  function liveDay(r){ var f=firstPost(r); return f?dDiff(f, today())+1:0; }
+  function postsOn(r, d){ return posts(r).filter(function(p){ return p.bd===(d||today()); }).length; }
+  function wins(r){ return posts(r).filter(function(p){ return p.win; }).length; }
+  function gateDue(r){ return r.status==='live' && !Mt(r).gate && liveDay(r)>=14; }
+  function rrToday(r){ return (Mt(r).rr||[]).indexOf(today())>=0; }
+  function state(r){
+    if(r.status==='restart') return 'restart';
+    if(r.status==='warmup') return canLaunch(r)?'launch':'warm';
+    if(gateDue(r)) return 'gate';
+    var t=TGT[role(r)][0]; return postsOn(r)>=t?'done':'post';
+  }
+  var GRP=[['launch','Warm-up finished — post the best content first'],['warm','Warm-up — replies only, zero posts'],['gate','Day-14 gate — viral post or restart'],
+           ['post','Live — posts still due today'],['done','Live — today\'s posts done'],['restart','Restarted (archived)']];
+
+  function cacheRows(){ try{ sessionStorage.setItem('dc_rows_'+PROJECT, JSON.stringify({ t:Date.now(), rows:S.rows })); }catch(e){} }
+  function paintCached(){ try{ var c=JSON.parse(sessionStorage.getItem('dc_rows_'+PROJECT)||'null'); if(c && c.rows && (Date.now()-c.t)<10*60*1000){ S.rows=c.rows; S.loaded=true; return true; } }catch(e){} return false; }
+  async function load(){
+    try{
+      var d=await jFetch(API+'?action=pa_list&project='+encodeURIComponent(PROJECT)+'&_='+Date.now());
+      if(!d||!d.ok) throw new Error((d&&d.error)||'load');
+      S.rows=(d.rows||[]).map(function(r){ if(typeof r.meta==='string'){ try{ r.meta=JSON.parse(r.meta); }catch(e){ r.meta={}; } } r.meta=r.meta||{}; return r; });
+      S.loaded=true; S.err=''; cacheRows();
+    }catch(e){ S.err='Could not load the X board — check your connection, then refresh.'; }
+    HUB.onData(CID);
+  }
+  function owners(){ var m={}; accts().forEach(function(r){ var k=ownerOf(r); if(k) m[k]=1; }); return Object.keys(m); }
+
+  /* a VA's day (emp=null → everyone) */
+  function dayStats(emp, d){
+    emp=emp?String(emp).toLowerCase():null; d=d||today();
+    var o={ rep:0, posts:0, trendPosts:0, wins:0, rr:0, trends:0, warm:0, live:0, due:0, gate:0, launch:0, accts:0, wuShort:0 };
+    accts().forEach(function(r){
+      var m=Mt(r), mine=!emp || ownerOf(r)===emp;
+      (m.posts||[]).forEach(function(p){ if(p.bd===d && (!emp || String(p.by||'').toLowerCase()===emp)){ o.posts++; if(p.ty==='trend') o.trendPosts++; } });
+      if(mine){ o.rep+=+((m.rep||{})[d]||0); if((m.rr||[]).indexOf(d)>=0) o.rr++; }
+      if(!mine || r.status==='restart') return;
+      o.accts++;
+      if(r.status==='warmup'){ o.warm++; if(canLaunch(r)) o.launch++; else if(repOn(r, d)<5) o.wuShort++; }
+      else { o.live++; if(postsOn(r, d)<TGT[role(r)][0]) o.due++; if(gateDue(r)) o.gate++; }
+    });
+    trends().forEach(function(t){ if(t.bd===d && (!emp || String(t.by||'').toLowerCase()===emp)) o.trends++; });
+    return o;
+  }
+
+  /* writes */
+  async function upd(id, q, okMsg){
+    try{ var d=await paUpdate(id, q);
+      if(d&&d.ok){ if(okMsg) toast(okMsg); return true; }
+      toast('Could not save — '+((d&&d.error)||'try again')+'.'); return false;
+    }catch(e){ toast('Connection error.'); return false; }
+  }
+  async function patchMeta(id, fn, extra, okMsg){
+    await load(); var r=rowById(id); if(!r){ toast('That account is gone — refresh.'); return false; }
+    var m=JSON.parse(JSON.stringify(r.meta||{})); if(fn(m, r)===false) return false;
+    var q=Object.assign({ meta:JSON.stringify(m) }, extra||{});
+    var ok=await upd(id, q, okMsg); if(ok){ r.meta=m; Object.keys(extra||{}).forEach(function(k){ r[k]=extra[k]; }); cacheRows(); paint(); setTimeout(load, 1500); }
+    return ok;
+  }
+  async function guarded(k, fn){ if(S.busy[k]) return; S.busy[k]=1; try{ return await fn(); } finally{ delete S.busy[k]; } }
+  function trimDays(obj, keep){ Object.keys(obj||{}).sort().slice(0,-keep).forEach(function(k){ delete obj[k]; }); }
+  async function copyText(t){
+    try{ if(navigator.clipboard && window.isSecureContext){ await navigator.clipboard.writeText(t); return true; } }catch(e){}
+    try{ var ta=document.createElement('textarea'); ta.value=t; ta.setAttribute('readonly',''); ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); var ok=document.execCommand('copy'); ta.remove(); return ok; }catch(e){ return false; }
+  }
+
+  /* new account */
+  async function add(){
+    var h=String(($('mx-h')||{}).value||'').trim().replace(/\s+/g,'').replace(/^@?/,'@').slice(0,32), rl=String(($('mx-role')||{}).value||'burner'),
+        cr=String(($('mx-cr')||{}).value||'').trim().slice(0,60), va=isOwner()?String(($('mx-va')||{}).value||'').trim().toUpperCase():'';
+    if(!/^@[A-Za-z0-9_]{2,30}$/.test(h)){ toast('Type the X handle (letters, numbers, _).'); return; }
+    if(h.toLowerCase()==='@trends'){ toast('That name is reserved.'); return; }
+    if(accts().some(function(r){ return String(r.handle||'').toLowerCase()===h.toLowerCase(); })){ toast(h+' is already on the board.'); return; }
+    if(rl==='main' && cr && accts().some(function(r){ return r.status!=='restart' && role(r)==='main' && String(Mt(r).cr||'').toLowerCase()===cr.toLowerCase(); }) &&
+       !confirm(cr+' already has a main account on the board.\n\nAdd another main anyway? (Usually: one main + 2–3 burners.)')) return;
+    if(isOwner() && va && !/^[A-Z0-9_-]{2,24}$/.test(va)){ toast('Type the VA\'s Employee ID (e.g. JMB028), or leave it blank.'); return; }
+    if(!(await linkGate(CL(), 'Adding an X account'))) return;
+    var meta={ kind:'acct', role:rl==='main'?'main':'burner', cr:cr, setup:{}, ws:today(), rep:{}, rr:[], posts:[] };
+    await guarded('add', async function(){
+      try{
+        var d=await jFetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle='+encodeURIComponent(h)+'&model='+encodeURIComponent(cr||'Meadow')+'&status=warmup&meta='+encodeURIComponent(JSON.stringify(meta))+'&employee_id='+encodeURIComponent(va||USER.id)+'&_='+Date.now(), 0);
+        if(d&&d.ok){ ['mx-h','mx-cr','mx-va'].forEach(function(k){ if($(k)) $(k).value=''; }); toast(h+' added — finish the profile setup, then start the 3-day reply warm-up.'); await load(); var r=accts().filter(function(x){ return String(x.handle).toLowerCase()===h.toLowerCase(); })[0]; if(r){ S.pan={ id:r.id, k:'setup' }; paint(); } }
+        else toast(d&&d.error==='DUPLICATE'?h+' is already on the board.':'Could not add the account.');
+      }catch(e){ toast('Connection error.'); }
+    });
+  }
+  function open(id, k){ S.pan=(S.pan && S.pan.id===id && S.pan.k===k)?null:{ id:id, k:k }; paint();
+    var f={ post:'mx-cap', gate:'mx-gn' }[k]; if(S.pan && f) setTimeout(function(){ var e=$(f); if(e) try{ e.focus(); }catch(_e){} }, 30); }
+  function close(){ S.pan=null; paint(); }
+
+  /* 1 · setup */
+  async function setupSave(id){
+    var r=rowById(id); if(!r) return;
+    var s={}; ['pfp','name','bio','link'].forEach(function(k){ s[k]=!!(($('mx-s-'+k)||{}).checked); });
+    if(!(await linkGate(CL(), 'Saving the profile setup'))) return;
+    await guarded(id, function(){ return patchMeta(id, function(m){ m.setup=s; }, null, (s.pfp&&s.name&&s.bio&&s.link)?'Profile set ✓ — the account looks real. Start replying (warm-up).':'Saved — finish every item before the first reply.'); });
+    S.pan=null; paint();
+  }
+  /* 2 · warm-up replies (and ongoing replies on live accounts) */
+  async function reply(id, n){
+    var r=rowById(id); if(!r) return; n=n||1;
+    if(r.status==='warmup' && !setupOk(r)){ toast('Finish the profile setup first — the account must look real before the first reply.'); open(id,'setup'); return; }
+    var have=repOn(r);
+    if(r.status==='warmup' && have>=10 && !confirm(r.handle+' already has '+have+' replies today. The playbook says 5–10 a day.\n\nLog more anyway?')) return;
+    if(!(await linkGate(CL(), 'Logging replies'))) return;
+    await guarded(id, async function(){
+      var ok=await patchMeta(id, function(m){ var R=m.rep=m.rep||{}; R[today()]=(+R[today()]||0)+n; trimDays(R, 60); }, null, null);
+      if(!ok) return;
+      bump(PO, 'X Replies', n);
+      var now=repOn(rowById(id)||r);
+      toast('+'+n+' repl'+(n===1?'y':'ies')+' ✓ — '+r.handle+': '+now+' today'+(r.status==='warmup'?(now<5?' (aim for 5–10, answer the post, one-liners)':' — warm-up target met for today'):'')+'.');
+    });
+  }
+  async function launch(id){
+    var r=rowById(id); if(!r) return;
+    if(!canLaunch(r)){ toast(wuDay(r)<4?'Still in the warm-up — day '+wuDay(r)+' of 3. No posts yet.':(!setupOk(r)?'Finish the profile setup first.':'Each of the 3 warm-up days needs 5+ replies ('+wuDone(r)+' of 3 done).')); return; }
+    if(!confirm('Warm-up done for '+r.handle+'.\n\nThe first post must be the best content you have — a proven winner if one exists.\n\nGo live?')) return;
+    await guarded(id, function(){ return upd(id, { status:'live' }, r.handle+' is live — post your best content first.').then(function(ok){ if(ok){ r.status='live'; cacheRows(); S.pan={ id:id, k:'post' }; paint(); } return ok; }); });
+  }
+  /* 3 · posts */
+  function winnersAll(){ var out=[]; accts().forEach(function(r){ posts(r).forEach(function(p){ if(p.win) out.push({ r:r, p:p }); }); }); return out.sort(function(a,b){ return String(b.p.at).localeCompare(String(a.p.at)); }); }
+  async function postSave(id){
+    var r=rowById(id); if(!r) return;
+    if(r.status!=='live'){ toast(r.status==='warmup'?'Zero posts during the 3-day warm-up — replies only.':'This account was restarted.'); return; }
+    var ty=String(($('mx-ty')||{}).value||'bait'), cap=String(($('mx-cap')||{}).value||'').trim(), u=String(($('mx-u')||{}).value||'').trim().slice(0,200),
+        rq=!!(($('mx-rq')||{}).checked), pin=!!(($('mx-pin')||{}).checked), tr=String(($('mx-tr')||{}).value||'');
+    if(!TY[ty]) ty='bait';
+    if(cap.length<4){ toast('Type the caption you posted.'); return; }
+    if(!rq){ toast('Tick the check: the caption demands a reply (not "rate me", not "do I look good").'); return; }
+    if(ty==='trend' && !tr){ toast('Pick the trend (log it first under Trends).'); return; }
+    if(u && !/^https?:\/\//i.test(u)){ toast('The post link should start with https://'); return; }
+    if(!(await linkGate(CL(), 'Logging a post'))) return;
+    await guarded(id, async function(){
+      var ok=await patchMeta(id, function(m){
+        var P=(m.posts||[]).concat([{ at:new Date().toISOString(), bd:today(), by:me(), ty:ty, cap:cap.slice(0,280), u:u, pin:role(r)==='burner'?pin:false, tr:ty==='trend'?tr:'', emb:'', win:false }]);
+        m.posts=P.slice(-300);
+      }, null, null);
+      if(!ok) return;
+      bump(PO, ty==='trend'?'X Trend Posts':'X Posts', 1);
+      var n=postsOn(rowById(id)||r), t=TGT[role(r)];
+      toast('+1 post ✓ — '+r.handle+': '+n+' today (target '+t[0]+'–'+t[1]+'). Reply to everyone who answers.');
+      if($('mx-cap')) $('mx-cap').value=''; if($('mx-u')) $('mx-u').value='';
+    });
+  }
+  async function postMark(id, at, k, v){
+    var r=rowById(id); if(!r) return;
+    if(!(await linkGate(CL(), 'Updating a post'))) return;
+    await guarded(id+'|'+at, function(){ return patchMeta(id, function(m){ var p=(m.posts||[]).filter(function(x){ return x.at===at; })[0]; if(!p) return false;
+      if(k==='emb') p.emb=v; if(k==='win') p.win=!!v; if(k==='pin') p.pin=!!v; if(k==='imp'){ var n=parseInt(String(v).replace(/[^0-9]/g,''),10); p.imp=isNaN(n)?'':n; } },
+      null, k==='emb'?(v==='flag'?'Logged as flagged — take it down and re-upload the same image with a new caption.':'Embed test: clean ✓'):(k==='win'?(v?'Marked as a winner ✓ — reuse it on every new account.':'Winner removed.'):(k==='pin'?'Pinned reply to the main ✓':'Saved.'))); });
+  }
+  async function rrDone(id){
+    var r=rowById(id); if(!r) return;
+    if(rrToday(r)){ toast('Already logged today.'); return; }
+    if(!(await linkGate(CL(), 'Logging replies to repliers'))) return;
+    await guarded(id, function(){ return patchMeta(id, function(m){ m.rr=(m.rr||[]).concat([today()]).slice(-60); }, null, 'Replied to the repliers ✓ — the cheapest reach on X.'); });
+  }
+  /* 4 · trends */
+  async function trendAdd(){
+    var n=String(($('mx-tn')||{}).value||'').trim().slice(0,120);
+    if(n.length<3){ toast('Name the trend (the format, phrase or prompt).'); return; }
+    if(!(await linkGate(CL(), 'Logging a trend'))) return;
+    await guarded('trend', async function(){
+      var t=trendRow();
+      if(!t){
+        try{ var d=await jFetch(API+'?action=pa_add&project='+encodeURIComponent(PROJECT)+'&handle=trends&model=Meadow&status=log&meta='+encodeURIComponent(JSON.stringify({ kind:'trends', list:[] }))+'&employee_id='+encodeURIComponent(USER.id)+'&_='+Date.now(), 0);
+          if(!(d&&(d.ok||d.error==='DUPLICATE'))){ toast('Could not start the trend log.'); return; } }catch(e){ toast('Connection error.'); return; }
+        await load(); t=trendRow(); if(!t) return;
+      }
+      var ok=await patchMeta(t.id, function(m){ m.kind='trends'; m.list=(m.list||[]).concat([{ id:'t'+Date.now().toString(36), n:n, at:new Date().toISOString(), bd:today(), by:me(), v24:'' }]).slice(-200); }, null,
+        'Trend logged ✓ — make the creator\'s version and post it on every account within 15–30 minutes.');
+      if(ok && $('mx-tn')) $('mx-tn').value='';
+    });
+  }
+  async function trendViews(tid){
+    var t=trendRow(); if(!t) return; var x=(Mt(t).list||[]).filter(function(y){ return y.id===tid; })[0]; if(!x) return;
+    var v=String(prompt('Views at 24 h for "'+x.n+'" (best post across the accounts):', x.v24||'')||'').replace(/[^0-9]/g,''); if(!v) return;
+    await guarded('trend', function(){ return patchMeta(t.id, function(m){ var y=(m.list||[]).filter(function(z){ return z.id===tid; })[0]; if(y) y.v24=+v; }, null, 'Saved.'); });
+  }
+  /* 5 · day-14 gate */
+  async function gateSave(id, res){
+    var r=rowById(id); if(!r) return; var note=String(($('mx-gn')||{}).value||'').trim().slice(0,200);
+    if(res==='pass' && !wins(r) && !note){ toast('Which post broke the baseline? Mark it as a winner, or write it in the note.'); return; }
+    if(res==='fail' && !confirm('Restart '+r.handle+'?\n\nThe playbook: two weeks with every post at 10–300 impressions means the wrong algorithm — do not try to fix it. The account is archived here; add a new one and run the warm-up properly.')) return;
+    if(!(await linkGate(CL(), 'Saving the day-14 gate'))) return;
+    await guarded(id, function(){ return patchMeta(id, function(m){ m.gate={ at:new Date().toISOString(), by:me(), res:res, note:note }; }, res==='fail'?{ status:'restart' }:null,
+      res==='pass'?'Gate passed ✓ — scale it: hit the cadence, mix questions in, keep catching trends.':'Archived as restarted. Add the new account and start its warm-up.'); });
+    S.pan=null; paint();
+  }
+  async function setRole(id, rl){ var r=rowById(id); if(!r) return; await guarded(id, function(){ return patchMeta(id, function(m){ m.role=rl; }, null, r.handle+' is now a '+(rl==='main'?'main account':'burner')+'.'); }); }
+  async function moveTo(id){
+    var r=rowById(id); if(!r || !isOwner()) return;
+    var to=String(prompt('Move '+r.handle+' to which VA? (Employee ID, e.g. JMB028)', '')||'').trim().toUpperCase();
+    if(!/^[A-Z0-9_-]{2,24}$/.test(to)) return;
+    await guarded(id, function(){ return upd(id, { assigned_to:to.toLowerCase() }, r.handle+' → '+vaName(to.toLowerCase())).then(function(ok){ if(ok){ r.assigned_to=to.toLowerCase(); cacheRows(); paint(); } return ok; }); });
+  }
+  async function del(id){
+    var r=rowById(id);
+    if(!confirm('DELETE '+((r&&r.handle)||'this account')+' from the X board?\n\nOnly for wrong entries — its posts and history go with it. A failed account is restarted, not deleted.')) return;
+    try{
+      var d=await jFetch(API+'?action=pa_delete&id='+encodeURIComponent(id)+'&employee_id='+encodeURIComponent(isOwner()?'admin':USER.id)+'&_='+Date.now(), 0);
+      if(d&&d.ok){ toast('Deleted.'); load(); }
+      else if(d&&d.error==='NOT_YOURS') toast('Only the VA on this account (or the admin) can delete it.');
+      else toast('Could not delete: '+((d&&d.error)||'error'));
+    }catch(e){ toast('Connection error.'); }
+  }
+  async function copyCap(id, at){ var r=rowById(id); var p=r&&posts(r).filter(function(x){ return x.at===at; })[0]; if(!p) return; toast((await copyText(p.cap))?'Caption copied — same photo, same words on the new account.':'Could not copy — select it by hand.'); }
+  function setDay(d){ S.day=(d===today())?'':d; paint(); }
+  function setFilter(f){ S.filter=f; try{ sessionStorage.setItem('dc_va_'+PROJECT, f); }catch(e){} paint(); }
+
+  /* ══ VIEWS ══ */
+  function kmenu(label, items){
+    return '<details class="kmenu" onclick="event.stopPropagation()"><summary>'+label+'</summary><div class="dd">'+items.map(function(it){
+      if(it==='---') return '<div class="sep"></div>';
+      return '<button class="'+(it[2]||'')+'" onclick="this.closest(\'details\').removeAttribute(\'open\');'+it[1]+'">'+it[0]+'</button>';
+    }).join('')+'</div></details>';
+  }
+  function sopHtml(){
+    return '<details class="th-sop"><summary>X Growth Playbook (SOPX01) — the short version</summary><div class="th-sopg">'+
+      '<div><b>How X works</b>X counts one signal: <b>replies</b>. It learns the niche from who you interact with. Every post must demand a reply.</div>'+
+      '<div><b>Structure</b>One <b>main</b> (the asset — brandy, no explicit content, bio → OF) and <b>2–3 burners</b> (volume, trends; bio + pinned reply → the main).</div>'+
+      '<div><b>Setup</b>Profile picture leads with her strongest asset (sharp, lit, centered). Name, bio, link set before the first reply.</div>'+
+      '<div><b>3-day warm-up</b>Reply <b>5–10 times a day</b> under the reply-target list. Answer the post, one-liners, no links or generic praise. Like + follow. <b>Zero posts.</b></div>'+
+      '<div><b>Week 1</b>Engagement bait: scroll-stopping image + caption that gets an emotion + a reply they have to give. Main 2–3/day (min 1), burners 3–4.</div>'+
+      '<div><b>Week 2 on</b>Add opinion questions (everyone answers differently). Reply to the repliers. Main ≈ ⅔ engagement, ⅓ trends.</div>'+
+      '<div><b>Trends</b>Spot it, post the creator\'s version within <b>15–30 min</b> on every account, pin a reply to the main on burners, log views at 24 h.</div>'+
+      '<div><b>Winners &amp; flags</b>Mark posts that beat the baseline and reuse them on every new account. Embed test: preview = clean, bare link = flagged → re-upload with a new caption.</div>'+
+      '<div><b>Day-14 gate</b>One post broke the baseline → scale. Every post at 10–300 impressions → <b>restart</b>, don\'t fix.</div>'+
+    '</div></details>';
+  }
+  function routine(o){
+    var st=function(n, ok, lbl, sub){ return '<div class="th-st'+(ok?' ok':'')+'"><i>'+(ok?'✓':n)+'</i><span>'+lbl+'<small>'+sub+'</small></span></div>'; };
+    return '<div class="th-card"><div class="th-ch"><b>Today\'s routine</b><span>'+esc(sdate(today()))+'</span></div><div class="th-steps">'+
+      st(1, o.warm===0 || o.wuShort===0, 'Warm-up replies (5–10 each)', o.warm?(o.wuShort?o.wuShort+' account'+(o.wuShort===1?'':'s')+' under 5 today':'all warming accounts at 5+'):'no account warming')+
+      st(2, o.due===0, 'Hit the posting cadence', o.live?(o.due?o.due+' account'+(o.due===1?'':'s')+' below today\'s target':o.posts+' posts today'):'no live account yet')+
+      st(3, o.trends>0, 'Check trends, post within 30 min', o.trends?o.trends+' trend'+(o.trends===1?'':'s')+' logged · '+o.trendPosts+' trend post'+(o.trendPosts===1?'':'s'):'none logged today')+
+      st(4, o.live===0 || o.rr>=o.live, 'Reply to the repliers', o.live?(o.rr+' of '+o.live+' live account'+(o.live===1?'':'s')):'—')+
+      (o.gate?st(5, false, 'Day-14 gate', o.gate+' account'+(o.gate===1?'':'s')+' to review'):'')+
+    '</div></div>';
+  }
+  function stats(o){
+    var c=function(v, l, w){ return '<div class="th-stat'+(w?' warn':'')+'"><b>'+v+'</b><span>'+l+'</span></div>'; };
+    return '<div class="th-stats">'+c(o.accts,'Accounts')+c(o.warm,'Warming up')+c(o.live,'Live')+c(o.rep,'Replies '+(day()===today()?'today':sdate(day())))+c(o.posts,'Posts')+c(o.trends,'Trends logged')+(o.gate?c(o.gate,'Gate due',true):'')+'</div>';
+  }
+  function addForm(){
+    return '<div class="th-add mx-add">'+
+      '<input id="mx-h" placeholder="@handle" maxlength="32" autocomplete="off" onkeydown="if(event.key===\'Enter\')MX.add()">'+
+      '<select id="mx-role"><option value="burner">Burner</option><option value="main">Main account</option></select>'+
+      '<input id="mx-cr" placeholder="Creator" maxlength="60" autocomplete="off">'+
+      (isOwner()?'<input id="mx-va" placeholder="VA ID (optional)" maxlength="24" autocomplete="off">':'')+
+      '<button class="th-btn go" onclick="MX.add()">＋ Add account</button></div>';
+  }
+  function trendsHtml(own){
+    var L=trends().slice(0,own?20:8), td=today();
+    return '<div class="th-card"><div class="th-ch"><b>Trend log</b><span>spot it → post on every account within 15–30 min · log views at 24 h</span></div>'+
+      (own?'':'<div class="th-add mx-tadd"><input id="mx-tn" placeholder="Trend spotted — the format, phrase or prompt" maxlength="120" autocomplete="off" onkeydown="if(event.key===\'Enter\')MX.trendAdd()"><button class="th-btn go" onclick="MX.trendAdd()">Log trend</button></div>')+
+      (L.length?'<div class="mx-tl">'+L.map(function(t){
+        var n=0; accts().forEach(function(r){ posts(r).forEach(function(p){ if(p.tr===t.id) n++; }); });
+        var age=Math.round((Date.now()-Date.parse(t.at))/36e5);
+        return '<div><b>'+esc(t.n)+'</b><span>'+esc(sdate(t.bd))+' '+esc(tm(t.at))+(own?' · '+esc(vaName(String(t.by).toLowerCase())):'')+'</span><em>'+n+' post'+(n===1?'':'s')+'</em>'+
+          (t.v24!==''&&t.v24!=null?'<i>'+Number(t.v24).toLocaleString()+' views/24h</i>':(age>=20&&!own?'<button class="th-btn sm ln" onclick="MX.trendViews(\''+jsq(t.id)+'\')">Log 24h views</button>':(t.bd===td?'<i class="hot">live now</i>':'')))+'</div>';
+      }).join('')+'</div>':'<div class="muted" style="font-size:12px">No trends logged yet.</div>')+'</div>';
+  }
+  function winnersHtml(){
+    var W=winnersAll().slice(0,12); if(!W.length) return '';
+    return '<div class="th-card"><div class="th-ch"><b>Winners</b><span>reuse them — same photo, same words — on every new account</span></div><div class="mx-tl">'+W.map(function(x){
+      return '<div><b title="'+esc(x.p.cap)+'">'+esc(String(x.p.cap).slice(0,90))+'</b><span>'+esc(x.r.handle)+' · '+esc(TY[x.p.ty]||x.p.ty)+(x.p.imp?' · '+Number(x.p.imp).toLocaleString()+' impressions':'')+'</span><button class="th-btn sm ln" onclick="MX.copyCap(\''+jsq(x.r.id)+'\',\''+jsq(x.p.at)+'\')">Copy caption</button></div>';
+    }).join('')+'</div></div>';
+  }
+  function panHtml(r){
+    var P=S.pan; if(!P || P.id!==r.id) return ''; var id=jsq(r.id), m=Mt(r);
+    if(P.k==='setup'){ var s=m.setup||{}, rl=role(r);
+      var ck=function(k, t){ return '<label class="th-ck"><input type="checkbox" id="mx-s-'+k+'"'+(s[k]?' checked':'')+'> '+t+'</label>'; };
+      return '<div class="wp-pan"><b>Profile setup · '+esc(r.handle)+'</b><p>Everything set before the first reply goes out.</p>'+
+        ck('pfp','Profile picture leads with her strongest asset — sharp, well lit, centered, nothing explicit')+
+        ck('name', rl==='main'?'Display name: her name / stage name, clean':'Display name: a different name for this burner')+
+        ck('bio', rl==='main'?'Bio: short, personality-led, one hook line':'Bio: one line that funnels to the main (“I post way more on my main → @main”)')+
+        ck('link', rl==='main'?'Link: OnlyFans / landing page':'Link: the main account')+
+        '<div class="wp-row"><button class="th-btn go" onclick="MX.setupSave(\''+id+'\')">Save setup</button><button class="th-btn ln" onclick="MX.close()">Cancel</button></div></div>';
+    }
+    if(P.k==='post'){
+      var T=trends().filter(function(t){ return Date.now()-Date.parse(t.at)<48*36e5; });
+      var last=posts(r).slice(-6).reverse();
+      return '<div class="wp-pan"><b>Log a post · '+esc(r.handle)+'</b><p>'+postsOn(r)+' today · target '+TGT[role(r)][0]+'–'+TGT[role(r)][1]+(role(r)==='main'?' (min 1, high quality only)':' (volume over polish)')+'.</p>'+
+        '<div class="wp-row"><select id="mx-ty" onchange="MX.paint()"><option value="bait">Bait (week 1 style)</option><option value="question">Opinion question</option><option value="trend">Trend</option><option value="winner">Winner repost</option></select>'+
+          '<select id="mx-tr"><option value="">— trend —</option>'+T.map(function(t){ return '<option value="'+esc(t.id)+'">'+esc(t.n)+'</option>'; }).join('')+'</select></div>'+
+        '<textarea id="mx-cap" maxlength="280" placeholder="Caption as posted — something they have to answer"></textarea>'+
+        '<input id="mx-u" placeholder="Post link (optional) — https://x.com/…" maxlength="200" style="width:100%">'+
+        '<label class="th-ck"><input type="checkbox" id="mx-rq"> The caption demands a reply (funny, different, an answer they want to say — not "rate me" / "do I look good")</label>'+
+        (role(r)==='burner'?'<label class="th-ck"><input type="checkbox" id="mx-pin"> Pinned a reply pointing to the main (do it as soon as it moves)</label>':'')+
+        '<div class="wp-row"><button class="th-btn go" onclick="MX.postSave(\''+id+'\')">Posted ✓ (+1)</button><button class="th-btn ln" onclick="MX.close()">Close</button></div>'+
+        (last.length?'<div class="mx-pl">'+last.map(function(p){ var a=jsq(p.at);
+          return '<div><span class="mx-ty '+esc(p.ty)+'">'+esc(TY[p.ty]||p.ty)+'</span><b title="'+esc(p.cap)+'">'+esc(String(p.cap).slice(0,70))+'</b><small>'+esc(sdate(p.bd))+'</small>'+
+            '<span class="mx-pa">'+(p.emb==='clean'?'<i class="ok">clean</i>':(p.emb==='flag'?'<i class="bad">flagged</i>':'<button onclick="MX.postMark(\''+id+'\',\''+a+'\',\'emb\',\'clean\')">Embed: preview ✓</button><button onclick="MX.postMark(\''+id+'\',\''+a+'\',\'emb\',\'flag\')">bare link ✗</button>'))+
+            (role(r)==='burner'&&!p.pin?'<button onclick="MX.postMark(\''+id+'\',\''+a+'\',\'pin\',1)">pinned reply</button>':'')+
+            '<button class="'+(p.win?'on':'')+'" onclick="MX.postMark(\''+id+'\',\''+a+'\',\'win\','+(p.win?0:1)+')">'+(p.win?'★ winner':'☆ winner')+'</button></span></div>'; }).join('')+'</div>':'')+
+      '</div>';
+    }
+    if(P.k==='gate'){
+      return '<div class="wp-pan"><b>Day-14 gate · '+esc(r.handle)+'</b><p>Did at least one post break the account\'s baseline (e.g. averages 500 impressions, one hit 2k+)? '+wins(r)+' winner'+(wins(r)===1?'':'s')+' marked.</p>'+
+        '<input id="mx-gn" placeholder="Note — which post, how many impressions" maxlength="200" style="width:100%">'+
+        '<div class="wp-row"><button class="th-btn go" onclick="MX.gateSave(\''+id+'\',\'pass\')">Pass — scale it</button><button class="th-btn ln" onclick="MX.gateSave(\''+id+'\',\'fail\')">Fail — restart the account</button><button class="th-btn ln" onclick="MX.close()">Cancel</button></div></div>';
+    }
+    return '';
+  }
+  function card(r, own){
+    var id=jsq(r.id), s=state(r), m=Mt(r), rl=role(r), t=TGT[rl];
+    var flag={ launch:['ready','Ready to go live'], warm:['low','Warm-up day '+Math.min(wuDay(r),3)+' of 3'], gate:['out','Gate due'], post:['ready','Posts due'], done:['ok','On target'], restart:['paused','Restarted'] }[s];
+    var nums=r.status==='warmup'
+      ? '<div class="'+(repOn(r)>=5?'':'pink')+'"><b>'+repOn(r)+'</b><span>replies today</span></div><div><b>'+wuDone(r)+'/3</b><span>days at 5+</span></div><div><b>0</b><span>posts (none allowed)</span></div>'
+      : '<div class="'+(postsOn(r)>=t[0]?'':'pink')+'"><b>'+postsOn(r)+'/'+t[0]+'</b><span>posts today</span></div><div><b>'+repOn(r)+'</b><span>replies today</span></div><div class="'+(liveDay(r)>=12&&!m.gate?'warn':'')+'"><b>'+(liveDay(r)||'—')+'</b><span>day live</span></div>';
+    var info=[(rl==='main'?'Main':'Burner')+(m.cr?' · '+m.cr:'')];
+    if(!setupOk(r)) info.push('profile setup unfinished'); if(wins(r)) info.push(wins(r)+' winner'+(wins(r)===1?'':'s')); if(m.gate) info.push('gate '+(m.gate.res==='pass'?'passed':'failed')+' '+sdate(String(m.gate.at).slice(0,10)));
+    if(own) info.push(vaName(ownerOf(r)));
+    var menu=[['Profile setup…', "MX.open('"+id+"','setup')"]];
+    if(r.status==='live') menu.push(['Day-14 gate…', "MX.open('"+id+"','gate')"]);
+    menu.push(rl==='main'?['Make it a burner', "MX.setRole('"+id+"','burner')"]:['Make it the main (burner outgrew it)', "MX.setRole('"+id+"','main')"]);
+    if(own) menu.push(['Move to another VA…', "MX.moveTo('"+id+"')"]);
+    menu.push('---'); menu.push(['Delete (wrong entry)', "MX.del('"+id+"')", 'danger']);
+    var btns='';
+    if(!own && r.status!=='restart'){
+      if(r.status==='warmup'){
+        btns='<div class="wp-btns"><button class="th-btn ln" onclick="MX.reply(\''+id+'\',1)">＋1 reply</button><button class="th-btn ln" onclick="MX.reply(\''+id+'\',5)">＋5 replies</button>'+
+          (canLaunch(r)?'<button class="th-btn go" onclick="MX.launch(\''+id+'\')">Go live</button>':'')+'</div>'+
+          (!setupOk(r)?'<button class="wp-up" onclick="MX.open(\''+id+'\',\'setup\')">Finish the profile setup before replying</button>':'');
+      } else {
+        btns='<div class="wp-btns"><button class="th-btn go" onclick="MX.open(\''+id+'\',\'post\')">Log a post</button><button class="th-btn ln" onclick="MX.reply(\''+id+'\',1)">＋1 reply</button>'+
+          '<button class="th-btn ln" onclick="MX.rrDone(\''+id+'\')"'+(rrToday(r)?' disabled':'')+'>'+(rrToday(r)?'Repliers answered ✓':'Replied to repliers')+'</button></div>'+
+          (gateDue(r)?'<button class="wp-up" onclick="MX.open(\''+id+'\',\'gate\')">Day '+liveDay(r)+': review the day-14 gate</button>':'');
+      }
+    }
+    return '<div class="wp-m mx-a '+s+'"><div class="wp-hd"><b title="'+esc(r.handle)+'">'+esc(r.handle)+'</b><span class="wp-flag '+flag[0]+'">'+flag[1]+'</span>'+kmenu('⋯', menu)+'</div>'+
+      '<div class="wp-nums">'+nums+'</div><div class="wp-last">'+esc(info.join(' · '))+'</div>'+btns+(own?'':panHtml(r))+'</div>';
+  }
+  function grid(list, own){
+    if(!list.length) return '<div class="th-empty"><b>No X accounts yet</b><span>'+(own?'Accounts appear when the VA adds them (or add one above with a VA ID).':'Add the main account and 2–3 burners — set each profile up, then start the 3-day reply warm-up.')+'</span></div>';
+    var by={}; list.forEach(function(r){ var s=state(r); (by[s]=by[s]||[]).push(r); });
+    return GRP.filter(function(g){ return by[g[0]]; }).map(function(g){
+      var L=by[g[0]].sort(function(a,b){ return (role(a)==='main'?0:1)-(role(b)==='main'?0:1) || String(a.handle).localeCompare(String(b.handle)); });
+      return '<div class="wp-sect '+g[0]+'"><b>'+g[1]+'</b><span>'+L.length+'</span></div><div class="wp-grid">'+L.map(function(r){ return card(r, own); }).join('')+'</div>';
+    }).join('');
+  }
+  function daySel(){
+    var opts=[], d=today(); for(var i=0;i<14;i++){ var x=hubDayAdd(d,-i); opts.push('<option value="'+x+'"'+(x===day()?' selected':'')+'>'+(i===0?'Today':(i===1?'Yesterday':sdate(x)))+'</option>'); }
+    return '<select class="th-day" onchange="MX.setDay(this.value)">'+opts.join('')+'</select>';
+  }
+  function ownerHtml(){
+    var d=day(), all=dayStats(null, d), keys=owners().filter(function(k){ return OWNER_IDS.indexOf(k.toUpperCase())<0; });
+    var tbl=keys.length?'<div class="th-card"><div class="th-ch"><b>By VA · '+esc(d===today()?'today':sdate(d))+'</b><span>replies · posts · trends · repliers answered</span></div><table class="th-tbl"><thead><tr><th>VA</th><th>Replies</th><th>Posts</th><th>Trends</th><th>Repliers</th><th>Warming / live</th></tr></thead><tbody>'+keys.map(function(k){
+        var o=dayStats(k, d);
+        return '<tr><td>'+avatar(k,'a')+'<b>'+esc(vaName(k))+'</b></td><td class="'+(o.rep?'ok':'warn')+'">'+o.rep+'</td><td class="'+(o.posts?'ok':'')+'">'+o.posts+(o.trendPosts?'<small>'+o.trendPosts+' trend</small>':'')+'</td><td>'+o.trends+'</td><td>'+o.rr+'/'+o.live+'</td><td>'+o.warm+' / '+o.live+(o.gate?'<small>'+o.gate+' gate due</small>':'')+'</td></tr>';
+      }).join('')+'</tbody></table></div>':'<div class="th-empty"><b>Nobody on Meadow · X yet</b><span>The VA lands here when their portal timer runs on Meadows › X / Twitter (or add them in Team).</span></div>';
+    var by={}; accts().forEach(function(r){ var k=ownerOf(r); by[k]=(by[k]||0)+1; });
+    var list=accts().filter(function(r){ return S.filter==='all' || ownerOf(r)===S.filter; });
+    var pills=Object.keys(by).length>1?'<div class="th-pills"><button class="vpill'+(S.filter==='all'?' on':'')+'" onclick="MX.setFilter(\'all\')">All · '+accts().length+'</button>'+Object.keys(by).sort().map(function(k){ return '<button class="vpill'+(S.filter===k?' on':'')+'" onclick="MX.setFilter(\''+jsq(k)+'\')">'+esc(vaName(k))+' · '+by[k]+'</button>'; }).join('')+'</div>':'';
+    return '<div class="th-ownh">'+daySel()+'</div>'+stats(all)+tbl+addForm()+'<div class="th-gh"><b>Every account</b><span>'+accts().length+'</span></div>'+pills+grid(list, true)+trendsHtml(true)+winnersHtml();
+  }
+  function bodyHtml(){
+    if(!S.loaded) return '<div class="muted" style="padding:8px">'+(S.err?esc(S.err):'Loading the X board…')+'</div>';
+    if(isOwner()) return ownerHtml();
+    S.day='';
+    var o=dayStats(meL(), today()), mine=accts().filter(function(r){ return ownerOf(r)===meL(); });
+    return routine(o)+stats(o)+addForm()+grid(mine, false)+trendsHtml(false)+winnersHtml();
+  }
+  var CSS='.c-mx .mx-add{grid-template-columns:minmax(120px,1fr) 130px minmax(110px,1fr) '+'auto}'+
+    '.c-mx .mx-tadd{grid-template-columns:1fr auto;margin-bottom:8px}'+
+    '.c-mx .mx-tl>div,.c-mx .mx-pl>div{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 0;border-top:1px solid var(--line);font-size:12px}'+
+    '.c-mx .mx-tl>div:first-child,.c-mx .mx-pl>div:first-child{border-top:0}'+
+    '.c-mx .mx-tl b,.c-mx .mx-pl b{flex:1;min-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}'+
+    '.c-mx .mx-tl span,.c-mx .mx-pl small{color:var(--ink3);font-size:11px}'+
+    '.c-mx .mx-tl em{font-style:normal;font-weight:800;font-size:11px;color:var(--ink2)}'+
+    '.c-mx .mx-tl i{font-style:normal;font-weight:800;font-size:11px;color:#0f766e}.c-mx .mx-tl i.hot{color:#be123c}'+
+    '.c-mx .mx-ty{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;padding:2px 7px;border-radius:99px;background:var(--s3);color:var(--ink2)}'+
+    '.c-mx .mx-ty.trend{background:#fef3c7;color:#92400e}.c-mx .mx-ty.question{background:#e0f2fe;color:#075985}.c-mx .mx-ty.winner{background:#dcfce7;color:#166534}'+
+    '.c-mx .mx-pa{display:flex;gap:4px;flex-wrap:wrap}.c-mx .mx-pa button{border:1px solid var(--line);background:var(--s1);border-radius:8px;padding:3px 7px;font:700 10.5px Inter,sans-serif;cursor:pointer;color:var(--ink2)}'+
+    '.c-mx .mx-pa button.on{background:#dcfce7;border-color:#86efac;color:#166534}.c-mx .mx-pa i{font-style:normal;font-weight:800;font-size:10.5px;padding:3px 6px;border-radius:8px}'+
+    '.c-mx .mx-pa i.ok{background:#dcfce7;color:#166534}.c-mx .mx-pa i.bad{background:#fee2e2;color:#b91c1c}'+
+    '.c-mx .wp-pan select{min-width:150px}'+
+    '@media (max-width:640px){ .c-mx .mx-add{grid-template-columns:1fr 1fr} }';
+  function render(host){
+    if(!document.getElementById('mx-css')){ var st=document.createElement('style'); st.id='mx-css'; st.textContent=CSS; document.head.appendChild(st); }
+    host.innerHTML='<div class="c-thr c-wp c-mx"><div class="sub">Grow the creator on X the ALTR way: one main + 2–3 burners, a 3-day reply-only warm-up, posts that demand a reply, trends within 30 minutes, winners reused, and the day-14 gate. Timed in the hub · replies count +1 X Replies, posts +1 X Posts (trend posts +1 X Trend Posts).</div>'+sopHtml()+'<div id="mx-body"></div></div>';
+    paint();
+  }
+  var KEEP=['mx-h','mx-cr','mx-va','mx-tn','mx-ty','mx-tr','mx-cap','mx-u','mx-gn'];
+  function paint(){
+    var b=$('mx-body'); if(!b) return HUB.repaint();
+    var keep={}, pid=S.pan?S.pan.id+'|'+S.pan.k:'';
+    if(pid && pid===S._pid) KEEP.forEach(function(k){ var e=$(k); if(e && e.value!=='') keep[k]=e.value; });
+    ['mx-h','mx-cr','mx-va','mx-tn','mx-role'].forEach(function(k){ var e=$(k); if(e && e.value) keep[k]=e.value; });
+    var cks={}; ['mx-rq','mx-pin'].forEach(function(k){ var e=$(k); if(e && e.checked && pid===S._pid) cks[k]=1; });
+    var ae=document.activeElement, foc=ae&&ae.id;
+    b.innerHTML=bodyHtml(); S._pid=pid;
+    Object.keys(keep).forEach(function(k){ var e=$(k); if(e) e.value=keep[k]; }); Object.keys(cks).forEach(function(k){ if($(k)) $(k).checked=true; });
+    var ty=$('mx-ty'), tr=$('mx-tr'); if(tr) tr.style.display=(ty&&ty.value==='trend')?'':'none';
+    if(foc && $(foc) && $(foc).focus) try{ $(foc).focus(); }catch(e){}
+  }
+  /* MONTH SCORES (owner → Client Hub · Scores). Productivity stays the portal's own (po_bump counts).
+     QA = worked days where every warming account got 5+ replies and every live account hit its minimum posts.
+     Results = day-14 gates passed out of gates reviewed this month (needs at least one review). */
+  function monthScores(month){
+    var from=month+'-01', end=hubMonthEnd(month), emps={};
+    owners().forEach(function(k){ emps[k]=1; });
+    return Object.keys(emps).filter(function(e){ return OWNER_IDS.indexOf(e.toUpperCase())<0; }).map(function(emp){
+      var worked=0, good=0;
+      for(var d=from; d<=end; d=hubDayAdd(d,1)){
+        var act=0, ok=true;
+        accts().forEach(function(r){ if(ownerOf(r)!==emp) return; var m=Mt(r), rp=+((m.rep||{})[d]||0), ps=(m.posts||[]).filter(function(p){ return p.bd===d; }).length;
+          if(rp||ps) act=1;
+          var fp=(m.posts||[]).map(function(p){ return p.bd; }).sort()[0]||'';
+          if(m.ws && d>=m.ws && (!fp || d<fp) && d<=hubDayAdd(m.ws,2) && rp<5) ok=false;
+          if(fp && d>=fp && r.status!=='restart' && ps<1) ok=false; });
+        if(act){ worked++; if(ok) good++; }
+      }
+      var g=accts().filter(function(r){ return ownerOf(r)===emp && Mt(r).gate && String(Mt(r).gate.at).slice(0,7)===month; }), pass=g.filter(function(r){ return Mt(r).gate.res==='pass'; }).length;
+      if(!worked && !g.length) return null;
+      return { emp:emp.toUpperCase(), days:worked, prod:null, qa:worked?hubR1(good/worked*100):null, res:g.length?hubR1(pass/g.length*100):null,
+        why:{ prod:'portal productivity', qa:good+' of '+worked+' days on the playbook cadence', res:g.length?(pass+' of '+g.length+' day-14 gates passed'):'no gate reviewed yet' } };
+    }).filter(Boolean);
+  }
+  return { id:CID, S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners, monthScores:monthScores,
+           add:add, open:open, close:close, setupSave:setupSave, reply:reply, launch:launch, postSave:postSave, postMark:postMark, rrDone:rrDone,
+           trendAdd:trendAdd, trendViews:trendViews, gateSave:gateSave, setRole:setRole, moveTo:moveTo, del:del, copyCap:copyCap, setDay:setDay, setFilter:setFilter,
+           _t:{ dayStats:dayStats, state:state, canLaunch:canLaunch, wuDay:wuDay, wuDone:wuDone, liveDay:liveDay, gateDue:gateDue } };
+})();
+
 /* ═══════════ THE HUB — tabs, who sees what, Team ═══════════ */
 var HUB=(function(){
-  var MODS={ 'design-shopify':DS, 'imperium':IMA, 'ember':EM, 'skyvern':SKY, 'project2':P2, 'slaybae':SLB, 'threads':THR, 'meadow':MDW, 'newfans':WP };
+  var MODS={ 'design-shopify':DS, 'imperium':IMA, 'ember':EM, 'skyvern':SKY, 'project2':P2, 'slaybae':SLB, 'threads':THR, 'meadow':MDW, 'meadowx':MX, 'newfans':WP };
   Object.keys(MODS).forEach(function(k){ if(!clientById(k)) delete MODS[k]; });   // retired clients don't load (Oct 15)
   function loadAll(){ Object.keys(MODS).forEach(function(k){ try{ MODS[k].load(); }catch(e){} }); }
   /* WHO IS ON A CLIENT = THE WORKLOG (Jeth, Oct 9: "just based on the worklog") — anyone who tracked time on that
