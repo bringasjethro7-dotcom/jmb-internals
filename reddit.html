@@ -5205,6 +5205,13 @@ var CHK={ day:'', map:{}, prev:{}, at:0, err:'' };
 function hcShiftOf(va){ return SHIFTOF[String(va||'').toLowerCase()]==='night'?'night':'day'; }
 function hcDue(shift, day){ day=day||today(); return shift==='night'?dAdd(day,1)+' '+HC_NIGHT_END:day+' '+HC_DAY_END; }
 function hcDueLbl(shift){ return shift==='night'?'5:00 AM':'5:00 PM'; }
+/* Nov 11 (Jeth): night shift works overtime until 8–10 AM. The tool day flips at 7 AM, so a night VA still working was
+   signed in for the NEW day at 7:00 and handed a second health check right after finishing the night one. Now a night
+   VA is never signed in between 7:00 AM and 1:00 PM PHT (their overtime window), and a night sign-in made in that window
+   only counts from 1:00 PM — their next list opens with their next night shift. */
+var HC_NIGHT_OT_FROM=7, HC_NIGHT_OT_TO=13;
+function phtHour(t){ var d=t?new Date(t):new Date(); return isNaN(d)?-1:((d.getUTCHours()+8)%24); }
+function hcNightOT(){ var h=phtHour(); return h>=HC_NIGHT_OT_FROM && h<HC_NIGHT_OT_TO; }
 var _chkP=null;
 function chkLoad(force){
   var d=today(); if(!force && CHK.day===d && Date.now()-CHK.at<90000) return Promise.resolve();
@@ -5214,7 +5221,9 @@ function chkLoad(force){
     try{
       var yd=dAdd(d,-1);
       var rows=await sbGet('rc_checkin?day=in.('+encodeURIComponent(d)+','+encodeURIComponent(yd)+')&select=day,employee_id,shift,first_at');
-      var m={}, pm={}; (rows||[]).forEach(function(x){ var o={ shift:x.shift==='night'?'night':'day', at:x.first_at }, k=String(x.employee_id||'').toLowerCase(); if(String(x.day)===d) m[k]=o; else pm[k]=o; });
+      var ot=hcNightOT();
+      var m={}, pm={}; (rows||[]).forEach(function(x){ var o={ shift:x.shift==='night'?'night':'day', at:x.first_at }, k=String(x.employee_id||'').toLowerCase();
+        if(String(x.day)===d){ var fh=phtHour(x.first_at); if(ot && o.shift==='night' && fh>=HC_NIGHT_OT_FROM && fh<HC_NIGHT_OT_TO) return; m[k]=o; } else pm[k]=o; });   // Nov 11: night overtime sign-ins wait until 1 PM
       CHK={ day:d, map:m, prev:pm, at:Date.now(), err:'' };
     }catch(e){ CHK.err=String((e&&e.message)||e||'failed'); CHK.at=Date.now(); }
     _CC=null; _chkP=null;
@@ -5225,6 +5234,7 @@ function chkLoad(force){
 async function chkIn(){
   if(!USER || isAdmin() || !DIR_READY) return;
   var d=today(), me=myId(), k='rc_ci_'+me+'_'+d; if(!me) return;
+  if(hcShiftOf(me)==='night' && hcNightOT()) return;   // Nov 11: night overtime — today's list opens with tonight's shift
   var done=false; try{ done=!!localStorage.getItem(k); }catch(e){}
   if(done && CHK.day===d && CHK.map[me]) return;
   try{
@@ -5302,6 +5312,7 @@ function hcVaBanner(n, left){
 }
 function hcEmptyMsg(){
   if(CHK.day!==today() && !CHK.err) return 'Loading today\'s list…';
+  if(!CHK.err && !(CHK.map||{})[myId()] && hcShiftOf(myId())==='night' && hcNightOT()) return 'Your health check for last night is done. Today\'s list opens when your night shift starts.';
   if(!CHK.err && !(CHK.map||{})[myId()]) return 'Signing you in for today\'s check…';
   return 'Nothing assigned to you right now. When a teammate is absent, or the morning shift leaves accounts unchecked, they show up here — keep this tab open.';
 }
