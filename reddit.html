@@ -5379,7 +5379,7 @@ async function pqRegrade(from, apply){
       var row={ day:y, va:va, old:old, now:sug };
       if(apply && sug!==old){
         try{ var d=await api({ action:'rc_qa_set', by:USER.id, va:va, date:y, score:sug, note:'Automatic (re-graded Nov 11 with the fair rules; the owner can change it): '+(F.length?F.map(function(f){ return f.t+' −'+f.d; }).join(' · '):'no rule hits') });
-          row.saved=!!(d&&d.ok); if(row.saved) api({ action:'rc_day_snap', by:USER.id, va:va, date:y, auto_flags:JSON.stringify(F.filter(function(f){ return f.k!=='hidden_ban' && f.k!=='manual'; })), auto_deduct:ded }).catch(function(){});
+          row.saved=!!(d&&d.ok); if(row.saved) api({ action:'rc_day_snap', by:USER.id, va:va, date:y, auto_flags:JSON.stringify(F.filter(function(f){ return f.k!=='hidden_ban' && f.k!=='manual' && f.k!=='viol'; })), auto_deduct:ded }).catch(function(){});
         }catch(e){ row.saved=false; }
       }
       out.push(row);
@@ -5425,7 +5425,7 @@ async function pqAutoFill(){
       var F=pqFlags(va,y2,dr,L), ded=pqDed(F); return { va:va, F:F, ded:ded, sug:Math.max(0, Math.round((10-ded)*2)/2) }; }).filter(Boolean);
     for(var k=0;k<list.length;k++){ var x=list[k];
       try{ var d=await api({ action:'rc_qa_set', by:USER.id, va:x.va, date:y2, score:x.sug, note:'Automatic (the owner can change it): '+(x.F.length?x.F.map(function(f){ return f.t+' −'+f.d; }).join(' · '):'no rule hits') });
-        if(d && d.ok){ total++; api({ action:'rc_day_snap', by:USER.id, va:x.va, date:y2, auto_flags:JSON.stringify(x.F.filter(function(f){ return f.k!=='hidden_ban' && f.k!=='manual'; })), auto_deduct:x.ded }).catch(function(){}); }
+        if(d && d.ok){ total++; api({ action:'rc_day_snap', by:USER.id, va:x.va, date:y2, auto_flags:JSON.stringify(x.F.filter(function(f){ return f.k!=='hidden_ban' && f.k!=='manual' && f.k!=='viol'; })), auto_deduct:x.ded }).catch(function(){}); }
       }catch(e){}
     }
     try{ localStorage.setItem('rc_qa_auto2_'+y2,'1'); }catch(e){}
@@ -7492,17 +7492,36 @@ var QA_RULES=[
   { k:'overrun',    n:'Task timer left running past its time limit', d:0.25, u:'each · max 1' },
   { k:'crfail',     n:'Creation timer ended with no account — cancelled after 2 minutes or ran out — the first 2 a day are free', d:0.25, u:'each after 2 · max 1.5' },
   { k:'typo',       n:'Username typo — the health check could not find the account until the owner corrected the name', d:0.25, u:'each · max 1' },
-  { k:'fix_open',   n:'A username sent back for fixing is still not corrected (or marked banned)', d:0.5, u:'each, per day it stays open · max 1.5' }
+  { k:'fix_open',   n:'A username sent back for fixing is still not corrected (or marked banned)', d:0.5, u:'each, per day it stays open · max 1.5' },
+  /* Nov 11 (Jeth: "deductions … not following the instructions for the tools and they have violations against the SOPs, the
+     portals"): the owner logs a violation on a VA-day from the QA table. A logged violation is the owner's own call, so it is
+     not held back by the daily floor. Every new rule starts with a 3-day grace — it shows as a reminder (−0) first. */
+  { k:'viol',       n:'Violation logged by the owner — tool instructions not followed (−0.5), portal rule broken (−0.5), SOP not followed (−1), serious SOP breach (−2)', d:0.5, u:'as logged · outside the floor', since:'2026-11-11' }
 ];
+/* the violation list — the same four in every tool (Reddit Central, ALTR Studio, Slaybae, the Client Hub) */
+var VIOL_TYPES=[
+  { k:'tool', n:'Tool instructions not followed', d:0.5, ex:'skipped a step the tool asks for, wrong button or flow, ignored a tool warning' },
+  { k:'portal', n:'Portal rule broken', d:0.5, ex:'timer on the wrong task, no EOD checklist, left the timer running' },
+  { k:'sop', n:'SOP not followed', d:1, ex:'did the work differently from the SOP' },
+  { k:'serious', n:'Serious SOP breach', d:2, ex:'put accounts or phones at risk' }
+];
+var QA_GRACE_DAYS=3;
+/* a rule with a start date (since) is a reminder only for its first 3 days */
+function pqGrace(k, day){ var r=pqRule(k); return !!(r.since && day>=r.since && day<dAdd(r.since, QA_GRACE_DAYS)); }
+function pqGraceApply(F, day){
+  (F||[]).forEach(function(f){ if(f.d>0 && pqGrace(f.k, day)){ f.t+=' · grace until '+dAdd(pqRule(f.k).since, QA_GRACE_DAYS)+' (reminder)'; f.d=0; } });
+  return F;
+}
 /* Nov 11 (Jeth: "I want to be fair"): a day can lose at most 4 points (worst day 6/10) — unless it shows clear cheating:
    a session/DMs ticked within 20 s, or 2+ hidden bans. Hidden bans count at most −2 together. */
 var QA_DAY_FLOOR=4;
 function pqDed(F){
   var hb=0, sum=0, severe=false;
-  (F||[]).forEach(function(f){ if(f.k==='hidden_ban'){ hb+=f.d; return; } sum+=(+f.d||0); if(f.k==='quick' && f.d>0) severe=true; });
+  var viol=0;
+  (F||[]).forEach(function(f){ if(f.k==='hidden_ban'){ hb+=f.d; return; } if(f.k==='viol'){ viol+=(+f.d||0); return; } sum+=(+f.d||0); if(f.k==='quick' && f.d>0) severe=true; });
   var nHb=(F||[]).filter(function(f){ return f.k==='hidden_ban'; }).length; if(nHb>=2) severe=true;
   sum+=Math.min(2, hb);
-  return severe?sum:Math.min(QA_DAY_FLOOR, sum);
+  return (severe?sum:Math.min(QA_DAY_FLOOR, sum))+viol;
 }
 function pqRule(k){ for(var i=0;i<QA_RULES.length;i++) if(QA_RULES[i].k===k) return QA_RULES[i]; return { d:0 }; }
 function dAdd(d,n){ var x=new Date(d+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+n); return x.toISOString().slice(0,10); }
@@ -7714,7 +7733,7 @@ function pqEntered(e){
 function pqFlags(va, day, dr, L){
   var F=[], mf=[];
   try{ mf=JSON.parse((dr&&dr.manual_flags)||'[]')||[]; }catch(e){ mf=[]; }
-  mf.forEach(function(f){ if(f.type==='hidden_ban') F.push({ k:'hidden_ban', t:'Hidden ban · '+(f.account||''), d:pqRule('hidden_ban').d, c:'r' }); else F.push({ k:'manual', t:f.label||'Flag', d:+f.deduct||0, c:'a' }); });
+  mf.forEach(function(f){ if(f.type==='hidden_ban') F.push({ k:'hidden_ban', t:'Hidden ban · '+(f.account||''), d:pqRule('hidden_ban').d, c:'r' }); else if(f.type==='violation') F.push({ k:'viol', t:f.label||'Violation', d:+f.deduct||0, c:'r', tip:f.note||'' }); else F.push({ k:'manual', t:f.label||'Flag', d:+f.deduct||0, c:'a' }); });
   var night=SHIFTOF[va]==='night', hcDueNow=!L.live || phtStamp()>hcDue(night?'night':'day', day);   // Oct 13: due at the end of the shift
   if(!L.off && hcDueNow && L.hcA>0 && L.hcD<L.hcA) F.push(L.hcD===0?{ k:'hc_none', t:'Health check never started (0/'+L.hcA+')', d:pqRule('hc_none').d, c:'r' }:{ k:'hc_missing', t:'Health check '+L.hcD+'/'+L.hcA, d:pqRule('hc_missing').d, c:'r' });
   if(!L.off && dr && dr.hc_first_at && String(dr.hc_first_at).slice(0,10)>=day && String(dr.hc_first_at)>day+(night?' 20:15:00':' 08:15:00'))
@@ -7739,8 +7758,28 @@ function pqFlags(va, day, dr, L){
   var untagNew=untag.filter(function(r){ var c=cdateOf(r)||String(r.created_at||'').slice(0,10); return c && c>=dAdd(day,-1) && c<=day; }).length;   // Nov 11 (Jeth): charged once, then a reminder
   if(untag.length) F.push({ k:'tagging', t:untag.length+' account'+(untag.length===1?'':'s')+' missing tags'+(untagNew<untag.length?' ('+(untag.length-untagNew)+' reminder only)':''), d:Math.min(1,untagNew*pqRule('tagging').d), c:'a', tip:untag.slice(0,12).map(function(r){ return r.handle+': '+[!methodOf(r)?'method':'',!r.model?'model':'',(cdateOf(r)>=ps&&!r.device&&phoneList(false,r.project).length)?'phone':''].filter(String).join(', '); }).join('\n') });
   // Oct 15: stage jumps / early promotions are no longer a QA finding (the client may move accounts ahead).
-  return F;
+  return pqGraceApply(F, day);
 }
+/* owner: log a violation on this VA-day (Nov 11) */
+function pqViolOpen(va){
+  var day=PQ.day||today();
+  openModal('<h3 style="margin:0 0 4px">Log a violation · '+esc(vaName(va))+'</h3><div class="muted" style="font-size:12.5px;margin-bottom:10px">Business day '+esc(day)+'. It shows on their QA day and comes off the suggested score'+(pqGrace('viol',day)?' — this week it is a reminder only (3-day grace for the new rule).':'.')+'</div>'+
+    VIOL_TYPES.map(function(v,i){ return '<label style="display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line,#e5e7eb);border-radius:10px;margin-bottom:6px;cursor:pointer"><input type="radio" name="pq-vt" value="'+i+'"'+(i===0?' checked':'')+' style="margin-top:3px"><span><b>'+esc(v.n)+'</b> <b style="color:#b42318">−'+v.d+'</b><br><span class="muted" style="font-size:12px">'+esc(v.ex)+'</span></span></label>'; }).join('')+
+    '<input class="inp" id="pq-vn" placeholder="What happened (they will see this)" style="width:100%;margin-top:6px">'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn" onclick="closeModal(false)">Cancel</button><button class="btn pri" onclick="pqViolSave(\''+jsq(va)+'\')">Log it</button></div>');
+}
+async function pqViolSave(va){
+  var day=PQ.day||today(), sel=document.querySelector('input[name=pq-vt]:checked'), v=VIOL_TYPES[sel?+sel.value:0], note=(($('pq-vn')||{}).value||'').trim();
+  if(!note){ toast('Write what happened — the VA sees it.'); return; }
+  try{
+    var d=await api({ action:'rc_qa_flag', by:USER.id, va:va, date:day, flag:JSON.stringify({ type:'violation', vk:v.k, label:v.n+' — '+note.slice(0,140), deduct:v.d, note:note }) });
+    if(!(d&&d.ok)){ toast('Could not save: '+((d&&d.error)||'unknown')); return; }
+    var dr=pqRow(va,day); if(!dr){ dr={ date:day, va:va }; (PQ.dd=PQ.dd||[]).push(dr); }
+    var mf=[]; try{ mf=JSON.parse(dr.manual_flags||'[]')||[]; }catch(e){} mf.push({ type:'violation', vk:v.k, label:v.n+' — '+note.slice(0,140), deduct:v.d, note:note }); dr.manual_flags=JSON.stringify(mf);
+    closeModal(true); toast('Violation logged for '+firstName(va)+'. Save their score to apply it.'); renderView();
+  }catch(e){ toast('Connection error.'); }
+}
+window.pqViolOpen=pqViolOpen; window.pqViolSave=pqViolSave;
 /* portal time vs tool time for a VA-day: live from presence + today's task log, past days from the ledger */
 function pqCover(va, day, dr){
   var tracked=0, timed=0;
@@ -7775,7 +7814,7 @@ function pqQA(){
         '<td><input class="qa-sc'+(sc!==''?' saved':'')+'" id="qa-s-'+esc(va)+'" type="number" min="0" max="10" step="0.5" value="'+esc(sc)+'" placeholder="'+sug+'"></td>'+
         '<td style="max-width:none"><input class="qa-nt" id="qa-n-'+esc(va)+'" value="'+esc(dr&&dr.qa_note||'')+'" placeholder="optional"></td>'+
         '<td class="num">'+(a&&a.length?(a.reduce(function(s,x){ return s+x; },0)/a.length).toFixed(1)+'<span class="muted" style="font-size:10.5px"> · '+a.length+'d</span>':'<span class="muted">—</span>')+'</td>'+
-        '<td style="white-space:nowrap"><button class="btn sm '+(sc!==''?'sec':'pri')+'" onclick="pqSave(\''+jsq(va)+'\','+sug+')">'+(sc!==''?'Update':'Save')+'</button></td></tr>';
+        '<td style="white-space:nowrap"><button class="btn sm '+(sc!==''?'sec':'pri')+'" onclick="pqSave(\''+jsq(va)+'\','+sug+')">'+(sc!==''?'Update':'Save')+'</button> <button class="btn sm sec" title="Log a violation (tool instructions, portal rule, SOP)" onclick="pqViolOpen(\''+jsq(va)+'\')">＋ Violation</button></td></tr>';
     }).join('')+'</tbody></table></div>'+
     '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn sm" onclick="pqRegradeUI(false)">Re-grade from Nov 1 with the fair rules (preview)</button><span class="muted" style="font-size:11.5px">Only automatic scores change; scores you typed by hand stay.</span></div>'+
     '<p class="muted" style="font-size:11.5px;margin-top:6px">Leave the score empty and press Save to accept the suggestion. Scores are stored per business day in the RcDaily sheet with who scored and when.</p>';
@@ -7788,7 +7827,7 @@ async function pqSave(va, sug){
   try{
     var d=await api({ action:'rc_qa_set', by:USER.id, va:va, date:day, score:v, note:note });
     if(!(d&&d.ok)){ toast('Could not save: '+((d&&d.error)||'unknown')); return; }
-    api({ action:'rc_day_snap', by:USER.id, va:va, date:day, auto_flags:JSON.stringify(F.filter(function(f){ return f.k!=='hidden_ban' && f.k!=='manual'; })), auto_deduct:ded }).catch(function(){});
+    api({ action:'rc_day_snap', by:USER.id, va:va, date:day, auto_flags:JSON.stringify(F.filter(function(f){ return f.k!=='hidden_ban' && f.k!=='manual' && f.k!=='viol'; })), auto_deduct:ded }).catch(function(){});
     if(!dr){ dr={ date:day, va:va }; (PQ.dd=PQ.dd||[]).push(dr); }
     dr.qa_score=v; dr.qa_note=note; dr.qa_by=USER.id; dr.qa_at=phtStamp();
     toast(firstName(va)+' · '+v+'/10 saved'); renderView();

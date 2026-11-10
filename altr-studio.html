@@ -2370,13 +2370,36 @@ function scDays(){
   if(!d.rows.length) h+='<tr><td colspan="8" class="empty">Nobody had a target on this day.</td></tr>';
   d.rows.forEach(function(o){ var id=o.va.replace(/[^a-z0-9]/gi,'_');
     h+='<tr><td class="c1">'+esc(natName(o.name||o.va))+'</td><td class="num">'+o.posted+'/'+o.post_target+'</td><td class="num">'+o.sourced+'/'+o.src_target+'</td>'+(function(){ var tk=+o.tracked_secs||0, tm=+o.tool_secs||0, pc=covPct(tm,tk); return '<td style="white-space:nowrap">'+(tk||tm?(hm(tm)+' <span class="muted">/ '+hm(tk)+'</span>'+(pc!=null?' <b style="color:'+covColor(pc)+'">'+pc+'%</b>':'')):'<span class="muted">—</span>')+(o.work?'<div class="muted" style="font-size:11px;margin-top:2px;white-space:normal">⏱ '+Object.keys(o.work).map(function(l){ var x=o.work[l]; return esc(l)+' '+hm(x.secs)+' · '+x.ticks+' tick'+(x.ticks===1?'':'s'); }).join(' · ')+'</div>':'')+'</td>'; })()+'<td class="num" style="font-weight:800;color:'+scTone(o.suggested*10)+'">'+o.suggested+'</td><td style="white-space:normal;max-width:320px">'+((o.hits||[]).length?o.hits.map(function(x){ return '<span class="pill" style="background:rgba(255,61,154,.12);color:#ffb3d1;margin:1px 3px 1px 0" title="−'+x.d+'">'+esc(x.t)+' −'+x.d+'</span>'; }).join(''):'<span class="muted">clean</span>')+'</td>'+
-      '<td><input id="qa-'+id+'" type="number" min="0" max="10" step="0.5" value="'+(o.qa===null?'':o.qa)+'" placeholder="'+o.suggested+'" style="width:76px;padding:6px 8px;font-weight:800" onchange="scSetQa(\''+jsq(o.va)+'\',\''+jsq(o.name)+'\',this.value,document.getElementById(\'qn-'+id+'\').value)"></td><td><input id="qn-'+id+'" value="'+esc(o.qa_note||'')+'" placeholder="note (optional)" style="width:180px;padding:6px 8px" onchange="scSetQa(\''+jsq(o.va)+'\',\''+jsq(o.name)+'\',document.getElementById(\'qa-'+id+'\').value,this.value)"></td></tr>'; });
+      '<td><input id="qa-'+id+'" type="number" min="0" max="10" step="0.5" value="'+(o.qa===null?'':o.qa)+'" placeholder="'+o.suggested+'" style="width:76px;padding:6px 8px;font-weight:800" onchange="scSetQa(\''+jsq(o.va)+'\',\''+jsq(o.name)+'\',this.value,document.getElementById(\'qn-'+id+'\').value)"></td><td><input id="qn-'+id+'" value="'+esc(o.qa_note||'')+'" placeholder="note (optional)" style="width:180px;padding:6px 8px" onchange="scSetQa(\''+jsq(o.va)+'\',\''+jsq(o.name)+'\',document.getElementById(\'qa-'+id+'\').value,this.value)"> <button class="btn sm sec" title="Log a violation (tool instructions, portal rule, SOP)" onclick="scViolOpen(\''+jsq(o.va)+'\',\''+jsq(o.name)+'\')">＋ Violation</button></td></tr>'; });
   h+='</tbody></table></div>';
   h+='<div class="card pad" style="margin-top:12px"><div class="ch-h"><b>Rules behind the suggestion</b><span>start at 10, deduct per hit · your number is final</span></div>'+(d.rules||[]).map(function(r){ return '<div class="rep"><span style="flex:1">'+esc(r.n)+'</span><b class="mag">−'+r.d+(r.max?' · max '+r.max:'')+'</b></div>'; }).join('')+'</div>';
   return h;
 }
 function altrDAddC(d,n){ var x=new Date(d+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+n); return x.toISOString().slice(0,10); }
 async function scLoadDay(){ SC.loading=true; try{ var d=await apiGet({ action:'altr_sc_day', by_id:myId(), date:SC.day },0); SC.d=d&&d.ok?d:{ date:SC.day, error:(d&&d.error==='unknown action')?'The ALTR backend needs version 2026-10-05-aura2.':((d&&d.error)||'network'), rows:[] }; }catch(e){ SC.d={ date:SC.day, error:'network', rows:[] }; } SC.loading=false; if(VIEW==='score') renderView(); }
+/* Nov 11 (Jeth: deductions for not following the tool's instructions and for SOP / portal violations) — same four
+   kinds as Reddit Central and the Client Hub. Stored in ALTR_QAViolations; the suggestion takes them off outside the floor. */
+var VIOL_TYPES=[
+  { k:'tool', n:'Tool instructions not followed', d:0.5, ex:'skipped a step the Studio asks for, wrong button or flow, ignored a Studio warning' },
+  { k:'portal', n:'Portal rule broken', d:0.5, ex:'timer on the wrong task, no EOD checklist, left the timer running' },
+  { k:'sop', n:'SOP not followed', d:1, ex:'did the work differently from the SOP' },
+  { k:'serious', n:'Serious SOP breach', d:2, ex:'put accounts or phones at risk' }
+];
+function scViolOpen(va, name){
+  openModal('<h3 style="margin:0 0 4px">Log a violation · '+esc(natName(name||va))+'</h3><div class="muted" style="font-size:12.5px;margin-bottom:10px">Day '+esc(SC.day)+'. It comes off the suggested score'+(SC.day<'2026-11-14'?' — until Nov 13 it is a reminder only (3-day grace for the new rule).':'.')+'</div>'+
+    VIOL_TYPES.map(function(v,i){ return '<label style="display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:10px;margin-bottom:6px;cursor:pointer"><input type="radio" name="sc-vt" value="'+i+'"'+(i===0?' checked':'')+' style="margin-top:3px"><span><b>'+esc(v.n)+'</b> <b class="mag">−'+v.d+'</b><br><span class="muted" style="font-size:12px">'+esc(v.ex)+'</span></span></label>'; }).join('')+
+    '<input id="sc-vn" placeholder="What happened (they will see this)" style="width:100%;margin-top:6px;padding:8px 10px">'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn sec" onclick="closeModal(false)">Cancel</button><button class="btn" onclick="scViolSave(\''+jsq(va)+'\')">Log it</button></div>');
+}
+async function scViolSave(va){
+  var sel=document.querySelector('input[name=sc-vt]:checked'), v=VIOL_TYPES[sel?+sel.value:0], note=((document.getElementById('sc-vn')||{}).value||'').trim();
+  if(!note){ toast('Write what happened — the VA sees it.'); return; }
+  try{ var d=await apiPost({ action:'altr_qa_viol', date:SC.day, va:va, kind:v.k, label:v.n+' — '+note.slice(0,120), deduct:v.d, note:note });
+    if(d&&d.ok){ closeModal(true); toast('Violation logged — the suggestion updates now.'); SC.d=null; renderView(); }
+    else toast(d&&d.error==='unknown action'?'The ALTR backend needs version 2026-11-11-fairqa first.':((d&&d.error)||'Failed'));
+  }catch(e){ toast('Save failed'); }
+}
+window.scViolOpen=scViolOpen; window.scViolSave=scViolSave;
 async function scSetQa(va, name, v, note){ try{ var d=await apiPost({ action:'altr_qa_set', date:SC.day, va:va, name:name, qa:v, note:note }); if(d&&d.ok){ toast('QA saved'); var r=(SC.d&&SC.d.rows||[]).filter(function(x){ return x.va===va; })[0]; if(r){ r.qa=(v===''?null:parseFloat(v)); r.qa_note=note; } SC.m=null; } else toast((d&&d.error)||'Failed'); }catch(e){ toast('Save failed'); } }
 /* ══════════ DAILY QA FILLS ITSELF (Jeth, Oct 13) ══════════
    "It should start on October 5 … backtrack that and give the score." Every VA-day from Oct 5 to yesterday that
