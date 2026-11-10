@@ -5361,6 +5361,35 @@ async function fixGate(){
 }
 function fixGateRefresh(){ var b=document.querySelector('#modal.on .fix-gate'); if(!b) return; var L=fixMine(); if(!L.length){ closeModal(true); toast('All fixed — you can start now.'); } else b.innerHTML=fixRows(L); }
 
+/* ══════════ RE-GRADE (Jeth, Nov 11: "from November 1 … adjust it based on how I approved the pointing system") ══════════
+   Recomputes every AUTOMATIC daily QA score (note starts "Automatic") from `from` to yesterday with today's rules.
+   Scores the owner typed by hand are left alone. pqRegrade(from) → preview rows; pqRegrade(from, true) → saves. */
+async function pqRegrade(from, apply){
+  if(!isAdmin()) return { error:'owner only' };
+  var out=[], keep=PQ.day, yd=dAdd(today(),-1);
+  for(var y=from, g=0; y<=yd && g<62; y=dAdd(y,1), g++){
+    var tries=0; while(PQ.loading && tries++<60) await new Promise(function(r){ setTimeout(r,500); });
+    PQ.day=y; PQ.key=''; await pqLoad(true);
+    if(!PQ.dd || (PQ.st && PQ.st.error)) { out.push({ day:y, err:true }); continue; }
+    var vas=pqVAs(y);
+    for(var i=0;i<vas.length;i++){ var va=vas[i], dr=pqRow(va,y), L=pqLive(va,y);
+      if(L.nodata || !dr || dr.qa_score==='' || dr.qa_score==null) continue;
+      if(!/^Automatic/i.test(String(dr.qa_note||dr.note||''))) continue;
+      var F=pqFlags(va,y,dr,L), ded=pqDed(F), sug=Math.max(0, Math.round((10-ded)*2)/2), old=+dr.qa_score;
+      var row={ day:y, va:va, old:old, now:sug };
+      if(apply && sug!==old){
+        try{ var d=await api({ action:'rc_qa_set', by:USER.id, va:va, date:y, score:sug, note:'Automatic (re-graded Nov 11 with the fair rules; the owner can change it): '+(F.length?F.map(function(f){ return f.t+' −'+f.d; }).join(' · '):'no rule hits') });
+          row.saved=!!(d&&d.ok); if(row.saved) api({ action:'rc_day_snap', by:USER.id, va:va, date:y, auto_flags:JSON.stringify(F.filter(function(f){ return f.k!=='hidden_ban' && f.k!=='manual'; })), auto_deduct:ded }).catch(function(){});
+        }catch(e){ row.saved=false; }
+      }
+      out.push(row);
+    }
+  }
+  PQ.day=keep; PQ.key=''; PQ.st=null; if(VIEW==='prod') pqLoad(true);
+  return out;
+}
+window.pqRegrade=pqRegrade;
+
 /* ══════════ QA FILLS ITSELF (Jeth, Oct 13) ══════════
    Days the owner has not scored are filled with the suggested score (10 minus the rule hits) the next time
    the owner opens Reddit Central — every day from the process start (Oct 5) to yesterday, once each (Oct 13:
@@ -5378,7 +5407,7 @@ async function pqAutoFill(){
     PQ.day=y2; PQ.key=''; await pqLoad(true);
     if(!PQ.dd || (PQ.st && PQ.st.error)) continue;
     var list=pqVAs(y2).map(function(va){ var dr=pqRow(va,y2), L=pqLive(va,y2); if(L.nodata || (dr && dr.qa_score!=='' && dr.qa_score!=null)) return null; if(!(L.due>0||L.hcA>0||L.cre>0)) return null;
-      var F=pqFlags(va,y2,dr,L), ded=F.reduce(function(s,f){ return s+f.d; },0); return { va:va, F:F, ded:ded, sug:Math.max(0, Math.round((10-ded)*2)/2) }; }).filter(Boolean);
+      var F=pqFlags(va,y2,dr,L), ded=pqDed(F); return { va:va, F:F, ded:ded, sug:Math.max(0, Math.round((10-ded)*2)/2) }; }).filter(Boolean);
     for(var k=0;k<list.length;k++){ var x=list[k];
       try{ var d=await api({ action:'rc_qa_set', by:USER.id, va:x.va, date:y2, score:x.sug, note:'Automatic (the owner can change it): '+(x.F.length?x.F.map(function(f){ return f.t+' −'+f.d; }).join(' · '):'no rule hits') });
         if(d && d.ok){ total++; api({ action:'rc_day_snap', by:USER.id, va:x.va, date:y2, auto_flags:JSON.stringify(x.F.filter(function(f){ return f.k!=='hidden_ban' && f.k!=='manual'; })), auto_deduct:x.ded }).catch(function(){}); }
@@ -7434,22 +7463,32 @@ function vHealth(){
 var PQ={ tab:'score', range:'7', day:'', month:'', st:null, dd:null, tgt:null, sc:null, scLoading:false, loading:false, key:'', tg:{} };
 var PQ_MIN=10;    // runs before a task's team time is learned
 var QA_RULES=[
-  { k:'hidden_ban', n:'Hidden ban — a health check found one of their accounts banned that they never tagged', d:2, u:'each' },
+  { k:'hidden_ban', n:'Hidden ban — a health check found one of their accounts banned that they never tagged', d:1, u:'each · max 2' },
   { k:'hc_missing', n:'Daily health check not finished by the end of the shift', d:1, u:'' },
-  { k:'hc_none',    n:'Daily health check never started', d:2, u:'instead of the −1' },
-  { k:'hc_late',    n:'Health check started after 8:15 (AM or PM shift)', d:0.5, u:'' },
+  { k:'hc_none',    n:'Daily health check never started', d:1.5, u:'instead of the −1' },
+  { k:'hc_late',    n:'Health check started after 8:15 (AM or PM shift)', d:0.25, u:'' },
   /* Oct 15 (Jeth): the client may move an account ahead — e.g. Warm-up straight to Early + DMs or Posting — so
      skipping a stage or promoting before its days are up is allowed and costs nothing. The old 'skip' rule (−1 each)
      is gone, and every deduction it made since Oct 5 was refunded. */
-  { k:'tagging',    n:'Accounts not tagged right — method or model missing, or a new account without its phone', d:0.5, u:'each · max 2' },
+  { k:'tagging',    n:'Accounts not tagged right — method or model missing, or a new account without its phone (charged the day the account is added; after that a reminder only)', d:0.25, u:'each · max 1' },
   { k:'quick',      n:'Session or DMs finished within 20 seconds of starting', d:0.5, u:'each · max 2' },
-  { k:'fast',       n:'Under 35% of the team time for that task (once it is learned)', d:0.5, u:'each · max 2' },
-  { k:'cover',      n:'Portal time more than 30 minutes ahead of the tool timers', d:1, u:'' },
-  { k:'overrun',    n:'Task timer left running past its time limit', d:0.5, u:'each · max 2' },
-  { k:'crfail',     n:'Creation timer ended with no account — cancelled after 2 minutes or ran out (Jeth, Oct 31: every failure counts)', d:0.5, u:'each · no cap' },
-  { k:'typo',       n:'Username typo — the health check could not find the account until the owner corrected the name', d:0.5, u:'each · max 2' },
-  { k:'fix_open',   n:'A username sent back for fixing is still not corrected (or marked banned)', d:1, u:'each, per day it stays open · max 3' }
+  { k:'fast',       n:'Under 35% of the team time for that task (once it is learned)', d:0.25, u:'each · max 1' },
+  { k:'cover',      n:'Portal time ahead of the tool timers — 30 to 60 minutes −0.5, over 60 minutes −1', d:1, u:'' },
+  { k:'overrun',    n:'Task timer left running past its time limit', d:0.25, u:'each · max 1' },
+  { k:'crfail',     n:'Creation timer ended with no account — cancelled after 2 minutes or ran out — the first 2 a day are free', d:0.25, u:'each after 2 · max 1.5' },
+  { k:'typo',       n:'Username typo — the health check could not find the account until the owner corrected the name', d:0.25, u:'each · max 1' },
+  { k:'fix_open',   n:'A username sent back for fixing is still not corrected (or marked banned)', d:0.5, u:'each, per day it stays open · max 1.5' }
 ];
+/* Nov 11 (Jeth: "I want to be fair"): a day can lose at most 4 points (worst day 6/10) — unless it shows clear cheating:
+   a session/DMs ticked within 20 s, or 2+ hidden bans. Hidden bans count at most −2 together. */
+var QA_DAY_FLOOR=4;
+function pqDed(F){
+  var hb=0, sum=0, severe=false;
+  (F||[]).forEach(function(f){ if(f.k==='hidden_ban'){ hb+=f.d; return; } sum+=(+f.d||0); if(f.k==='quick' && f.d>0) severe=true; });
+  var nHb=(F||[]).filter(function(f){ return f.k==='hidden_ban'; }).length; if(nHb>=2) severe=true;
+  sum+=Math.min(2, hb);
+  return severe?sum:Math.min(QA_DAY_FLOOR, sum);
+}
 function pqRule(k){ for(var i=0;i<QA_RULES.length;i++) if(QA_RULES[i].k===k) return QA_RULES[i]; return { d:0 }; }
 function dAdd(d,n){ var x=new Date(d+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+n); return x.toISOString().slice(0,10); }
 function bizDayOf(ts){ var t=(ts instanceof Date)?ts:parseTs(ts); return t?phtDate(new Date(t.getTime()-BIZ_FLIP_H*3600000)):''; }
@@ -7669,20 +7708,21 @@ function pqFlags(va, day, dr, L){
   var q=rows.filter(function(x){ return x.secs!=null && x.secs<20; }).length;
   if(q) F.push({ k:'quick', t:q+' finished within 20 s', d:Math.min(2,q*pqRule('quick').d), c:'r' });
   var fast=rows.filter(function(x){ if(x.secs==null || x.secs<20) return false; var tt=pqTeamTime(x.kind+'|'+x.stage+'|'+(x.method||'(none)')); return tt && x.secs<tt*0.35; }).length;
-  if(fast) F.push({ k:'fast', t:fast+' far under the team time', d:Math.min(2,fast*pqRule('fast').d), c:'a' });
+  if(fast) F.push({ k:'fast', t:fast+' far under the team time', d:Math.min(1,fast*pqRule('fast').d), c:'a' });
   var ovr=((PQ.st&&PQ.st.rows)||[]).filter(function(x){ return String(x.va).toLowerCase()===va && x.kind==='overrun'; }).length;
-  if(ovr) F.push({ k:'overrun', t:ovr+' timer'+(ovr===1?'':'s')+' ran past the limit', d:Math.min(2, ovr*pqRule('overrun').d), c:'r' });
+  if(ovr) F.push({ k:'overrun', t:ovr+' timer'+(ovr===1?'':'s')+' ran past the limit', d:Math.min(1, ovr*pqRule('overrun').d), c:'r' });
   var crf=((PQ.st&&PQ.st.rows)||[]).filter(function(x){ return String(x.va).toLowerCase()===va && x.kind==='crfail' && (x.secs==null || x.secs>=CR_FREE); });   // Oct 31
   if(crf.length){ var crm=Math.round(crf.reduce(function(s2,x){ return s2+(+x.secs||0); },0)/60);
-    F.push({ k:'crfail', t:crf.length+' creation'+(crf.length===1?'':'s')+' with no account · '+crm+' min', d:crf.length*pqRule('crfail').d, c:'r',
+    F.push({ k:'crfail', t:crf.length+' creation'+(crf.length===1?'':'s')+' with no account · '+crm+' min', d:Math.min(1.5, Math.max(0, crf.length-2)*pqRule('crfail').d), c:'r',
       tip:crf.map(function(x){ return fmtSecs(x.secs)+' — '+String(x.source||'').replace(/^cancel · /,''); }).join(' · ') }); }
-  try{ var cv=pqCover(va, day, dr); if(cv && cv.tracked-cv.timed>1800) F.push({ k:'cover', t:'Portal '+hm(cv.tracked-cv.timed)+' ahead of the tool ('+hm(cv.timed)+' of '+hm(cv.tracked)+')', d:pqRule('cover').d, c:'r', tip:'The portal tracked '+hm(cv.tracked)+' but this tool\'s timers only covered '+hm(cv.timed)+' of it.' }); }catch(_cv){}
+  try{ var cv=pqCover(va, day, dr); if(cv && cv.tracked-cv.timed>1800) F.push({ k:'cover', t:'Portal '+hm(cv.tracked-cv.timed)+' ahead of the tool ('+hm(cv.timed)+' of '+hm(cv.tracked)+')', d:(cv.tracked-cv.timed>3600?1:0.5), c:'r', tip:'The portal tracked '+hm(cv.tracked)+' but this tool\'s timers only covered '+hm(cv.timed)+' of it.' }); }catch(_cv){}
   var ps=CFG.process_start||'2026-10-01', untag=allRows().filter(function(r){ return owner(r)===va && !isDead(r) && !isParked(r) && (!methodOf(r) || !r.model || (cdateOf(r)>=ps && !r.device && phoneList(false, r.project).length)); });
   var typos=allRows().filter(function(r){ var ty=M(r).typo; return ty && ty.day===day && String(ty.by||owner(r)).toLowerCase()===va; });
-  if(typos.length) F.push({ k:'typo', t:typos.length+' username typo'+(typos.length===1?'':'s')+' corrected', d:Math.min(2,typos.length*pqRule('typo').d), c:'r', tip:typos.map(function(r){ var t=M(r).typo; return t.from+' → '+t.to; }).join(' · ') });
+  if(typos.length) F.push({ k:'typo', t:typos.length+' username typo'+(typos.length===1?'':'s')+' corrected', d:Math.min(1,typos.length*pqRule('typo').d), c:'r', tip:typos.map(function(r){ var t=M(r).typo; return t.from+' → '+t.to; }).join(' · ') });
   var openFix=allRows().filter(function(r){ var f=M(r).fix; return f && fixTo(r)===va && !isDead(r) && String(f.day||'')<=day && (day===today() || String(f.day||'')<day); });
-  if(openFix.length && (day<today() || phtStamp()>day+(SHIFTOF[va]==='night'?' 23:00:00':' 12:00:00'))) F.push({ k:'fix_open', t:openFix.length+' username fix'+(openFix.length===1?'':'es')+' still open', d:Math.min(3, openFix.length*pqRule('fix_open').d), c:'a', tip:openFix.map(function(r){ return r.handle+' (asked '+String((M(r).fix||{}).day||'')+')'; }).join(' · ') });
-  if(untag.length) F.push({ k:'tagging', t:untag.length+' account'+(untag.length===1?'':'s')+' missing tags', d:Math.min(2,untag.length*pqRule('tagging').d), c:'a', tip:untag.slice(0,12).map(function(r){ return r.handle+': '+[!methodOf(r)?'method':'',!r.model?'model':'',(cdateOf(r)>=ps&&!r.device&&phoneList(false,r.project).length)?'phone':''].filter(String).join(', '); }).join('\n') });
+  if(openFix.length && (day<today() || phtStamp()>day+(SHIFTOF[va]==='night'?' 23:00:00':' 12:00:00'))) F.push({ k:'fix_open', t:openFix.length+' username fix'+(openFix.length===1?'':'es')+' still open', d:Math.min(1.5, openFix.length*pqRule('fix_open').d), c:'a', tip:openFix.map(function(r){ return r.handle+' (asked '+String((M(r).fix||{}).day||'')+')'; }).join(' · ') });
+  var untagNew=untag.filter(function(r){ var c=cdateOf(r)||String(r.created_at||'').slice(0,10); return c && c>=dAdd(day,-1) && c<=day; }).length;   // Nov 11 (Jeth): charged once, then a reminder
+  if(untag.length) F.push({ k:'tagging', t:untag.length+' account'+(untag.length===1?'':'s')+' missing tags'+(untagNew<untag.length?' ('+(untag.length-untagNew)+' reminder only)':''), d:Math.min(1,untagNew*pqRule('tagging').d), c:'a', tip:untag.slice(0,12).map(function(r){ return r.handle+': '+[!methodOf(r)?'method':'',!r.model?'model':'',(cdateOf(r)>=ps&&!r.device&&phoneList(false,r.project).length)?'phone':''].filter(String).join(', '); }).join('\n') });
   // Oct 15: stage jumps / early promotions are no longer a QA finding (the client may move accounts ahead).
   return F;
 }
@@ -7703,13 +7743,13 @@ function pqQA(){
     '<div class="sp"></div><span class="muted" style="font-size:12px">Business day · '+esc(fmtD(parseTs(day)))+'</span> <button class="btn sm sec" onclick="pqFillAll()" title="Save the suggested score for every VA who worked and has no score yet">Fill suggested for everyone</button></div>';
   h+='<details class="card pad" style="margin-bottom:12px"><summary style="cursor:pointer;font-weight:800">How the QA score works</summary><div style="font-size:13px;line-height:1.6;margin-top:8px">'+
     'You score each VA <b>out of 10</b> for the day — your number is final. The <b>suggested</b> score starts at 10 and takes off what the rules found:'+
-    '<table class="db" style="margin-top:8px"><tbody>'+QA_RULES.map(function(r){ return '<tr><td class="c1">'+esc(r.n)+'</td><td class="num" style="font-weight:800;color:#1C252B">'+(r.d?'−'+r.d:'—')+'</td><td class="muted" style="font-size:11.5px">'+esc(r.u)+'</td></tr>'; }).join('')+'</tbody></table>'+
+    '<table class="db" style="margin-top:8px"><tbody>'+QA_RULES.map(function(r){ return '<tr><td class="c1">'+esc(r.n)+'</td><td class="num" style="font-weight:800;color:#1C252B">'+(r.d?'−'+r.d:'—')+'</td><td class="muted" style="font-size:11.5px">'+esc(r.u)+'</td></tr>'; }).join('')+'<tr><td class="c1"><b>Daily floor</b> — a day loses at most '+QA_DAY_FLOOR+' points (worst day '+(10-QA_DAY_FLOOR)+'/10), unless it shows clear cheating (a session ticked within 20 s, or 2+ hidden bans)</td><td class="num" style="font-weight:800;color:#1C252B">max −'+QA_DAY_FLOOR+'</td><td class="muted" style="font-size:11.5px">per day</td></tr></tbody></table>'+
     '<div class="muted" style="font-size:12px;margin-top:6px">Sessions done and accounts created are shown for context — they are productivity, not QA, and are not scored until you set the task targets.</div></div></details>';
   if(!vas.length) return h+'<div class="card empty">No VAs with accounts yet.</div>';
   var avg={}; (PQ.dd||[]).forEach(function(x){ if(x.qa_score===''||x.qa_score==null) return; var s=parseFloat(x.qa_score); if(isNaN(s)) return; var k=String(x.va).toLowerCase(); (avg[k]=avg[k]||[]).push(s); });
   h+='<div class="tbl-w" style="max-height:none"><table class="db"><thead><tr><th class="c1">VA</th><th>Sessions</th><th>Created</th><th>Health check</th><th title="Tool timers vs portal timer">Tool time</th><th>Rule hits</th><th>Suggested</th><th>Your score</th><th>Note</th><th>Month avg</th><th></th></tr></thead><tbody>'+
     vas.map(function(va){
-      var dr=pqRow(va,day), L=pqLive(va,day), F=pqFlags(va,day,dr,L), ded=F.reduce(function(s,f){ return s+f.d; },0), sug=Math.max(0, Math.round((10-ded)*2)/2);
+      var dr=pqRow(va,day), L=pqLive(va,day), F=pqFlags(va,day,dr,L), ded=pqDed(F), sug=Math.max(0, Math.round((10-ded)*2)/2);
       var sc=dr && dr.qa_score!=='' && dr.qa_score!=null ? String(dr.qa_score) : '', a=avg[va];
       var hc=L.off?'<span class="flag" style="background:var(--s2);color:var(--ink3)">'+esc(L.off)+'</span>':(L.nodata?'<span class="muted">no data</span>':(L.hcA?(L.hcD+'/'+L.hcA+(dr&&dr.hc_first_at?' <span class="muted" style="font-size:11px">· '+esc(fmtT(parseTs(dr.hc_first_at)))+'</span>':'')):'<span class="muted">—</span>'));
       return '<tr data-va="'+esc(va)+'"><td class="c1">'+esc(vaName(va))+(SHIFTOF[va]==='night'?' 🌙':'')+'</td>'+
@@ -7728,7 +7768,7 @@ function pqQA(){
 async function pqSave(va, sug){
   var day=PQ.day||today(), si=$('qa-s-'+va), ni=$('qa-n-'+va);
   var v=si&&si.value!==''?parseFloat(si.value):sug; if(isNaN(v)||v<0||v>10){ toast('Score must be 0–10.'); return; }
-  var note=ni?ni.value:'', dr=pqRow(va,day), F=pqFlags(va,day,dr,pqLive(va,day)), ded=F.reduce(function(s,f){ return s+f.d; },0);
+  var note=ni?ni.value:'', dr=pqRow(va,day), F=pqFlags(va,day,dr,pqLive(va,day)), ded=pqDed(F);
   try{
     var d=await api({ action:'rc_qa_set', by:USER.id, va:va, date:day, score:v, note:note });
     if(!(d&&d.ok)){ toast('Could not save: '+((d&&d.error)||'unknown')); return; }
@@ -7740,7 +7780,7 @@ async function pqSave(va, sug){
 }
 async function pqFillAll(){
   var day=PQ.day||today(), list=pqVAs(day).map(function(va){ var dr=pqRow(va,day), L=pqLive(va,day); if(L.off || L.nodata || (dr && dr.qa_score!=='' && dr.qa_score!=null)) return null;
-    if(!(L.due>0 || L.hcA>0 || L.cre>0)) return null; var F=pqFlags(va,day,dr,L); return { va:va, sug:Math.max(0, Math.round((10-F.reduce(function(s,f){ return s+f.d; },0))*2)/2) }; }).filter(Boolean);
+    if(!(L.due>0 || L.hcA>0 || L.cre>0)) return null; var F=pqFlags(va,day,dr,L); return { va:va, sug:Math.max(0, Math.round((10-pqDed(F))*2)/2) }; }).filter(Boolean);
   if(!list.length){ toast('Everyone who worked already has a score.'); return; }
   if(!(await confirmBox('Fill '+list.length+' score'+(list.length===1?'':'s')+'?', list.map(function(x){ return esc(vaName(x.va))+' → <b>'+x.sug+'</b>'; }).join('<br>')+'<br><br>Only VAs who worked and have no score yet. You can change any of them after.', 'Save all'))) return;
   for(var i=0;i<list.length;i++){ var si=$('qa-s-'+list[i].va); if(si) si.value=''; await pqSave(list[i].va, list[i].sug); }
