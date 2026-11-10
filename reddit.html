@@ -1056,7 +1056,7 @@ function isSX(r){ return !!r && ((r.meta&&r.meta.sop==='sx') || SX_STAGES.indexO
    Create the account → 24 hours after creation it moves to Story Ops → ONE session a day: post the stories and send the DMs
    the way the client asks, then Done. No numbers to hit, the session is the unit. meta.sop="st" for life. */
 var ST_C='#4E5D78', ST_STAGES=['story'], ST_VAS=/^(jmb010)$/i;
-var STPH=[{k:'story', n:'Story Ops · Stories + DMs', c:ST_C, st:true, one:true, plan:'Story Ops (3rd SOP): the account can be used 24 hours after it was created · then ONE session a day — post the stories and send the DMs the way the client asks, then tap Done.', task:'Reddit Posting'}];
+var STPH=[{k:'story', n:'Story Ops · Stories + DMs', c:ST_C, st:true, one:true, plan:'Story Ops (3rd SOP): the account can be used 24 hours after it was created · then every day two separate tasks, each with its own timer: Stories (post the stories) and DMs (send the DMs the way the client asks) — they can be done at different times.', task:'Reddit Posting', dms:true}];
 function isST(r){ return !!r && ((M(r)||{}).sop==='st' || ST_STAGES.indexOf(r.status)>=0); }
 function stReadyAt(r){ var c=null; try{ c=createdAt(r); }catch(e){} return c ? new Date(c.getTime()+24*3600000) : null; }
 function stReady(r){ var a=stReadyAt(r); return !a || Date.now()>=a.getTime(); }
@@ -2209,7 +2209,7 @@ function progOf(rows, worker){
     if(!worker) cr=creationOf(r, crBy||wk, crBy||ow);
     else if(!crBy || crBy===wk) cr=creationOf(r, wk, ow);
     if(cr){ tot+=1; parts.cr+=1; if(cr.done) done+=1; }
-    if(r.status==='story'){ var sdn=markOkAny(m.s1,wk,ow)?1:0; if(!stReady(r) && !sdn) return; tot+=1; parts.st=(parts.st||0)+1; done+=sdn; return; }   // Nov 9: Story Ops — one session a day once 24 h old
+    if(r.status==='story'){ var sdn=(markOkAny(m.s1,wk,ow)?1:0)+(markOkAny(m.dm,wk,ow)?1:0); if(!stReady(r) && !sdn) return; tot+=2; parts.st=(parts.st||0)+2; done+=sdn; return; }   // Nov 11: Stories + DMs, two tasks a day   // Nov 9: Story Ops — one session a day once 24 h old
     var sxu=isSXSt(r.status)?sxUnits(r, wk, ow):null;   // Oct 27: the Suicidal Operation's own SOP
     if(sxu){ tot+=sxu.tot; done+=sxu.done; if(sxu.k==='standby') parts.sxsb=(parts.sxsb||0)+1; else parts[r.status==='sxwarm'?'sxw':(r.status==='sxsetup'?'sxs':(r.status==='sxcomment'?'sxc':'sxp'))]+=sxu.tot; return; }
     if(isWorkable(r)){ var spd=sesPerDay(r), e=(markOkAny(m.s1,wk,ow)?1:0)+(markOkAny(m.s2,wk,ow)?1:0); tot+=spd; parts.ladder+=spd; done+=Math.min(spd,e); return; }   // Nov 3: trial phases are one session a day
@@ -2533,9 +2533,9 @@ function rowHtml(r){
     act=held?'':sesBtn(r,1)+sesBtn(r,2)+'<button class="ses ok2" onclick="liftBack(\''+id+'\')">'+IC.check+' Cleared</button>';
   } else if(p && p.st){   // Nov 9: Story Ops (3rd SOP) — one session a day of stories + DMs, 24 h after creation
     var srdy=stReady(r);
-    prog=srdy?'<span class="muted" title="'+esc(p.plan)+'" style="font-size:11.5px;font-weight:600;color:'+ST_C+'">Story Ops · one session a day · stories + DMs · <u style="text-decoration-style:dotted;cursor:help">plan</u></span>'
+    prog=srdy?'<span class="muted" title="'+esc(p.plan)+'" style="font-size:11.5px;font-weight:600;color:'+ST_C+'">Story Ops · Stories and DMs, separate timers · <u style="text-decoration-style:dotted;cursor:help">plan</u></span>'
              :'<span class="note i" title="'+esc(p.plan)+'">Story Ops opens '+esc(stReadyLbl(r))+' (24 h after creation)</span>';
-    if(!held) act=srdy?sesBtn(r,1,'Stories + DMs'):'<button class="ses" disabled title="Usable 24 hours after creation">Stories + DMs · '+esc(stReadyLbl(r))+'</button>';
+    if(!held) act=srdy?(sesBtn(r,1,'Stories')+dmBtn(r)):'<button class="ses" disabled title="Usable 24 hours after creation">Stories + DMs · '+esc(stReadyLbl(r))+'</button>';   // Nov 11 (Jeth): stories and DMs are separate tasks, each with its own timer, done at different times
   } else if(p && p.sx){   // Suicidal Operation (Oct 25)
     prog=sxProg(r);   // Oct 27: one warm-up, then posting once warmed + assigned
     if(!held) act=sxActs(r);
@@ -2777,9 +2777,9 @@ function cardHtml(r){
       (!held && pchkPending(r).length?postsStrip(r):'');
   } else if(p && p.st){   // Nov 9: Story Ops (3rd SOP)
     var srdy2=stReady(r);
-    body=(srdy2?'<div class="note" style="border-color:'+ST_C+'55">Story Ops · one session a day: post the stories and send the DMs the way the client asks, then tap Done.</div>'
+    body=(srdy2?'<div class="note" style="border-color:'+ST_C+'55">Story Ops · two separate tasks a day, each with its own timer: <b>Stories</b> (post the stories) and <b>DMs</b> (send the DMs the way the client asks). Do them at different times if you need to.</div>'
                :'<div class="note i">Story Ops opens '+esc(stReadyLbl(r))+' — 24 hours after the account was created.</div>')+
-      (held?'':'<div class="acts">'+(srdy2?sesBtn(r,1,'Stories + DMs'):'<button class="ses" disabled title="Usable 24 hours after creation">Stories + DMs · '+esc(stReadyLbl(r))+'</button>')+'</div>');
+      (held?'':'<div class="acts">'+(srdy2?(sesBtn(r,1,'Stories')+dmBtn(r)):'<button class="ses" disabled title="Usable 24 hours after creation">Stories + DMs · '+esc(stReadyLbl(r))+'</button>')+'</div>');
   } else if(p && p.sx){   // Suicidal Operation (Oct 25)
     var asg2=sxAssign(r), u2=sxUnits(r, worksFor(r), owner(r))||{};
     var sb=sxStandby(r);
@@ -7570,7 +7570,7 @@ function pqTasks(){
   var t=[{ kind:'creation', stage:'', n:'Account creation', s:'Start creating → counted (+1)' }];
   PH.concat(TRPH).forEach(function(p){ if(p.task) t.push({ kind:'session', stage:p.k, n:'Session · '+p.n, s:p.plan }); });
   t.push({ kind:'session', stage:'recovery', n:'Session · Spam recovery', s:'10 min browsing · replies · no upvotes' });
-  PH.concat(TRPH).forEach(function(p){ if(p.dms) t.push({ kind:'dms', stage:p.k, n:'DMs · '+p.n, s:'one DM round' }); });
+  PH.concat(TRPH, STPH).forEach(function(p){ if(p.dms) t.push({ kind:'dms', stage:p.k, n:'DMs · '+p.n, s:'one DM round' }); });
   t.push({ kind:'healthcheck', stage:'', n:'Health check · per account', s:'one profile look · the daily limit is 2.5× this per account × each VA\'s list (now '+hcPerSecs()+' s per account)', one:true });
   return t;
 }
