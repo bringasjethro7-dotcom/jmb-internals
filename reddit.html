@@ -5212,6 +5212,11 @@ function hcDueLbl(shift){ return shift==='night'?'5:00 AM':'5:00 PM'; }
 var HC_NIGHT_OT_FROM=7, HC_NIGHT_OT_TO=13;
 function phtHour(t){ var d=t?new Date(t):new Date(); return isNaN(d)?-1:((d.getUTCHours()+8)%24); }
 function hcNightOT(){ var h=phtHour(); return h>=HC_NIGHT_OT_FROM && h<HC_NIGHT_OT_TO; }
+/* Nov 11 (Jeth): "once the VA has done the health check within the shift, don't make them repeat it." General rule for
+   every shift (day, night, double, flexible): a VA who signed in for yesterday's check less than 16 hours ago is still
+   on that same shift, so no new list until those 16 hours have passed. */
+var HC_SHIFT_SPAN_H=16;
+function hcSameShift(prevAt){ var t=Date.parse(prevAt||''); return !isNaN(t) && (Date.now()-t) < HC_SHIFT_SPAN_H*3600000; }
 var _chkP=null;
 function chkLoad(force){
   var d=today(); if(!force && CHK.day===d && Date.now()-CHK.at<90000) return Promise.resolve();
@@ -5224,6 +5229,7 @@ function chkLoad(force){
       var ot=hcNightOT();
       var m={}, pm={}; (rows||[]).forEach(function(x){ var o={ shift:x.shift==='night'?'night':'day', at:x.first_at }, k=String(x.employee_id||'').toLowerCase();
         if(String(x.day)===d){ var fh=phtHour(x.first_at); if(ot && o.shift==='night' && fh>=HC_NIGHT_OT_FROM && fh<HC_NIGHT_OT_TO) return; m[k]=o; } else pm[k]=o; });   // Nov 11: night overtime sign-ins wait until 1 PM
+      Object.keys(m).forEach(function(k){ if(pm[k] && hcSameShift(pm[k].at) && Date.parse(m[k].at||'')-Date.parse(pm[k].at||'') < HC_SHIFT_SPAN_H*3600000) delete m[k]; });   // Nov 11: same shift as yesterday's check → no second list yet
       CHK={ day:d, map:m, prev:pm, at:Date.now(), err:'' };
     }catch(e){ CHK.err=String((e&&e.message)||e||'failed'); CHK.at=Date.now(); }
     _CC=null; _chkP=null;
@@ -5235,6 +5241,8 @@ async function chkIn(){
   if(!USER || isAdmin() || !DIR_READY) return;
   var d=today(), me=myId(), k='rc_ci_'+me+'_'+d; if(!me) return;
   if(hcShiftOf(me)==='night' && hcNightOT()) return;   // Nov 11: night overtime — today's list opens with tonight's shift
+  if(CHK.day!==d) await chkLoad(true);
+  if(CHK.prev && CHK.prev[me] && hcSameShift(CHK.prev[me].at)) return;   // Nov 11: still the shift that did yesterday's check
   var done=false; try{ done=!!localStorage.getItem(k); }catch(e){}
   if(done && CHK.day===d && CHK.map[me]) return;
   try{
@@ -5312,7 +5320,7 @@ function hcVaBanner(n, left){
 }
 function hcEmptyMsg(){
   if(CHK.day!==today() && !CHK.err) return 'Loading today\'s list…';
-  if(!CHK.err && !(CHK.map||{})[myId()] && hcShiftOf(myId())==='night' && hcNightOT()) return 'Your health check for last night is done. Today\'s list opens when your night shift starts.';
+  if(!CHK.err && !(CHK.map||{})[myId()] && ((hcShiftOf(myId())==='night' && hcNightOT()) || (CHK.prev && CHK.prev[myId()] && hcSameShift(CHK.prev[myId()].at)))) return 'You\'ve done your health check for this shift. Your next list opens with your next shift.';
   if(!CHK.err && !(CHK.map||{})[myId()]) return 'Signing you in for today\'s check…';
   return 'Nothing assigned to you right now. When a teammate is absent, or the morning shift leaves accounts unchecked, they show up here — keep this tab open.';
 }
