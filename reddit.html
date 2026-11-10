@@ -5390,6 +5390,21 @@ async function pqRegrade(from, apply){
 }
 window.pqRegrade=pqRegrade;
 
+/* owner: preview → apply the November re-grade */
+async function pqRegradeUI(apply){
+  if(!isAdmin()) return;
+  openModal('<h3>Re-grading November…</h3><p class="muted">Working through each day from Nov 1 — about a minute.</p>');
+  var R=await pqRegrade('2026-11-01', !!apply);
+  var ch=(R||[]).filter(function(x){ return x.va && x.now!==x.old; }), by={};
+  (R||[]).forEach(function(x){ if(!x.va) return; var b=by[x.va]=by[x.va]||{ n:0, o:0, w:0 }; b.n++; b.o+=x.old; b.w+=x.now; });
+  var rows=Object.keys(by).sort().map(function(k){ var b=by[k]; return '<tr><td class="c1"><b>'+esc(vaName(k))+'</b></td><td class="num">'+b.n+'</td><td class="num">'+(Math.round(b.o/b.n*10)/10)+'</td><td class="num" style="font-weight:800">'+(Math.round(b.w/b.n*10)/10)+'</td></tr>'; }).join('');
+  openModal('<h3>'+(apply?'Re-graded':'Re-grade preview')+' · Nov 1 → yesterday</h3><p class="muted">'+ch.length+' VA-day'+(ch.length===1?'':'s')+' '+(apply?'changed and saved':'would change')+'. Average daily QA per VA (automatic days only):</p>'+
+    '<div class="tbl-w"><table class="db"><thead><tr><th class="c1">VA</th><th>Days</th><th>Before</th><th>After</th></tr></thead><tbody>'+(rows||'<tr><td colspan="4">No automatic scores found.</td></tr>')+'</tbody></table></div>'+
+    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn" onclick="closeModal(true)">Close</button>'+(apply||!ch.length?'':'<button class="btn pri" onclick="pqRegradeUI(true)">Apply to all '+ch.length+'</button>')+'</div>');
+  if(apply) toast('Saved — open Scorecard and press "Publish now" to send November to the portal.');
+}
+window.pqRegradeUI=pqRegradeUI;
+
 /* ══════════ QA FILLS ITSELF (Jeth, Oct 13) ══════════
    Days the owner has not scored are filled with the suggested score (10 minus the rule hits) the next time
    the owner opens Reddit Central — every day from the process start (Oct 5) to yesterday, once each (Oct 13:
@@ -7762,6 +7777,7 @@ function pqQA(){
         '<td class="num">'+(a&&a.length?(a.reduce(function(s,x){ return s+x; },0)/a.length).toFixed(1)+'<span class="muted" style="font-size:10.5px"> · '+a.length+'d</span>':'<span class="muted">—</span>')+'</td>'+
         '<td style="white-space:nowrap"><button class="btn sm '+(sc!==''?'sec':'pri')+'" onclick="pqSave(\''+jsq(va)+'\','+sug+')">'+(sc!==''?'Update':'Save')+'</button></td></tr>';
     }).join('')+'</tbody></table></div>'+
+    '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn sm" onclick="pqRegradeUI(false)">Re-grade from Nov 1 with the fair rules (preview)</button><span class="muted" style="font-size:11.5px">Only automatic scores change; scores you typed by hand stay.</span></div>'+
     '<p class="muted" style="font-size:11.5px;margin-top:6px">Leave the score empty and press Save to accept the suggestion. Scores are stored per business day in the RcDaily sheet with who scored and when.</p>';
   return h;
 }
