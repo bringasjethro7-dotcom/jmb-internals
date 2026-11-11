@@ -5384,7 +5384,35 @@ var MDW=(function(){
     repBtn();
   }
   function paintList(){ var l=$('mdw-list'); if(!l) return paint(); var ph=($('mdw-ph')||{}).value; l.innerHTML=listHtml(); if(ph && $('mdw-ph')) $('mdw-ph').value=ph; repBtn(); }
-  return { id:CID, S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners,
+  /* ═══ SCORES (Nov 11 — Jeth: "all of them use tools, why is it missing?"). Meadow had no score at all, so Hamto's
+     Productivity · QA · Results were blank. Worked out from the leads and the day records, on the days the VA worked:
+       Productivity = leads messaged ÷ MDW_DAILY (60 a day), capped at 100 per day, averaged.
+       QA = 10 a day, −2 no inbox check logged, −1 under half of the day's new leads messaged, −1 replies waiting 2+ days
+            at the end of the day; daily floor −4; logged violations on top (Client Hub violations).
+       Results = reply rate on this month's messages against MDW_REPLY_GOOD (10%), plus +5 per number sent (cap 100). ═══ */
+  var MDW_DAILY=60, MDW_REPLY_GOOD=0.10;
+  function monthScores(month){
+    var from=month+'-01', end=hubMonthEnd(month);
+    return owners().filter(function(e){ return OWNER_IDS.indexOf(e.toUpperCase())<0; }).map(function(emp){
+      var days=0, pr=[], qa=[], msgT=0, repT=0, numT=0;
+      for(var d=from; d<=end; d=hubDayAdd(d,1)){
+        var o=dayStats(emp, d); if(!(o.found||o.msg||o.reply||o.rep||o.inbox.length)) continue;
+        days++; msgT+=o.msg; repT+=o.reply; numT+=o.rep;
+        pr.push(Math.min(1, o.msg/MDW_DAILY));
+        var ded=0; if(!o.inbox.length) ded+=2; if(o.found>=4 && o.msg<o.found/2) ded+=1;
+        var stale=leads().filter(function(r){ return ownerOf(r)===emp && r.status==='replied' && ev(r,'reply') && ev(r,'reply')<=hubDayAdd(d,-2) && !(ev(r,'rep') && ev(r,'rep')<=d) && !(ev(r,'close') && ev(r,'close')<=d); }).length;
+        if(stale) ded+=1;
+        ded=Math.min(4, ded); try{ if(typeof VQA!=='undefined') ded+=VQA.ded(PROJECT, emp, d); }catch(_v){}
+        qa.push(Math.max(0, 10-ded));
+      }
+      if(!days) return null;
+      var p=hubAvg(pr), q=hubAvg(qa), rr=msgT?repT/msgT:null;
+      var res=(msgT>=30)?hubR1(Math.min(100, rr/MDW_REPLY_GOOD*100 + numT*5)):null;
+      return { emp:emp.toUpperCase(), days:days, prod:p===null?null:hubR1(p*100), qa:q===null?null:hubR1(q*10), res:res,
+        why:{ prod:msgT+' messaged in '+days+' day'+(days===1?'':'s')+' (target '+MDW_DAILY+'/day)', qa:days+' day'+(days===1?'':'s')+' · inbox, follow-up, replies', res:repT+' replies ('+(rr===null?'—':Math.round(rr*1000)/10+'%')+') · '+numT+' number'+(numT===1?'':'s')+' sent' } };
+    }).filter(Boolean);
+  }
+  return { id:CID, S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners, monthScores:monthScores,
            inbox:inbox, add:add, msg:msg, replied:replied, close:close, reopen:reopen, repOpen:repOpen, repSet:repSet, repBtn:repBtn, repSend:repSend,
            summary:summary, moveTo:moveTo, del:del, setView:setView, setDay:setDay, setFilter:setFilter, setQ:setQ,
            _t:{ dayStats:dayStats, msgFor:msgFor, phoneOk:phoneOk, cleanH:cleanH } };
@@ -6437,13 +6465,14 @@ var HUB=(function(){
      and Publish sends them to the portal scorecard (sc_ext_save), the way Reddit Central and ALTR Studio already do. The
      portal blends each client by the VA's hours on it. A number a board can't measure stays blank, so the portal keeps
      its own for that part. ═══ */
-  var SCX={ imperium:'imperium', slaybae:'slaybae', project2:'p2', threads:'threads', ember:'ember', 'design-shopify':'torchlight' };
+  var SCX={ imperium:'imperium', slaybae:'slaybae', project2:'p2', threads:'threads', ember:'ember', 'design-shopify':'torchlight', meadow:'meadow' };   // Nov 11: + Meadow (TikTok outreach)
   var SCX_RULE={
     imperium:'Productivity: plan steps done ÷ due on the phones they opened. QA: the QA tab\'s day score, averaged. Results: share of their accounts not banned or restricted.',
     slaybae:'Productivity: plan steps done ÷ due on the phones they opened. QA: the QA tab\'s day score, averaged. Results: share of their accounts not banned or restricted.',
     project2:'Productivity: the 7 plan steps done each day. QA: the QA tab\'s day score, averaged. Results: approved days that were posted, and accounts still active. The board keeps the last 10 days.',
     threads:'Productivity: waves posted ÷ due (2 a day per postable account). QA: the shift checklist done. Results: share of their accounts still postable.',
     ember:'Results: accounts made this month that are still running. Productivity and QA aren\'t measured on this board, so the portal\'s own numbers stay.',
+    meadow:'Productivity: leads messaged ÷ 60 a day. QA: 10 a day, −2 no inbox check, −1 new leads left unmessaged, −1 replies waiting 2+ days (floor −4) + violations. Results: reply rate vs 10%, +5 per number sent.',
     'design-shopify':'Results: this month\'s cards published ÷ published + still in the pipeline. Productivity and QA aren\'t measured on this board, so the portal\'s own numbers stay.'
   };
   function scMonths(){ var t=today(), y=+t.slice(0,4), m=+t.slice(5,7), out=[]; for(var i=0;i<3;i++){ var mm=m-i, yy=y; while(mm<1){ mm+=12; yy--; } var k=yy+'-'+(mm<10?'0':'')+mm; if(k>='2026-10') out.push(k); } return out; }
