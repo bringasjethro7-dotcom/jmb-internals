@@ -3302,8 +3302,10 @@ function IGPhones(CFG){
       var mine=accts().filter(function(a){ var p=rowById(a.meta.phone); return (ownerOf(a)===lc || (p && ownerOf(p)===lc)) && String(a.meta.start||'')<=end; });
       var alive=mine.filter(function(a){ return a.status!=='banned' && a.status!=='restricted'; }).length, q=hubAvg(o.qa);
       var res=mine.length>=3?hubR1(alive/mine.length*100):null, rwhy=alive+' of '+mine.length+' accounts still up';
-      if(RES && month>='2026-11'){ var gm=growthMonth(lc, month); res=gm.n?hubR1(gm.pts/gm.n*100):null;
-        rwhy=gm.n?(gm.n+' account-weeks · '+gm.grew+' grew followers (+'+fmtN(gm.gained)+') · '+gm.vUp+' reel views up'):'growth needs two weeks of daily logs'; }
+      if(RES && month>='2026-11'){ var gm=growthMonth(lc, month);
+        /* Nov 11 (Jeth: scores missing): growth needs two weeks of daily logs — until then account survival stands in */
+        if(gm.n){ res=hubR1(gm.pts/gm.n*100); rwhy=gm.n+' account-weeks · '+gm.grew+' grew followers (+'+fmtN(gm.gained)+') · '+gm.vUp+' reel views up'; }
+        else rwhy=rwhy+' (growth scoring starts once two weeks of daily logs exist)'; }
       return { emp:k, days:o.days, prod:o.due?hubR1(Math.min(100, o.done/o.due*100)):null, qa:q===null?null:hubR1(q*10), res:res,
         why:{ prod:o.done+' of '+o.due+' planned steps', qa:o.qa.length+' day'+(o.qa.length===1?'':'s')+' scored by the QA rules', res:rwhy } };
     });
