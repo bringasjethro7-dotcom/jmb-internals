@@ -837,6 +837,23 @@ body::before{content:'';position:fixed;inset:-20% -10% auto;height:520px;z-index
 .rs-how{font-size:12.5px;color:var(--ink2);line-height:1.55;background:#fff5f7;border:1px solid rgba(225,29,72,.16);border-radius:14px;padding:10px 13px;margin:0 0 12px}
 .rs-card{padding:4px 4px 0;overflow-x:auto}
 .rs-t{width:100%;border-collapse:collapse;font-size:13px}
+/* Nov 11: Accounts database + Post insights */
+.ia-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px;margin-bottom:10px}
+.ia-q{flex:1;min-width:200px;padding:9px 12px;border:1px solid var(--line2);border-radius:10px;font:600 13px Inter,sans-serif;outline:none;background:#fff}
+.ia-sel{padding:8px 10px;border:1px solid var(--line2);border-radius:10px;font:600 12.5px Inter,sans-serif;background:#fff}
+.ia-t tr.ia-row{cursor:pointer;transition:background .15s}.ia-t tr.ia-row:hover td{background:rgba(225,29,72,.04)}.ia-t tr.ia-row.on td{background:rgba(225,29,72,.07)}
+.ia-st{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em}
+.ia-st.ok{background:#dcfce7;color:#166534}.ia-st.warn{background:#fef3c7;color:#92400e}.ia-st.bad{background:#fee2e2;color:#991b1b}.ia-st.mute{background:#f1f5f9;color:#475569}
+.ia-open{white-space:nowrap}
+.ia-det td{background:#fffafc;padding:14px 16px}
+.ia-dg{display:grid;grid-template-columns:minmax(260px,1.2fr) minmax(240px,1fr);gap:16px}
+@media (max-width:820px){ .ia-dg{grid-template-columns:1fr} }
+.ia-h{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:8px}
+.ia-chart{width:100%;height:120px;display:block}.ia-ax{display:flex;justify-content:space-between;font-size:11px;color:var(--ink3);font-weight:600;margin-top:4px}
+.ia-pl{display:grid;gap:6px}.ia-pi{display:grid;grid-template-columns:110px 1fr;gap:2px 10px;align-items:baseline;padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:12.5px}
+.ia-pi b{font-size:13px}.ia-pi em{grid-column:2;font-style:normal;font-size:11.5px;color:var(--ink3)}
+.ia-pc{padding:0;margin-bottom:12px;overflow:hidden}.ia-ph{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.ia-pt .rs-in{width:96px}.ia-pt .rs-in.ia-url{width:170px}.ia-pt .rs-in.ia-s{width:104px}
 .rs-t th{text-align:left;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);padding:10px 12px;border-bottom:1px solid var(--line)}
 .rs-t td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
 .rs-t td small{display:block;font-size:11px;color:var(--ink3);font-weight:600;margin-top:2px}
@@ -2278,6 +2295,7 @@ function IGPhones(CFG){
      up, compared with the week before. A missed daily log is a small QA deduction (−0.25 an account, max −1) after a
      3-day grace (counts from Nov 14). */
   var RES=!!CFG.results, RES_SINCE='2026-11-11', RES_GRACE_END='2026-11-14';
+  var INS=!!CFG.insights;   // Nov 11: Accounts database + per-post insights (Slaybae)
   /* Oct 21: the client's own plan applies from SCH.since; earlier days are judged by the plan that was in force then
      (so the month's scores and QA don't re-grade old days against a calendar nobody was working to). */
   function schFor(date){ return (SCH && String(date||today())>=(SCH.since||'')) ? SCH : null; }
@@ -2990,7 +3008,7 @@ function IGPhones(CFG){
     return s('ph', ready+'<small>/'+P.length+'</small>','Phones ready')+s('pf', open,'Open this shift')+s('wa', warm,SCH?'Days 1–'+(SCH.reels-1):'Warm-up')+(SCH?'':s('fe', feed,'Feed photos'))+s('re', reels,'On reels')+s('rt', rd+'<small>/'+rt+'</small>','Reels today')+(trial?s('tr', trial,'Trial reels to set'):'');
   }
   function navPills(){
-    var v=[['today','Today'],['phones','Phones & setup']]; if(RES) v.push(['results','Results']); if(isOwner()) v.push(['qa','QA']);
+    var v=[['today','Today'],['phones','Phones & setup']]; if(INS){ v.push(['accounts','Accounts']); v.push(['posts','Posts']); } if(RES) v.push(['results','Results']); if(isOwner()) v.push(['qa','QA']);
     return '<div class="inav">'+v.map(function(x){ return '<button class="'+(S.view===x[0]?'on':'')+'" onclick="'+NS+'.setView(\''+x[0]+'\')">'+x[1]+'</button>'; }).join('')+'</div>';
   }
   function chip(cls, t){ return '<span class="ich '+cls+'">'+t+'</span>'; }
@@ -3173,6 +3191,8 @@ function IGPhones(CFG){
   }
   function body(){
     if(!S.loaded) return '<div class="muted" style="padding:10px">'+(S.err?esc(S.err):'Loading '+esc(PROJECT)+'…')+'</div>';
+    if(INS && S.view==='accounts') return viewAccounts();
+    if(INS && S.view==='posts') return viewPosts();
     return S.view==='phones'?viewPhones():(S.view==='qa'?viewQA():(S.view==='results' && RES?viewResults():viewToday()));
   }
   function render(host){
@@ -3287,6 +3307,135 @@ function IGPhones(CFG){
     cacheRows(); paint(); try{ if(typeof tmTouch==='function') tmTouch(); }catch(_t){}
     toast(ok===todo.length?('Saved: '+ok+' account'+(ok>1?'s':'')+' logged for '+date+'.'):('Saved '+ok+' of '+todo.length+'. Try the rest again.'));
   }
+  /* ════════ ACCOUNTS DATABASE + POST INSIGHTS (Nov 11 — Jeth: "like Reddit Central … show all the accounts, which
+     phones, which model, a button to open them and see the followers … each post should create a shell the tool updates
+     with views, comments and reacts"). Instagram has no feed we can safely pull from, so the numbers are typed by the VA
+     from the app; every reel logged in Today becomes a post shell here automatically (one per reel, per account, per day).
+       account.meta.posts = { 'YYYY-MM-DD#n': { url, v, l, c, at, by, hist:{ 'YYYY-MM-DD':{v,l,c} } } }   (last 45 days)
+     ════════ */
+  var IN=S.ins=S.ins||{ q:'', va:'', ph:'', md:'', st:'live', sort:'fol', open:'', pday:'', pva:'', pq:'' };
+  function igUrl(h){ return 'https://www.instagram.com/'+encodeURIComponent(String(h||'').replace(/^@/,''))+'/'; }
+  function postsOf(a){ return (a && a.meta && a.meta.posts) || {}; }
+  function reelsOn(a, d){ var L=((a.meta||{}).log||{})[d]||{}; return (+L.reels||0)+(+L.trial||0); }
+  function shellsOf(a, days){
+    var out=[], P=postsOf(a), from=hubDayAdd(today(), -((days||14)-1)), lg=(a.meta||{}).log||{}, seen={};
+    Object.keys(lg).forEach(function(d){ if(d<from) return; var n=reelsOn(a,d); for(var i=1;i<=n;i++){ var id=d+'#'+i; seen[id]=1; out.push({ id:id, d:d, n:i, p:P[id]||null }); } });
+    Object.keys(P).forEach(function(id){ if(seen[id]) return; var d=id.split('#')[0]; if(d<from) return; out.push({ id:id, d:d, n:+id.split('#')[1]||1, p:P[id] }); });
+    return out.sort(function(x,y){ return x.d===y.d?x.n-y.n:(x.d<y.d?1:-1); });
+  }
+  function pStat(p){ return p?{ v:+p.v||0, l:+p.l||0, c:+p.c||0 }:null; }
+  function pPrev(p){ if(!p || !p.hist) return null; var ks=Object.keys(p.hist).sort(); if(ks.length<2) return null; var h=p.hist[ks[ks.length-2]]; return { d:ks[ks.length-2], v:+h.v||0, l:+h.l||0, c:+h.c||0 }; }
+  function acctPostSum(a, days){ var sh=shellsOf(a, days||30), n=0, v=0, l=0, c=0, filled=0;
+    sh.forEach(function(x){ n++; var st=pStat(x.p); if(st && x.p.at){ filled++; v+=st.v; l+=st.l; c+=st.c; } }); return { n:n, filled:filled, v:v, l:l, c:c, avg:filled?Math.round(v/filled):null }; }
+  function modelOf(a){ var p=rowById(a.meta.phone); return String(a.model||(p&&p.model)||'').trim(); }
+  function folNow(a){ var g=grAt(a, today()); return g?g.f:null; }
+  function fol7(a){ var c=grAt(a, today()), p=grAt(a, hubDayAdd(today(),-7)); return (c && p && c.d>p.d)?c.f-p.f:null; }
+  function stChip(a){ var st=a.status||'active'; var m={ active:['ok','Active'], restricted:['warn','Restricted'], banned:['bad','Banned'], hold:['mute','On hold'] }[st]||['mute',st]; return '<span class="ia-st '+m[0]+'">'+m[1]+'</span>'; }
+  function insFilter(k, v){ IN[k]=v; paint(); }
+  function insOpen(id){ IN.open=(IN.open===id?'':id); paint(); }
+  function sel(id, val, opts, k){ return '<select class="ia-sel" onchange="'+NS+'.insF(\''+k+'\',this.value)">'+opts.map(function(o){ return '<option value="'+esc(o[0])+'"'+(o[0]===val?' selected':'')+'>'+esc(o[1])+'</option>'; }).join('')+'</select>'; }
+  function viewAccounts(){
+    var A=accts(), me0=me().toLowerCase();
+    var vas={}, phs={}, mds={}; A.forEach(function(a){ var o=resOwnerOf(a); if(o) vas[o]=1; var p=rowById(a.meta.phone); if(p) phs[p.id]=phoneLabel(p); var m=modelOf(a); if(m) mds[m]=1; });
+    var L=A.filter(function(a){
+      if(IN.st==='live' && DEAD[a.status]) return false; if(IN.st==='dead' && !DEAD[a.status]) return false;
+      if(IN.va && resOwnerOf(a)!==IN.va) return false; if(IN.ph && a.meta.phone!==IN.ph) return false; if(IN.md && modelOf(a)!==IN.md) return false;
+      if(IN.q){ var q=IN.q.toLowerCase(); var p=rowById(a.meta.phone); if((String(a.handle)+' '+modelOf(a)+' '+(p?phoneLabel(p):'')+' '+vaName(resOwnerOf(a))).toLowerCase().indexOf(q)<0) return false; }
+      return true; });
+    var key=IN.sort; L.sort(function(x,y){
+      if(key==='fol') return (folNow(y)||-1)-(folNow(x)||-1);
+      if(key==='grow') return (fol7(y)==null?-1e9:fol7(y))-(fol7(x)==null?-1e9:fol7(x));
+      if(key==='views') return (acctPostSum(y).avg||-1)-(acctPostSum(x).avg||-1);
+      var px=rowById(x.meta.phone), py=rowById(y.meta.phone); return String(px?phoneLabel(px):'').localeCompare(String(py?phoneLabel(py):''), undefined, { numeric:true }) || String(x.handle).localeCompare(String(y.handle)); });
+    var live=A.filter(function(a){ return !DEAD[a.status]; }), totF=0, cntF=0, g7=0, c7=0, pv=0, pn=0;
+    live.forEach(function(a){ var f=folNow(a); if(f!=null){ totF+=f; cntF++; } var d=fol7(a); if(d!=null){ g7+=d; c7++; } var s2=acctPostSum(a,7); pv+=s2.v; pn+=s2.filled; });
+    var h='<div class="rs-hero own"><div class="rs-hl"><small>'+esc(PROJECT)+' · account database</small><b>'+live.length+' <em>live</em></b><span>'+A.length+' accounts on '+Object.keys(phs).length+' phones · '+Object.keys(mds).length+' models</span></div>'+
+      '<div class="rs-hk"><div><b>'+(cntF?fmtN(totF):'—')+'</b><span>total followers</span></div><div><b>'+(c7?(g7>=0?'+':'')+fmtN(g7):'—')+'</b><span>followers · 7 days</span></div><div><b>'+(pn?fmtN(Math.round(pv/pn)):'—')+'</b><span>avg views per post · 7 days</span></div></div></div>';
+    h+='<div class="card ia-bar"><input class="ia-q" placeholder="Search @handle, model, phone, VA…" value="'+esc(IN.q)+'" oninput="clearTimeout(window.__iaT);var v=this.value;window.__iaT=setTimeout(function(){'+NS+'.insF(\'q\',v)},350)">'+
+      sel('va', IN.va, [['','All VAs']].concat(Object.keys(vas).sort().map(function(k){ return [k, vaName(k)]; })), 'va')+
+      sel('ph', IN.ph, [['','All phones']].concat(Object.keys(phs).sort(function(x,y){ return String(phs[x]).localeCompare(phs[y], undefined, { numeric:true }); }).map(function(k){ return [k, phs[k]]; })), 'ph')+
+      sel('md', IN.md, [['','All models']].concat(Object.keys(mds).sort().map(function(k){ return [k,k]; })), 'md')+
+      sel('st', IN.st, [['live','Live'],['all','All'],['dead','Banned / restricted / held']], 'st')+
+      sel('sort', IN.sort, [['fol','Most followers'],['grow','Fastest growing'],['views','Best avg views'],['phone','Phone order']], 'sort')+
+      (vas[me0] && IN.va!==me0?'<button class="btn sm sec" onclick="'+NS+'.insF(\'va\',\''+esc(me0)+'\')">My accounts</button>':'')+'</div>';
+    h+='<div class="card rs-card"><table class="rs-t ia-t"><thead><tr><th>Account</th><th>Phone · model</th><th>VA</th><th>Stage</th><th>Followers</th><th>7 days</th><th>Posts · 30d</th><th>Avg views</th><th>Trend</th><th></th></tr></thead><tbody>'+
+      (L.length?L.map(function(a){
+        var p=rowById(a.meta.phone), f=folNow(a), d7=fol7(a), ps=acctPostSum(a,30), g=grAt(a, today()), op=IN.open===a.id;
+        var row='<tr class="ia-row'+(op?' on':'')+'" onclick="'+NS+'.insOpen(\''+a.id+'\')"><td><b>@'+esc(String(a.handle).replace(/^@/,''))+'</b><small>'+stChip(a)+'</small></td>'+
+          '<td>'+(p?esc(phoneLabel(p)):'—')+'<small>'+esc(modelOf(a)||'—')+'</small></td><td>'+esc(vaName(resOwnerOf(a)))+'</td><td>'+esc(phase(a).t)+'<small>day '+dayN(a)+'</small></td>'+
+          '<td><b>'+(f!=null?fmtN(f):'—')+'</b>'+(g && g.d!==today()?'<small>'+esc(g.d)+'</small>':'')+'</td><td>'+(d7!=null?dlt(d7):'<span class="rs-d na">—</span>')+'</td>'+
+          '<td>'+ps.n+(ps.n?'<small>'+ps.filled+' with stats</small>':'')+'</td><td>'+(ps.avg!=null?fmtN(ps.avg):'—')+'</td><td>'+spark(a)+'</td>'+
+          '<td onclick="event.stopPropagation()"><a class="btn sm sec ia-open" href="'+igUrl(a.handle)+'" target="_blank" rel="noopener">Open ↗</a></td></tr>';
+        if(op) row+='<tr class="ia-det"><td colspan="10">'+acctDetail(a)+'</td></tr>';
+        return row; }).join('')
+        :'<tr><td colspan="10" class="muted" style="padding:16px">No accounts match.</td></tr>')+'</tbody></table></div>'+
+      '<div class="rs-how">Followers come from the daily growth log (Results tab). Posts are made by the reels logged in Today, and their views, likes and comments are typed in the <b>Posts</b> tab. Tap an account to see its follower line and its posts.</div>';
+    return h;
+  }
+  function bigChart(a){
+    var g=grOf(a), ks=Object.keys(g).sort().slice(-30); if(ks.length<2) return '<div class="muted" style="font-size:12px;padding:8px 0">The follower line appears after two days of growth logs.</div>';
+    var vals=ks.map(function(d){ return +g[d].f||0; }), mn=Math.min.apply(null, vals), mx=Math.max.apply(null, vals), W=520, H=120, sp=(mx-mn)||1;
+    var pts=vals.map(function(v,i){ return [(i*(W/(vals.length-1))), (H-14-(v-mn)/sp*(H-30))]; });
+    var line=pts.map(function(q){ return q[0].toFixed(1)+','+q[1].toFixed(1); }).join(' '), area='0,'+H+' '+line+' '+W+','+H;
+    return '<svg class="ia-chart" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="iag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e11d48" stop-opacity=".28"/><stop offset="1" stop-color="#e11d48" stop-opacity="0"/></linearGradient></defs><polygon points="'+area+'" fill="url(#iag)"/><polyline points="'+line+'" fill="none" stroke="#e11d48" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></svg>'+
+      '<div class="ia-ax"><span>'+esc(ks[0])+' · '+fmtN(vals[0])+'</span><span>'+esc(ks[ks.length-1])+' · '+fmtN(vals[vals.length-1])+'</span></div>';
+  }
+  function acctDetail(a){
+    var sh=shellsOf(a, 30);
+    return '<div class="ia-dg"><div class="ia-dc"><b class="ia-h">Followers · last 30 logs</b>'+bigChart(a)+'</div>'+
+      '<div class="ia-dc"><b class="ia-h">Posts · last 30 days</b>'+(sh.length?'<div class="ia-pl">'+sh.slice(0,12).map(function(x){ var st=pStat(x.p), pr=pPrev(x.p);
+        return '<div class="ia-pi"><span>'+esc(x.d.slice(5))+' · reel '+x.n+(x.p&&x.p.url?' <a href="'+esc(x.p.url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a>':'')+'</span>'+
+          (st&&x.p.at?'<b>'+fmtN(st.v)+' views</b><em>'+fmtN(st.l)+' likes · '+fmtN(st.c)+' comments'+(pr?' · '+dlt(st.v-pr.v,'views'):'')+'</em>':'<em class="muted">no stats yet</em>')+'</div>'; }).join('')+'</div>'
+        :'<div class="muted" style="font-size:12px">No reels logged in the last 30 days.</div>')+'</div></div>';
+  }
+  function viewPosts(){
+    var date=today(), lc=me().toLowerCase(), own=isOwner();
+    var A=accts().filter(function(a){ return !DEAD[a.status] || shellsOf(a,7).length; });
+    if(!own && !IN.pva) IN.pva=lc;
+    var rows=[]; A.forEach(function(a){ if(IN.pva && resOwnerOf(a)!==IN.pva && !resWorkedBy(a, IN.pva, 14)) return; shellsOf(a, 7).forEach(function(x){ rows.push({ a:a, x:x }); }); });
+    if(IN.pq){ var q=IN.pq.toLowerCase(); rows=rows.filter(function(r){ return (String(r.a.handle)+' '+modelOf(r.a)).toLowerCase().indexOf(q)>=0; }); }
+    var due=rows.filter(function(r){ return !(r.x.p && r.x.p.hist && r.x.p.hist[date]); }), today0=rows.filter(function(r){ return r.x.d===date; });
+    var tv=0, tn=0, best=null; rows.forEach(function(r){ var st=pStat(r.x.p); if(st && r.x.p.at){ tv+=st.v; tn++; if(!best || st.v>best.v) best={ v:st.v, a:r.a, x:r.x }; } });
+    var vas={}; accts().forEach(function(a){ var o=resOwnerOf(a); if(o) vas[o]=1; });
+    var h='<div class="rs-hero"><div class="rs-hl"><small>Post insights · last 7 days</small><b>'+rows.length+' <em>posts</em></b><span>'+today0.length+' posted today · '+due.length+' need today\'s numbers</span></div>'+
+      '<div class="rs-hk"><div><b>'+(tn?fmtN(tv):'—')+'</b><span>views on these posts</span></div><div><b>'+(tn?fmtN(Math.round(tv/tn)):'—')+'</b><span>avg views per post</span></div><div><b>'+(best?fmtN(best.v):'—')+'</b><span>'+(best?'best · @'+esc(String(best.a.handle).replace(/^@/,'')):'best post')+'</span></div></div></div>';
+    h+='<div class="rs-how">Every reel you log in <b>Today</b> becomes a post here. Once a day, open each post on Instagram and type its <b>views, likes and comments</b> (paste the reel link the first time). Posts stay here for 7 days, so you can watch them grow day by day.</div>';
+    h+='<div class="card ia-bar"><input class="ia-q" placeholder="Search @handle or model…" value="'+esc(IN.pq)+'" oninput="clearTimeout(window.__iaT);var v=this.value;window.__iaT=setTimeout(function(){'+NS+'.insF(\'pq\',v)},350)">'+
+      (own||Object.keys(vas).length>1?sel('pva', IN.pva, [['','All VAs']].concat(Object.keys(vas).sort().map(function(k){ return [k, vaName(k)]; })), 'pva'):'')+'</div>';
+    if(!rows.length) return h+'<div class="card" style="padding:18px"><b>No posts in the last 7 days.</b><div class="muted" style="margin-top:4px">Log reels in Today — each one appears here as a post to track.</div></div>';
+    var byAcct={}; rows.forEach(function(r){ (byAcct[r.a.id]=byAcct[r.a.id]||{ a:r.a, L:[] }).L.push(r.x); });
+    h+=Object.keys(byAcct).map(function(k){ var G=byAcct[k], a=G.a, p=rowById(a.meta.phone);
+      return '<div class="card ia-pc"><div class="ia-ph"><b>@'+esc(String(a.handle).replace(/^@/,''))+'</b><span class="muted">'+(p?esc(phoneLabel(p))+' · ':'')+esc(modelOf(a)||'')+(folNow(a)!=null?' · '+fmtN(folNow(a))+' followers':'')+'</span><span style="flex:1"></span><a class="btn sm sec" href="'+igUrl(a.handle)+'" target="_blank" rel="noopener">Open ↗</a></div>'+
+        '<table class="rs-t ia-pt"><thead><tr><th>Post</th><th>Link</th><th>Views</th><th>Likes</th><th>Comments</th><th>Since last update</th><th></th></tr></thead><tbody>'+
+        G.L.map(function(x){ var P=x.p, st=pStat(P), pr=pPrev(P), done=P && P.hist && P.hist[date], idp=PX+'-ps-'+a.id+'-'+x.id.replace(/[^0-9a-z]/gi,'');
+          return '<tr'+(done?' class="ok"':'')+'><td><b>Reel '+x.n+'</b><small>'+esc(x.d)+(x.d===date?' · today':'')+'</small></td>'+
+            '<td><input class="rs-in ia-url" id="'+idp+'-u" placeholder="paste link" value="'+esc(P&&P.url||'')+'"></td>'+
+            '<td><input class="rs-in" id="'+idp+'-v" type="number" min="0" inputmode="numeric" value="'+(done?esc(st.v):'')+'" placeholder="'+(st?esc(st.v):'views')+'"></td>'+
+            '<td><input class="rs-in ia-s" id="'+idp+'-l" type="number" min="0" inputmode="numeric" value="'+(done?esc(st.l):'')+'" placeholder="'+(st?esc(st.l):'likes')+'"></td>'+
+            '<td><input class="rs-in ia-s" id="'+idp+'-c" type="number" min="0" inputmode="numeric" value="'+(done?esc(st.c):'')+'" placeholder="'+(st?esc(st.c):'comments')+'"></td>'+
+            '<td>'+(st && P.at?(pr?dlt(st.v-pr.v,'views')+'<br>'+dlt(st.l-pr.l,'likes'):'<span class="muted" style="font-size:11.5px">first numbers in</span>'):'<span class="muted" style="font-size:11.5px">no numbers yet</span>')+'</td>'+
+            '<td><button class="btn sm" onclick="'+NS+'.postSave(\''+a.id+'\',\''+x.id+'\')">'+(done?'Update':'Save')+'</button></td></tr>'; }).join('')+'</tbody></table></div>'; }).join('');
+    return h;
+  }
+  async function postSave(aid, pid){
+    if(!isOwner() && !(await linkGate(CL(), 'Logging post insights'))) return;
+    var idp=PX+'-ps-'+aid+'-'+pid.replace(/[^0-9a-z]/gi,''), gv=function(s){ var e=$(idp+'-'+s); return e?String(e.value).trim():''; };
+    var u=gv('u'), vs=gv('v'), ls=gv('l'), cs=gv('c');
+    if(vs===''){ toast('Type the views (likes and comments if you can see them).'); return; }
+    var v=parseInt(vs,10), l=ls===''?0:parseInt(ls,10), c=cs===''?0:parseInt(cs,10);
+    if([v,l,c].some(function(n){ return isNaN(n)||n<0||n>2000000000; })){ toast('Numbers only, please.'); return; }
+    if(u && !/^https?:\/\/(www\.)?instagram\.com\//i.test(u)){ toast('The link should be an instagram.com link.'); return; }
+    var key='ps_'+aid+pid; if(S.busy[key]) return; S.busy[key]=1;
+    try{
+      var ok=await guarded(aid, function(){ return patchMeta(aid, function(m){
+        var d=today(); m.posts=m.posts||{}; var P=m.posts[pid]=m.posts[pid]||{};
+        if(u) P.url=u; P.v=v; P.l=l; P.c=c; P.at=new Date().toISOString(); P.by=me(); P.hist=P.hist||{}; P.hist[d]={ v:v, l:l, c:c };
+        var hk=Object.keys(P.hist).sort(); while(hk.length>14){ delete P.hist[hk.shift()]; }
+        var from=hubDayAdd(d,-45); Object.keys(m.posts).forEach(function(k){ if(k.split('#')[0]<from) delete m.posts[k]; });
+      }, null, 'Post numbers saved'); });
+      if(ok===true){ try{ tmTouch(); }catch(_t){} }
+    } finally { delete S.busy[key]; }
+  }
   if(!S.who) S.who='all';
   /* ── MONTH SCORES (owner → Client Hub · Scores, Oct 21) ──
      Productivity = plan steps done ÷ due on the phones each VA opened (the QA tab's own numbers), over the month.
@@ -3314,7 +3463,7 @@ function IGPhones(CFG){
     setView:setView, setWho:setWho, toggleAddPhone:toggleAddPhone, addPhone:addPhone, setupTick:setupTick, phoneNote:phoneNote,
     addAcct:addAcct, createStart:createStart, log:logTask, setStatus:setStatus, trialUnlocked:trialUnlocked, trialSet:trialSet, trialUndo:trialUndo, history:history, reassign:reassign, del:del,
     preflight:preflightOpen, pfClose:pfClose, pfPick:pfPick, pfClear:pfClear, pfAttach:pfAttach, pfCap:pfCap, pfRule:pfRule, pfSave:pfSave, pfReview:pfReview,
-    qaSave:qaSave, qaDate:qaDateSet, qaShift:qaShift, resSave:resSave,
+    qaSave:qaSave, qaDate:qaDateSet, qaShift:qaShift, resSave:resSave, insF:insFilter, insOpen:insOpen, postSave:postSave,
     scrollStart:scrollStart, scrollDrop:function(){ scrollDrop(false); }, waveStart:waveStart, waveFinish:waveFinish, tmStart:tmStart, tmStop:tmStop, tmPick:tmPick, tmStill:tmStill, tmTouch:tmTouch, timerOn:timerOn, timerInfo:timerInfo, _TM:TM,
     _t:{ dayN:dayN, plan:plan, phase:phase, reelTarget:reelTarget, pfOk:pfOk, qaRows:qaRows, phoneOpen:phoneOpen, setupDone:setupDone, waveAccts:waveAccts, waveNo:waveNo, waveDue:waveDue, scrollDone:scrollDone, waveScroll:waveScroll, waveLine:waveLine, waves:WAVES } };
   SELF=api; IGP.push(api); return api;
@@ -3322,7 +3471,7 @@ function IGPhones(CFG){
 var IGP=[];
 var IMA=IGPhones({ ns:'IMA', cid:'imperium', project:'Imperium', px:'ima', kp:'ima', phEx:'IMA-07', sop:'SOP-02 — Instagram setup &amp; warm-up (physical phone)' });
 var SLB=IGPhones({ ns:'SLB', cid:'slaybae',  project:'Slaybae',  px:'slb', kp:'slb', phEx:'SLB-01', sop:'Slaybae SOP — Instagram setup &amp; posting (physical phone) · updated Oct 20',
-  sched:{ since:'2026-10-20', email:2, pfp:3, reels:4, ramp:[1,2,3], scroll:1, from:'2026-10-19', lbl:{ 1:'Creation', 2:'Email', 3:'Profile picture' } }, waves:true, results:true });
+  sched:{ since:'2026-10-20', email:2, pfp:3, reels:4, ramp:[1,2,3], scroll:1, from:'2026-10-19', lbl:{ 1:'Creation', 2:'Email', 3:'Profile picture' } }, waves:true, results:true, insights:true });
 
 IGP=IGP.filter(function(m){ return !!clientById(m.id); });   // Nov 9: Imperium retired — its phone module leaves the timer loops (Slaybae stays)
 
