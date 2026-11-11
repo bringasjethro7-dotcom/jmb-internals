@@ -5230,6 +5230,7 @@ function vSubs(){
    If Supabase cannot be reached the old rule comes back (everyone who owns live accounts), so the check
    never stops. */
 var HC_DAY_END='17:00:00', HC_NIGHT_END='05:00:00';
+var HC_DONE_EXC={ 'jmb017':'2026-11-11' };   // Nov 11 (Jeth): Felilou's health check counts as done today (list kept growing after she finished)
 var CHK={ day:'', map:{}, prev:{}, at:0, err:'' };
 function hcShiftOf(va){ return SHIFTOF[String(va||'').toLowerCase()]==='night'?'night':'day'; }
 function hcDue(shift, day){ day=day||today(); return shift==='night'?dAdd(day,1)+' '+HC_NIGHT_END:day+' '+HC_DAY_END; }
@@ -5337,6 +5338,17 @@ function ccPlan(){
     }
     if(c){ plan[c].push(r.id); of[r.id]=c; if(ended[pool]) missed[c].push(r.id); return; }
     if(!ended[pool]) wait.push(r.id); else un.push(r.id);
+  });
+  /* Nov 11 (Jeth): HEALTH CHECK EXCEPTIONS — a VA whose list kept growing after she finished (Felilou, Nov 11: signed in at
+     1 PM as the only night checker, then the 5 PM morning handover kept landing on her) is marked done for that day:
+     what she checked stays hers, everything still unchecked on her list goes to another checker of the same shift who is
+     in (or waits, unassigned), so her EOD is not blocked. Add a line per exception: 'jmb0xx':'yyyy-mm-dd'. */
+  Object.keys(HC_DONE_EXC).forEach(function(c){
+    if(HC_DONE_EXC[c]!==day || !plan[c]) return;
+    var keep=[], move=[]; plan[c].forEach(function(id){ var r=rowById(id); if(r && ccState(r)) keep.push(id); else move.push(id); });
+    plan[c]=keep; missed[c]=(missed[c]||[]).filter(function(id){ return keep.indexOf(id)>=0; });
+    var sh=(ins[c]&&ins[c].shift)||hcShiftOf(c), others=(present[sh]||[]).filter(function(v){ return v!==c && !HC_DONE_EXC[v]; });
+    move.forEach(function(id){ var r=rowById(id); var w=r?rv(others, r):null; if(w){ plan[w].push(id); of[id]=w; } else { delete of[id]; un.push(id); } });
   });
   _CC={ day:day, plan:plan, of:of, missed:missed, checkers:checkers, ins:ins, exp:exp, present:present, unassigned:un, waiting:wait, ended:ended, shareDay:shareDay };
   _CCK=key; return _CC;
