@@ -3816,9 +3816,27 @@ function tmHoldNote(){ if(Date.now()-_tmHN<30000) return; _tmHN=Date.now(); var 
 var TMW={ io:null, raw:[], seen:[], iv:0 };
 function tmRunEl(){ var L=document.querySelectorAll('.ses.run,.btn.run'); for(var i=0;i<L.length;i++){ if(L[i].offsetParent!==null) return L[i]; } return null; }
 function tmJumpTo(b){
-  if(!b){ toast('The running account is hidden by a filter or search — clear it to see the account.'); return; }
+  if(!b){ tmLostBox(); return; }
   try{ b.scrollIntoView({block:'center',behavior:'smooth'}); }catch(_s){ b.scrollIntoView(); }
   b.classList.remove('tm-found'); void b.offsetWidth; b.classList.add('tm-found'); setTimeout(function(){ try{ b.classList.remove('tm-found'); }catch(_r){} }, 1500);
+}
+/* Nov 11 (Jeth — Jamilla could not stop her timer: "the running account is hidden by a filter or search"): when the
+   running account is not on the board (a filter or search, or the account moved off her list), the timer can still be
+   finished or cancelled right here, so a VA is never stuck with a clock she cannot reach. */
+function tmLostBox(){
+  var L=tmRunning(''); if(!L.length){ toast('No timer is running.'); return; }
+  var x=L[0], p=String(x.k).split('|'), id=p[0], k=p[1]||'', r=rowById(id), m=/^s(\d)$/.exec(k);
+  var canFinish=!!(r && (m || k==='dm'));
+  window.__tmLost=function(act){ closeModal(null);
+    if(act==='finish'){ if(m) doSession(id, parseInt(m[1],10)); else if(k==='dm') dmsDone(id); }
+    else if(act==='cancel'){ tmCancel(id, k); }
+    else if(act==='clear'){ try{ document.querySelectorAll('input[type=search],input.search,#q,.srch input').forEach(function(i){ i.value=''; i.dispatchEvent(new Event('input',{bubbles:true})); }); }catch(_c){} try{ if(typeof go==='function') go('today'); }catch(_g){} setTimeout(function(){ var b=tmRunEl(); if(b) tmJumpTo(b); }, 500); } };
+  openModal('<div class="md-h"><h3>Your running timer</h3><p class="muted" style="margin-top:4px">The account is not showing on your board right now (a filter or search is on, or the account moved off your list). You can still finish or cancel the timer here.</p></div>'+
+    '<div class="md-b"><div class="tm-busy"><i class="tmd-dot"></i><b>'+esc(x.txt)+'</b><span class="tmd-t"'+(x.pz?'':' data-tm="'+x.t+'"')+'>'+tmFmt(x.el)+'</span></div></div>'+
+    '<div class="md-f"><button class="btn sec" onclick="__tmLost(\'clear\')">Clear search and show it</button>'+
+    '<button class="btn sec" onclick="__tmLost(\'cancel\')">Cancel timer (nothing saved)</button>'+
+    (canFinish?'<button class="btn pri" onclick="__tmLost(\'finish\')">Finish and save</button>':'')+'</div>');
+  tmEnsure();
 }
 function tmJump(){
   var b=tmRunEl(); if(b){ tmJumpTo(b); return; }
