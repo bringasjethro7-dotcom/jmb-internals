@@ -1691,6 +1691,15 @@ function actKey(){ return 'hub_act_'+myId()+'_'+phtToday(); }
 function actToday(){ try{ return parseInt(localStorage.getItem(actKey())||'0',10)||0; }catch(e){ return 0; } }
 function actBump(){ var was=ACT.last; ACT.last=Date.now(); if(Date.now()-was>60000){ try{ tbSend(false); }catch(e){} } }
 ['click','keydown','pointerdown','touchstart','scroll','wheel'].forEach(function(ev){ try{ document.addEventListener(ev, actBump, { passive:true, capture:true }); }catch(e){} });
+/* Nov 12 (Florence, via Jeth): the "still working?" box kept popping up while the portal timer ran fine. It is now skipped
+   when BOTH hold: the portal timer is running on this client (fresh presence) AND the VA really used this tab (click, key,
+   scroll) in the last 30 min. REAL only moves on real input, never from a timer tick — an idle laptop still gets the box. */
+var REAL={ at:Date.now() };
+['click','keydown','pointerdown','touchstart','wheel'].forEach(function(ev){ try{ document.addEventListener(ev, function(){ REAL.at=Date.now(); }, { passive:true, capture:true }); }catch(e){} });
+function hubSkipAsk(cid){
+  try{ if(Date.now()-REAL.at>30*60000) return false; var cl=cid?clientById(cid):HUB.cur(); if(!cl) return false;
+    return linkState(LINK.me, cl).k==='ok'; }catch(e){ return false; }
+}
 setInterval(function(){ try{ if(!USER || isOwner()) return; if(!hubWorking()) return; localStorage.setItem(actKey(), String(actToday()+15)); }catch(e){} }, 15000);
 var TB={ sent:0, off:0, ext:true, openSent:0 };
 /* work → last_active. Without the pairing columns (old table) plain activity still counts, or nobody could pair. */
@@ -1823,7 +1832,7 @@ function htTick(){
   var R=HT.run; if(!R){ if(HT.tick){ clearInterval(HT.tick); HT.tick=null; } return; }
   var now=Date.now(); if(!document.hidden) try{ ACT.last=now; }catch(e){}
   if(now-(R.seen||0)>=30000){ R.seen=now; htSave(); }
-  if(!HT.ask){ if(now-(R.chk||R.start)>=HT_LIM) htAskOpen(); }
+  if(!HT.ask){ if(now-(R.chk||R.start)>=HT_LIM){ if(hubSkipAsk(R.cid)){ R.chk=now; htSave(); try{ tbSend(true); }catch(_s){} } else htAskOpen(); } }
   else if(now-HT.ask.at>=HT_ASK){ htAskClose(); HT.run=null; htSave(); try{ toast('Work timer stopped — no answer to “still working?”.'); }catch(e){} try{ tbSend(true); }catch(e){} htPaint(); return; }
   var c=$('ht-clk'); if(c) c.textContent=htClock(now-R.start);
 }
@@ -2556,7 +2565,7 @@ function IGPhones(CFG){
       } else if(!TM.ask){
         if(!document.hidden) try{ ACT.last=now; }catch(_a){}
         if(R.k==='wave' && !R.sc && now-R.start>=SCROLL_MS && now>=(R.scTry||0)){ R.sc=1; R.scTry=now+15000; tmSave(); waveScroll(R); }
-        if(now-(R.chk||R.start) >= (TLIM[R.k]||20)*60000) tmAskOpen();
+        if(now-(R.chk||R.start) >= (TLIM[R.k]||20)*60000){ if(hubSkipAsk(CID)){ R.chk=now; tmSave(); } else tmAskOpen(); }
       } else if(now-TM.ask.at >= ASK_MS){
         var lbl=tmLabel(R), askAt=TM.ask.at; tmAskClose(); TM.run=null; tmSave(); if(R.k==='wave') waveRecord(R, askAt); try{ toast('Timer stopped — no answer to “still working?” ('+lbl+').'); }catch(e){} try{ tbSend(true); }catch(e){} tmPaint(true); return;
       }
@@ -4527,7 +4536,7 @@ var P2=(function(){
     if(!document.hidden) try{ ACT.last=now; }catch(_a){}
     if(now-(R.seen||0)>=30000){ R.seen=now; tmSave(); }
     if(R.ends){ if(R.ends<=now){ engFinish(); return; } }
-    else if(!TM.ask){ if(now-(R.chk||R.start)>=lim(R)) tmAskOpen(); }
+    else if(!TM.ask){ if(now-(R.chk||R.start)>=lim(R)){ if(hubSkipAsk('project2')){ R.chk=now; tmSave(); } else tmAskOpen(); } }
     else if(now-TM.ask.at>=ASK_MS){
       var at=TM.ask.at, lbl=tmLabel(R); tmAskClose(); TM.run=null; tmSave(); credit(R, at);
       toast('Timer stopped — no answer to “still working?” ('+lbl+'). The time up to the question is kept.'); try{ tbSend(true); }catch(e){} tmPaint(true); return;
