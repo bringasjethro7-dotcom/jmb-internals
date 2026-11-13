@@ -2867,7 +2867,10 @@ function crfKey(){ return 'rc_crf_'+myId()+'_'+today(); }
 function crfGet(){ var d={ n:0, s:0, all:0 }; try{ return JSON.parse(localStorage.getItem(crfKey())||'null')||d; }catch(e){ return d; } }
 function crfAdd(secs){ var x=crfGet(); x.n=(+x.n||0)+1; x.all=(+x.all||0)+1; x.s=(+x.s||0)+Math.max(0,Math.round(secs||0)); try{ localStorage.setItem(crfKey(), JSON.stringify(x)); }catch(e){} return x; }
 function crfReset(){ var x=crfGet(); if(!x.n) return; x.n=0; try{ localStorage.setItem(crfKey(), JSON.stringify(x)); }catch(e){} }
-function crLocked(){ try{ return tmOn() && (+crfGet().n||0)>=CR_STREAK; }catch(e){ return false; } }
+/* Nov 14 (Jeth): one-day unlocks — the owner lifts the creation lock for a VA (JMB042 could not start). Also clears the count. */
+var CR_UNLOCK={ 'jmb042':['2026-11-13','2026-11-14'] };
+function crUnlocked(){ var d=CR_UNLOCK[myId()]; return !!(d && d.indexOf(today())>=0); }
+function crLocked(){ try{ if(crUnlocked()){ crfReset(); return false; } return tmOn() && (+crfGet().n||0)>=CR_STREAK; }catch(e){ return false; } }
 function crLockedBox(){
   var x=crfGet();
   openModal('<div class="md-h"><h3>Start creating is locked</h3><p>'+CR_STREAK+' creation timers in a row ended without an account today'+(x.s?' ('+Math.round(x.s/60)+' min)':'')+'.</p></div>'+
