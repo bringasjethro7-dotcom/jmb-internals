@@ -271,6 +271,12 @@ main{max-width:1320px;margin:0 auto;padding:20px 18px 80px}
 .ses.up:hover{border-color:var(--p);color:var(--pd)}
 .ses.dm{border-color:rgba(168,172,171,.35);color:#595959;background:rgba(168,172,171,.06)}
 .ses.ok2{border-color:rgba(195,184,152,.4);color:#675F51;background:rgba(195,184,152,.07)}
+/* Nov 15 (Jeth): Story Ops → Posted */
+.ses.posted{border-color:#22a06b;background:#22a06b;color:#fff}
+.ses.posted:hover{background:#1c8a5b;border-color:#1c8a5b;color:#fff}
+.lr.st-posted{background:rgba(34,160,107,.07)}
+.pst-pill{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;background:rgba(34,160,107,.14);color:#1c8a5b;font-weight:800;font-size:11.5px;border:1px solid rgba(34,160,107,.35);white-space:nowrap}
+.note.pst{border-color:rgba(34,160,107,.4);color:#1c8a5b;background:rgba(34,160,107,.08)}
 /* task timers (Oct 5): ▶ start → ■ finish — the tool learns how long each task takes */
 .ses.go .pl{width:0;height:0;border-left:7px solid currentColor;border-top:4.5px solid transparent;border-bottom:4.5px solid transparent;margin:0 2px 0 3px}
 .ses.run{border-color:#A8ACAB;background:linear-gradient(180deg,rgba(168,172,171,.26),rgba(168,172,171,.26));color:#595959}
@@ -1187,6 +1193,21 @@ function stageMeta0(k){
   return {k:k,n:String(k||'—'),c:'#595959'};
 }
 function stageOrd(k){ var i=ORDER.indexOf(k); return i<0?50:i; }
+/* Nov 15 (Jeth): Story Ops → "Posted". A Story Ops account marked posted (meta.posted = when) sits in its own Posted
+   section right below Story Ops: DMs only (no Stories), with a way back. The stage itself stays Story Ops. */
+function stPosted(r){ return !!(r && r.status==='story' && M(r).posted); }
+function rowOrd(r){ return stageOrd(r.status)+(stPosted(r)?0.5:0); }
+async function stMarkPosted(id, b){
+  var r=rowById(id); if(!r) return; if(b) b.disabled=true;
+  if(await saveMeta(r,{ posted:new Date().toISOString() })){ toast('Moved to Posted · '+r.handle); renderView(); }
+  else { if(b) b.disabled=false; toast('Could not save — try again.'); }
+}
+async function stUnpost(id, b){
+  var r=rowById(id); if(!r) return; if(b) b.disabled=true;
+  if(await saveMeta(r,{ posted:null })){ toast('Back in Story Ops · '+r.handle); renderView(); }
+  else { if(b) b.disabled=false; toast('Could not save — try again.'); }
+}
+function stPostedLbl(r){ var t=parseTs(M(r).posted); return t?fmtDT(t):'—'; }
 function groupOf(k){ for(var i=0;i<GROUPS.length;i++) if(GROUPS[i].st.indexOf(k)>=0) return GROUPS[i]; return {k:'other',n:'Other',c:'#595959',st:[]}; }
 function isDead(r){ return r.status==='banned'; }
 function isWorkable(r){ var s=r.status; return s!=='banned'&&s!=='tempban'&&s!=='new'&&s!=='creation'&&s!=='creationstandby'&&s!=='onhold'&&s!=='archived'; }
@@ -2209,6 +2230,7 @@ function progOf(rows, worker){
     if(!worker) cr=creationOf(r, crBy||wk, crBy||ow);
     else if(!crBy || crBy===wk) cr=creationOf(r, wk, ow);
     if(cr){ tot+=1; parts.cr+=1; if(cr.done) done+=1; }
+    if(r.status==='story' && m.posted){ var pdn=markOkAny(m.dm,wk,ow)?1:0; tot+=1; parts.st=(parts.st||0)+1; done+=pdn; return; }   // Nov 15: Posted — DMs only
     if(r.status==='story'){ var sdn=(markOkAny(m.s1,wk,ow)?1:0)+(markOkAny(m.dm,wk,ow)?1:0); if(!stReady(r) && !sdn) return; tot+=2; parts.st=(parts.st||0)+2; done+=sdn; return; }   // Nov 11: Stories + DMs, two tasks a day   // Nov 9: Story Ops — one session a day once 24 h old
     var sxu=isSXSt(r.status)?sxUnits(r, wk, ow):null;   // Oct 27: the Suicidal Operation's own SOP
     if(sxu){ tot+=sxu.tot; done+=sxu.done; if(sxu.k==='standby') parts.sxsb=(parts.sxsb||0)+1; else parts[r.status==='sxwarm'?'sxw':(r.status==='sxsetup'?'sxs':(r.status==='sxcomment'?'sxc':'sxp'))]+=sxu.tot; return; }
@@ -2406,13 +2428,14 @@ function vToday(){
   if(!board.length && !(admin && TD.va!=='all')){ return h+'<div class="card empty">No accounts yet. Create one on your assigned iPhone, then tap <b>Log new account</b> right away — the SOP says the account is logged the moment it exists.</div>'; }
   var mOrd=function(r){ var m=methodOf(r); var i=mkeys.indexOf(m); return m?(i<0?50:i):99; };
   var mdl=modelsAllowed(PROJECT), mdOrd=function(r){ var m=String(r.model||''), i=mdl.indexOf(m); return m?(i<0?50:i):99; };
-  rows.sort(function(a,b){ return (TD.by==='method'?(mOrd(a)-mOrd(b)):0) || (TD.by==='model'?(mdOrd(a)-mdOrd(b) || String(a.model||'').localeCompare(String(b.model||''))):0) || stageOrd(a.status)-stageOrd(b.status) || (isHeld(a)-isHeld(b)) || daysIn(b)-daysIn(a) || String(a.handle).localeCompare(String(b.handle)); });
+  rows.sort(function(a,b){ return (TD.by==='method'?(mOrd(a)-mOrd(b)):0) || (TD.by==='model'?(mdOrd(a)-mdOrd(b) || String(a.model||'').localeCompare(String(b.model||''))):0) || rowOrd(a)-rowOrd(b) || (isHeld(a)-isHeld(b)) || daysIn(b)-daysIn(a) || String(a.handle).localeCompare(String(b.handle)); });
   var out=[], last=null;
   rows.forEach(function(r){
     var key, label, col, n;
     if(TD.by==='method'){ key=methodOf(r); label=key||'Not tagged yet — set the method'; col=methodColor(key); n=rows.filter(function(x){ return methodOf(x)===key; }).length; }
     else if(TD.by==='model'){ key=String(r.model||''); label=key||'No model yet'; col=key?AVC[Math.abs(hcH(key))%AVC.length]:'#A8ACAB'; n=rows.filter(function(x){ return String(x.model||'')===key; }).length; }
-    else { var sm=stageMeta(r.status); key=sm.n; label=sm.n; col=sm.c; n=rows.filter(function(x){ return stageMeta(x.status).n===key; }).length; }
+    else if(stPosted(r)){ key='__posted'; label='Posted'; col='#22a06b'; n=rows.filter(stPosted).length; }
+    else { var sm=stageMeta(r.status); key=sm.n; label=sm.n; col=sm.c; n=rows.filter(function(x){ return stageMeta(x.status).n===key && !stPosted(x); }).length; }
     if(key!==last){ out.push('<div class="lg" style="--gc:'+col+'"><i></i><b>'+esc(label)+'</b><span>'+n+'</span></div>'); last=key; }
     out.push(rowHtml(r));
   });
@@ -2535,7 +2558,9 @@ function rowHtml(r){
     var srdy=stReady(r);
     prog=srdy?'<span class="muted" title="'+esc(p.plan)+'" style="font-size:11.5px;font-weight:600;color:'+ST_C+'">Story Ops · Stories and DMs, separate timers · <u style="text-decoration-style:dotted;cursor:help">plan</u></span>'
              :'<span class="note i" title="'+esc(p.plan)+'">Story Ops opens '+esc(stReadyLbl(r))+' (24 h after creation)</span>';
-    if(!held) act=srdy?(sesBtn(r,1,'Stories')+dmBtn(r)):'<button class="ses" disabled title="Usable 24 hours after creation">Stories + DMs · '+esc(stReadyLbl(r))+'</button>';   // Nov 11 (Jeth): stories and DMs are separate tasks, each with its own timer, done at different times
+    if(stPosted(r)){ prog='<span class="note pst">'+IC.check+' Marked posted · '+esc(stPostedLbl(r))+'</span>';
+      if(!held) act=dmBtn(r)+'<button class="ses" onclick="stUnpost(\''+id+'\',this)">Move back to Story Ops</button>'; }
+    else if(!held) act=srdy?(sesBtn(r,1,'Stories')+dmBtn(r)+'<button class="ses posted" onclick="stMarkPosted(\''+id+'\',this)">✓ Posted</button>'):'<button class="ses" disabled title="Usable 24 hours after creation">Stories + DMs · '+esc(stReadyLbl(r))+'</button>';   // Nov 15: ✓ Posted   // Nov 11 (Jeth): stories and DMs are separate tasks, each with its own timer, done at different times
   } else if(p && p.sx){   // Suicidal Operation (Oct 25)
     prog=sxProg(r);   // Oct 27: one warm-up, then posting once warmed + assigned
     if(!held) act=sxActs(r);
@@ -2558,9 +2583,10 @@ function rowHtml(r){
   else if(m.fix && !isDead(r)) prog='<span class="note r" title="The health check could not find this username on Reddit — correct it (typos are a QA finding) or mark it banned">'+IC.search+' Fix the username — not found on Reddit</span>';
   else if(m.hcrep && !isDead(r)) prog='<span class="note b" title="A teammate found this profile '+(m.hcrep.res==='n'?'missing':'banned')+' on Reddit during the daily check">'+IC.ban+' Reported '+(m.hcrep.res==='n'?'not found':'banned')+' — admin will confirm</span>';
   if(held){ prog='<span class="note i">'+IC.pause+' On hold today</span>'; act=''; }
-  return '<div class="lr'+(isDead(r)?' dim':'')+'" data-rid="'+esc(r.id)+'" style="--sc:'+sm.c+'">'+
+  var _pst=stPosted(r);
+  return '<div class="lr'+(isDead(r)?' dim':'')+(_pst?' st-posted':'')+'" data-rid="'+esc(r.id)+'" style="--sc:'+(_pst?'#22a06b':sm.c)+'">'+
     '<div class="cell c-acc"><div class="an" onclick="openRec(\''+id+'\')" title="Open record">'+esc(r.handle)+'</div><div class="sub"><span class="msub" style="color:'+methodColor(methodOf(r))+';font-weight:800">'+esc(methodOf(r)||'no method')+' · </span>'+(isSX(r)?'<b style="color:'+SX_C+'">Suicidal Op'+(sxAssign(r)?' · '+esc(sxAssign(r)):'')+'</b> · ':'')+(sub||'<span style="opacity:.6">—</span>')+tag+'</div></div>'+
-    '<div class="cell c-stg">'+stageSelect(r)+'</div>'+
+    '<div class="cell c-stg">'+(_pst?'<span class="pst-pill">Posted ✓</span>':stageSelect(r))+'</div>'+
     '<div class="cell c-meth">'+(methodOf(r)?methodPill(methodOf(r),true):'<span class="chip" style="background:rgba(182,157,128,.20);color:#382E22;cursor:pointer;font-size:10.5px" onclick="editRec(\''+id+'\')">set method</span>')+'</div>'+
     '<div class="cell c-va">'+(admin?esc(firstName(ow)):pmCell(r))+'</div>'+
     '<div class="cell c-age num" title="'+esc(createdAt(r)?'Created '+fmtDT(createdAt(r)):'')+'">'+(age!=null?age+'d':'—')+'</div>'+
@@ -2779,7 +2805,8 @@ function cardHtml(r){
     var srdy2=stReady(r);
     body=(srdy2?'<div class="note" style="border-color:'+ST_C+'55">Story Ops · two separate tasks a day, each with its own timer: <b>Stories</b> (post the stories) and <b>DMs</b> (send the DMs the way the client asks). Do them at different times if you need to.</div>'
                :'<div class="note i">Story Ops opens '+esc(stReadyLbl(r))+' — 24 hours after the account was created.</div>')+
-      (held?'':'<div class="acts">'+(srdy2?(sesBtn(r,1,'Stories')+dmBtn(r)):'<button class="ses" disabled title="Usable 24 hours after creation">Stories + DMs · '+esc(stReadyLbl(r))+'</button>')+'</div>');
+      (held?'':'<div class="acts">'+(stPosted(r)?(dmBtn(r)+'<button class="ses" onclick="stUnpost(\''+jsq(r.id)+'\',this)">Move back to Story Ops</button>'):(srdy2?(sesBtn(r,1,'Stories')+dmBtn(r)+'<button class="ses posted" onclick="stMarkPosted(\''+jsq(r.id)+'\',this)">✓ Posted</button>'):'<button class="ses" disabled title="Usable 24 hours after creation">Stories + DMs · '+esc(stReadyLbl(r))+'</button>'))+'</div>');
+    if(stPosted(r)) body='<div class="note pst">'+IC.check+' Marked posted · '+esc(stPostedLbl(r))+'</div>'+body.replace(/^<div class="note"[^]*?<\/div>/, '');
   } else if(p && p.sx){   // Suicidal Operation (Oct 25)
     var asg2=sxAssign(r), u2=sxUnits(r, worksFor(r), owner(r))||{};
     var sb=sxStandby(r);
