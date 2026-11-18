@@ -3577,10 +3577,18 @@ function tcModelOk(m){ m=String(m||'').trim(); if(!m) return ''; var L=[]; try{ 
 function tcLastKey(){ return 'rc_tclast_'+PROJECT+'_'+myId(); }
 function tcLastSet(m){ m=String(m||'').trim(); if(!m) return; try{ var v=JSON.stringify({ d:today(), m:m }); if(localStorage.getItem(tcLastKey())!==v) localStorage.setItem(tcLastKey(), v); }catch(e){} }
 function tcLastToday(){ try{ var x=JSON.parse(localStorage.getItem(tcLastKey())||'null'); if(x && x.d===today() && x.m) return String(x.m); }catch(e){} return ''; }
+/* Nov 18 (Jeth): Story Ops time is ALWAYS filed under the portal category "Arya Slutty Confession" — never the
+   account's model pair — and only as Account creation, Story posting or DM. Once a Story Ops task ran today, health
+   checks, post checks and idle stay in that category and on the last Story Ops task (never Reddit Warmup). */
+var ST_CAT='Arya Slutty Confession';
+function stKKey(){ return 'rc_stk_'+PROJECT+'_'+myId(); }
+function stKSet(k){ try{ localStorage.setItem(stKKey(), JSON.stringify({ d:today(), k:k })); }catch(e){} }
+function stKGet(){ try{ var x=JSON.parse(localStorage.getItem(stKKey())||'null'); if(x && x.d===today() && x.k) return String(x.k); }catch(e){} return 'posting'; }
+function stStory(w, k, lbl){ w.m=ST_CAT; w.k=k; w.v=''; if(lbl) w.lbl=lbl; tcLastSet(ST_CAT); stKSet(k); return w; }
 /* the model of the last account this VA logged as a creation */
 function tcLastCreated(){
   var me=myId(), best='', bt=0;
-  try{ (ROWS||[]).forEach(function(r){ if(!r || String(r.created_by||'').toLowerCase()!==me) return; var mm=tcModelOk(rGroup(r)); if(!mm) return;
+  try{ (ROWS||[]).forEach(function(r){ if(!r || String(r.created_by||'').toLowerCase()!==me) return; var mm=isST(r)?ST_CAT:tcModelOk(rGroup(r)); if(!mm) return;
     var m=M(r); if(!m.cdone && !m.added) return; var d=parseTs(m.cdoneAt||r.created_at), t=d?d.getTime():0; if(t>bt){ bt=t; best=mm; } }); }catch(e){}
   return best;
 }
@@ -3612,11 +3620,12 @@ function tcHomeModel(){
 function tcWorkModel(){ return tcLastToday() || tcHomeModel(); }
 /* creation: the model this creation is for */
 function crmKey(){ return 'rc_crm_'+PROJECT+'_'+myId(); }
-function crModel(){ var x=crGet(); if(x && x.m) return x.m; var s=''; try{ s=localStorage.getItem(crmKey())||''; }catch(e){} return tcModelOk(s) || tcLastCreated() || tcWorkModel(); }
+function crModel(){ var x=crGet(); if(x && x.m) return x.m; var s=''; try{ s=localStorage.getItem(crmKey())||''; }catch(e){} if(s===ST_CAT && canST()) return ST_CAT; return tcModelOk(s) || tcLastCreated() || tcWorkModel(); }
 function crModelSet(m, quiet){ m=String(m||'').trim(); if(!m) return; try{ localStorage.setItem(crmKey(), m); }catch(e){}
   var o=tmAll(), x=o['__create|c']; if(x && x.m!==m){ x.m=m; tmPut(o); if(!quiet) toast('This creation now goes to '+m+' in the portal.'); } }
 function crPick(sel){ crModelSet(sel.value); renderView(); }
 function crPickHtml(){ var L=[]; try{ L=modelsAllowed(PROJECT).slice(); }catch(e){} if(!L.length) return ''; var cur=crModel();
+  try{ if(canST() && L.indexOf(ST_CAT)<0) L.push(ST_CAT); }catch(_s){}
   if(cur && L.map(function(x){ return String(x).toLowerCase(); }).indexOf(cur.toLowerCase())<0) L.unshift(cur);
   return '<label class="crm" title="The model this creation is for. The portal bills the creation time to it.">for <select class="sel" onchange="crPick(this)">'+
     L.map(function(x){ return '<option'+(x===cur?' selected':'')+'>'+esc(x)+'</option>'; }).join('')+'</select></label>'; }
@@ -3624,15 +3633,19 @@ function tcWant(){
   var o={}; try{ o=tmAll(); }catch(e){}
   var best=null; Object.keys(o).forEach(function(k){ if(o[k] && o[k].t && !o[k].ps && (!best || o[k].t<o[best].t)) best=k; });
   var w={ p:PROJECT, m:tcWorkModel(), k:'warmup', v:'', idle:true, lbl:'Reddit Central open', at:new Date().toISOString() };
-  if(!best) return w;
+  var stDay=(tcLastToday()===ST_CAT);   // a Story Ops task ran today → idle / checks stay in Story Ops
+  if(!best){ if(stDay){ w.m=ST_CAT; w.k=stKGet(); } return w; }
   var parts=best.split('|'), id=parts[0], key=parts[1]||'';
   w.idle=false;
-  if(id==='__create'){ w.k='creation'; w.m=String(o[best].m||'')||crModel()||w.m; w.v=String(NA.method||''); w.lbl='Creating an account'; tcLastSet(w.m); return w; }
+  if(id==='__create'){ w.k='creation'; w.m=String(o[best].m||'')||crModel()||w.m; if(w.m===ST_CAT) return stStory(w,'creation','Creating a Story Ops account'); w.v=String(NA.method||''); w.lbl='Creating an account'; tcLastSet(w.m); return w; }
+  if(stDay && (id==='__hc' || id==='__pc')){ w.m=ST_CAT; w.k=stKGet(); w.lbl=(id==='__hc'?'Health check':'Post check'); return w; }
   if(id==='__hc'){ w.k='warmup'; w.lbl='Health check'; try{ w.m=tcHomeModel()||w.m; }catch(_c){} return w; }   // Nov 4: the VA's own model — never the shuffled check list's
   if(id==='__pc'){ w.k='posting'; w.lbl='Post check'; try{ var _pm=tcModelOk(tcTally(pcMine().map(function(x){ return x.r; }))), _my=tcMyModels(); w.m=(_pm && _my.indexOf(_pm)>=0)?_pm:(tcHomeModel()||w.m); }catch(_p){} return w; }   // Nov 4: the posts' model only when it is one of hers, else her own model
   var r=null; try{ r=rowById(id); }catch(e){}
-  if(!r){ w.lbl='Task'; return w; }
-  w.p=r.project||PROJECT; w.m=rGroup(r)||w.m;   // Nov 4c: the portal bills the pair (Capri/Stella), not the account's own model w.v=methodOf(r); tcLastSet(w.m);
+  if(!r){ w.lbl='Task'; if(stDay){ w.m=ST_CAT; w.k=stKGet(); } return w; }
+  if(isST(r)){ w.p=r.project||PROJECT; return stStory(w, 'posting', (key==='dm'?'DMs · ':'Stories · ')+(r.handle||'')); }   // Story Ops: stories + DMs → Story posting
+  w.p=r.project||PROJECT; w.m=rGroup(r)||w.m; if(stDay) tcLastSet(w.m);   // back on a regular account → leave Story Ops
+    // Nov 4c: the portal bills the pair (Capri/Stella), not the account's own model w.v=methodOf(r); tcLastSet(w.m);
   if(/^s\d/.test(key)){ var ph=phase(r.status), t=(r.status==='recovery')?'Reddit Warmup':(ph&&ph.task); w.k=(t==='Reddit Posting')?'posting':'warmup'; w.lbl=sesLbl(key)+' · '+(r.handle||''); }
   else if(key==='dm'){ w.k='posting'; w.lbl='DMs · '+(r.handle||''); }
   else { w.k='warmup'; w.lbl='Task · '+(r.handle||''); }
