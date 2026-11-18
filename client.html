@@ -1353,6 +1353,7 @@ body.cx-wide .cx-dr{background:radial-gradient(520px 260px at 0% 0%,rgba(28,37,4
 
 /* removal rows: the full line is readable (it used to be cut off), unchecked rows show a hatched bar */
 .dr .dr-r,.cx-dr .cx-dr-r{grid-template-columns:minmax(150px,1.2fr) minmax(80px,1.4fr) 112px;align-items:center}
+.cx-dr .cx-dr-r{grid-template-columns:minmax(140px,1.1fr) minmax(70px,1.2fr) 210px}
 .dr .dr-r .nm,.cx-dr .cx-dr-r .nm{white-space:normal;overflow:visible}
 .dr .dr-r .nm small,.cx-dr .cx-dr-r .nm small{white-space:normal;line-height:1.35;margin-top:2px}
 .dr .dr-r .dr-bar.nc,.cx-dr .cx-dr-r .cx-dr-bar.nc{background:repeating-linear-gradient(135deg,rgba(103,95,81,.10) 0 5px,transparent 5px 10px);box-shadow:inset 0 0 0 1px var(--line2)}
@@ -3349,7 +3350,7 @@ function drcCss(){
     '.cx-dr-tr .col{display:flex;flex-direction:column;width:100%;max-width:22px;height:50px;border-radius:6px;overflow:hidden;background:#e5e7eb}.cx-dr-tr .col i{display:block;width:100%}'+
     '.cx-dr-tr div.on .col{outline:2px solid var(--ink);outline-offset:1px}.cx-dr-tr small{font-size:10px;color:var(--ink3);font-weight:700}'+
     '.cx-dr-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;margin-top:14px}.cx-dr-cols h4{margin:0 0 6px;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3)}'+
-    '.cx-dr-r{display:grid;grid-template-columns:minmax(96px,1fr) minmax(90px,1.6fr) 132px;gap:10px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px}.cx-dr-r:last-child{border-bottom:0}'+
+    '.cx-dr-r{display:grid;grid-template-columns:minmax(96px,1fr) minmax(90px,1.4fr) 196px;gap:10px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px}.cx-dr-r:last-child{border-bottom:0}'+
     '.cx-dr-r .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cx-dr-r .nm small{display:block;font-weight:600;color:var(--ink3);font-size:11px}'+
     '.cx-dr-bar{display:flex;height:10px;border-radius:6px;background:#e5e7eb;overflow:hidden}.cx-dr-bar i{display:block;height:100%}'+
     '.cx-dr-pp{display:flex;gap:8px;justify-content:flex-end;font-size:12.5px;font-weight:800;white-space:nowrap}.cx-dr-pp .d{color:#1C252B}.cx-dr-pp .u{color:#675F51}.cx-dr-pp .n{color:var(--ink3)}';
@@ -3357,14 +3358,14 @@ function drcCss(){
 }
 /* a = [posted, stayed up, moderators, spam filters, not checked] → shares of the CHECKED posts */
 function drcVs(a){ var c=a[1]+a[2]+a[3], dn=a[2]+a[3]; if(!c) return null; var pd=Math.round(dn/c*100); return { c:c, dn:dn, up:a[1], pd:pd, pu:100-pd }; }
-function drcBar(v){ return v?'<div class="cx-dr-bar" title="'+v.dn+' taken down · '+v.up+' stayed up"><i class="cx-vs-dn" style="width:'+v.pd+'%"></i><i class="cx-vs-up" style="width:'+v.pu+'%"></i></div>':'<div class="cx-dr-bar nc" title="None of these posts has been checked yet"></div>'; }
+function drcBar(v){ return v?'<div class="cx-dr-bar" title="'+v.up+' successful · '+v.dn+' removed"><i class="cx-vs-up" style="width:'+v.pu+'%"></i><i class="cx-vs-dn" style="width:'+v.pd+'%"></i></div>':'<div class="cx-dr-bar nc" title="None of these posts has been checked yet"></div>'; }
 function drcList(obj, lab, ord){
   var M={}, O={}; Object.keys(obj||{}).forEach(function(k){ var l=lab?lab(k):k, a=obj[k]||[], b=M[l]||(M[l]=[0,0,0,0,0]); for(var i=0;i<5;i++) b[i]+=(+a[i]||0); if(ord && O[l]==null) O[l]=ord(k); });   // "Arya/Kaia" + "Arya & Kaia" → one row
   var L=Object.keys(M).map(function(k){ return { k:k, o:O[k]||0, a:M[k], v:drcVs(M[k]) }; }).sort(function(x,y){ return (x.o-y.o) || (y.a[0]-x.a[0]) || (x.k<y.k?-1:1); });
   if(!L.length) return '<div style="font-size:12.5px;color:var(--ink3)">No posts this day.</div>';
   return L.map(function(x){ var a=x.a, v=x.v;
-    return '<div class="cx-dr-r"><div class="nm" title="'+esc(x.k)+'">'+esc(x.k)+'<small>'+a[0]+' posted'+(v?' · '+v.c+' checked: '+v.dn+' down, '+v.up+' up':'')+(a[4]?' · '+a[4]+' not checked yet':'')+'</small></div>'+
-      drcBar(v)+'<div class="cx-dr-pp">'+(v?'<span class="d">'+v.pd+'% down</span><span class="u">'+v.pu+'% up</span>':'<span class="n">not checked</span>')+'</div></div>'; }).join('');
+    return '<div class="cx-dr-r"><div class="nm" title="'+esc(x.k)+'">'+esc(x.k)+'<small>'+a[0]+' posted'+(v?' · '+v.c+' checked: '+v.up+' successful, '+v.dn+' removed':'')+(a[4]?' · '+a[4]+' not checked yet':'')+'</small></div>'+
+      drcBar(v)+'<div class="cx-dr-pp">'+(v?'<span class="u">'+v.pu+'% successful</span><span class="d">'+v.pd+'% removed</span>':'<span class="n">not checked</span>')+'</div></div>'; }).join('');
 }
 /* ═══ 14-DAY REMOVAL TREND v2 (Nov 4 — Jeth: "make it better", premium + smooth on low-spec laptops) ═══
    Smooth curve whose colour follows the zone it is in (green < 25% · amber 25–50% · red > 50%), soft area under it,
