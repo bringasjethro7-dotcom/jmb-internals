@@ -8600,6 +8600,47 @@ async function setSave(){
   }catch(e){ b.disabled=false; b.textContent='Save settings'; toast('Connection error.'); }
 }
 
+/* ── ◧ SIDE BY SIDE (Nov 19, Jeth: "on the tool side just the task being done — none of the things that aren't used
+   regularly") ── Opened by the portal's Side by side view (?sv=1, inside the portal's frame): only Today and Health check,
+   no removal-rate / KPI panels, no greeting text, and while a task timer runs the board shows ONLY that account
+   ("Show all accounts" brings the rest back until the next task). Opened any other way: nothing changes. */
+var SVM=(function(){
+  var on=false; try{ on = window.parent!==window && /(^|&)sv=1(&|$)/.test(location.search.slice(1)); }catch(e){}
+  if(!on) return { on:false };
+  try{ document.documentElement.classList.add('sv-embed'); }catch(e){}
+  try{ var st=document.createElement('style'); st.textContent=
+    'html.sv-embed .td-top,html.sv-embed .tb .bases,html.sv-embed .tb .brand small,html.sv-embed .hero p{display:none!important}'+
+    'html.sv-embed .hero h2{font-size:20px}html.sv-embed main{padding-top:12px}'+
+    'html.sv-focus #view .lr:not(.sv-keep),html.sv-focus #view .lg{display:none!important}'+
+    'html.sv-focus #view .lr.sv-keep{box-shadow:0 0 0 2px #FF4500,0 14px 30px -18px rgba(255,69,0,.6);border-radius:12px}'+
+    '#svf{display:none;align-items:center;gap:10px;margin:0 0 12px;padding:10px 14px;border-radius:12px;background:#171717;color:#f5f3ee;font:600 13px Inter,system-ui,sans-serif}'+
+    '#svf b{color:#fff}#svf .sp{flex:1}#svf button{border:0;border-radius:999px;height:30px;padding:0 12px;font:800 12px Inter,system-ui,sans-serif;cursor:pointer;background:#f5f3ee;color:#171717}'+
+    'html.sv-hasrun #svf{display:flex}';
+    (document.head||document.documentElement).appendChild(st); }catch(e){}
+  var showAll=false, lastKey='';
+  function bar(row){
+    var v=document.getElementById('view'); if(!v) return;
+    var b=document.getElementById('svf');
+    if(!b || b.parentNode!==v){ if(b) b.remove(); b=document.createElement('div'); b.id='svf'; v.insertBefore(b, v.firstChild); }
+    var h=row?(row.querySelector('.an')||{}).textContent||'':'';
+    var html='<span>'+(showAll?'Showing all accounts':'Working on <b>'+String(h).replace(/[<>&]/g,'')+'</b> · only this account is shown')+'</span><span class="sp"></span><button type="button">'+(showAll?'Focus on my task':'Show all accounts')+'</button>';
+    if(b.__h!==html){ b.innerHTML=html; b.__h=html; b.querySelector('button').onclick=function(){ showAll=!showAll; tick(); }; }
+  }
+  function tick(){
+    var row=null, de=document.documentElement;
+    try{ if(typeof VIEW!=='undefined' && VIEW==='today'){ var L=document.querySelectorAll('#view .ses.run,#view .btn.run'); for(var i=0;i<L.length;i++){ var r=L[i].closest && L[i].closest('.lr'); if(r){ row=r; break; } } } }catch(e){}
+    var key=row?String(row.getAttribute('data-rid')||''):'';
+    if(key!==lastKey){ lastKey=key; showAll=false; }
+    [].forEach.call(document.querySelectorAll('#view .lr.sv-keep'), function(e){ if(e!==row) e.classList.remove('sv-keep'); });
+    if(row){ row.classList.add('sv-keep'); de.classList.add('sv-hasrun'); de.classList.toggle('sv-focus', !showAll); bar(row); }
+    else { de.classList.remove('sv-hasrun'); de.classList.remove('sv-focus'); var b=document.getElementById('svf'); if(b) b.remove(); }
+  }
+  setInterval(tick, 700);
+  return { on:true, tick:tick };
+})();
+/* only the daily work views inside Side by side */
+(function(){ if(!SVM.on) return; var _tf=tabsFor; tabsFor=function(){ return _tf().filter(function(t){ return t[0]==='today' || t[0]==='health'; }); }; })();
+
 /* ── 📱 PHONE WORK MODE BRIDGE (Oct 15) ── When this page runs inside the portal's Work mode on a phone (the portal timer on
    top, this tool underneath — portal opens it with ?pw=1): it signs in with the VA's portal sign-in (asked of the portal,
    which answers only its own frame), every tap here tells the portal "still working" (a tap inside a frame never reaches
@@ -8631,7 +8672,7 @@ var PWB=(function(){
   function wait(show){
     var el=document.getElementById('pwb-wait'); if(!show){ if(el) el.remove(); return; } if(el || !document.body) return;
     el=document.createElement('div'); el.id='pwb-wait';
-    el.innerHTML='<div><i></i><b>📱 Signing you in from your portal…</b><span>One moment — no PIN needed in work mode.</span><button type="button">Use my PIN instead</button></div>';
+    el.innerHTML='<div><i></i><b>Signing you in from your portal…</b><span>One moment — no PIN needed here.</span><button type="button">Use my PIN instead</button></div>';
     el.querySelector('button').onclick=function(){ wait(false); }; document.body.appendChild(el);
   }
   /* no saved sign-in here: take the portal's (asks a few times, then leaves the normal sign-in form) */
