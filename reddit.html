@@ -4781,21 +4781,21 @@ function drCss(){
     '.vdn{background:linear-gradient(90deg,#1C252B,#1C252B)}.vup{background:linear-gradient(90deg,#C3B898,#C3B898)}'+
     '.dr-sub{font-size:12px;color:var(--ink3)}.dr-sub b{color:var(--ink2)}.dr-lg{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;font-weight:700;color:var(--ink3);margin-top:5px}.dr-lg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}'+
     '.dr-tr{flex:0 1 auto;min-width:200px;height:74px;gap:5px}.dr-tr div{min-width:14px}.dr-tr .col{display:flex;flex-direction:column;width:100%;max-width:22px;height:50px;border-radius:7px;overflow:hidden;background:#e5e7eb;box-shadow:inset 0 0 0 1px rgba(17,19,34,.05)}.dr-tr .col i{display:block;width:100%;max-width:none;border-radius:0;min-height:0}.dr-tr div.on .col{outline:2px solid #171717;outline-offset:1px}.dr-tr div.on i{outline:none}'+
-    '.dr-r{grid-template-columns:minmax(96px,1fr) minmax(90px,1.6fr) 118px;gap:10px;padding:6px 4px;border-radius:8px}.dr-r:hover{background:rgba(17,19,34,.025)}.dr-r .dr-bar{display:flex;gap:2px;height:11px;border-radius:7px;background:#e5e7eb}.dr-r .dr-bar i{border-radius:0}'+
+    '.dr-r{grid-template-columns:minmax(96px,1fr) minmax(80px,1.3fr) 200px;gap:10px;padding:6px 4px;border-radius:8px}.dr-r:hover{background:rgba(17,19,34,.025)}.dr-r .dr-bar{display:flex;gap:2px;height:11px;border-radius:7px;background:#e5e7eb}.dr-r .dr-bar i{border-radius:0}'+
     '.dr-pp{display:flex;gap:8px;justify-content:flex-end;font-size:12.5px;font-weight:800;white-space:nowrap}.dr-pp .d{color:#1C252B}.dr-pp .u{color:#675F51}.dr-pp .n{color:var(--ink3)}';
   document.head.appendChild(s);
 }
 /* a = [posted, stayed up, moderators, spam filter, not checked] → shares of the CHECKED posts */
 function drVs(a){ var c=a[1]+a[2]+a[3], dn=a[2]+a[3]; if(!c) return null; var pd=Math.round(dn/c*100); return { c:c, dn:dn, up:a[1], pd:pd, pu:100-pd }; }
-function drVsBar(v){ return v?'<div class="dr-bar" title="'+v.dn+' removed · '+v.up+' stayed up"><i class="vdn" style="width:'+v.pd+'%"></i><i class="vup" style="width:'+v.pu+'%"></i></div>':'<div class="dr-bar nc" title="None of these posts has been checked yet"></div>'; }
+function drVsBar(v){ return v?'<div class="dr-bar" title="'+v.up+' successful · '+v.dn+' removed"><i class="vup" style="width:'+v.pu+'%"></i><i class="vdn" style="width:'+v.pd+'%"></i></div>':'<div class="dr-bar nc" title="None of these posts has been checked yet"></div>'; }
 /* lab(k) → the name shown · ord(k) → a fixed order (the pace ladder) instead of most posts first */
 function drPaceLab(k){ return (!k || k==='unknown')?'Not recorded':stageMeta(k).n; }
 function drList(obj, lab, ord){
   var L=Object.keys(obj).map(function(k){ return { k:lab?lab(k):k, o:ord?ord(k):0, a:obj[k], v:drVs(obj[k]) }; }).sort(function(x,y){ return (x.o-y.o) || (y.a[0]-x.a[0]) || (x.k<y.k?-1:1); });
   if(!L.length) return '<div class="muted" style="font-size:12px">No posts.</div>';
   return L.map(function(x){ var a=x.a, v=x.v;
-    return '<div class="dr-r"><div class="nm" title="'+esc(x.k)+'">'+esc(x.k)+'<small>'+a[0]+' posted'+(v?' · '+v.c+' checked: '+v.dn+' removed'+(a[3]?' ('+a[3]+' spam)':'')+', '+v.up+' up':'')+(a[4]?' · '+a[4]+' not checked yet':'')+'</small></div>'+
-      drVsBar(v)+'<div class="dr-pp">'+(v?'<span class="d">'+v.pd+'%</span><span class="u">'+v.pu+'% up</span>':'<span class="n">not checked</span>')+'</div></div>'; }).join('');
+    return '<div class="dr-r"><div class="nm" title="'+esc(x.k)+'">'+esc(x.k)+'<small>'+a[0]+' posted'+(v?' · '+v.c+' checked: '+v.up+' successful, '+v.dn+' removed'+(a[3]?' ('+a[3]+' spam)':''):'')+(a[4]?' · '+a[4]+' not checked yet':'')+'</small></div>'+
+      drVsBar(v)+'<div class="dr-pp">'+(v?'<span class="u">'+v.pu+'% successful</span><span class="d">'+v.pd+'% removed</span>':'<span class="n">not checked</span>')+'</div></div>'; }).join('');
 }
 /* ═══ 14-DAY REMOVAL TREND v2 (Nov 4 — Jeth: "make it better", premium + smooth on low-spec laptops) ═══
    Smooth curve whose colour follows the zone it is in (green < 25% · amber 25–50% · red > 50%), soft area under it,
@@ -4913,11 +4913,11 @@ function drCard(rows, label){
   var v=drVs(a);
   return '<div class="card pad dr"><div class="dr-h"><div><div class="dr-k">Daily removal rate'+(label?' · '+esc(label):'')+'</div><div class="dr-t">'+esc(lbl(day))+(day===td||day===yd?' <span class="muted" style="font-size:12px;font-weight:600">'+esc(fmtDay(day))+'</span>':'')+'</div></div>'+
     '<div class="dr-days"><button class="'+(day===td?'on':'')+'" onclick="DRV.day=\''+td+'\';renderView()">Today</button><button class="'+(day===yd?'on':'')+'" onclick="DRV.day=\''+yd+'\';renderView()">Yesterday</button>'+(isAdmin()?'<button class="crr-b" onclick="crrOpen(\''+day+'\')" title="The day\'s removal rate as text for the client group chat — no VA names">Client report</button>':'')+'</div></div>'+
-    '<div class="dr-top">'+(v?'<div class="dr-donut" style="--d:'+v.pd+'%" title="'+v.dn+' removed · '+v.up+' stayed up"><b>'+v.c+'</b><small>checked</small></div>':'')+
-      '<div class="dr-vs"><div class="dr-nums"><div class="dr-n dn"><b>'+(v?v.pd+'%':'—')+'</b><span>Removed</span></div><div class="dr-n up"><b>'+(v?v.pu+'%':'—')+'</b><span>Stayed up</span></div>'+(a[4]?'<div class="dr-n nc"><b>'+a[4]+'</b><span>Not checked yet</span></div>':'')+'</div>'+
-      (v?'<div class="dr-bigbar"><i class="vdn" style="width:'+v.pd+'%">'+(v.pd>=14?'<em>'+v.dn+' removed</em>':'')+'</i><i class="vup" style="width:'+v.pu+'%">'+(v.pu>=14?'<em>'+v.up+' up</em>':'')+'</i></div>':'<div class="dr-bigbar"></div>')+
+    '<div class="dr-top">'+(v?'<div class="dr-donut" style="--d:'+v.pd+'%" title="'+v.up+' successful · '+v.dn+' removed"><b>'+v.c+'</b><small>checked</small></div>':'')+
+      '<div class="dr-vs"><div class="dr-nums"><div class="dr-n up"><b>'+(v?v.pu+'%':'—')+'</b><span>Successful Posts</span></div><div class="dr-n dn"><b>'+(v?v.pd+'%':'—')+'</b><span>Removed Posts</span></div>'+(a[4]?'<div class="dr-n nc"><b>'+a[4]+'</b><span>Not checked yet</span></div>':'')+'</div>'+
+      (v?'<div class="dr-bigbar"><i class="vup" style="width:'+v.pu+'%">'+(v.pu>=14?'<em>'+v.up+' Successful</em>':'')+'</i><i class="vdn" style="width:'+v.pd+'%">'+(v.pd>=14?'<em>'+v.dn+' Removed</em>':'')+'</i></div>':'<div class="dr-bigbar"></div>')+
       '<div class="dr-sub">'+(chk?'<b>'+(a[2]+a[3])+'</b> of '+chk+' checked posts removed ('+a[2]+' by mods · '+a[3]+' spam filter) · <b>'+a[1]+'</b> stayed up':'No checked posts yet')+' · '+a[0]+' posted'+(a[4]?' · <b style="color:#382E22">'+a[4]+' still to check</b>':'')+'</div>'+
-      '<div class="dr-lg"><span><i class="vdn"></i>Removed — mods or spam filter</span><span><i class="vup"></i>Stayed up</span></div></div>'+
+      '<div class="dr-lg"><span><i class="vup"></i>Successful — stayed up</span><span><i class="vdn"></i>Removed — mods or spam filter</span></div></div>'+
     '</div>'+drTrendHtml(tpts, day, td, "DRV.day='{d}';renderView()", 'removed')+
     '<div class="dr-cols"><div><h4>By model</h4>'+drList(D.model)+'</div><div><h4>By pace</h4>'+drList(D.pace, drPaceLab, stageOrd)+'</div>'+(isAdmin()?'<div><h4>By shift (who posted)</h4>'+drList(D.shift)+'</div>':'')+'</div>'+
     '<div class="muted" style="font-size:11.5px;margin-top:10px">Morning and night shift together · each post is checked at the end of the shift that posted it · rate = removed by mods + spam filter, of the checked posts. The client sees the same numbers in their portal.</div></div>';
