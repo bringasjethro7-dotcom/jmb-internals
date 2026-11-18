@@ -4015,9 +4015,9 @@ function tmGapFix(){
   Object.keys(o).forEach(function(k){ var x=o[k]; if(!tmIsWork(k) || !x || !x.t || x.ps) return; if(+x.t>=last) return; x.pz=(+x.pz||0)+gap; ch=true; });
   if(ch){ tmPut(o); tmCapNote('This page was asleep for '+Math.round(gap/60000)+' min — your timer skipped that time and carries on from where it was.'); try{ renderView(); }catch(e){} }
 }
-function tmPauseAll(why, note){
-  var o=tmAll(), now=Date.now(), ch=false;
-  Object.keys(o).forEach(function(k){ var x=o[k]; if(tmIsWork(k) && x && x.t && !x.ps){ x.ps=now; x.pw=why||'portal'; ch=true; } });
+function tmPauseAll(why, note, at){
+  var o=tmAll(), now=Date.now(), ch=false, ps=(at && at<=now && now-at<15*60000)?at:now;   // Nov 18: pause from when the portal was first seen off
+  Object.keys(o).forEach(function(k){ var x=o[k]; if(tmIsWork(k) && x && x.t && !x.ps){ x.ps=Math.max(ps, +x.t||ps); x.pw=why||'portal'; ch=true; } });
   if(ch){ tmPut(o); if(note) tmCapNote(note); try{ renderView(); }catch(e){} }
   return ch;
 }
@@ -4034,8 +4034,16 @@ function tmPauseTick(){
     if(!any) return;
     linkLoad(true).then(function(){
       var st=linkState(LINK.me);
-      if(st.k==='off' || st.k==='other') tmPauseAll('portal', 'Timer paused — '+st.why+'. Nothing is lost: it carries on from where it stopped once your portal timer runs on Reddit again.');
-      else if(st.k==='ok') tmResumeAuto();
+      if(st.k==='off' || st.k==='other'){
+        /* Nov 18 (JMB012 auto-pauses): one "off" reading is not enough — a portal reload, an update, a second portal tab
+           or a category switch shows "not running" for a few seconds. Pause only when the portal is still off 75 s later;
+           the pause then starts from the first "off" reading, so no portal-less time is ever counted. */
+        var now=Date.now();
+        if(!TMG.offAt) TMG.offAt=now;
+        if(now-TMG.offAt<75000){ setTimeout(tmPauseTick, 40000); return; }
+        tmPauseAll('portal', 'Timer paused — '+st.why+'. Nothing is lost: it carries on from where it stopped once your portal timer runs on Reddit again.', TMG.offAt);
+      }
+      else { TMG.offAt=0; if(st.k==='ok') tmResumeAuto(); }
     });
   }catch(e){}
 }
