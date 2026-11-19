@@ -4166,11 +4166,11 @@ async function rpLoad(force){
   if(!rpOn() || !USER) return; if(!force && Date.now()-RP.at<60000) return; RP.at=Date.now();
   try{ var d=await apiPost({ action:'rc_reply_mine' }); if(d && d.ok){ RP.linked=!!d.linked; RP.prog=d.progress||null; RP.maxh=d.max_h||12; RP.by={}; (d.list||[]).forEach(function(a){ RP.by[rpKey(a.acct,a.ses)]=a; }); renderView(); } }catch(e){}
 }
-function rpCanTag(r){ if(isAdmin()) return true; var me=myId(); return !!me && (worksFor(r)===me || owner(r)===me); }   // Jeth: the VA who owns / works the account picks its colour
+function rpCanTag(r){ if(isAdmin()) return true; if(M(r).rtag) return false; var me=myId(); return !!me && (worksFor(r)===me || owner(r)===me); }   // Jeth: the colour is permanent for the account's whole comment phase — the VA sets it once; only the admin can correct it   // Jeth: the VA who owns / works the account picks its colour
 function rpTagAsk(id, n){
   var r=rowById(id); if(!r) return; var cur=M(r).rtag||'';
-  openModal('<div class="md-h"><h3>Comment tag · u/'+esc(r.handle)+'</h3><p>Green and Yellow are run on different accounts. This account only ever gets comments for its colour\'s subreddits.</p></div>'+
-    '<div class="md-b"><div class="seg">'+[['green','Green'],['yellow','Yellow']].concat(cur?[['','None']]:[]).map(function(x){ return '<button type="button" class="'+(cur===x[0]?'on':'')+'" onclick="rpTagSet(\''+jsq(id)+'\',\''+x[0]+'\','+(n||0)+')">'+x[1]+'</button>'; }).join('')+'</div>'+(n?'<div class="hint" style="margin-top:8px">Pick the colour the client gave this account — your Session '+n+' comment comes right after.</div>':'')+'</div>'+
+  openModal('<div class="md-h"><h3>Comment tag · u/'+esc(r.handle)+'</h3><p>Green and Yellow are run on different accounts. This account only ever gets comments for its colour\'s subreddits, until it leaves Comment Farm.</p></div>'+
+    '<div class="md-b"><div class="seg">'+[['green','Green'],['yellow','Yellow']].concat(cur&&isAdmin()?[['','None']]:[]).map(function(x){ return '<button type="button" class="'+(cur===x[0]?'on':'')+'" onclick="rpTagSet(\''+jsq(id)+'\',\''+x[0]+'\','+(n||0)+')">'+x[1]+'</button>'; }).join('')+'</div>'+'<div class="hint" style="margin-top:8px">'+(isAdmin()&&cur?'Admin correction — the VA can\'t change it.':'This is <b>permanent</b> for the whole comment phase — it can\'t be changed later (only the admin can fix a mistake). Pick the colour the client gave this account.')+(n?' Your Session '+n+' comment comes right after.':'')+'</div></div>'+
     '<div class="md-f"><button class="btn sec" onclick="closeModal()">Close</button></div>');
 }
 async function rpTagSet(id, v, n){ var r=rowById(id); if(!r) return; closeModal(); var ok=await saveMeta(r, { rtag:v||null }); toast(ok?('u/'+r.handle+' → '+(v?(v==='green'?'Green':'Yellow'):'no tag')):'Could not save — try again.'); renderView(); if(ok && v && n) rpGo(rowById(id)||r, n); }
