@@ -2318,6 +2318,7 @@ function vToday(){
     if(_pk.length) h+=bnWrap('hold', '<div class="banner info">'+IC.pause+'<div style="flex:1"><b>'+_ph+' on hold'+(_pa?' · '+_pa+' archived':'')+'</b> for clients on '+esc(baseOf(PROJECT).n)+' — out of every board and every number until you release them.</div><button class="btn sm dark" onclick="DB.life=\'hold\';if(!DB.groupBy)DB.groupBy=\'client\';go(\'accounts\')">See them</button></div>'); }
   if(admin) h+=wrongBaseBanner(ALL[PROJECT]||ROWS);
   if(admin) h+=hcBanner()+hcMissBanner();
+  if(admin) h+=rpBanner();   // 19b: Reply Desk — fresh comments running low
   if(admin){ var _dq=delReqs(); if(_dq.length) h+='<div class="banner bad">'+IC.trash+'<div style="flex:1"><b>'+_dq.length+' deletion request'+(_dq.length===1?'':'s')+'</b> waiting for you — VAs can\'t delete a recorded account without your approval.</div><button class="btn sm dark" onclick="delReview()">Review</button></div>'; }
   try{ if(!localStorage.getItem('sop_seen_2026-10-05')) h+='<div class="banner" style="background:rgba(182,157,128,.28);border-color:rgba(168,172,171,.26)">'+IC.doc+'<div style="flex:1"><b>SOP update · 5 Oct:</b> the phase plans changed — warming, comment farming, NSFW comments, early posting, DMs, Strong / Super Strong and spam-filter recovery. Each account card shows its new plan.</div><a class="btn sm dark" href="huddle-reddit-sop.html" target="_blank" rel="noopener">What changed</a><button class="btn sm" onclick="localStorage.setItem(\'sop_seen_2026-10-05\',\'1\');renderView()">Got it</button></div>'; }catch(_sb){}
   try{ var _ml=ccMineLeft(); if(_ml.length) h+='<div class="banner warn">'+IC.search+'<div style="flex:1"><b>Daily health check:</b> '+_ml.length+' teammate account'+(_ml.length===1?'':'s')+' to check (time limit <b>'+fmtMS(hcCapTotal())+'</b> — '+hcPerSecs()+' s per account). <b>Due by '+hcDueLbl(hcShiftOf(me))+'</b> — the end of your shift. Not finished: the owner is told and your QA drops by 1 (by 2 if you never start).</div><button class="btn sm dark" onclick="go(\'health\')">Start check</button></div>'; }catch(_hc){}
@@ -4149,9 +4150,17 @@ var RP={ by:{}, linked:null, at:0, busy:{} };
 setInterval(function(){ try{ if(document.hidden || !rpOn() || !(ROWS||[]).some(function(r){ return r.status==='comment'; })) return; rpLoad(false); }catch(e){} }, 90000);
 function rpOn(){ return !!(BE_BUILD && BE_BUILD>='rc-2026-11-19b'); }
 function rpKey(id, n){ return id+'|'+n; }
+/* owner: the comment list must be fresh (posts under max_h hours) — say so before a shift runs dry */
+function rpBanner(){
+  if(!rpOn() || !RP.prog) return ''; var P=RP.prog, mh=RP.maxh||12, low=[];
+  ['green','yellow'].forEach(function(g){ var x=P[g]; var nm=g==='green'?'Green':'Yellow';
+    if(!x) low.push(nm+': none fresh'); else if(x.free<15) low.push(nm+': '+x.free+' left'+(x.newest_h!=null?' (newest post '+x.newest_h+' h old)':'')); else if(x.expiring>x.free/2) low.push(nm+': '+x.expiring+' of '+x.free+' expire within 3 h'); });
+  if(!low.length) return '';
+  return '<div class="banner warn">'+IC.doc+'<div style="flex:1"><b>Comment list needs a refresh</b> — only posts under '+mh+' h old are given out. '+esc(low.join(' · '))+'. Download a new JSON and send it to Claude.</div></div>';
+}
 async function rpLoad(force){
   if(!rpOn() || !USER) return; if(!force && Date.now()-RP.at<60000) return; RP.at=Date.now();
-  try{ var d=await apiPost({ action:'rc_reply_mine' }); if(d && d.ok){ RP.linked=!!d.linked; RP.prog=d.progress||null; RP.by={}; (d.list||[]).forEach(function(a){ RP.by[rpKey(a.acct,a.ses)]=a; }); renderView(); } }catch(e){}
+  try{ var d=await apiPost({ action:'rc_reply_mine' }); if(d && d.ok){ RP.linked=!!d.linked; RP.prog=d.progress||null; RP.maxh=d.max_h||12; RP.by={}; (d.list||[]).forEach(function(a){ RP.by[rpKey(a.acct,a.ses)]=a; }); renderView(); } }catch(e){}
 }
 function rpTagAsk(id){
   var r=rowById(id); if(!r) return; var cur=M(r).rtag||'';
