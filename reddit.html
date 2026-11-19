@@ -1058,6 +1058,7 @@ function sesPerDay(r){ return (isTrial(r&&r.status) || (r&&r.status)==='sxsetup'
 function pIx(k){ return isTrial(k)?phaseIx('day1'):phaseIx(k); }   // trial phases count as posting stages
 var SX_STAGES=['sxwarm','sxsetup','sxcomment','sxpost'];   // Nov 6a: + commenting
 function isSXSt(k){ return SX_STAGES.indexOf(k)>=0; }   // Nov 5b
+var SX_RETIRED=true;   // Nov 20 (Jeth): the client stopped the Suicidal Operation — its accounts are archived (history kept) and every SX screen, stage and button is hidden
 var SX_OK=['new','sxwarm','sxsetup','sxcomment','sxpost','recovery','tempban','onhold','archived','banned'];   // where a Suicidal Operation account can be
 var SX_C='#675F51';
 function isSX(r){ return !!r && ((r.meta&&r.meta.sop==='sx') || SX_STAGES.indexOf(r.status)>=0); }
@@ -2670,7 +2671,7 @@ function menuItems(r){
     if(r.status!=='onhold') it.push(['Put on hold…',"parkAcct('"+jsq(r.id)+"','onhold')",IC.pause]);
     if(r.status!=='archived') it.push(['Archive…',"parkAcct('"+jsq(r.id)+"','archived')",IC.doc]);
   }
-  if(isAdmin() && !isDead(r) && !isParked(r)){   // Suicidal Operation (Oct 25)
+  if(!SX_RETIRED && isAdmin() && !isDead(r) && !isParked(r)){   // Suicidal Operation (Oct 25)
     if(isSX(r)){ it.push(['Posting assignment…',"sxAssignAsk('"+jsq(r.id)+"')",IC.tag]); it.push(['Back to the original SOP…',"sxConvert('"+jsq(r.id)+"',false)",IC.swap]); }
     else it.push(['Move to Suicidal Operation…',"sxConvert('"+jsq(r.id)+"',true)",IC.swap]);
   }
@@ -4153,7 +4154,9 @@ async function sxCommentGo(id){
 var RP={ by:{}, linked:null, at:0, busy:{} };
 setInterval(function(){ try{ if(document.hidden || !rpOn() || !(ROWS||[]).some(function(r){ return r.status==='comment'; })) return; rpLoad(false); }catch(e){} }, 90000);
 function rpOn(){ return !!(BE_BUILD && BE_BUILD>='rc-2026-11-19b'); }
-function rpKey(id, n){ return id+'|'+n; }
+function rpKey(id, n, pt){ return id+'|'+n+'.'+(pt||1); }   // 19e: two comments per session (part 1 / 2)
+function rpPut(a){ if(a) RP.by[rpKey(a.acct,a.ses,a.part)]=a; }
+function rpPutAll(d){ if(d.list&&d.list.length) d.list.forEach(rpPut); else rpPut(d.a); }
 /* owner: the comment list must be fresh (posts under max_h hours) — say so before a shift runs dry */
 function rpBanner(){
   if(!rpOn() || !RP.prog) return ''; var P=RP.prog, mh=RP.maxh||12, low=[];
@@ -4164,7 +4167,7 @@ function rpBanner(){
 }
 async function rpLoad(force){
   if(!rpOn() || !USER) return; if(!force && Date.now()-RP.at<60000) return; RP.at=Date.now();
-  try{ var d=await apiPost({ action:'rc_reply_mine' }); if(d && d.ok){ RP.linked=!!d.linked; RP.prog=d.progress||null; RP.maxh=d.max_h||12; RP.by={}; (d.list||[]).forEach(function(a){ RP.by[rpKey(a.acct,a.ses)]=a; }); renderView(); } }catch(e){}
+  try{ var d=await apiPost({ action:'rc_reply_mine' }); if(d && d.ok){ RP.linked=!!d.linked; RP.prog=d.progress||null; RP.maxh=d.max_h||12; RP.by={}; (d.list||[]).forEach(rpPut); renderView(); } }catch(e){}
 }
 function rpCanTag(r){ if(isAdmin()) return true; if(M(r).rtag) return false; var me=myId(); return !!me && (worksFor(r)===me || owner(r)===me); }   // Jeth: the colour is permanent for the account's whole comment phase — the VA sets it once; only the admin can correct it   // Jeth: the VA who owns / works the account picks its colour
 function rpTagAsk(id, n){
@@ -4179,9 +4182,9 @@ function rpChips(r){
   if(!rpOn()) return ''; var g=M(r).rtag||'', h='';
   if(!g) return rpCanTag(r)?'<button class="ses" onclick="rpTagAsk(\''+jsq(r.id)+'\')">Set Green / Yellow</button>':'<span class="note i" style="font-size:11.5px">No comment tag yet — the account\'s VA sets Green / Yellow</span>';
   h+='<span class="ses" style="cursor:default;pointer-events:none">'+rpDot(g)+(g==='green'?'Green':'Yellow')+'</span>';
-  [1,2].forEach(function(n){ var a=RP.by[rpKey(r.id,String(n))]; if(!a) return;
-    h+=a.status==='posted'?'<button class="ses done" onclick="rpShow(\''+jsq(a.id)+'\')"><span class="bx">'+IC.check+'</span>S'+n+' comment · r/'+esc(a.sub)+'</button>'
-      :'<button class="ses go" onclick="rpShow(\''+jsq(a.id)+'\')">S'+n+' comment · r/'+esc(a.sub)+' <small>open</small></button>'; });
+  [1,2].forEach(function(n){ [1,2].forEach(function(pt){ var a=RP.by[rpKey(r.id,String(n),pt)]; if(!a) return; var lb='S'+n+' · C'+pt;
+    h+=a.status==='posted'?'<button class="ses done" onclick="rpShow(\''+jsq(a.id)+'\')"><span class="bx">'+IC.check+'</span>'+lb+' · r/'+esc(a.sub)+'</button>'
+      :'<button class="ses go" onclick="rpShow(\''+jsq(a.id)+'\')">'+lb+' · r/'+esc(a.sub)+' <small>open</small></button>'; }); });
   if(RP.linked===false) h+='<button class="ses" onclick="rpLink()">Link Telegram</button>';
   return h;
 }
@@ -4192,15 +4195,16 @@ async function rpGo(r, n){
   var k=rpKey(r.id,String(n)); if(RP.busy[k]) return; RP.busy[k]=1;
   try{ var d=await apiPost({ action:'rc_reply_next', id:r.id, handle:r.handle, grp:g, ses:String(n) });
     if(!d || !d.ok){ toast((d&&d.message)||'Could not get a comment ('+((d&&d.error)||'network')+').'); return; }
-    RP.by[k]=d.a; RP.linked=!!d.a.linked; renderView();
-    if(d.a.linked && d.a.sent) toast('Your comment for u/'+r.handle+' is in Telegram — r/'+d.a.sub+'.');
-    else rpShow(d.a.id);
+    rpPutAll(d); RP.linked=!!d.a.linked; renderView();
+    var L=(d.list&&d.list.length)?d.list:[d.a], subs=L.map(function(x){ return 'r/'+x.sub; }).join(' + ');
+    if(d.a.linked && L.every(function(x){ return x.sent; })) toast((L.length>1?'Your 2 comments':'Your comment')+' for u/'+r.handle+' are in Telegram — '+subs+'.'+(d.partial?' '+d.partial:''));
+    else { rpShow(L.filter(function(x){ return x.status!=='posted'; }).concat(L)[0].id); if(d.partial) toast(d.partial); }
   } catch(e){ toast('Could not get a comment — check the connection.'); }
   finally{ delete RP.busy[k]; }
 }
 function rpShow(aid){
   var a=rpFind(aid); if(!a) return; var posted=a.status==='posted';
-  openModal('<div class="md-h"><h3>'+rpDot(a.grp)+'Comment · u/'+esc(a.handle)+' · Session '+esc(a.ses)+'</h3><p>r/'+esc(a.sub)+(a.title?' — '+esc(a.title):'')+'</p></div>'+
+  openModal('<div class="md-h"><h3>'+rpDot(a.grp)+'Comment '+(a.part||1)+' of 2 · u/'+esc(a.handle)+' · Session '+esc(a.ses)+'</h3><p>r/'+esc(a.sub)+(a.title?' — '+esc(a.title):'')+'</p></div>'+
     '<div class="md-b">'+
       '<div class="fld"><label>The post</label><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn sec" href="'+esc(a.link)+'">Open in Reddit app</a><button class="btn sec" onclick="phCopy(this,\''+jsq(a.link)+'\')">Copy link</button></div></div>'+
       '<div class="fld"><label>Comment to post</label><div style="white-space:pre-wrap;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.45">'+esc(a.comment||'(comment not found — press Skip)')+'</div>'+
@@ -4216,11 +4220,11 @@ async function rpPosted(aid, btn){ var a=rpFind(aid); if(!a) return; if(btn){ bt
   if(d && d.ok){ a.status='posted'; a.posted_at=phtStamp(); closeModal(); renderView(); toast('Marked posted.'); } else { if(btn){ btn.disabled=false; btn.textContent='Posted'; } toast('Could not save — try again.'); } }
 async function rpSkip(aid){ var a=rpFind(aid); if(!a) return; var why=prompt('What is wrong with this post? (deleted, locked, comment doesn\'t fit…)',''); if(why===null) return;
   var d=null; try{ d=await apiPost({ action:'rc_reply_skip', id:aid, why:why }); }catch(e){}
-  if(d && d.ok){ RP.by[rpKey(d.a.acct,d.a.ses)]=d.a; RP.linked=!!d.a.linked; closeModal(); renderView(); if(d.a.linked && d.a.sent) toast('A new comment is in your Telegram — r/'+d.a.sub+'.'); else rpShow(d.a.id); }
+  if(d && d.ok){ rpPutAll(d); RP.linked=!!d.a.linked; closeModal(); renderView(); if(d.a.linked && d.a.sent) toast('A new comment is in your Telegram — r/'+d.a.sub+'.'); else rpShow(d.a.id); }
   else toast((d&&d.message)||'Could not get a new one.'); }
 async function rpResend(aid){ var a=rpFind(aid); if(!a) return; var r=rowById(a.acct)||{ id:a.acct, handle:a.handle };
   var d=null; try{ d=await apiPost({ action:'rc_reply_next', id:a.acct, handle:a.handle, grp:a.grp, ses:a.ses, resend:'1' }); }catch(e){}
-  if(d && d.ok){ RP.by[rpKey(a.acct,a.ses)]=d.a; toast(d.a.sent?'Sent again — check Telegram.':'Telegram did not take it — is your chat with the bot still open?'); closeModal(); renderView(); } else toast('Could not resend.'); }
+  if(d && d.ok){ rpPutAll(d); toast(d.a.sent?'Sent again — check Telegram.':'Telegram did not take it — is your chat with the bot still open?'); closeModal(); renderView(); } else toast('Could not resend.'); }
 async function rpLink(){
   var d=null; try{ d=await apiPost({ action:'rc_tg_link' }); }catch(e){}
   if(!d || !d.ok){ toast((d&&d.message)||'Telegram linking is not available.'); return; }
@@ -5336,7 +5340,7 @@ function subDaysCard(S){
         '<td class="num">'+(Object.keys(D.accts||{}).length||'·')+'</td></tr>'; }).join('')+'</tbody></table></div></div>';
 }
 function vSubs(){
-  var nSXs=subRows(isAdmin()?SUBS.base:'all').filter(function(r){ return isSX(r) && postsOf(r).length; }).length; if(!nSXs && SUBS.sop==='sx') SUBS.sop='std';
+  var nSXs=subRows(isAdmin()?SUBS.base:'all').filter(function(r){ return isSX(r) && postsOf(r).length; }).length; if(SX_RETIRED) nSXs=0; if(!nSXs && SUBS.sop==='sx') SUBS.sop='std';
   var admin=isAdmin(), S=subStats(SUBS.range, admin?SUBS.base:'all', SUBS.sop), q=String(SUBS.q||'').trim().toLowerCase();
   window._SUBIX=subIndex();
   var rl=SUBS.range?('last '+SUBS.range+' days'):'all time';
@@ -6005,7 +6009,7 @@ function newAccount(){
   openModal('<div class="md-h"><h3>Log new account</h3><p>Do this the moment the account exists on the phone. Creation date and time are stamped automatically.</p></div>'+
     '<div class="md-b">'+
       '<div class="seg" style="margin-bottom:14px"><button id="na-s0" class="on" onclick="naSeed(false)">Just created</button><button id="na-s1" onclick="naSeed(true)">Already existing account</button></div>'+
-      '<div class="fld"><label>SOP</label><div class="seg" id="na-sop"><button type="button" class="on" data-s="std" onclick="naSop(this)">Original SOP (ladder)</button><button type="button" data-s="sx" onclick="naSop(this)" style="color:'+SX_C+'">Suicidal Operation</button>'+(canST()?'<button type="button" data-s="st" onclick="naSop(this)" style="color:'+ST_C+'">Story Ops</button>':'')+'</div><div class="hint" id="na-sop-h">'+esc(naSopHint('std'))+'</div></div>'+
+      '<div class="fld"><label>SOP</label><div class="seg" id="na-sop"><button type="button" class="on" data-s="std" onclick="naSop(this)">Original SOP (ladder)</button>'+(SX_RETIRED?'':'<button type="button" data-s="sx" onclick="naSop(this)" style="color:'+SX_C+'">Suicidal Operation</button>')+(canST()?'<button type="button" data-s="st" onclick="naSop(this)" style="color:'+ST_C+'">Story Ops</button>':'')+'</div><div class="hint" id="na-sop-h">'+esc(naSopHint('std'))+'</div></div>'+
       '<div class="fld"><label>Reddit username</label><input class="inp" id="na-u" placeholder="u/username" autocomplete="off"></div>'+
       '<div class="fld"><label>Method — how this account is run</label><div class="seg" id="na-meth">'+methodsList().map(function(m){ return '<button type="button" data-m="'+esc(m)+'" onclick="naMeth(this)" style="color:'+methodColor(m)+'">'+esc(m)+'</button>'; }).join('')+'</div></div>'+
       '<div class="f2"><div class="fld"><label>Model</label>'+
@@ -6115,7 +6119,7 @@ function vAccounts(){
   var rows=dbRows();
   var col=COLS.filter(function(c){ return c.k===DB.sort; })[0]||COLS[8];
   rows.sort(function(a,b){ var x=col.v(a), y=col.v(b); return (x<y?-1:x>y?1:0)*DB.dir || String(a.handle).localeCompare(String(b.handle)); });
-  var anySX=src.some(isSX) || src.some(isST);
+  var anySX=(!SX_RETIRED && src.some(isSX)) || src.some(isST); if(SX_RETIRED && DB.sop==='sx') DB.sop='all';
   var cols=COLS.filter(function(c){ return (!c.admin || admin) && (!c.all || (admin && DB.all)) && (!c.hold || DB.life==='hold' || DB.life==='arch') && (!c.sx || anySX); });
   var h='<div class="hero"><div style="flex:1;min-width:240px"><h2>Accounts</h2><p>'+(admin?'Every account, every stage, from creation to ban — click a row for its full history.':'Your accounts — click a row for its full history.')+'</p></div>'+
     (admin?'<button class="btn sec" onclick="exportCsv()">'+IC.dl+' Export CSV</button>':'')+
@@ -6125,7 +6129,7 @@ function vAccounts(){
     '<div class="seg" style="width:auto">'+[['alive','Alive'],['hold','On hold'],['arch','Archived'],['dead','Banned'],['all','All']].map(function(x){ return '<button class="'+(DB.life===x[0]?'on':'')+'" onclick="DB.life=\''+x[0]+'\';'+((x[0]==='hold'||x[0]==='arch')?'if(!DB.groupBy)DB.groupBy=\'client\';':'if(DB.groupBy===\'client\')DB.groupBy=\'\';')+'renderView()">'+x[1]+(x[0]==='hold'||x[0]==='arch'?' <small>'+src.filter(x[0]==='hold'?function(r){ return r.status==='onhold'; }:isArchived).length+'</small>':'')+'</button>'; }).join('')+'</div>'+
     '<select class="sel" onchange="DB.grp=this.value;renderView()"><option value="">All stages</option>'+GROUPS.map(function(g){ return '<option value="'+g.k+'"'+(DB.grp===g.k?' selected':'')+'>'+g.n+'</option>'; }).join('')+'</select>'+
     '<select class="sel" onchange="DB.meth=this.value;renderView()"><option value="all">All methods</option>'+methodsList().map(function(m){ return '<option'+(DB.meth===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'<option value=""'+(DB.meth===''?' selected':'')+'>Not tagged</option></select>'+
-    (anySX||DB.sop!=='all'?'<select class="sel" onchange="DB.sop=this.value;renderView()" title="Which SOP"><option value="all">Both SOPs</option><option value="std"'+(DB.sop==='std'?' selected':'')+'>Original SOP</option><option value="sx"'+(DB.sop==='sx'?' selected':'')+'>Suicidal Operation</option><option value="st"'+(DB.sop==='st'?' selected':'')+'>Story Ops</option></select>':'')+
+    (anySX||DB.sop!=='all'?'<select class="sel" onchange="DB.sop=this.value;renderView()" title="Which SOP"><option value="all">Both SOPs</option><option value="std"'+(DB.sop==='std'?' selected':'')+'>Original SOP</option>'+(SX_RETIRED?'':'<option value="sx"'+(DB.sop==='sx'?' selected':'')+'>Suicidal Operation</option>')+'<option value="st"'+(DB.sop==='st'?' selected':'')+'>Story Ops</option></select>':'')+
     '<select class="sel" onchange="DB.model=this.value;renderView()"><option value="">All models</option>'+models.map(function(m){ return '<option'+(DB.model===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select>'+
     '<select class="sel" onchange="DB.phone=this.value;renderView()"><option value="">All phones</option>'+phones.map(function(m){ return '<option'+(DB.phone===m?' selected':'')+'>'+esc(m)+'</option>'; }).join('')+'</select>'+
     (admin?'<select class="sel" onchange="DB.va=this.value;renderView()"><option value="all">All VAs</option>'+vaOptions(DB.va,false)+'</select>':'')+
@@ -6337,7 +6341,7 @@ function plSummary(rows){
 function vPipeline(){
   var srcAll=PL.all?allRows():(ALL[PROJECT]||ROWS);
   if(!srcAll.length) return '<div class="card empty">Loading accounts…</div>';
-  var nSX=srcAll.filter(function(r){ return isSX(r) && !isParked(r); }).length; if(!nSX && PL.sop==='sx') PL.sop='std';
+  var nSX=SX_RETIRED?0:srcAll.filter(function(r){ return isSX(r) && !isParked(r); }).length; if(!nSX && PL.sop==='sx') PL.sop='std';
   var src=srcAll.filter(function(r){ return sopOf(r)===PL.sop; });   // the two SOPs are never mixed on the board (Oct 25)
   /* The pipeline compares METHODS — accounts without a method are not part of it (owner, Oct 5). */
   var all=src.filter(function(r){ return !!methodOf(r) && !isParked(r); });   // parked accounts are out of every report (Oct 6)
@@ -6865,7 +6869,7 @@ function vInsights(){
   }
   if(INS.client && (INS.dim==='va'||INS.dim==='device')) INS.dim='method';
   var nSX=0, seenX={}; insAllRows().forEach(function(r){ if(r && r.id && !seenX[r.id] && isSX(r) && !isParked(r) && (INS.base==='all' || r.project===INS.base)){ seenX[r.id]=1; nSX++; } });
-  if(!nSX && INS.sop==='sx') INS.sop='std';
+  if(SX_RETIRED) nSX=0; if(!nSX && INS.sop==='sx') INS.sop='std';
   var sopSeg=nSX?'<div class="seg no-print" style="width:auto"><button class="'+(INS.sop!=='sx'?'on':'')+'" onclick="INS.sop=\'std\';renderView()">Original SOP</button><button class="'+(INS.sop==='sx'?'on':'')+'" onclick="INS.sop=\'sx\';renderView()" style="color:'+SX_C+'">Suicidal Operation <small>'+nSX+'</small></button></div>':'';
   if(INS.sop==='sx'){   // Suicidal Operation: its own page (Oct 25)
     var hx='<div class="hero"><div style="flex:1;min-width:240px"><h2>Insights <span class="pill" style="background:'+SX_C+'16;color:'+SX_C+';vertical-align:4px">Suicidal Operation</span></h2><p>The fast SOP on its own — day 1 created, day 2–3 warm-up, posting from day 3 as the client assigns. None of these accounts are in the ladder\'s numbers.</p></div>'+sopSeg+
@@ -8530,7 +8534,7 @@ function vSettingsLists(){
     '<div class="row"><button class="btn sm sec" onclick="SET.phones.push({label:\'iPhone 12 · #'+(SET.phones.length+1)+'\',model:\'iPhone 12\',base:\'Reddit\',active:true});renderView()">'+IC.plus+' iPhone 12</button>'+
     '<button class="btn sm sec" onclick="SET.phones.push({label:\'iPhone 13 · #'+(SET.phones.length+1)+'\',model:\'iPhone 13\',base:\'Reddit\',active:true});renderView()">'+IC.plus+' iPhone 13</button></div>'+
     '<div class="hint muted" style="font-size:11px;margin-top:8px">iCloud addresses (Blaze+) show to the client in their portal. Addresses only — never put a password here. Each phone\'s proxy, IP rotation link, license key and IPA Apple ID are set on the <a href="#" onclick="go(\'phones\');return false">iPhones</a> tab.</div></div>';
-  h+='<div class="card pad s6"><div class="ch-h"><b>Suicidal Operation</b><span>its own SOP — kept out of the ladder\'s numbers</span></div>'+
+  if(!SX_RETIRED) h+='<div class="card pad s6"><div class="ch-h"><b>Suicidal Operation</b><span>its own SOP — kept out of the ladder\'s numbers</span></div>'+
     '<div class="note g" style="margin-bottom:10px">Day 1 the account is created · day 2 (or day 3 at the latest) warm-up · from day 3 it posts, the way the client assigns it. VAs pick it when they log a new account; the owner can move an existing account onto it from its ⋯ menu.</div>'+
     '<div class="lbl" style="margin-bottom:6px">Posting assignments the client can give</div><div class="chips">'+
     SET.sx_assign.map(function(x,i){ return '<span class="chip" style="background:'+SX_C+'12;color:'+SX_C+'">'+esc(x)+(SET.sx_assign.length>1?' <a href="#" onclick="SET.sx_assign.splice('+i+',1);renderView();return false" style="color:inherit;text-decoration:none;opacity:.6">×</a>':'')+'</span>'; }).join('')+

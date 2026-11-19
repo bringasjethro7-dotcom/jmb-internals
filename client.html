@@ -2768,7 +2768,8 @@ function insDims(){ return DIMS.filter(function(d){ return d[0]!=='va' && d[0]!=
 function allRowsAll(){ return INSD.rows||[]; }
 function allRows(){ var k=CXS.sop; return (INSD.rows||[]).filter(function(r){ return sopOf(r)===k; }); }   // Oct 25: one SOP at a time
 function rowById(id){ var L=allRowsAll(); for(var i=0;i<L.length;i++) if(L[i].id===id) return L[i]; return null; }
-function sxCountC(){ return allRowsAll().filter(function(r){ return isSX(r) && !isParked(r); }).length; }
+var SX_RETIRED=true;   // Nov 20: the Suicidal Operation was stopped by the client — its accounts are archived, its views hidden
+function sxCountC(){ if(SX_RETIRED) return 0; return allRowsAll().filter(function(r){ return isSX(r) && !isParked(r); }).length; }
 function sopBarC(){
   var n=sxCountC(); if(!n){ CXS.sop='std'; return ''; }
   return '<div class="cx-sopbar no-print"><span>Operation</span><div class="seg" style="width:auto"><button class="'+(CXS.sop==='std'?'on':'')+'" onclick="cxSop(\'std\')">Original SOP</button><button class="'+(CXS.sop==='sx'?'on':'')+'" onclick="cxSop(\'sx\')" style="color:'+SX_C+'">Suicidal Operation <small>'+n+'</small></button></div>'+
@@ -2865,7 +2866,7 @@ function vSettingsC(){
           '<td>'+(ic.length?ic.map(function(x){ return '<span class="chip" style="margin:2px 6px 2px 0">'+esc(x)+'</span>'; }).join(''):'<span class="muted">—</span>')+'</td></tr>'; }).join('')+
       '</tbody></table></div><div class="muted" style="font-size:12px;margin-top:8px">'+ph.length+' iPhone'+(ph.length===1?'':'s')+' · '+withIc+' with an iCloud listed. Addresses only — no passwords are kept here.</div>'
      :'<div class="muted" style="padding:10px 0">No iPhones listed yet.</div>')+'</div>';
-  h+='<div class="card pad" style="margin-top:12px"><div class="ch-h"><b>Suicidal Operation</b><span>a second, faster SOP — reported on its own, never mixed with the ladder</span></div>'+
+  if(!SX_RETIRED) h+='<div class="card pad" style="margin-top:12px"><div class="ch-h"><b>Suicidal Operation</b><span>a second, faster SOP — reported on its own, never mixed with the ladder</span></div>'+
     '<div class="sx-steps">'+[['Day 1','The account is created'],['Day 2 – 3','Warm-up · browsing only, no posting'],['After the warm-up','Account setup · name, bio, avatar, banner'],['After the setup','Commenting · one session of 10 comments'],['Day 3 onward','Posting, the way you assign it']].map(function(x){ return '<div><b>'+esc(x[0])+'</b><span>'+esc(x[1])+'</span></div>'; }).join('')+'</div>'+
     '<div class="lbl" style="margin:14px 0 6px">Posting assignments</div><div class="chips">'+L.map(function(x){ return '<span class="chip" style="background:'+SX_C+'12;color:'+SX_C+'">'+esc(x)+'</span>'; }).join('')+'</div>'+
     '<div class="muted" style="font-size:12px;margin-top:8px">Tell your JMB account manager which assignment each account should get — it shows on the account in Accounts, and the Suicidal Operation numbers are split by it.</div></div>';
