@@ -1363,6 +1363,9 @@ function addDays(ymd,n){ var d=new Date(ymd+'T12:00:00+08:00'); d.setTime(d.getT
 
 /* ── who ── */
 function isAdmin(){ return !!(USER && OWNERS.indexOf(String(USER.id||'').toLowerCase())>=0); }
+/* Nov 19 (Jeth): transfer leads can move accounts between VAs (Permanent transfer only) — no waiting for the owner at night or on an emergency leave */
+var XFERS=['jmb011'];   // Alieza Dela Cruz
+function canXfer(){ return isAdmin() || !!(USER && XFERS.indexOf(String(USER.id||'').toLowerCase())>=0); }
 function myId(){ return String((USER&&USER.id)||'').toLowerCase(); }
 function owner(r){ return String(r.assigned_to||r.created_by||'').toLowerCase(); }
 function coverOf(r){ return COVER[String(r&&r.id||'')]||''; }
@@ -2284,6 +2287,7 @@ function vToday(){
     (tmOn()?(crGet()?'<button class="btn run" onclick="newAccount()" title="Account exists on the phone? Log it — the timer stops when it is counted"><span class="sq"></span> Creating… <span class="tmv"'+(crGet().ps?'':' data-tm="'+tmVStart(crGet())+'"')+'>'+tmFmt(tmEl(crGet()))+(crGet().ps?' · paused':'')+'</span></button><button class="btn sec sm" onclick="crCancel()" title="Cancel — free in the first 2 minutes; after that it is recorded as a failed creation">'+IC.x+'</button>'+crPickHtml()
       :(crLocked()?'<button class="btn sec" onclick="crLockedBox()" title="Locked: '+CR_STREAK+' creation timers in a row ended without an account" style="opacity:.6">Start creating · locked</button>'
         :'<button class="btn sec" onclick="crStart()" title="Press when you START creating an account on the iPhone (stops by itself at '+Math.round(tmCapSecs('creation','','')/60)+' min)">▶ Start creating</button>'+crPickHtml())):'')+
+    (canXfer()&&!isAdmin()?'<button class="btn sec" onclick="xferOpen()" title="Move accounts from one VA to another (a VA left, is on leave, or the load needs balancing)">'+IC.swap+' Transfer accounts</button>':'')+
     '<button class="btn pri" onclick="newAccount()">'+IC.plus+' Log new account</button></div>';
   h+=pcBanner();   // Oct 27: end-of-shift post check (before EOD)
   try{ h+=phBanner(); }catch(_pb){}   // Oct 29: open iPhone problems (proxy · license key · Cloud+ · Apple ID)
@@ -8208,7 +8212,7 @@ function xfPlan(){
   return plan;
 }
 function xferOpen(preset, ids, lbl){
-  if(!isAdmin()){ toast('Only the owner can transfer accounts.'); return; }
+  if(!canXfer()){ toast('Only the owner can transfer accounts.'); return; }
   XF=xfDefault();
   preset=String(preset||'').toLowerCase();
   if(ids && ids.length){ XF.src='ids'; XF.ids=ids.slice(); XF.idsLbl=lbl||(ids.length===1?'This account':'Selected ('+ids.length+')'); XF.why='handover'; }
