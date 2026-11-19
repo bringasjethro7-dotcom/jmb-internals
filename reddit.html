@@ -1280,7 +1280,8 @@ function wdayOf(empId){
 }
 function myDay(){ return wdayOf(myId()); }
 function wdayReset(){ _WD={}; _WDm=0; }
-function shiftApply(){ var ch=false; Object.keys(ATT).forEach(function(k){ var sh=ATT[k].sh; if((sh==='night'||sh==='morning') && SHIFTOF[k]!==sh){ SHIFTOF[k]=sh; ch=true; } }); if(ch) wdayReset(); return ch; }
+var PROF_SHIFT={};   // Nov 20 (Jeth): the VA's shift on their profile — a NIGHT VA stays on the night team even if one time-in was saved as "morning" (Julio, Nov 19)
+function shiftApply(){ var ch=false; Object.keys(ATT).forEach(function(k){ var sh=ATT[k].sh; if(sh==='morning' && PROF_SHIFT[k]==='night') sh='night'; if((sh==='night'||sh==='morning') && SHIFTOF[k]!==sh){ SHIFTOF[k]=sh; ch=true; } }); if(ch) wdayReset(); return ch; }
 async function attLoad(){
   if(typeof SB_URL==='undefined' || typeof SB_KEY==='undefined'){ setTimeout(attLoad, 800); return; }
   try{
@@ -1546,7 +1547,7 @@ function goneHolders(rows){ var g={}; (rows||[]).forEach(function(r){ var o=owne
 async function loadNames(){
   try{
     var c=JSON.parse(sessionStorage.getItem('jmb_empdir')||'null');
-    if(c && c.N && c.G && (Date.now()-c.t)<30*60*1000){ NAMES=c.N; SHIFTOF=c.S||{}; PHOTOOF=c.P||{}; GONE=c.G||{}; DIR_READY=true; shiftApply(); wdayReset(); }
+    if(c && c.N && c.G && (Date.now()-c.t)<30*60*1000){ NAMES=c.N; SHIFTOF=c.S||{}; if(c.PS) PROF_SHIFT=c.PS; PHOTOOF=c.P||{}; GONE=c.G||{}; DIR_READY=true; shiftApply(); wdayReset(); }
   }catch(e){}
   try{
     var d=await jget(API+'?action=emp_dir&_='+Date.now(), 60000);
@@ -1554,11 +1555,11 @@ async function loadNames(){
     GONE={};
     d.employees.forEach(function(e){
       var k=String(e.employee_id).toLowerCase();
-      NAMES[k]=e.full_name||e.employee_id; SHIFTOF[k]=String(e.shift||'').toLowerCase(); PHOTOOF[k]=drivePhoto(e.photo||'');
+      NAMES[k]=e.full_name||e.employee_id; SHIFTOF[k]=String(e.shift||'').toLowerCase(); PROF_SHIFT[k]=SHIFTOF[k]; PHOTOOF[k]=drivePhoto(e.photo||'');
       if(e.active===false || INACTIVE_RE.test(String(e.status||'').trim())) GONE[k]=1;
     });
     DIR_READY=true;
-    try{ sessionStorage.setItem('jmb_empdir', JSON.stringify({N:NAMES,S:SHIFTOF,P:PHOTOOF,G:GONE,t:Date.now()})); }catch(_p){}
+    try{ sessionStorage.setItem('jmb_empdir', JSON.stringify({N:NAMES,S:SHIFTOF,PS:PROF_SHIFT,P:PHOTOOF,G:GONE,t:Date.now()})); }catch(_p){}
     shiftApply(); wdayReset();   // Nov 7: the portal time-in shift wins over the profile field
     paintTop(); renderView();
   }catch(e){ setTimeout(loadNames, 15000); }
