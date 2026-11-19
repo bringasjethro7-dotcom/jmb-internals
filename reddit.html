@@ -2674,7 +2674,7 @@ function menuItems(r){
     if(isSX(r)){ it.push(['Posting assignment…',"sxAssignAsk('"+jsq(r.id)+"')",IC.tag]); it.push(['Back to the original SOP…',"sxConvert('"+jsq(r.id)+"',false)",IC.swap]); }
     else it.push(['Move to Suicidal Operation…',"sxConvert('"+jsq(r.id)+"',true)",IC.swap]);
   }
-  if(isAdmin() && !isDead(r) && r.status==='comment'){ var _rt=M(r).rtag||''; it.push(['Comment tag: '+(_rt?(_rt==='green'?'Green':'Yellow')+' → change':'none → set')+'…',"rpTagAsk('"+jsq(r.id)+"')",IC.tag]); }   // 19b
+  if(rpCanTag(r) && !isDead(r) && r.status==='comment'){ var _rt=M(r).rtag||''; it.push(['Comment tag: '+(_rt?(_rt==='green'?'Green':'Yellow')+' → change':'none → set')+'…',"rpTagAsk('"+jsq(r.id)+"')",IC.tag]); }   // 19b
   if(!isDead(r)){
     it.push(['Update karma',"setKarma('"+jsq(r.id)+"')",IC.star]);
     it.push(['Edit details',"editRec('"+jsq(r.id)+"')",IC.edit]);
@@ -4147,7 +4147,7 @@ async function sxCommentGo(id){
   if(ok && tmOn()) await sesStart(id, 4);
 }
 /* ══ 19b · REPLY DESK — Comment Farm comments from the collector, sent to the VA's Telegram ══
-   Owner tags each Comment Farm account Green or Yellow (meta.rtag). Starting a session asks the backend for ONE ready-made
+   The VA who owns the account tags it Green or Yellow (meta.rtag; admin can too). Starting a session asks the backend for ONE ready-made
    comment from that colour's newest batch; the Reddit Central bot DMs it (post + tap-to-copy comment + Posted button).
    Not linked to Telegram yet → the same card opens here, with Link Telegram. */
 var RP={ by:{}, linked:null, at:0, busy:{} };
@@ -4166,17 +4166,18 @@ async function rpLoad(force){
   if(!rpOn() || !USER) return; if(!force && Date.now()-RP.at<60000) return; RP.at=Date.now();
   try{ var d=await apiPost({ action:'rc_reply_mine' }); if(d && d.ok){ RP.linked=!!d.linked; RP.prog=d.progress||null; RP.maxh=d.max_h||12; RP.by={}; (d.list||[]).forEach(function(a){ RP.by[rpKey(a.acct,a.ses)]=a; }); renderView(); } }catch(e){}
 }
-function rpTagAsk(id){
+function rpCanTag(r){ if(isAdmin()) return true; var me=myId(); return !!me && (worksFor(r)===me || owner(r)===me); }   // Jeth: the VA who owns / works the account picks its colour
+function rpTagAsk(id, n){
   var r=rowById(id); if(!r) return; var cur=M(r).rtag||'';
   openModal('<div class="md-h"><h3>Comment tag · u/'+esc(r.handle)+'</h3><p>Green and Yellow are run on different accounts. This account only ever gets comments for its colour\'s subreddits.</p></div>'+
-    '<div class="md-b"><div class="seg">'+[['green','Green'],['yellow','Yellow'],['','None']].map(function(x){ return '<button type="button" class="'+(cur===x[0]?'on':'')+'" onclick="rpTagSet(\''+jsq(id)+'\',\''+x[0]+'\')">'+x[1]+'</button>'; }).join('')+'</div></div>'+
+    '<div class="md-b"><div class="seg">'+[['green','Green'],['yellow','Yellow']].concat(cur?[['','None']]:[]).map(function(x){ return '<button type="button" class="'+(cur===x[0]?'on':'')+'" onclick="rpTagSet(\''+jsq(id)+'\',\''+x[0]+'\','+(n||0)+')">'+x[1]+'</button>'; }).join('')+'</div>'+(n?'<div class="hint" style="margin-top:8px">Pick the colour the client gave this account — your Session '+n+' comment comes right after.</div>':'')+'</div>'+
     '<div class="md-f"><button class="btn sec" onclick="closeModal()">Close</button></div>');
 }
-async function rpTagSet(id, v){ var r=rowById(id); if(!r) return; closeModal(); var ok=await saveMeta(r, { rtag:v||null }); toast(ok?('u/'+r.handle+' → '+(v?(v==='green'?'Green':'Yellow'):'no tag')):'Could not save — try again.'); renderView(); }
+async function rpTagSet(id, v, n){ var r=rowById(id); if(!r) return; closeModal(); var ok=await saveMeta(r, { rtag:v||null }); toast(ok?('u/'+r.handle+' → '+(v?(v==='green'?'Green':'Yellow'):'no tag')):'Could not save — try again.'); renderView(); if(ok && v && n) rpGo(rowById(id)||r, n); }
 function rpDot(g){ return '<i style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:0;background:'+(g==='green'?'#22a06b':'#e2b203')+'"></i>'; }
 function rpChips(r){
   if(!rpOn()) return ''; var g=M(r).rtag||'', h='';
-  if(!g) return isAdmin()?'<button class="ses" onclick="rpTagAsk(\''+jsq(r.id)+'\')">Set comment tag</button>':'<span class="note i" style="font-size:11.5px">No comment tag yet — admin sets Green / Yellow</span>';
+  if(!g) return rpCanTag(r)?'<button class="ses" onclick="rpTagAsk(\''+jsq(r.id)+'\')">Set Green / Yellow</button>':'<span class="note i" style="font-size:11.5px">No comment tag yet — the account\'s VA sets Green / Yellow</span>';
   h+='<span class="ses" style="cursor:default;pointer-events:none">'+rpDot(g)+(g==='green'?'Green':'Yellow')+'</span>';
   [1,2].forEach(function(n){ var a=RP.by[rpKey(r.id,String(n))]; if(!a) return;
     h+=a.status==='posted'?'<button class="ses done" onclick="rpShow(\''+jsq(a.id)+'\')"><span class="bx">'+IC.check+'</span>S'+n+' comment · r/'+esc(a.sub)+'</button>'
@@ -4187,7 +4188,7 @@ function rpChips(r){
 function rpFind(aid){ for(var k in RP.by) if(RP.by[k].id===aid) return RP.by[k]; return null; }
 async function rpGo(r, n){
   if(!rpOn()) return; var g=M(r).rtag||'';
-  if(!g){ toast('This account has no Green / Yellow tag yet — ask the admin. No comment was assigned.'); return; }
+  if(!g){ if(rpCanTag(r)) rpTagAsk(r.id, n); else toast('This account has no Green / Yellow tag yet — no comment was assigned.'); return; }
   var k=rpKey(r.id,String(n)); if(RP.busy[k]) return; RP.busy[k]=1;
   try{ var d=await apiPost({ action:'rc_reply_next', id:r.id, handle:r.handle, grp:g, ses:String(n) });
     if(!d || !d.ok){ toast((d&&d.message)||'Could not get a comment ('+((d&&d.error)||'network')+').'); return; }
