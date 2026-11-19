@@ -1270,7 +1270,11 @@ function wdayOf(empId){
   if(m!==_WDm){ _WD={}; _WDm=m; }
   var c=_WD[k]; if(c!==undefined) return c;
   var f=shiftWinDay(k), a=ATT[k], r=f;
-  if(a && a.open && /^\d{4}-\d{2}-\d{2}$/.test(a.d||'') && a.d>=dAdd(f,-1) && a.d<=dAdd(f,1)) r=a.d;   // clocked in now → that shift's date
+  /* Nov 19 (Jeth): a night VA who never timed out last night (JMB042, Nov 18) kept that night OPEN, so at 8:38 PM the next
+     night his sessions still read as done. A night shift can't still be running after 7 PM of the next day — an open time-in
+     older than the current night window is stale and no longer holds the day. */
+  var _night=SHIFTOF[k]==='night';
+  if(a && a.open && /^\d{4}-\d{2}-\d{2}$/.test(a.d||'') && a.d>=dAdd(f,_night?0:-1) && a.d<=dAdd(f,1)) r=a.d;   // clocked in now → that shift's date
   _WD[k]=r; return r;
 }
 function myDay(){ return wdayOf(myId()); }
