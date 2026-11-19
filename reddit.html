@@ -1829,7 +1829,7 @@ function start(){
   try{ want=window.__RC_VIEW || (new URLSearchParams(location.search)).get("tab") || sessionStorage.getItem("rc_view"); }catch(e){}
   if(want==='coverage'){ SETSUB='coverage'; want='settings'; }
   VIEW=(want && tabsFor().some(function(t){ return t[0]===want; }))?want:'today';
-  try{ api({ action:'rc_build' }).then(function(d){ BE_BUILD=(d&&d.build)||''; try{ setTimeout(tcHistLoad, 1500); }catch(_th){}
+  try{ api({ action:'rc_build' }).then(function(d){ BE_BUILD=(d&&d.build)||''; try{ setTimeout(tcHistLoad, 1500); }catch(_th){} try{ setTimeout(function(){ rpLoad(true); }, 2500); }catch(_rp){}
     /* Oct 31: once the backend with the Suicidal Op session fix (31a) is live, the owner's page asks it once to recount
        the days since Oct 25 (it runs inside the day close catch-up, then republishes the scorecard). */
     try{ if(isAdmin() && BE_BUILD>='rc-2026-10-31e' && !localStorage.getItem('rc_sxrc_31e')){ localStorage.setItem('rc_sxrc_31e','1');
@@ -2580,7 +2580,7 @@ function rowHtml(r){
     if(p.side) prog='<span class="muted" title="'+esc(p.plan)+'" style="font-size:11.5px;font-weight:600">Trial · '+din+'d · one session a day · <u style="text-decoration-style:dotted;cursor:help">plan</u></span>';
     if(!held){
       act=(p.task?(p.one?sesBtn(r,1,'Session'):sesBtn(r,1)+sesBtn(r,2)):'')+
-        (p.dms?dmBtn(r):'')+trialBackBtn(r)+
+        (p.dms?dmBtn(r):'')+trialBackBtn(r)+(st==='comment'?rpChips(r):'')+
         (p.karma&&!can?'<button class="ses" onclick="setKarma(\''+id+'\')">'+IC.star+' Karma</button>':'')+
         (next&&can?'<button class="ses up" onclick="promote(\''+id+'\',\''+next.k+'\')" title="Promote to '+esc(next.n)+'">'+IC.up+' '+esc(next.n)+'</button>':'');
     }
@@ -2669,6 +2669,7 @@ function menuItems(r){
     if(isSX(r)){ it.push(['Posting assignment…',"sxAssignAsk('"+jsq(r.id)+"')",IC.tag]); it.push(['Back to the original SOP…',"sxConvert('"+jsq(r.id)+"',false)",IC.swap]); }
     else it.push(['Move to Suicidal Operation…',"sxConvert('"+jsq(r.id)+"',true)",IC.swap]);
   }
+  if(isAdmin() && !isDead(r) && r.status==='comment'){ var _rt=M(r).rtag||''; it.push(['Comment tag: '+(_rt?(_rt==='green'?'Green':'Yellow')+' → change':'none → set')+'…',"rpTagAsk('"+jsq(r.id)+"')",IC.tag]); }   // 19b
   if(!isDead(r)){
     it.push(['Update karma',"setKarma('"+jsq(r.id)+"')",IC.star]);
     it.push(['Edit details',"editRec('"+jsq(r.id)+"')",IC.edit]);
@@ -2840,7 +2841,7 @@ function cardHtml(r){
         (p.dms?dmBtn(r):'')+trialBackBtn(r)+
         (p.karma&&!can?'<button class="ses" onclick="setKarma(\''+jsq(r.id)+'\')">'+IC.star+' Karma</button>':'')+
         (next&&can?'<button class="ses up" onclick="promote(\''+jsq(r.id)+'\',\''+next.k+'\')">'+IC.up+' '+esc(upLbl)+'</button>':'')+
-      '</div>')+(!held && (isPostingStage(st)||pchkPending(r).length)?postsStrip(r):'');
+      '</div>')+(!held && st==='comment'?'<div class="acts">'+rpChips(r)+'</div>':'')+(!held && (isPostingStage(st)||pchkPending(r).length)?postsStrip(r):'');
   }
   if(held) body+='<div class="note i">'+IC.pause+' On hold today — owner is off and the client approved leaving it untouched.</div>';
   return '<div class="card acct'+(isDead(r)?' dim':'')+'" style="--sc:'+sm.c+'">'+head+chipsHtml(r, isAdmin())+body+'</div>';
@@ -4124,6 +4125,7 @@ async function sesStart(id, n){
   if(!(await karmaGate(r))) return;          // today's karma first — then the clock starts
   if(!(await phGate(r))) return;             // Oct 29: first session on this iPhone this shift → is its proxy working?
   tmStart(id,'s'+n); renderView();
+  if(r.status==='comment' && n<=2) rpGo(r, n);   // 19b: Reply Desk — this session's comment, sent to the VA's Telegram
 }
 /* Nov 5b: a warmed Suicidal account → Account setup, and its timer starts in the same tap */
 async function sxSetupGo(id){
@@ -4138,6 +4140,82 @@ async function sxCommentGo(id){
   if(tmOn() && !tmOneGate(id+'|s4')) return;   // one timer at a time — say so before the account moves
   var ok=await moveTo(r, 'sxcomment', { meta:JSON.stringify(Object.assign({}, M(r), { pstart:today() })) }, 'Commenting · '+r.handle);
   if(ok && tmOn()) await sesStart(id, 4);
+}
+/* ══ 19b · REPLY DESK — Comment Farm comments from the collector, sent to the VA's Telegram ══
+   Owner tags each Comment Farm account Green or Yellow (meta.rtag). Starting a session asks the backend for ONE ready-made
+   comment from that colour's newest batch; the Reddit Central bot DMs it (post + tap-to-copy comment + Posted button).
+   Not linked to Telegram yet → the same card opens here, with Link Telegram. */
+var RP={ by:{}, linked:null, at:0, busy:{} };
+setInterval(function(){ try{ if(document.hidden || !rpOn() || !(ROWS||[]).some(function(r){ return r.status==='comment'; })) return; rpLoad(false); }catch(e){} }, 90000);
+function rpOn(){ return !!(BE_BUILD && BE_BUILD>='rc-2026-11-19b'); }
+function rpKey(id, n){ return id+'|'+n; }
+async function rpLoad(force){
+  if(!rpOn() || !USER) return; if(!force && Date.now()-RP.at<60000) return; RP.at=Date.now();
+  try{ var d=await apiPost({ action:'rc_reply_mine' }); if(d && d.ok){ RP.linked=!!d.linked; RP.prog=d.progress||null; RP.by={}; (d.list||[]).forEach(function(a){ RP.by[rpKey(a.acct,a.ses)]=a; }); renderView(); } }catch(e){}
+}
+function rpTagAsk(id){
+  var r=rowById(id); if(!r) return; var cur=M(r).rtag||'';
+  openModal('<div class="md-h"><h3>Comment tag · u/'+esc(r.handle)+'</h3><p>Green and Yellow are run on different accounts. This account only ever gets comments for its colour\'s subreddits.</p></div>'+
+    '<div class="md-b"><div class="seg">'+[['green','Green'],['yellow','Yellow'],['','None']].map(function(x){ return '<button type="button" class="'+(cur===x[0]?'on':'')+'" onclick="rpTagSet(\''+jsq(id)+'\',\''+x[0]+'\')">'+x[1]+'</button>'; }).join('')+'</div></div>'+
+    '<div class="md-f"><button class="btn sec" onclick="closeModal()">Close</button></div>');
+}
+async function rpTagSet(id, v){ var r=rowById(id); if(!r) return; closeModal(); var ok=await saveMeta(r, { rtag:v||null }); toast(ok?('u/'+r.handle+' → '+(v?(v==='green'?'Green':'Yellow'):'no tag')):'Could not save — try again.'); renderView(); }
+function rpDot(g){ return '<i style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:0;background:'+(g==='green'?'#22a06b':'#e2b203')+'"></i>'; }
+function rpChips(r){
+  if(!rpOn()) return ''; var g=M(r).rtag||'', h='';
+  if(!g) return isAdmin()?'<button class="ses" onclick="rpTagAsk(\''+jsq(r.id)+'\')">Set comment tag</button>':'<span class="note i" style="font-size:11.5px">No comment tag yet — admin sets Green / Yellow</span>';
+  h+='<span class="ses" style="cursor:default;pointer-events:none">'+rpDot(g)+(g==='green'?'Green':'Yellow')+'</span>';
+  [1,2].forEach(function(n){ var a=RP.by[rpKey(r.id,String(n))]; if(!a) return;
+    h+=a.status==='posted'?'<button class="ses done" onclick="rpShow(\''+jsq(a.id)+'\')"><span class="bx">'+IC.check+'</span>S'+n+' comment · r/'+esc(a.sub)+'</button>'
+      :'<button class="ses go" onclick="rpShow(\''+jsq(a.id)+'\')">S'+n+' comment · r/'+esc(a.sub)+' <small>open</small></button>'; });
+  if(RP.linked===false) h+='<button class="ses" onclick="rpLink()">Link Telegram</button>';
+  return h;
+}
+function rpFind(aid){ for(var k in RP.by) if(RP.by[k].id===aid) return RP.by[k]; return null; }
+async function rpGo(r, n){
+  if(!rpOn()) return; var g=M(r).rtag||'';
+  if(!g){ toast('This account has no Green / Yellow tag yet — ask the admin. No comment was assigned.'); return; }
+  var k=rpKey(r.id,String(n)); if(RP.busy[k]) return; RP.busy[k]=1;
+  try{ var d=await apiPost({ action:'rc_reply_next', id:r.id, handle:r.handle, grp:g, ses:String(n) });
+    if(!d || !d.ok){ toast((d&&d.message)||'Could not get a comment ('+((d&&d.error)||'network')+').'); return; }
+    RP.by[k]=d.a; RP.linked=!!d.a.linked; renderView();
+    if(d.a.linked && d.a.sent) toast('Your comment for u/'+r.handle+' is in Telegram — r/'+d.a.sub+'.');
+    else rpShow(d.a.id);
+  } catch(e){ toast('Could not get a comment — check the connection.'); }
+  finally{ delete RP.busy[k]; }
+}
+function rpShow(aid){
+  var a=rpFind(aid); if(!a) return; var posted=a.status==='posted';
+  openModal('<div class="md-h"><h3>'+rpDot(a.grp)+'Comment · u/'+esc(a.handle)+' · Session '+esc(a.ses)+'</h3><p>r/'+esc(a.sub)+(a.title?' — '+esc(a.title):'')+'</p></div>'+
+    '<div class="md-b">'+
+      '<div class="fld"><label>The post</label><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn sec" href="'+esc(a.link)+'">Open in Reddit app</a><button class="btn sec" onclick="phCopy(this,\''+jsq(a.link)+'\')">Copy link</button></div></div>'+
+      '<div class="fld"><label>Comment to post</label><div style="white-space:pre-wrap;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.45">'+esc(a.comment||'(comment not found — press Skip)')+'</div>'+
+        '<div style="margin-top:8px"><button class="btn sec" onclick="phCopy(this,\''+jsq(a.comment||'')+'\')">Copy comment</button></div></div>'+
+      (RP.linked?'<div class="hint">Also sent to your Telegram'+(a.sent?'':' — not delivered; press Resend')+'.</div>':'<div class="hint">Link Telegram once and every comment arrives on your phone — tap to copy, tap the post, paste.</div>')+
+    '</div>'+
+    '<div class="md-f">'+(posted?'<span class="muted" style="margin-right:auto">Posted ✓ '+esc(String(a.posted_at||'').slice(11,16))+'</span>':'<button class="btn sec" style="margin-right:auto" onclick="rpSkip(\''+jsq(a.id)+'\')" title="The post is deleted, locked or the comment doesn\'t fit">Skip — post gone</button>')+
+      (RP.linked?(!posted?'<button class="btn sec" onclick="rpResend(\''+jsq(a.id)+'\')">Resend</button>':''):'<button class="btn sec" onclick="rpLink()">Link Telegram</button>')+
+      (posted?'<button class="btn pri" onclick="closeModal()">Close</button>':'<button class="btn pri" onclick="rpPosted(\''+jsq(a.id)+'\',this)">Posted</button>')+'</div>');
+}
+async function rpPosted(aid, btn){ var a=rpFind(aid); if(!a) return; if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  var d=null; try{ d=await apiPost({ action:'rc_reply_posted', id:aid }); }catch(e){}
+  if(d && d.ok){ a.status='posted'; a.posted_at=phtStamp(); closeModal(); renderView(); toast('Marked posted.'); } else { if(btn){ btn.disabled=false; btn.textContent='Posted'; } toast('Could not save — try again.'); } }
+async function rpSkip(aid){ var a=rpFind(aid); if(!a) return; var why=prompt('What is wrong with this post? (deleted, locked, comment doesn\'t fit…)',''); if(why===null) return;
+  var d=null; try{ d=await apiPost({ action:'rc_reply_skip', id:aid, why:why }); }catch(e){}
+  if(d && d.ok){ RP.by[rpKey(d.a.acct,d.a.ses)]=d.a; RP.linked=!!d.a.linked; closeModal(); renderView(); if(d.a.linked && d.a.sent) toast('A new comment is in your Telegram — r/'+d.a.sub+'.'); else rpShow(d.a.id); }
+  else toast((d&&d.message)||'Could not get a new one.'); }
+async function rpResend(aid){ var a=rpFind(aid); if(!a) return; var r=rowById(a.acct)||{ id:a.acct, handle:a.handle };
+  var d=null; try{ d=await apiPost({ action:'rc_reply_next', id:a.acct, handle:a.handle, grp:a.grp, ses:a.ses, resend:'1' }); }catch(e){}
+  if(d && d.ok){ RP.by[rpKey(a.acct,a.ses)]=d.a; toast(d.a.sent?'Sent again — check Telegram.':'Telegram did not take it — is your chat with the bot still open?'); closeModal(); renderView(); } else toast('Could not resend.'); }
+async function rpLink(){
+  var d=null; try{ d=await apiPost({ action:'rc_tg_link' }); }catch(e){}
+  if(!d || !d.ok){ toast((d&&d.message)||'Telegram linking is not available.'); return; }
+  try{ window.open(d.url, '_blank'); }catch(e){}
+  openModal('<div class="md-h"><h3>Link your Telegram</h3><p>Telegram opens the Reddit Central bot (@'+esc(d.bot)+'). Press <b>Start</b> there — that\'s it.</p></div>'+
+    '<div class="md-b"><div class="fld"><label>Didn\'t open? Open this on your phone</label><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn sec" href="'+esc(d.url)+'" target="_blank" rel="noopener">Open Telegram</a><button class="btn sec" onclick="phCopy(this,\''+jsq(d.url)+'\')">Copy link</button></div></div>'+
+    '<div class="hint" id="rp-lk">Waiting for Start… (the link works for 30 minutes)</div></div>'+
+    '<div class="md-f"><button class="btn sec" onclick="closeModal()">Close</button></div>');
+  var t0=Date.now(); (function poll(){ if(Date.now()-t0>180000) return; setTimeout(async function(){ RP.at=0; await rpLoad(true); var el=$('rp-lk'); if(RP.linked){ if(el) el.textContent='Linked ✓ — your comments will arrive in Telegram.'; return; } if(el) poll(); }, 5000); })();
 }
 function sesLbl(k){ k=String(k||''); return k==='s3'?'Account setup':(k==='s4'?'Commenting':(k==='dm'?'DMs':'Session '+k.replace(/^s/,''))); }   // Nov 5b · 6a
 function tmCancel(id, k){ var o=tmAll(); delete o[id+'|'+k]; tmPut(o); renderView(); toast('Timer cancelled — nothing was recorded.'); }
