@@ -4195,13 +4195,45 @@ async function rpGo(r, n){
   if(!g){ if(rpCanTag(r)) rpTagAsk(r.id, n); else toast('This account has no Green / Yellow tag yet — no comment was assigned.'); return; }
   var k=rpKey(r.id,String(n)); if(RP.busy[k]) return; RP.busy[k]=1;
   try{ var d=await apiPost({ action:'rc_reply_next', id:r.id, handle:r.handle, grp:g, ses:String(n) });
-    if(!d || !d.ok){ toast((d&&d.message)||'Could not get a comment ('+((d&&d.error)||'network')+').'); return; }
+    if(!d || !d.ok){ if(d && (d.error==='GOOGLE_LIMIT'||d.error==='SERVER')){ await rpLocal(r, n, g); return; } toast((d&&d.message)||'Could not get a comment ('+((d&&d.error)||'network')+').'); return; }
     rpPutAll(d); RP.linked=!!d.a.linked; renderView();
     var L=(d.list&&d.list.length)?d.list:[d.a], subs=L.map(function(x){ return 'r/'+x.sub; }).join(' + ');
     if(d.a.linked && L.every(function(x){ return x.sent; })) toast((L.length>1?'Your 2 comments':'Your comment')+' for u/'+r.handle+' are in Telegram — '+subs+'.'+(d.partial?' '+d.partial:''));
     else { rpShow(L.filter(function(x){ return x.status!=='posted'; }).concat(L)[0].id); if(d.partial) toast(d.partial); }
-  } catch(e){ toast('Could not get a comment — check the connection.'); }
+  } catch(e){ try{ await rpLocal(r, n, g); }catch(_l){ toast('Could not get a comment — check the connection.'); } }
   finally{ delete RP.busy[k]; }
+}
+/* Nov 21 · BACKUP MODE — when the Reddit Central server can't fetch comments (Google's daily limit / Telegram down), the page
+   picks the comments itself straight from the comment list (Supabase): two fresh posts in two different subreddits, none
+   already posted, none this account already got today. No Telegram — the comment shows here with Copy comment / Open post;
+   Posted saves it to the same "done" list the server uses, so nobody gets it again. */
+async function rpLocal(r, n, g){
+  var maxH=12, cut=new Date(Date.now()-maxH*3600000).toISOString(), day=phtStamp().slice(0,10);
+  var lk='rpl_'+r.id+'_'+day, mine={}; try{ mine=JSON.parse(localStorage.getItem(lk)||'{}')||{}; }catch(_j){ mine={}; }
+  var have=(mine[String(n)]||[]).map(function(x){ x.local=true; return x; }).filter(function(x){ return x && x.post_id; });
+  if(have.length){ have.forEach(rpPut); renderView(); rpShow(have.filter(function(x){ return x.status!=='posted'; }).concat(have)[0].id); toast('Backup mode — the comments are here (Telegram is down). Copy, post, then tap Posted.'); return; }
+  var posts=await sbGet('rc_reply_posts?select=id,subreddit,title,app_link,comment_1,comment_2,sort_no&grp=eq.'+encodeURIComponent(g)+'&active=is.true&posted_at=gte.'+encodeURIComponent(cut)+'&order=sort_no.asc&limit=300');
+  if(!Array.isArray(posts) || !posts.length){ toast('No fresh '+g+' comments right now — tell your lead a new list is needed.'); return; }
+  var done={}, ids=posts.map(function(p){ return p.id; });
+  for(var i=0;i<ids.length;i+=100){ var dd=await sbGet('rc_reply_done?select=post_id,slot&post_id=in.('+ids.slice(i,i+100).map(encodeURIComponent).join(',')+')'); (dd||[]).forEach(function(x){ done[x.post_id+'|'+x.slot]=1; }); }
+  var usedSub={}, usedPost={}; Object.keys(mine).forEach(function(k){ (mine[k]||[]).forEach(function(x){ usedSub[String(x.sub).toLowerCase()]=1; usedPost[x.post_id]=1; }); });
+  var cand=[]; posts.forEach(function(p){ if(usedPost[p.id]) return; for(var s2=1;s2<=2;s2++){ var c=s2===2?p.comment_2:p.comment_1; if(c && !done[p.id+'|'+s2]) cand.push({ p:p, slot:s2, c:c }); } });
+  for(var j=cand.length-1;j>0;j--){ var q=Math.floor(Math.random()*(j+1)), t=cand[j]; cand[j]=cand[q]; cand[q]=t; }   // shuffle so two VAs rarely pick the same one
+  var pick=[], subs={};
+  [true,false].forEach(function(strict){ cand.forEach(function(x){ if(pick.length>=2) return; var sl=String(x.p.subreddit).toLowerCase(); if(subs[sl]) return; if(strict && usedSub[sl]) return; if(pick.some(function(y){ return y.p.id===x.p.id; })) return; subs[sl]=1; pick.push(x); }); });
+  if(!pick.length){ toast('Every fresh '+g+' comment is taken — tell your lead a new list is needed.'); return; }
+  var L=pick.map(function(x,i){ return { id:'L'+Date.now().toString(36)+i, acct:r.id, handle:r.handle, ses:String(n), part:i+1, grp:g, sub:x.p.subreddit, post_id:x.p.id, slot:x.slot, status:'sent', posted_at:'', sent:false, title:x.p.title, link:x.p.app_link, comment:x.c, local:true }; });
+  mine[String(n)]=L; try{ localStorage.setItem(lk, JSON.stringify(mine)); }catch(_s){}
+  L.forEach(rpPut); renderView(); rpShow(L[0].id);
+  toast('Backup mode — Telegram is down, so your '+(L.length>1?'2 comments are':'comment is')+' here: r/'+L.map(function(x){ return x.sub; }).join(' + r/')+'. Copy, post, then tap Posted.');
+}
+async function rpLocalPosted(a){
+  try{ var res=await fetch(SB_URL+'/rest/v1/rc_reply_done', { method:'POST', headers:{ apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json', Prefer:'return=minimal' },
+      body:JSON.stringify({ post_id:a.post_id, slot:Number(a.slot), employee_id:String((USER&&USER.id)||'').toUpperCase(), done_at:new Date().toISOString() }) });
+    if(!res.ok && res.status!==409) return false; }catch(e){ return false; }
+  a.status='posted'; a.posted_at=phtStamp();
+  try{ var lk='rpl_'+a.acct+'_'+phtStamp().slice(0,10), mine=JSON.parse(localStorage.getItem(lk)||'{}')||{}; (mine[String(a.ses)]||[]).forEach(function(x){ if(x.id===a.id){ x.status='posted'; x.posted_at=a.posted_at; } }); localStorage.setItem(lk, JSON.stringify(mine)); }catch(_s){}
+  return true;
 }
 function rpShow(aid){
   var a=rpFind(aid); if(!a) return; var posted=a.status==='posted';
@@ -4210,13 +4242,14 @@ function rpShow(aid){
       '<div class="fld"><label>The post</label><div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn sec" href="'+esc(a.link)+'">Open in Reddit app</a><button class="btn sec" onclick="phCopy(this,\''+jsq(a.link)+'\')">Copy link</button></div></div>'+
       '<div class="fld"><label>Comment to post</label><div style="white-space:pre-wrap;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.45">'+esc(a.comment||'(comment not found — press Skip)')+'</div>'+
         '<div style="margin-top:8px"><button class="btn sec" onclick="phCopy(this,\''+jsq(a.comment||'')+'\')">Copy comment</button></div></div>'+
-      (RP.linked?'<div class="hint">Also sent to your Telegram'+(a.sent?'':' — not delivered; press Resend')+'.</div>':'<div class="hint">Link Telegram once and every comment arrives on your phone — tap to copy, tap the post, paste.</div>')+
+      (a.local?'<div class="hint">Backup mode — Telegram is down right now, so this comment is only here. Copy it, post it on the iPhone signed in as u/'+esc(a.handle)+', then tap Posted. Other comments in this session: open the account again.</div>':RP.linked?'<div class="hint">Also sent to your Telegram'+(a.sent?'':' — not delivered; press Resend')+'.</div>':'<div class="hint">Link Telegram once and every comment arrives on your phone — tap to copy, tap the post, paste.</div>')+
     '</div>'+
-    '<div class="md-f">'+(posted?'<span class="muted" style="margin-right:auto">Posted ✓ '+esc(String(a.posted_at||'').slice(11,16))+'</span>':'<button class="btn sec" style="margin-right:auto" onclick="rpSkip(\''+jsq(a.id)+'\')" title="The post is deleted, locked or the comment doesn\'t fit">Skip — post gone</button>')+
-      (RP.linked?(!posted?'<button class="btn sec" onclick="rpResend(\''+jsq(a.id)+'\')">Resend</button>':''):'<button class="btn sec" onclick="rpLink()">Link Telegram</button>')+
+    '<div class="md-f">'+(posted?'<span class="muted" style="margin-right:auto">Posted ✓ '+esc(String(a.posted_at||'').slice(11,16))+'</span>':a.local?'<span style="margin-right:auto"></span>':'<button class="btn sec" style="margin-right:auto" onclick="rpSkip(\''+jsq(a.id)+'\')" title="The post is deleted, locked or the comment doesn\'t fit">Skip — post gone</button>')+
+      (a.local?'':RP.linked?(!posted?'<button class="btn sec" onclick="rpResend(\''+jsq(a.id)+'\')">Resend</button>':''):'<button class="btn sec" onclick="rpLink()">Link Telegram</button>')+
       (posted?'<button class="btn pri" onclick="closeModal()">Close</button>':'<button class="btn pri" onclick="rpPosted(\''+jsq(a.id)+'\',this)">Posted</button>')+'</div>');
 }
 async function rpPosted(aid, btn){ var a=rpFind(aid); if(!a) return; if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
+  if(a.local){ var okL=await rpLocalPosted(a); if(okL){ closeModal(); renderView(); toast('Marked posted.'); } else { if(btn){ btn.disabled=false; btn.textContent='Posted'; } toast('Could not save — try again.'); } return; }
   var d=null; try{ d=await apiPost({ action:'rc_reply_posted', id:aid }); }catch(e){}
   if(d && d.ok){ a.status='posted'; a.posted_at=phtStamp(); closeModal(); renderView(); toast('Marked posted.'); } else { if(btn){ btn.disabled=false; btn.textContent='Posted'; } toast('Could not save — try again.'); } }
 async function rpSkip(aid){ var a=rpFind(aid); if(!a) return; var why=prompt('What is wrong with this post? (deleted, locked, comment doesn\'t fit…)',''); if(why===null) return;
