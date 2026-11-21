@@ -8794,6 +8794,8 @@ var PWB=(function(){
   var last=0;
   function ping(){ var n=Date.now(); if(n-last<8000) return; last=n; try{ window.parent.postMessage({ jmbTool:'activity', tool:TOOL }, PORTAL); }catch(e){} }
   ['pointerdown','touchstart','touchmove','keydown','wheel','input','change'].forEach(function(ev){ try{ document.addEventListener(ev, ping, { passive:true, capture:true }); }catch(e){} });
+  /* Nov 21: Alt+S inside the tool slims / restores the portal side of Side by side (keys typed here never reach the portal) */
+  try{ document.addEventListener('keydown', function(e){ if(e.altKey && !e.ctrlKey && !e.metaKey && (e.code==='KeyS' || String(e.key).toLowerCase()==='s')){ e.preventDefault(); try{ window.parent.postMessage({ jmbTool:'hotkey', k:'s', tool:TOOL }, PORTAL); }catch(_){} } }, true); }catch(e){}
   var waiters=[];
   window.addEventListener('message', function(ev){
     if(ev.origin!==PORTAL || ev.source!==window.parent) return;
