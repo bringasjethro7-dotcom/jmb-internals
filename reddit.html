@@ -5697,7 +5697,10 @@ async function pqAutoFill(){
     try{ localStorage.setItem('rc_qa_auto2_'+y2,'1'); }catch(e){}
   }
   PQ.day=keep; PQ.key=''; PQ.st=null; if(VIEW==='prod') pqLoad(true);
-  if(total) toast('QA filled automatically for '+total+' VA-day'+(total===1?'':'s')+' — Productivity & QA to change any.');
+  if(total){ toast('QA filled automatically for '+total+' VA-day'+(total===1?'':'s')+' — Productivity & QA to change any.');
+    /* Nov 24: send the newly filled QA to the portal scorecard straight away (was: only at the next day close). */
+    var mos={}; days.forEach(function(d){ mos[d.slice(0,7)]=1; });
+    Object.keys(mos).forEach(function(m){ api({ action:'rc_sc_publish', by:USER.id, month:m }).catch(function(){}); }); }
 }
 
 async function doSession(id, n, btn){

@@ -6963,6 +6963,25 @@ var HUB=(function(){
     }catch(e){ toast('Connection error.'); }
     S.scBusy=false; if(S.view==='scores') renderScores($('main'));
   }
+  /* AUTO-PUBLISH (Jeth, Nov 23): the owner no longer has to press Publish — whenever the owner has the hub open, every
+     client's scores for this month (and last month during the first 3 days) go to the portal scorecard by themselves,
+     at most once every 3 hours. Same rows and same sc_ext_save as the Publish button, without the confirm box. */
+  async function scAutoPublish(){
+    try{
+      if(!isOwner() || S.scBusy) return;
+      var t=today(), months=[t.slice(0,7)];
+      if(+t.slice(8,10)<=3){ var y=+t.slice(0,4), m=+t.slice(5,7)-1; if(m<1){ m=12; y--; } months.push(y+'-'+(m<10?'0':'')+m); }
+      for(var i=0;i<months.length;i++){
+        var mo=months[i], key='hub_sc_auto_'+mo, last=0; try{ last=+localStorage.getItem(key)||0; }catch(_l){}
+        if(Date.now()-last < 3*3600*1000) continue;
+        var rows=[]; Object.keys(SCX).filter(function(k){ return MODS[k] && clientById(k); }).forEach(function(k){ scRows(k, mo).forEach(function(r){ rows.push({ employee_id:String(r.emp).toUpperCase(), month:mo, source:SCX[k], productivity:r.prod, quality:r.qa, results:r.res, detail:{ days:r.days, why:r.why, from:'Client Hub (auto)' } }); }); });
+        if(!rows.length) continue;
+        var d=await jFetch(API+'?action=sc_ext_save&month='+encodeURIComponent(mo)+'&by=client-hub&rows='+encodeURIComponent(JSON.stringify(rows))+'&_='+Date.now(), 0);
+        if(d && d.ok){ try{ localStorage.setItem(key, String(Date.now())); }catch(_s){} await scLoadPub(mo, true); if(S.view==='scores') renderScores($('main')); }
+      }
+    }catch(e){}
+  }
+  setTimeout(scAutoPublish, 60000); setInterval(scAutoPublish, 30*60000);
   function scSetMonth(m){ S.scMonth=m; renderScores($('main')); }
   async function scRefresh(){ toast('Reading the boards…'); loadAll(); await scLoadPub(S.scMonth||today().slice(0,7), true); setTimeout(function(){ if(S.view==='scores') renderScores($('main')); }, 2500); }
   function renderTeam(main){
