@@ -2275,7 +2275,7 @@ var DS=(function(){
       if(p.slice(0,7)===month){ o.pub++; o.days[p.slice(0,10)]=1; }
       else if(['waiting','editing','drive','shopify'].indexOf(r.status)>=0) o.open++; });
     return Object.keys(per).filter(function(k){ return OWNER_IDS.indexOf(k.toUpperCase())<0 && per[k].pub+per[k].open>0; }).map(function(k){ var o=per[k];
-      return { emp:k.toUpperCase(), days:Object.keys(o.days).length, prod:null, qa:null, res:hubR1(o.pub/(o.pub+o.open)*100),
+      return { emp:k.toUpperCase(), days:Object.keys(o.days).length, prod:null, qa:null, res:(o.pub+o.open)>=3?hubR1(o.pub/(o.pub+o.open)*100):null,
         why:{ prod:'not measured here', qa:'not measured here', res:o.pub+' published this month · '+o.open+' still in the pipeline' } }; });
   }
   return { id:'design-shopify', S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners, monthScores:monthScores,
@@ -3729,8 +3729,32 @@ function IGPhones(CFG){
      Productivity = plan steps done ÷ due on the phones each VA opened (the QA tab's own numbers), over the month.
      QA = the QA tab's day score ×10, averaged over the days they worked. Results = account survival: of the accounts on
      their phones that existed this month, the share not banned or restricted (at least 3 accounts). */
+  /* Nov 24 (Jeth: "productivity is the pace on the assigned task, not the count"): every timed wave (one account's
+     warm-up + Reels in one timer) is judged against the team's normal time per wave this month — 80–120% of it = 100,
+     faster falls to 0 at 40% (rushed), slower to 0 at 200% (dragged). Needs 10+ waves on the board; until then the old
+     steps-done rate stands in. */
+  function paceMonth(month){
+    var from=month+'-01', end=hubMonthEnd(month), runs=[];
+    accts().forEach(function(a){ var lg=a.meta.log||{}; Object.keys(lg).forEach(function(d){ if(d<from||d>end) return; var w=(lg[d]||{}).wave; if(!w||!(+w.secs>0)) return;
+      var n=Math.max(1, +w.n||1); runs.push({ by:String(w.by||'').toUpperCase(), per:(+w.secs)/n, n:n }); }); });
+    var vals=runs.map(function(r){ return r.per; }).sort(function(x,y){ return x-y; });
+    var req=vals.length>=10?vals[Math.floor((vals.length-1)/2)]:null, by={};
+    if(req) runs.forEach(function(r){ if(!r.by) return; var x=r.per/req, sc=(x>=0.8&&x<=1.2)?100:(x<0.8?Math.max(0,100*(x-0.4)/0.4):Math.max(0,100*(2-x)/0.8));
+      var o=by[r.by]=by[r.by]||{ w:0, s:0, on:0, fast:0, slow:0 }; o.w+=r.n; o.s+=sc*r.n; if(sc===100) o.on+=r.n; else if(x<1) o.fast+=r.n; else o.slow+=r.n; });
+    return { req:req, n:vals.length, by:by };
+  }
+  /* Nov 24 (Jeth): Results must be earned, not handed out. Each VA's followers gained per account-week is placed against
+     the team: team average = 85, best = 100, worst = 60. Fewer than 3 account-weeks = not scored yet (blank, never a free 100). */
+  function growthTeam(month){
+    var L={}; owners().forEach(function(e){ var lc=String(e).toLowerCase(); var g=growthMonth(lc, month); if(g.n>=3) L[lc]={ n:g.n, per:g.gained/g.n }; });
+    var v=Object.keys(L).map(function(k){ return L[k].per; }), tot=0, nn=0; Object.keys(L).forEach(function(k){ tot+=L[k].per*L[k].n; nn+=L[k].n; });
+    return { L:L, avg:nn?tot/nn:null, hi:v.length?Math.max.apply(null,v):null, lo:v.length?Math.min.apply(null,v):null };
+  }
+  function growthSpread(T, lc){ var me=T.L[lc]; if(!me || T.avg===null) return null; var x=me.per, t=T.avg, sc;
+    if(x>=t) sc=(T.hi>t)?85+15*(x-t)/(T.hi-t):100; else sc=(T.lo<t)?85-25*(t-x)/(t-T.lo):85;
+    return hubR1(Math.max(60, Math.min(100, sc))); }
   function monthScores(month){
-    var from=month+'-01', end=hubMonthEnd(month), per={};
+    var from=month+'-01', end=hubMonthEnd(month), per={}, PM=paceMonth(month), GT=(RES && month>='2026-11')?growthTeam(month):null;
     for(var d=from; d<=end; d=hubDayAdd(d,1)){
       qaRows(d).forEach(function(r){ var o=per[r.emp]=per[r.emp]||{ days:0, due:0, done:0, qa:[] }; o.days++; o.due+=r.due; o.done+=r.done; o.qa.push(r.score); });
     }
@@ -3739,12 +3763,14 @@ function IGPhones(CFG){
       var mine=accts().filter(function(a){ var p=rowById(a.meta.phone); return (ownerOf(a)===lc || (p && ownerOf(p)===lc)) && String(a.meta.start||'')<=end; });
       var alive=mine.filter(function(a){ return a.status!=='banned' && a.status!=='restricted'; }).length, q=hubAvg(o.qa);
       var res=mine.length>=3?hubR1(alive/mine.length*100):null, rwhy=alive+' of '+mine.length+' accounts still up';
-      if(RES && month>='2026-11'){ var gm=growthMonth(lc, month);
-        /* Nov 11 (Jeth: scores missing): growth needs two weeks of daily logs — until then account survival stands in */
-        if(gm.n){ res=hubR1(gm.pts/gm.n*100); rwhy=gm.n+' account-weeks · '+gm.grew+' grew followers (+'+fmtN(gm.gained)+') · '+gm.vUp+' reel views up'; }
-        else rwhy=rwhy+' (growth scoring starts once two weeks of daily logs exist)'; }
-      return { emp:k, days:o.days, prod:o.due?hubR1(Math.min(100, o.done/o.due*100)):null, qa:q===null?null:hubR1(q*10), res:res,
-        why:{ prod:o.done+' of '+o.due+' planned steps', qa:o.qa.length+' day'+(o.qa.length===1?'':'s')+' scored by the QA rules', res:rwhy } };
+      if(GT){ var gm=growthMonth(lc, month), sp=growthSpread(GT, lc);
+        res=sp; rwhy=gm.n>=3?(gm.n+' account-weeks · +'+fmtN(gm.gained)+' followers ('+fmtN(gm.n?gm.gained/gm.n:0)+' per account-week vs team '+fmtN(GT.avg||0)+')')
+          :('not scored yet — '+gm.n+' account-week'+(gm.n===1?'':'s')+' of follower logs (needs 3)'); }
+      var pc=PM.req?PM.by[String(k).toUpperCase()]:null, prod, pwhy;
+      if(pc && pc.w){ prod=hubR1(pc.s/pc.w); pwhy=pc.w+' wave'+(pc.w===1?'':'s')+' vs the normal '+Math.round(PM.req/60)+' min: '+pc.on+' on pace · '+pc.fast+' too fast · '+pc.slow+' too slow'; }
+      else { prod=o.due?hubR1(Math.min(100, o.done/o.due*100)):null; pwhy=o.done+' of '+o.due+' planned steps (no timed waves to judge the pace yet)'; }
+      return { emp:k, days:o.days, prod:prod, qa:q===null?null:hubR1(q*10), res:res,
+        why:{ prod:pwhy, qa:o.qa.length+' day'+(o.qa.length===1?'':'s')+' scored by the QA rules', res:rwhy } };
     });
   }
   var api={ id:CID, ns:NS, px:PX, name:PROJECT, tmQuiet:tmQuiet, S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners, monthScores:monthScores,
@@ -6904,7 +6930,7 @@ var HUB=(function(){
      and Publish sends them to the portal scorecard (sc_ext_save), the way Reddit Central and ALTR Studio already do. The
      portal blends each client by the VA's hours on it. A number a board can't measure stays blank, so the portal keeps
      its own for that part. ═══ */
-  var SCX={ imperium:'imperium', slaybae:'slaybae', project2:'p2', threads:'threads', ember:'ember', 'design-shopify':'torchlight', meadow:'meadow' };   // Nov 11: + Meadow (TikTok outreach)
+  var SCX={ imperium:'imperium', slaybae:'slaybae', project2:'p2', threads:'threads', ember:'ember', 'design-shopify':'torchlight' };   // Nov 24: Meadow withdrawn (client ended) — no longer scored   // Nov 11: + Meadow (TikTok outreach)
   var SCX_RULE={
     imperium:'Productivity: plan steps done ÷ due on the phones they opened. QA: the QA tab\'s day score, averaged. Results: share of their accounts not banned or restricted.',
     slaybae:'Productivity: plan steps done ÷ due on the phones they opened. QA: the QA tab\'s day score, averaged. Results: share of their accounts not banned or restricted.',

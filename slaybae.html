@@ -1745,6 +1745,15 @@ function actKey(){ return 'hub_act_'+myId()+'_'+phtToday(); }
 function actToday(){ try{ return parseInt(localStorage.getItem(actKey())||'0',10)||0; }catch(e){ return 0; } }
 function actBump(){ var was=ACT.last; ACT.last=Date.now(); if(Date.now()-was>60000){ try{ tbSend(false); }catch(e){} } }
 ['click','keydown','pointerdown','touchstart','scroll','wheel'].forEach(function(ev){ try{ document.addEventListener(ev, actBump, { passive:true, capture:true }); }catch(e){} });
+/* Nov 12 (Florence, via Jeth): the "still working?" box kept popping up while the portal timer ran fine. It is now skipped
+   when BOTH hold: the portal timer is running on this client (fresh presence) AND the VA really used this tab (click, key,
+   scroll) in the last 30 min. REAL only moves on real input, never from a timer tick — an idle laptop still gets the box. */
+var REAL={ at:Date.now() };
+['click','keydown','pointerdown','touchstart','wheel'].forEach(function(ev){ try{ document.addEventListener(ev, function(){ REAL.at=Date.now(); }, { passive:true, capture:true }); }catch(e){} });
+function hubSkipAsk(cid){
+  try{ if(Date.now()-REAL.at>30*60000) return false; var cl=cid?clientById(cid):HUB.cur(); if(!cl) return false;
+    return linkState(LINK.me, cl).k==='ok'; }catch(e){ return false; }
+}
 setInterval(function(){ try{ if(!USER || isOwner()) return; if(!hubWorking()) return; localStorage.setItem(actKey(), String(actToday()+15)); }catch(e){} }, 15000);
 var TB={ sent:0, off:0, ext:true, openSent:0 };
 /* work → last_active. Without the pairing columns (old table) plain activity still counts, or nobody could pair. */
@@ -1877,7 +1886,7 @@ function htTick(){
   var R=HT.run; if(!R){ if(HT.tick){ clearInterval(HT.tick); HT.tick=null; } return; }
   var now=Date.now(); if(!document.hidden) try{ ACT.last=now; }catch(e){}
   if(now-(R.seen||0)>=30000){ R.seen=now; htSave(); }
-  if(!HT.ask){ if(now-(R.chk||R.start)>=HT_LIM) htAskOpen(); }
+  if(!HT.ask){ if(now-(R.chk||R.start)>=HT_LIM){ if(hubSkipAsk(R.cid)){ R.chk=now; htSave(); try{ tbSend(true); }catch(_s){} } else htAskOpen(); } }
   else if(now-HT.ask.at>=HT_ASK){ htAskClose(); HT.run=null; htSave(); try{ toast('Work timer stopped — no answer to “still working?”.'); }catch(e){} try{ tbSend(true); }catch(e){} htPaint(); return; }
   var c=$('ht-clk'); if(c) c.textContent=htClock(now-R.start);
 }
@@ -2320,7 +2329,7 @@ var DS=(function(){
       if(p.slice(0,7)===month){ o.pub++; o.days[p.slice(0,10)]=1; }
       else if(['waiting','editing','drive','shopify'].indexOf(r.status)>=0) o.open++; });
     return Object.keys(per).filter(function(k){ return OWNER_IDS.indexOf(k.toUpperCase())<0 && per[k].pub+per[k].open>0; }).map(function(k){ var o=per[k];
-      return { emp:k.toUpperCase(), days:Object.keys(o.days).length, prod:null, qa:null, res:hubR1(o.pub/(o.pub+o.open)*100),
+      return { emp:k.toUpperCase(), days:Object.keys(o.days).length, prod:null, qa:null, res:(o.pub+o.open)>=3?hubR1(o.pub/(o.pub+o.open)*100):null,
         why:{ prod:'not measured here', qa:'not measured here', res:o.pub+' published this month · '+o.open+' still in the pipeline' } }; });
   }
   return { id:'design-shopify', S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners, monthScores:monthScores,
@@ -2610,7 +2619,7 @@ function IGPhones(CFG){
       } else if(!TM.ask){
         if(!document.hidden) try{ ACT.last=now; }catch(_a){}
         if(R.k==='wave' && !R.sc && now-R.start>=SCROLL_MS && now>=(R.scTry||0)){ R.sc=1; R.scTry=now+15000; tmSave(); waveScroll(R); }
-        if(now-(R.chk||R.start) >= (TLIM[R.k]||20)*60000) tmAskOpen();
+        if(now-(R.chk||R.start) >= (TLIM[R.k]||20)*60000){ if(hubSkipAsk(CID)){ R.chk=now; tmSave(); } else tmAskOpen(); }
       } else if(now-TM.ask.at >= ASK_MS){
         var lbl=tmLabel(R), askAt=TM.ask.at; tmAskClose(); TM.run=null; tmSave(); if(R.k==='wave') waveRecord(R, askAt); try{ toast('Timer stopped — no answer to “still working?” ('+lbl+').'); }catch(e){} try{ tbSend(true); }catch(e){} tmPaint(true); return;
       }
@@ -3774,8 +3783,32 @@ function IGPhones(CFG){
      Productivity = plan steps done ÷ due on the phones each VA opened (the QA tab's own numbers), over the month.
      QA = the QA tab's day score ×10, averaged over the days they worked. Results = account survival: of the accounts on
      their phones that existed this month, the share not banned or restricted (at least 3 accounts). */
+  /* Nov 24 (Jeth: "productivity is the pace on the assigned task, not the count"): every timed wave (one account's
+     warm-up + Reels in one timer) is judged against the team's normal time per wave this month — 80–120% of it = 100,
+     faster falls to 0 at 40% (rushed), slower to 0 at 200% (dragged). Needs 10+ waves on the board; until then the old
+     steps-done rate stands in. */
+  function paceMonth(month){
+    var from=month+'-01', end=hubMonthEnd(month), runs=[];
+    accts().forEach(function(a){ var lg=a.meta.log||{}; Object.keys(lg).forEach(function(d){ if(d<from||d>end) return; var w=(lg[d]||{}).wave; if(!w||!(+w.secs>0)) return;
+      var n=Math.max(1, +w.n||1); runs.push({ by:String(w.by||'').toUpperCase(), per:(+w.secs)/n, n:n }); }); });
+    var vals=runs.map(function(r){ return r.per; }).sort(function(x,y){ return x-y; });
+    var req=vals.length>=10?vals[Math.floor((vals.length-1)/2)]:null, by={};
+    if(req) runs.forEach(function(r){ if(!r.by) return; var x=r.per/req, sc=(x>=0.8&&x<=1.2)?100:(x<0.8?Math.max(0,100*(x-0.4)/0.4):Math.max(0,100*(2-x)/0.8));
+      var o=by[r.by]=by[r.by]||{ w:0, s:0, on:0, fast:0, slow:0 }; o.w+=r.n; o.s+=sc*r.n; if(sc===100) o.on+=r.n; else if(x<1) o.fast+=r.n; else o.slow+=r.n; });
+    return { req:req, n:vals.length, by:by };
+  }
+  /* Nov 24 (Jeth): Results must be earned, not handed out. Each VA's followers gained per account-week is placed against
+     the team: team average = 85, best = 100, worst = 60. Fewer than 3 account-weeks = not scored yet (blank, never a free 100). */
+  function growthTeam(month){
+    var L={}; owners().forEach(function(e){ var lc=String(e).toLowerCase(); var g=growthMonth(lc, month); if(g.n>=3) L[lc]={ n:g.n, per:g.gained/g.n }; });
+    var v=Object.keys(L).map(function(k){ return L[k].per; }), tot=0, nn=0; Object.keys(L).forEach(function(k){ tot+=L[k].per*L[k].n; nn+=L[k].n; });
+    return { L:L, avg:nn?tot/nn:null, hi:v.length?Math.max.apply(null,v):null, lo:v.length?Math.min.apply(null,v):null };
+  }
+  function growthSpread(T, lc){ var me=T.L[lc]; if(!me || T.avg===null) return null; var x=me.per, t=T.avg, sc;
+    if(x>=t) sc=(T.hi>t)?85+15*(x-t)/(T.hi-t):100; else sc=(T.lo<t)?85-25*(t-x)/(t-T.lo):85;
+    return hubR1(Math.max(60, Math.min(100, sc))); }
   function monthScores(month){
-    var from=month+'-01', end=hubMonthEnd(month), per={};
+    var from=month+'-01', end=hubMonthEnd(month), per={}, PM=paceMonth(month), GT=(RES && month>='2026-11')?growthTeam(month):null;
     for(var d=from; d<=end; d=hubDayAdd(d,1)){
       qaRows(d).forEach(function(r){ var o=per[r.emp]=per[r.emp]||{ days:0, due:0, done:0, qa:[] }; o.days++; o.due+=r.due; o.done+=r.done; o.qa.push(r.score); });
     }
@@ -3784,12 +3817,14 @@ function IGPhones(CFG){
       var mine=accts().filter(function(a){ var p=rowById(a.meta.phone); return (ownerOf(a)===lc || (p && ownerOf(p)===lc)) && String(a.meta.start||'')<=end; });
       var alive=mine.filter(function(a){ return a.status!=='banned' && a.status!=='restricted'; }).length, q=hubAvg(o.qa);
       var res=mine.length>=3?hubR1(alive/mine.length*100):null, rwhy=alive+' of '+mine.length+' accounts still up';
-      if(RES && month>='2026-11'){ var gm=growthMonth(lc, month);
-        /* Nov 11 (Jeth: scores missing): growth needs two weeks of daily logs — until then account survival stands in */
-        if(gm.n){ res=hubR1(gm.pts/gm.n*100); rwhy=gm.n+' account-weeks · '+gm.grew+' grew followers (+'+fmtN(gm.gained)+') · '+gm.vUp+' reel views up'; }
-        else rwhy=rwhy+' (growth scoring starts once two weeks of daily logs exist)'; }
-      return { emp:k, days:o.days, prod:o.due?hubR1(Math.min(100, o.done/o.due*100)):null, qa:q===null?null:hubR1(q*10), res:res,
-        why:{ prod:o.done+' of '+o.due+' planned steps', qa:o.qa.length+' day'+(o.qa.length===1?'':'s')+' scored by the QA rules', res:rwhy } };
+      if(GT){ var gm=growthMonth(lc, month), sp=growthSpread(GT, lc);
+        res=sp; rwhy=gm.n>=3?(gm.n+' account-weeks · +'+fmtN(gm.gained)+' followers ('+fmtN(gm.n?gm.gained/gm.n:0)+' per account-week vs team '+fmtN(GT.avg||0)+')')
+          :('not scored yet — '+gm.n+' account-week'+(gm.n===1?'':'s')+' of follower logs (needs 3)'); }
+      var pc=PM.req?PM.by[String(k).toUpperCase()]:null, prod, pwhy;
+      if(pc && pc.w){ prod=hubR1(pc.s/pc.w); pwhy=pc.w+' wave'+(pc.w===1?'':'s')+' vs the normal '+Math.round(PM.req/60)+' min: '+pc.on+' on pace · '+pc.fast+' too fast · '+pc.slow+' too slow'; }
+      else { prod=o.due?hubR1(Math.min(100, o.done/o.due*100)):null; pwhy=o.done+' of '+o.due+' planned steps (no timed waves to judge the pace yet)'; }
+      return { emp:k, days:o.days, prod:prod, qa:q===null?null:hubR1(q*10), res:res,
+        why:{ prod:pwhy, qa:o.qa.length+' day'+(o.qa.length===1?'':'s')+' scored by the QA rules', res:rwhy } };
     });
   }
   var api={ id:CID, ns:NS, px:PX, name:PROJECT, tmQuiet:tmQuiet, S:S, load:load, render:render, paint:paint, paintCached:paintCached, owners:owners, monthScores:monthScores,
@@ -4581,7 +4616,7 @@ var P2=(function(){
     if(!document.hidden) try{ ACT.last=now; }catch(_a){}
     if(now-(R.seen||0)>=30000){ R.seen=now; tmSave(); }
     if(R.ends){ if(R.ends<=now){ engFinish(); return; } }
-    else if(!TM.ask){ if(now-(R.chk||R.start)>=lim(R)) tmAskOpen(); }
+    else if(!TM.ask){ if(now-(R.chk||R.start)>=lim(R)){ if(hubSkipAsk('project2')){ R.chk=now; tmSave(); } else tmAskOpen(); } }
     else if(now-TM.ask.at>=ASK_MS){
       var at=TM.ask.at, lbl=tmLabel(R); tmAskClose(); TM.run=null; tmSave(); credit(R, at);
       toast('Timer stopped — no answer to “still working?” ('+lbl+'). The time up to the question is kept.'); try{ tbSend(true); }catch(e){} tmPaint(true); return;
@@ -6949,7 +6984,7 @@ var HUB=(function(){
      and Publish sends them to the portal scorecard (sc_ext_save), the way Reddit Central and ALTR Studio already do. The
      portal blends each client by the VA's hours on it. A number a board can't measure stays blank, so the portal keeps
      its own for that part. ═══ */
-  var SCX={ imperium:'imperium', slaybae:'slaybae', project2:'p2', threads:'threads', ember:'ember', 'design-shopify':'torchlight', meadow:'meadow' };   // Nov 11: + Meadow (TikTok outreach)
+  var SCX={ imperium:'imperium', slaybae:'slaybae', project2:'p2', threads:'threads', ember:'ember', 'design-shopify':'torchlight' };   // Nov 24: Meadow withdrawn (client ended) — no longer scored   // Nov 11: + Meadow (TikTok outreach)
   var SCX_RULE={
     imperium:'Productivity: plan steps done ÷ due on the phones they opened. QA: the QA tab\'s day score, averaged. Results: share of their accounts not banned or restricted.',
     slaybae:'Productivity: plan steps done ÷ due on the phones they opened. QA: the QA tab\'s day score, averaged. Results: share of their accounts not banned or restricted.',
@@ -7008,6 +7043,25 @@ var HUB=(function(){
     }catch(e){ toast('Connection error.'); }
     S.scBusy=false; if(S.view==='scores') renderScores($('main'));
   }
+  /* AUTO-PUBLISH (Jeth, Nov 23): the owner no longer has to press Publish — whenever the owner has the hub open, every
+     client's scores for this month (and last month during the first 3 days) go to the portal scorecard by themselves,
+     at most once every 3 hours. Same rows and same sc_ext_save as the Publish button, without the confirm box. */
+  async function scAutoPublish(){
+    try{
+      if(!isOwner() || S.scBusy) return;
+      var t=today(), months=[t.slice(0,7)];
+      if(+t.slice(8,10)<=3){ var y=+t.slice(0,4), m=+t.slice(5,7)-1; if(m<1){ m=12; y--; } months.push(y+'-'+(m<10?'0':'')+m); }
+      for(var i=0;i<months.length;i++){
+        var mo=months[i], key='hub_sc_auto_'+mo, last=0; try{ last=+localStorage.getItem(key)||0; }catch(_l){}
+        if(Date.now()-last < 3*3600*1000) continue;
+        var rows=[]; Object.keys(SCX).filter(function(k){ return MODS[k] && clientById(k); }).forEach(function(k){ scRows(k, mo).forEach(function(r){ rows.push({ employee_id:String(r.emp).toUpperCase(), month:mo, source:SCX[k], productivity:r.prod, quality:r.qa, results:r.res, detail:{ days:r.days, why:r.why, from:'Client Hub (auto)' } }); }); });
+        if(!rows.length) continue;
+        var d=await jFetch(API+'?action=sc_ext_save&month='+encodeURIComponent(mo)+'&by=client-hub&rows='+encodeURIComponent(JSON.stringify(rows))+'&_='+Date.now(), 0);
+        if(d && d.ok){ try{ localStorage.setItem(key, String(Date.now())); }catch(_s){} await scLoadPub(mo, true); if(S.view==='scores') renderScores($('main')); }
+      }
+    }catch(e){}
+  }
+  setTimeout(scAutoPublish, 60000); setInterval(scAutoPublish, 30*60000);
   function scSetMonth(m){ S.scMonth=m; renderScores($('main')); }
   async function scRefresh(){ toast('Reading the boards…'); loadAll(); await scLoadPub(S.scMonth||today().slice(0,7), true); setTimeout(function(){ if(S.view==='scores') renderScores($('main')); }, 2500); }
   function renderTeam(main){
