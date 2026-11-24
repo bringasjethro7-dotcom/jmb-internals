@@ -3735,13 +3735,18 @@ function IGPhones(CFG){
      steps-done rate stands in. */
   function paceMonth(month){
     var from=month+'-01', end=hubMonthEnd(month), runs=[];
+    /* one wave = one account's day of work in one timer (w.n is the wave's NUMBER, not a count). Waves differ by the
+       account's stage (warm-up day vs 1/2/3 Reels a day), so each wave is judged against the normal time for ITS stage. */
     accts().forEach(function(a){ var lg=a.meta.log||{}; Object.keys(lg).forEach(function(d){ if(d<from||d>end) return; var w=(lg[d]||{}).wave; if(!w||!(+w.secs>0)) return;
-      var n=Math.max(1, +w.n||1); runs.push({ by:String(w.by||'').toUpperCase(), per:(+w.secs)/n, n:n }); }); });
-    var vals=runs.map(function(r){ return r.per; }).sort(function(x,y){ return x-y; });
-    var req=vals.length>=10?vals[Math.floor((vals.length-1)/2)]:null, by={};
-    if(req) runs.forEach(function(r){ if(!r.by) return; var x=r.per/req, sc=(x>=0.8&&x<=1.2)?100:(x<0.8?Math.max(0,100*(x-0.4)/0.4):Math.max(0,100*(2-x)/0.8));
-      var o=by[r.by]=by[r.by]||{ w:0, s:0, on:0, fast:0, slow:0 }; o.w+=r.n; o.s+=sc*r.n; if(sc===100) o.on+=r.n; else if(x<1) o.fast+=r.n; else o.slow+=r.n; });
-    return { req:req, n:vals.length, by:by };
+      var ph=phase(a, d), key=ph.k; try{ if(ph.k==='reels') key='reels'+reelTarget(dayN(a, d), schFor(d)); }catch(_k){}
+      runs.push({ by:String(w.by||'').toUpperCase(), per:+w.secs, key:key }); }); });
+    var med=function(L){ L=L.slice().sort(function(x,y){ return x-y; }); return L.length?L[Math.floor((L.length-1)/2)]:null; };
+    var all=runs.map(function(r){ return r.per; }), G={}; runs.forEach(function(r){ (G[r.key]=G[r.key]||[]).push(r.per); });
+    var reqAll=all.length>=10?med(all):null, REQ={}; Object.keys(G).forEach(function(k){ REQ[k]=G[k].length>=8?med(G[k]):reqAll; });
+    var by={};
+    if(reqAll) runs.forEach(function(r){ if(!r.by) return; var req=REQ[r.key]||reqAll, x=r.per/req, sc=(x>=0.8&&x<=1.2)?100:(x<0.8?Math.max(0,100*(x-0.4)/0.4):Math.max(0,100*(2-x)/0.8));
+      var o=by[r.by]=by[r.by]||{ w:0, s:0, on:0, fast:0, slow:0 }; o.w++; o.s+=sc; if(sc===100) o.on++; else if(x<1) o.fast++; else o.slow++; });
+    return { req:reqAll, REQ:REQ, n:all.length, by:by };
   }
   /* Nov 24 (Jeth): Results must be earned, not handed out. Each VA's followers gained per account-week is placed against
      the team: team average = 85, best = 100, worst = 60. Fewer than 3 account-weeks = not scored yet (blank, never a free 100). */
@@ -3767,7 +3772,7 @@ function IGPhones(CFG){
         res=sp; rwhy=gm.n>=3?(gm.n+' account-weeks · +'+fmtN(gm.gained)+' followers ('+fmtN(gm.n?gm.gained/gm.n:0)+' per account-week vs team '+fmtN(GT.avg||0)+')')
           :('not scored yet — '+gm.n+' account-week'+(gm.n===1?'':'s')+' of follower logs (needs 3)'); }
       var pc=PM.req?PM.by[String(k).toUpperCase()]:null, prod, pwhy;
-      if(pc && pc.w){ prod=hubR1(pc.s/pc.w); pwhy=pc.w+' wave'+(pc.w===1?'':'s')+' vs the normal '+Math.round(PM.req/60)+' min: '+pc.on+' on pace · '+pc.fast+' too fast · '+pc.slow+' too slow'; }
+      if(pc && pc.w){ prod=hubR1(pc.s/pc.w); pwhy=pc.w+' wave'+(pc.w===1?'':'s')+' vs the normal time for each stage: '+pc.on+' on pace · '+pc.fast+' too fast · '+pc.slow+' too slow'; }
       else { prod=o.due?hubR1(Math.min(100, o.done/o.due*100)):null; pwhy=o.done+' of '+o.due+' planned steps (no timed waves to judge the pace yet)'; }
       return { emp:k, days:o.days, prod:prod, qa:q===null?null:hubR1(q*10), res:res,
         why:{ prod:pwhy, qa:o.qa.length+' day'+(o.qa.length===1?'':'s')+' scored by the QA rules', res:rwhy } };
