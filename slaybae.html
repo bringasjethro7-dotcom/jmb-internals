@@ -3816,7 +3816,9 @@ function IGPhones(CFG){
     var v=Object.keys(L).map(function(k){ return L[k].per; }), tot=0, nn=0; Object.keys(L).forEach(function(k){ tot+=L[k].per*L[k].n; nn+=L[k].n; });
     return { L:L, avg:nn?tot/nn:null, hi:v.length?Math.max.apply(null,v):null, lo:v.length?Math.min.apply(null,v):null };
   }
-  function growthSpread(T, lc){ var me=T.L[lc]; if(!me || T.avg===null) return null; var x=me.per, t=T.avg, sc;
+  /* Nov 25 (Jeth): a VA with 1–2 account-weeks is still scored (was blank until 3) — his own followers per account-week is
+     placed against the same team line (the team line itself still only uses VAs with 3+ account-weeks). 0 weeks stays blank. */
+  function growthSpread(T, lc, gm){ var me=T.L[lc]; if(!me && gm && gm.n>=1) me={ n:gm.n, per:gm.gained/gm.n }; if(!me || T.avg===null) return null; var x=me.per, t=T.avg, sc;
     if(x>=t) sc=(T.hi>t)?85+15*(x-t)/(T.hi-t):100; else sc=(T.lo<t)?85-25*(t-x)/(t-T.lo):85;
     return hubR1(Math.max(60, Math.min(100, sc))); }
   function monthScores(month){
@@ -3829,9 +3831,9 @@ function IGPhones(CFG){
       var mine=accts().filter(function(a){ var p=rowById(a.meta.phone); return (ownerOf(a)===lc || (p && ownerOf(p)===lc)) && String(a.meta.start||'')<=end; });
       var alive=mine.filter(function(a){ return a.status!=='banned' && a.status!=='restricted'; }).length, q=hubAvg(o.qa);
       var res=mine.length>=3?hubR1(alive/mine.length*100):null, rwhy=alive+' of '+mine.length+' accounts still up';
-      if(GT){ var gm=growthMonth(lc, month), sp=growthSpread(GT, lc);
-        res=sp; rwhy=gm.n>=3?(gm.n+' account-weeks · +'+fmtN(gm.gained)+' followers ('+fmtN(gm.n?gm.gained/gm.n:0)+' per account-week vs team '+fmtN(GT.avg||0)+')')
-          :('not scored yet — '+gm.n+' account-week'+(gm.n===1?'':'s')+' of follower logs (needs 3)'); }
+      if(GT){ var gm=growthMonth(lc, month), sp=growthSpread(GT, lc, gm);
+        res=sp; rwhy=gm.n>=1?(gm.n+' account-week'+(gm.n===1?'':'s')+(gm.n<3?' (early)':'')+' · +'+fmtN(gm.gained)+' followers ('+fmtN(gm.n?gm.gained/gm.n:0)+' per account-week vs team '+fmtN(GT.avg||0)+')')
+          :('not scored yet — '+gm.n+' account-week'+(gm.n===1?'':'s')+' of follower logs (needs 1)'); }
       var pc=PM.req?PM.by[String(k).toUpperCase()]:null, prod, pwhy;
       if(pc && pc.w){ prod=hubR1(pc.s/pc.w); pwhy=pc.w+' wave'+(pc.w===1?'':'s')+' vs the normal time for each stage: '+pc.on+' on pace · '+pc.fast+' too fast · '+pc.slow+' too slow'; }
       else { prod=o.due?hubR1(Math.min(100, o.done/o.due*100)):null; pwhy=o.done+' of '+o.due+' planned steps (no timed waves to judge the pace yet)'; }
