@@ -915,6 +915,13 @@ html.lite .pfx-flow::before,html.lite .pfx-flow::after,html.lite .pfx-hub,html.l
 #tmDock.pzd{background:#37322D;box-shadow:0 0 0 3px rgba(195,184,152,.6),0 16px 34px -14px rgba(0,0,0,.6)}
 #tmDock.pzd::before{animation:none}
 #tmDock.pzd .tmd-dot{animation:none;background:#C3B898;border-radius:3px}
+.shot-box{border:1.5px dashed var(--line,#d6d3cc);border-radius:12px;padding:10px 12px;margin:6px 0 10px;background:var(--s1,#fafaf8)}
+.shot-h{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;font-size:13px;margin-bottom:6px}
+.shot-drop{display:inline-flex;gap:6px;align-items:center;cursor:pointer;font-weight:700;font-size:13px;padding:7px 12px;border-radius:9px;background:var(--s2,#efede8)}
+.shot-th{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.shot-t{position:relative}.shot-t img{height:72px;border-radius:7px;border:1px solid var(--line,#ddd);display:block}
+.shot-t button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:0;background:#1C252B;color:#fff;font-size:13px;line-height:20px;cursor:pointer;padding:0}
+.shot-err{margin-top:8px;font-size:12.5px;color:#1C252B;background:#f4e3df;border-radius:8px;padding:7px 10px;font-weight:600}
+.shot-pl{margin-top:6px;display:flex;flex-wrap:wrap;gap:4px}
 </style>
 </head>
 <body>
@@ -4558,9 +4565,11 @@ async function finishCreation(id, btn){
    Reddit shows right now. Feeds the Account Center trend lines. */
 async function karmaGate(r){
   var m=M(r), _kd=wdayOf(worksFor(r)); if(String(m.mday||'')===_kd || String(m.mday||'')===today()) return true;   // Nov 7: once per work day — no second ask at 7 AM on a night shift
-  var v=await askNumber('Karma check-in', 'Before the first session today: what karma does <b>'+esc(r.handle)+'</b> show right now?', m.karma);
+  var v=null, ksrc='typed', ksid=0;
+  if(shotOn()){ var kr=await shotKarma(r); if(kr){ v=kr.k; ksrc=kr.src; ksid=kr.sid||0; } }   // Nov 25: read from the profile screenshot
+  else v=await askNumber('Karma check-in', 'Before the first session today: what karma does <b>'+esc(r.handle)+'</b> show right now?', m.karma);
   if(v==null){ toast('Log today\'s karma first — then the session unlocks.'); return false; }
-  if(!(await saveMeta(r,{ mday:_kd, karma:v }))){ toast('Could not save the number — try again.'); return false; }
+  if(!(await saveMeta(r,{ mday:_kd, karma:v, ksrc:ksrc, ksid:ksid }))){ toast('Could not save the number — try again.'); return false; }
   return true;
 }
 /* ═══════════ SUBREDDIT TRACKING (Jeth, Oct 13) ═══════════
@@ -4670,9 +4679,146 @@ function askSubs(r, n){
 }
 function postsWith(r, subs, n){
   var arr=postsOf(r).slice(), d=myDay(), b=myId(), t=phtStamp();   // Nov 7: the VA's work day (night overtime stays on the night)
-  subs.forEach(function(s){ arr.push({ d:d, n:n, r:s, b:b, t:t, st:r.status }); });
+  subs.forEach(function(s){ var o={ d:d, n:n, r:s, b:b, t:t, st:r.status }; if(subs._src) o.src=subs._src; if(subs._sid) o.sid=subs._sid; arr.push(o); });   // Nov 25: src 'shot' (read from the screenshot) or 'typed'
   return arr.slice(-150);
 }
+/* ═══════════ SCREENSHOT READER (Jeth, Nov 25) ═══════════
+   "We should not ask for the subreddit when they are doing the posting … the tool will identify the subreddits using the
+   screenshots … and if the post got removed or not … the karma … if the account is still banned or active … they just
+   need to upload the screenshots." The VA uploads (or pastes, Ctrl+V) screenshots; the rc-shot function reads them with
+   AI vision and returns the username, the posts (subreddit + live / removed by mods / spam filter), the karma and whether
+   the account is suspended. The VA never types those values, so results can't be dressed up:
+   • the username on the screenshot must be the account's — another account's screenshot is refused;
+   • every image is kept with its fingerprint — the same screenshot used for another account or day is flagged;
+   • posting: the session saves the subreddits the screenshot shows (posts made since the timer started);
+   • post checks (before a session + end of shift): each post is filled in from the screenshot; a post the screenshot
+     doesn't show can be answered by hand only after a read, and is saved as "typed" so the owner sees it;
+   • karma: read from the profile screenshot; typing it is the fallback and is marked as typed.
+   CFG.shots_off turns it off (back to typing). */
+var SHOT_FN=SB_URL+'/functions/v1/rc-shot', SHOT={};
+function shotOn(){ return !(CFG && (CFG.shots_off===true || CFG.shots_off==='1')) && !!(USER && USER.sess); }
+function shotShrink(file){
+  return new Promise(function(res, rej){
+    var fr=new FileReader(); fr.onerror=function(){ rej(new Error('read')); };
+    fr.onload=function(){ var img=new Image(); img.onerror=function(){ rej(new Error('image')); };
+      img.onload=function(){ var max=1800, w=img.naturalWidth, h=img.naturalHeight, s=Math.min(1, max/Math.max(w,h)); w=Math.round(w*s); h=Math.round(h*s);
+        var c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h);
+        var url=c.toDataURL('image/jpeg', 0.86); res({ data:url.split(',')[1], type:'image/jpeg', url:url }); };
+      img.src=fr.result; };
+    fr.readAsDataURL(file);
+  });
+}
+function shotBoxHtml(key, title, hint){
+  var S=SHOT[key]||{}; SHOT._active=key;
+  return '<div class="shot-box" id="sb-'+key+'" onclick="SHOT._active=\''+key+'\'">'+
+    '<div class="shot-h"><b>'+esc(title)+'</b><span class="muted">'+hint+'</span></div>'+
+    '<div class="muted" style="font-size:12px;margin-bottom:6px">On the phone window press <b>Win + Shift + S</b>, drag over the screen, then press <b>Ctrl + V</b> here. Up to 6 screenshots.</div><label class="shot-drop">'+IC.plus+' Add screenshots <span class="muted">— or paste with Ctrl+V</span><input type="file" accept="image/*" multiple style="display:none" onchange="shotAdd(\''+key+'\',this.files);this.value=\'\'"></label>'+
+    '<div class="shot-th" id="sbt-'+key+'">'+shotThumbs(key)+'</div>'+
+    '<div class="row" style="gap:8px;margin-top:8px"><button type="button" class="btn sm pri" id="sbg-'+key+'" onclick="shotGo(\''+key+'\')"'+((S.files||[]).length?'':' disabled')+'>Read screenshots</button>'+
+    '<span class="muted" id="sbs-'+key+'" style="font-size:12px"></span></div>'+
+    '<div id="sbr-'+key+'">'+(S.html||'')+'</div></div>';
+}
+function shotThumbs(key){ var S=SHOT[key]||{}; return (S.files||[]).map(function(f,i){ return '<span class="shot-t"><img src="'+f.url+'" alt=""><button type="button" title="Remove" onclick="event.preventDefault();shotDel(\''+key+'\','+i+')">×</button></span>'; }).join(''); }
+async function shotAdd(key, files){
+  var S=SHOT[key]=SHOT[key]||{ files:[] }; var L=[].slice.call(files||[]).filter(function(f){ return /^image\//.test(f.type); });
+  for(var i=0;i<L.length && S.files.length<6;i++){ try{ S.files.push(await shotShrink(L[i])); }catch(e){ toast('That file is not a picture.'); } }
+  if(S.files.length>=6 && L.length) toast('Six screenshots at a time.');
+  var t=$('sbt-'+key); if(t) t.innerHTML=shotThumbs(key); var g=$('sbg-'+key); if(g) g.disabled=!S.files.length;
+}
+function shotDel(key, i){ var S=SHOT[key]; if(!S) return; S.files.splice(i,1); var t=$('sbt-'+key); if(t) t.innerHTML=shotThumbs(key); var g=$('sbg-'+key); if(g) g.disabled=!S.files.length; }
+document.addEventListener('paste', function(e){
+  var key=SHOT._active; if(!key || !$('sb-'+key)) return;
+  var it=[].slice.call((e.clipboardData||{}).items||[]).filter(function(x){ return x.kind==='file' && /^image\//.test(x.type); });
+  if(!it.length) return; e.preventDefault(); shotAdd(key, it.map(function(x){ return x.getAsFile(); }));
+});
+async function shotGo(key){
+  var S=SHOT[key]; if(!S || !(S.files||[]).length) return;
+  var g=$('sbg-'+key), st=$('sbs-'+key); if(g){ g.disabled=true; g.innerHTML='<span class="bx"></span>Reading…'; } if(st) st.textContent='About 10–20 seconds.';
+  var d=null;
+  try{ var r=await fetch(SHOT_FN, { method:'POST', headers:{ 'Content-Type':'application/json', apikey:SB_KEY, Authorization:'Bearer '+SB_KEY },
+      body:JSON.stringify({ op:'read', sess:USER.sess, handle:S.handle, kind:S.kind, expect:S.expect||null, images:S.files.map(function(f){ return { data:f.data, type:f.type }; }) }) });
+    d=await r.json(); }catch(e){ d={ ok:false, error:'Connection problem — try again.' }; }
+  if(g){ g.disabled=false; g.textContent='Read again'; } if(st) st.textContent='';
+  S.tried=true;
+  if(!d || !d.ok){ S.res=null; S.html='<div class="shot-err">'+esc((d&&d.error)||'Could not read the screenshots.')+'</div>'; var b0=$('sbr-'+key); if(b0) b0.innerHTML=S.html; if(S.onfail) S.onfail(d); return; }
+  S.res=d; S.html=shotSummary(d, S); var b=$('sbr-'+key); if(b) b.innerHTML=S.html;
+  shotStatusNote(S, d);
+  if(S.onread) S.onread(d);
+}
+function shotSummary(d, S){
+  var R=d.read||{}, fl=(d.flags||[]), h='';
+  if(fl.length) h+='<div class="shot-err">'+fl.map(esc).join('<br>')+'</div>';
+  var bits=[];
+  bits.push(R.user_match?'<span class="qf g">u/'+esc(R.username)+' ✓</span>':'<span class="qf r">'+(R.username?'shows u/'+esc(R.username):'username not visible')+'</span>');
+  if(R.account_status && R.account_status!=='active' && R.account_status!=='unknown') bits.push('<span class="qf r">account '+esc(R.account_status)+'</span>');
+  if(R.karma && R.karma.total!=null) bits.push('<span class="qf g">karma '+R.karma.total+'</span>');
+  var P=R.posts||[]; if(P.length) bits.push('<span class="qf a">'+P.length+' post'+(P.length===1?'':'s')+' seen</span>');
+  h+='<div style="margin-top:8px">'+bits.join(' ')+'</div>';
+  if(P.length) h+='<div class="shot-pl">'+P.slice(0,12).map(function(p){ var c=p.status==='live'?'g':(p.status==='unknown'?'':'r'); return '<span class="qf '+c+'">'+esc(p.subreddit)+(p.age?' · '+esc(p.age):'')+' · '+esc({ live:'live', removed_mod:'removed by mods', removed_spam:'spam filter', unknown:'status not visible' }[p.status]||p.status)+'</span>'; }).join(' ')+'</div>';
+  return h;
+}
+/* a suspended / gone account seen on a screenshot is noted on the account for the owner (never moved to banned by itself) */
+function shotStatusNote(S, d){
+  var R=d.read||{}; if(!R.user_match || !S.r) return;
+  if(['suspended','banned','not_found'].indexOf(R.account_status)>=0){ toast(S.r.handle+' looks '+R.account_status+' on the screenshot — tag it banned if it is.'); saveMeta(S.r,{ shotst:{ s:R.account_status, at:phtStamp(), by:myId(), sid:d.id||0 } }).catch(function(){}); }
+}
+function shotAgeMins(a){ var m=String(a||'').toLowerCase().match(/(\d+)\s*(s|sec|m|min|h|hr|d|day|w|mo|y)/); if(!m) return /now|just/.test(String(a||'').toLowerCase())?0:null;
+  var n=+m[1], u=m[2]; return u[0]==='s'?0:(u==='m'||u==='min'?n:(u[0]==='h'?n*60:(u[0]==='d'?n*1440:(u[0]==='w'?n*10080:99999)))); }
+var SHOT_ST={ live:'up', removed_mod:'mod', removed_spam:'spam' };
+
+/* POSTING SESSION — the subreddits come from the screenshot (posts made since this session's timer started) */
+function shotSubs(r, n, t){
+  if(!shotOn()) return askSubs(r, n);
+  var cnt=PPS[r.status]||1, since=(t && t.start)?Math.round((Date.now()-t.start)/60000)+20:240, key='ses';
+  SHOT[key]={ files:[], handle:r.handle, kind:'session', r:r, picked:null };
+  SHOT[key].onread=function(d){
+    var R=d.read||{}, ok=R.user_match && !(d.flags||[]).some(function(f){ return /already used/.test(f); });
+    var P=(R.posts||[]).filter(function(p){ var a=shotAgeMins(p.age); return a==null || a<=since; }).slice(0, Math.max(cnt, 10));
+    var seen={}, subs=[]; P.forEach(function(p){ if(p.subreddit){ subs.push(p.subreddit); } });
+    SHOT[key].picked=ok && subs.length?subs:null;
+    var bx=$('ses-pick'); if(bx) bx.innerHTML=ok?(subs.length?'<b>'+subs.length+' post'+(subs.length===1?'':'s')+' from this session:</b> '+subs.map(esc).join(', ')+(subs.length<cnt?' <span class="muted">(the plan is '+cnt+' — add the rest of the posts to the screenshots if you made more)</span>':''):'<span class="shot-err" style="display:inline-block">No post from this session on the screenshots — show the profile\'s Posts tab right after posting.</span>'):'';
+    var sv=$('ses-save'); if(sv) sv.disabled=!SHOT[key].picked;
+  };
+  return new Promise(function(res){
+    _mResolve=res;
+    openModal('<div class="md-h"><h3>Show your posts · Session '+n+'</h3><p><b>'+esc(r.handle)+'</b> · '+esc(stageMeta(r.status).n)+' — '+cnt+' post'+(cnt===1?'':'s')+' a session. Take a screenshot of the account\'s <b>Posts</b> tab (username at the top, today\'s posts below) and add it here. The tool reads the subreddits itself — nothing to type.</p></div>'+
+      '<div class="md-b">'+shotBoxHtml(key, 'Screenshots of u/'+r.handle+'\'s posts', '')+'<div id="ses-pick" style="margin-top:10px;font-size:13px"></div>'+
+      '<div style="margin-top:12px"><a href="#" class="muted" style="font-size:12px" onclick="event.preventDefault();closeModal(\'__type\')">No screenshot possible? Type the subreddits instead (the owner sees it was typed)</a></div></div>'+
+      '<div class="md-f"><button class="btn sec" onclick="closeModal(null)">Cancel</button><button class="btn pri" id="ses-save" disabled onclick="closeModal(SHOT.ses&&SHOT.ses.picked)">Save session</button></div>');
+  }).then(function(v){
+    var S=SHOT[key]; delete SHOT[key];
+    if(v==='__type') return askSubs(r, n).then(function(x){ if(x){ x._src='typed'; } return x; });
+    if(Array.isArray(v) && v.length){ v=v.slice(); v._src='shot'; v._sid=(S&&S.res&&S.res.id)||0; return v; }
+    return null;
+  });
+}
+/* KARMA — read from the profile screenshot */
+function shotKarma(r){
+  var m=M(r), key='kar';
+  SHOT[key]={ files:[], handle:r.handle, kind:'karma', r:r, k:null };
+  SHOT[key].onread=function(d){ var R=d.read||{}, ok=R.user_match && R.karma && R.karma.total!=null && !(d.flags||[]).some(function(f){ return /already used/.test(f); });
+    SHOT[key].k=ok?R.karma.total:null; var sv=$('kar-save'); if(sv){ sv.disabled=!ok; sv.textContent=ok?'Save karma '+R.karma.total:'Save'; } };
+  return new Promise(function(res){
+    _mResolve=res;
+    openModal('<div class="md-h"><h3>Karma check-in</h3><p>Before the first session today: a screenshot of <b>'+esc(r.handle)+'</b>\'s profile showing its <b>karma</b> (username and karma visible). The tool reads the number.</p></div>'+
+      '<div class="md-b">'+shotBoxHtml(key, 'Profile screenshot of u/'+r.handle, '')+
+      '<div style="margin-top:12px"><a href="#" class="muted" style="font-size:12px" onclick="event.preventDefault();closeModal(\'__type\')">No screenshot possible? Type the karma instead (the owner sees it was typed)</a></div></div>'+
+      '<div class="md-f"><button class="btn sec" onclick="closeModal(null)">Cancel</button><button class="btn pri" id="kar-save" disabled onclick="closeModal(SHOT.kar&&SHOT.kar.k)">Save</button></div>');
+  }).then(function(v){
+    var S=SHOT[key]; delete SHOT[key];
+    if(v==='__type') return askNumber('Karma check-in', 'What karma does <b>'+esc(r.handle)+'</b> show right now? <span class="muted">(typed — the owner sees it)</span>', m.karma).then(function(x){ return x==null?null:{ k:x, src:'typed' }; });
+    if(v!=null && v!==false && !isNaN(+v)) return { k:+v, src:'shot', sid:(S&&S.res&&S.res.id)||0 };
+    return null;
+  });
+}
+/* POST CHECKS — fill the verdicts from a screenshot of the account's posts */
+function shotMatch(posts, read){
+  var pool=(read.posts||[]).filter(function(p){ return SHOT_ST[p.status]; }).map(function(p){ return { k:subKey(p.subreddit), v:SHOT_ST[p.status], used:false }; });
+  var out={};
+  posts.forEach(function(x){ var k=subKey(x.p.r); for(var j=0;j<pool.length;j++){ if(!pool[j].used && pool[j].k===k){ pool[j].used=true; out[x.key]=pool[j].v; break; } } });
+  return out;
+}
+
 /* ═══════════ POST CHECK (Jeth + the client, Oct 25) ═══════════
    "We want to know how many posts are getting removed every day … before he can post, he should first mark the
    posts from yesterday." Until now a post nobody tagged counted as stayed up, so removals ran low. From the 25 Oct
@@ -4711,17 +4857,29 @@ function pchkHelp(){
 }
 var PCHK=null;
 function pchkRow(p, i){
-  var k=(PCHK&&PCHK.ans[i])||'';
-  function b(v,l,c){ return '<button type="button" class="pk-b'+(k===v?' on '+c:'')+'" onclick="pchkPick('+i+',\''+v+'\')">'+l+'</button>'; }
+  var k=(PCHK&&PCHK.ans[i])||'', viaShot=PCHK&&PCHK.src&&PCHK.src[i]==='shot', waitShot=shotOn() && PCHK && !PCHK.tried && !k;
+  function b(v,l,c){ if(viaShot) return k===v?'<span class="pk-b on '+c+'">'+l+' · from screenshot</span>':''; if(waitShot) return ''; return '<button type="button" class="pk-b'+(k===v?' on '+c:'')+'" onclick="pchkPick('+i+',\''+v+'\')">'+l+'</button>'; }
   return '<div class="pk-row'+(k?' done':'')+'" id="pk-'+i+'"><div class="pk-n"><a href="https://www.reddit.com/'+esc(p.r)+'/new/" target="_blank" rel="noopener">'+esc(p.r)+' ↗</a>'+
     '<small>'+esc(fmtDay(p.d))+(p.n?' · session '+p.n:'')+(p.st?' · '+esc(stageMeta(p.st).n):'')+(p.b && String(p.b).toLowerCase()!==myId()?' · posted by '+esc(firstName(p.b)):'')+'</small></div>'+
-    '<div class="pk-seg">'+b('up','Stayed up','g')+b('mod','Removed by mods','r')+b('spam','Spam filter','a')+'</div></div>';
+    '<div class="pk-seg">'+(waitShot?'<span class="muted" style="font-size:12px">waiting for the screenshot</span>':b('up','Stayed up','g')+b('mod','Removed by mods','r')+b('spam','Spam filter','a')+(shotOn()&&!viaShot&&PCHK.tried?'<span class="muted" style="font-size:11px;width:100%">not on the screenshot — answer by hand (saved as typed)</span>':''))+'</div></div>';
 }
+function pchkShotWire(r){
+  if(!shotOn() || !PCHK) return; var ps=postsOf(r);
+  SHOT.pk={ files:[], handle:r.handle, kind:'check', r:r, expect:{ posts:PCHK.idx.map(function(i){ return { r:ps[i].r, d:ps[i].d }; }) } };
+  SHOT.pk.onread=function(d){ if(!PCHK) return; PCHK.tried=true; var R=d.read||{}; PCHK.src=PCHK.src||{};
+    if(R.user_match && !(d.flags||[]).some(function(f){ return /already used/.test(f); })){
+      var mt=shotMatch(PCHK.idx.map(function(i){ return { key:i, p:ps[i] }; }), R); Object.keys(mt).forEach(function(i){ PCHK.ans[i]=mt[i]; PCHK.src[i]='shot'; }); PCHK.sid=d.id||0; }
+    pchkRepaint(r); };
+  SHOT.pk.onfail=function(){ if(PCHK){ PCHK.tried=true; pchkRepaint(r); } };
+}
+function pchkRepaint(r){ var ps=postsOf(r); PCHK.idx.forEach(function(i){ var el=$('pk-'+i); if(el) el.outerHTML=pchkRow(ps[i], i); });
+  var n=PCHK.idx.length, done=PCHK.idx.filter(function(j){ return PCHK.ans[j]; }).length; var c=$('pk-cnt'); if(c) c.textContent=done+' of '+n+' answered'; var sv=$('pk-save'); if(sv) sv.disabled=done<n; }
 function pchkHtml(r){
   var ps=postsOf(r), L=PCHK.idx, n=L.length, done=L.filter(function(i){ return PCHK.ans[i]; }).length;
   return '<div class="md-h"><h3>'+(PCHK.gate?'Before you post: check '+(n===1?'the last post':'the last '+n+' posts'):'Check '+n+' post'+(n===1?'':'s'))+'</h3>'+
     '<p>Open <b>'+esc(r.handle)+'</b> on its iPhone and look at '+(n===1?'this post':'each post')+'. What happened to it? This is how we count removals every day — <b>a post nobody checks counts as “not checked”, never as stayed up</b>.</p>'+pchkHelp()+'</div>'+
     '<div class="md-b"><a class="btn sm sec" href="'+esc(qrUrl(r))+'submitted/" target="rc-profile" rel="noopener" style="margin-bottom:10px">Open u/'+esc(r.handle)+' posts on Reddit ↗</a>'+
+    (shotOn()?shotBoxHtml('pk', 'Screenshot of u/'+r.handle+'\'s posts', ' — the tool marks each post itself'):'')+
     '<div class="pk-list">'+L.map(function(i){ return pchkRow(ps[i], i); }).join('')+'</div></div>'+
     '<div class="md-f" style="align-items:center"><span class="muted" id="pk-cnt" style="font-size:12px;margin-right:auto">'+done+' of '+n+' answered</span>'+
     '<button class="btn sec" onclick="closeModal(false)">'+(PCHK.gate?'Not now':'Close')+'</button><button class="btn pri" id="pk-save"'+(done<n?' disabled':'')+' onclick="pchkSave(this)">'+(PCHK.gate?'Save & start':'Save')+'</button></div>';
@@ -4730,8 +4888,8 @@ function pchkHtml(r){
 function pchkGate(r, manual){
   if(!manual && isAdmin()) return Promise.resolve(true);
   var L=pchkPending(r); if(!L.length) return Promise.resolve(true);
-  PCHK={ id:r.id, idx:L, ans:{}, gate:!manual };
-  return new Promise(function(res){ _mResolve=res; openModal(pchkHtml(r)); }).then(function(v){ PCHK=null; return v===true; });
+  PCHK={ id:r.id, idx:L, ans:{}, gate:!manual, src:{}, tried:false }; pchkShotWire(r);
+  return new Promise(function(res){ _mResolve=res; openModal(pchkHtml(r)); }).then(function(v){ PCHK=null; delete SHOT.pk; return v===true; });
 }
 async function pchkOpen(id){ var r=rowById(id); if(!r) return; if(await pchkGate(r, true)) renderView(); }
 function pchkPick(i, k){
@@ -4745,7 +4903,7 @@ async function pchkSave(btn){
   if(!PCHK) return; var r=rowById(PCHK.id); if(!r){ closeModal(false); return; }
   var L=PCHK.idx; if(L.some(function(i){ return !PCHK.ans[i]; })){ toast('Answer every post first.'); return; }
   var arr=postsOf(r).map(function(p){ return Object.assign({}, p); }), c={ up:0, mod:0, spam:0 };
-  L.forEach(function(i){ var k=PCHK.ans[i]; if(arr[i]){ postSet(arr[i], k); c[k]++; } });
+  L.forEach(function(i){ var k=PCHK.ans[i]; if(arr[i]){ postSet(arr[i], k); if(shotOn()){ arr[i].vs=(PCHK.src&&PCHK.src[i]==='shot')?'shot':'typed'; if(arr[i].vs==='shot' && PCHK.sid) arr[i].vsid=PCHK.sid; } c[k]++; } });
   var lbl=btn?btn.textContent:''; if(btn){ btn.disabled=true; btn.textContent='Saving…'; }
   if(await saveMeta(r,{ posts:arr })){
     toast(r.handle+': '+c.up+' stayed up'+(c.mod?' · '+c.mod+' removed by mods':'')+(c.spam?' · '+c.spam+' spam filter':''));
@@ -4829,12 +4987,26 @@ function pcBanner(){
 var PCK=null;
 function pcK(x){ return x.r.id+'#'+x.i; }
 function pcRow(x){
-  var k=pcK(x), v=(PCK&&PCK.ans[k])||'', p=x.p;
-  function b(val,l,c){ return '<button type="button" class="pk-b'+(v===val?' on '+c:'')+'" onclick="pcPick(\''+jsq(k)+'\',\''+val+'\')">'+l+'</button>'; }
+  var k=pcK(x), v=(PCK&&PCK.ans[k])||'', p=x.p, viaShot=PCK&&PCK.src&&PCK.src[k]==='shot', waitShot=shotOn() && PCK && !(PCK.tried&&PCK.tried[x.r.id]) && !v;
+  function b(val,l,c){ if(viaShot) return v===val?'<span class="pk-b on '+c+'">'+l+' · from screenshot</span>':''; if(waitShot) return ''; return '<button type="button" class="pk-b'+(v===val?' on '+c:'')+'" onclick="pcPick(\''+jsq(k)+'\',\''+val+'\')">'+l+'</button>'; }
   return '<div class="pk-row'+(v?' done':'')+'" id="pc-'+esc(k.replace(/[^A-Za-z0-9_-]/g,'_'))+'"><div class="pk-n"><a href="https://www.reddit.com/'+esc(p.r)+'/new/" target="_blank" rel="noopener">'+esc(p.r)+' ↗</a>'+
     '<small>'+(p.n?'session '+p.n:'')+(p.t?' · logged '+esc(fmtT(parseTs(p.t))):'')+(p.st?' · '+esc(stageMeta(p.st).n):'')+'</small></div>'+
-    '<div class="pk-seg">'+b('up','Stayed up','g')+b('mod','Removed by mods','r')+b('spam','Spam filter','a')+'</div></div>';
+    '<div class="pk-seg">'+(waitShot?'<span class="muted" style="font-size:12px">waiting for the screenshot</span>':b('up','Stayed up','g')+b('mod','Removed by mods','r')+b('spam','Spam filter','a'))+'</div></div>';
 }
+function pcShotWire(r){
+  var key='pc_'+String(r.id).replace(/[^A-Za-z0-9_]/g,'_'); if(SHOT[key]) return key;
+  var mine=function(){ return (PCK?PCK.items:[]).filter(function(x){ return x.r.id===r.id; }); };
+  SHOT[key]={ files:[], handle:r.handle, kind:'check', r:r, expect:{ posts:mine().map(function(x){ return { r:x.p.r, d:x.p.d }; }) } };
+  SHOT[key].onread=function(d){ if(!PCK) return; PCK.tried=PCK.tried||{}; PCK.tried[r.id]=true; PCK.src=PCK.src||{}; PCK.sid=PCK.sid||{}; var R=d.read||{};
+    if(R.user_match && !(d.flags||[]).some(function(f){ return /already used/.test(f); })){
+      var mt=shotMatch(mine().map(function(x){ return { key:pcK(x), p:x.p }; }), R); Object.keys(mt).forEach(function(k){ PCK.ans[k]=mt[k]; PCK.src[k]='shot'; PCK.sid[k]=d.id||0; }); pcTouch(); }
+    pcRepaint(); };
+  SHOT[key].onfail=function(){ if(PCK){ PCK.tried=PCK.tried||{}; PCK.tried[r.id]=true; pcRepaint(); } };
+  return key;
+}
+function pcRepaint(){ if(!PCK) return; PCK.items.forEach(function(x){ var el=$('pc-'+pcK(x).replace(/[^A-Za-z0-9_-]/g,'_')); if(el) el.outerHTML=pcRow(x); });
+  var n=PCK.items.length, done=PCK.items.filter(function(y){ return PCK.ans[pcK(y)]; }).length; var c=$('pc-cnt'); if(c) c.textContent=done+' of '+n+' answered';
+  var sv=$('pc-save'); if(sv){ sv.disabled=!done; sv.textContent=done<n?'Save '+done+' answered':'Save all'; } }
 function pcHtml(){
   var L=PCK.items, n=L.length, done=L.filter(function(x){ return PCK.ans[pcK(x)]; }).length, by={}, ord=[];
   L.forEach(function(x){ if(!by[x.r.id]){ by[x.r.id]=[]; ord.push(x.r); } by[x.r.id].push(x); });
@@ -4844,6 +5016,7 @@ function pcHtml(){
     '<div class="md-b">'+ord.map(function(r){ var mo=String(r.model||'').trim();
       return '<div style="margin:12px 0 6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b>'+esc(r.handle)+'</b>'+(mo?'<span class="pill" style="background:var(--s2);color:#595959">'+esc(mo)+'</span>':'')+methodPill(methodOf(r),true)+
         '<a class="btn sm sec" href="'+esc(qrUrl(r))+'submitted/" target="rc-profile" rel="noopener" style="margin-left:auto">Open u/'+esc(r.handle)+' posts ↗</a></div>'+
+        (shotOn()?shotBoxHtml(pcShotWire(r), 'Screenshot of u/'+r.handle+'\'s posts', ' — the tool marks each post itself'):'')+
         '<div class="pk-list">'+by[r.id].map(pcRow).join('')+'</div>'; }).join('')+'</div>'+
     '<div class="md-f" style="align-items:center"><span class="muted" id="pc-cnt" style="font-size:12px;margin-right:auto">'+done+' of '+n+' answered</span>'+
     '<button class="btn sec" onclick="closeModal(false)">Not now</button><button class="btn pri" id="pc-save"'+(done?'':' disabled')+' onclick="pcSave(this)">'+(done<n?'Save '+done+' answered':'Save all')+'</button></div>';
@@ -4856,7 +5029,7 @@ async function pcOpen(){
   PCK={ items:items, ans:{} }; pcTouch();
   var v=await new Promise(function(res){ _mResolve=res; openModal(pcHtml()); try{ $('modal').classList.add('wide'); }catch(e){} tmEnsure(); });
   if(v!==true) pcStop('close');
-  PCK=null; try{ renderView(); }catch(e){}
+  PCK=null; Object.keys(SHOT).forEach(function(k){ if(/^pc_/.test(k)) delete SHOT[k]; }); try{ renderView(); }catch(e){}
 }
 function pcPick(k, v){
   if(!PCK) return; PCK.ans[k]=v; pcTouch();
@@ -4875,13 +5048,13 @@ async function pcSave(btn){
   var c={ up:0, mod:0, spam:0 }, bad=0;
   for(var j=0;j<ord.length;j++){
     var g=by[ord[j]], r=rowById(g.r.id)||g.r, arr=postsOf(r).map(function(p){ return Object.assign({}, p); });
-    g.set.forEach(function(s){ if(arr[s[0]]){ postSet(arr[s[0]], s[1]); } });
+    g.set.forEach(function(s){ if(arr[s[0]]){ postSet(arr[s[0]], s[1]); if(shotOn()){ var kk=g.r.id+'#'+s[0]; arr[s[0]].vs=(PCK.src&&PCK.src[kk]==='shot')?'shot':'typed'; if(arr[s[0]].vs==='shot' && PCK.sid && PCK.sid[kk]) arr[s[0]].vsid=PCK.sid[kk]; } } });
     if(await saveMeta(r,{ posts:arr })) g.set.forEach(function(s){ c[s[1]]++; }); else bad++;
   }
   var left=pcPending().length;
   toast((c.up+c.mod+c.spam)+' checked · '+c.up+' stayed up'+(c.mod?' · '+c.mod+' removed by mods':'')+(c.spam?' · '+c.spam+' spam filter':'')+(bad?' · '+bad+' account'+(bad===1?'':'s')+' could not save — try again':'')+(left?' · '+left+' still to check':''));
   if(!left){ pcStop('done'); closeModal(true); }
-  else { PCK.items=pcPending(); PCK.ans={}; try{ $('modal').innerHTML=pcHtml(); }catch(e){} }
+  else { PCK.items=pcPending(); PCK.ans={}; PCK.src={}; PCK.tried={}; Object.keys(SHOT).forEach(function(k){ if(/^pc_/.test(k)) delete SHOT[k]; }); try{ $('modal').innerHTML=pcHtml(); }catch(e){} }
 }
 
 /* ═══════════ DAILY REMOVAL RATE — by model and by posting pace (Jeth + the client, Oct 27 · pace instead of method Nov 4) ═══════════
@@ -5712,7 +5885,7 @@ async function doSession(id, n, btn){
   var p=phase(r.status), task=(r.status==='recovery')?'Reddit Warmup':(p&&p.task);
   /* Oct 13: a posting session asks which subreddit each post went to (the subreddit report) */
   var subs=null;
-  if(task==='Reddit Posting'){ subs=await askSubs(r, n);
+  if(task==='Reddit Posting'){ subs=await shotSubs(r, n, t);
     if(!subs){ if(t){ var o0=tmAll(); o0[id+'|s'+n]={ t:t.start, p:t.parallel, d:myDay() }; tmPut(o0); } renderView(); toast('Session not saved — add the subreddits to finish it.'); return; } }
   if(btn){ btn.disabled=true; btn.innerHTML='<span class="bx"></span>Saving…'; }
   var patch=(n===4)?{ sxcm:vaKeyOf(USER.id), sxcmt:phtStamp(), last:vaKeyOf(USER.id) }:(n===3)?{ sxsu:vaKeyOf(USER.id), sxsut:phtStamp(), last:vaKeyOf(USER.id) }:((n===2)?{ s2:vaKeyOf(USER.id), s2t:phtStamp(), last:vaKeyOf(USER.id) }:{ s1:vaKeyOf(USER.id), s1t:phtStamp() });   // n 3 (Nov 5b): the account setup
