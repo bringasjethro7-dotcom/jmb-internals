@@ -5644,7 +5644,7 @@ async function pqRegrade(from, apply){
       var F=pqFlags(va,y,dr,L), ded=pqDed(F), sug=Math.max(0, Math.round((10-ded)*2)/2), old=+dr.qa_score;
       var row={ day:y, va:va, old:old, now:sug };
       if(apply && sug!==old){
-        try{ var d=await api({ action:'rc_qa_set', by:USER.id, va:va, date:y, score:sug, note:'Automatic (re-graded Nov 11 with the fair rules; the owner can change it): '+(F.length?F.map(function(f){ return f.t+' −'+f.d; }).join(' · '):'no rule hits') });
+        try{ var d=await api({ action:'rc_qa_set', by:USER.id, va:va, date:y, score:sug, note:'Automatic (re-graded Nov 25 with QA v2 — weighted by how serious and how much; the owner can change it): '+(F.length?F.map(function(f){ return f.t+' −'+f.d; }).join(' · '):'no rule hits') });
           row.saved=!!(d&&d.ok); if(row.saved) api({ action:'rc_day_snap', by:USER.id, va:va, date:y, auto_flags:JSON.stringify(F.filter(function(f){ return f.k!=='hidden_ban' && f.k!=='manual' && f.k!=='viol'; })), auto_deduct:ded }).catch(function(){});
         }catch(e){ row.saved=false; }
       }
@@ -7746,27 +7746,26 @@ function vHealth(){
    The ledger shape (RcTasks, RcDaily, ScorecardExt) is tool-agnostic so ALTR Media can reuse it. */
 var PQ={ tab:'score', range:'7', day:'', month:'', st:null, dd:null, tgt:null, sc:null, scLoading:false, loading:false, key:'', tg:{} };
 var PQ_MIN=10;    // runs before a task's team time is learned
+/* Nov 25 (Jeth: "it depends on how heavy the mistake is … more specific … more accurate"): QA v2. Every rule now
+   scales with HOW MUCH of the day's work it touched (a share, minutes, accounts) and HOW SERIOUS it is — account
+   safety and honesty weigh most, record-keeping least. A day still loses at most 4 (cheating excepted). Applies to
+   every November day through the re-grade. */
 var QA_RULES=[
-  { k:'hidden_ban', n:'Hidden ban — a health check found one of their accounts banned that they never tagged', d:1, u:'each · max 2' },
-  { k:'hc_missing', n:'Daily health check not finished by the end of the shift', d:1, u:'' },
-  { k:'hc_none',    n:'Daily health check never started', d:1.5, u:'instead of the −1' },
-  { k:'hc_late',    n:'Health check started after 8:15 (AM or PM shift)', d:0.25, u:'' },
-  /* Oct 15 (Jeth): the client may move an account ahead — e.g. Warm-up straight to Early + DMs or Posting — so
-     skipping a stage or promoting before its days are up is allowed and costs nothing. The old 'skip' rule (−1 each)
-     is gone, and every deduction it made since Oct 5 was refunded. */
-  { k:'tagging',    n:'Accounts not tagged right — method or model missing, or a new account without its phone (charged the day the account is added; after that a reminder only)', d:0.25, u:'each · max 1' },
-  { k:'quick',      n:'Session or DMs finished within 20 seconds of starting', d:0.5, u:'each · max 2' },
-  { k:'fast',       n:'Under 35% of the team time for that task (once it is learned)', d:0.25, u:'each · max 1' },
-  { k:'cover',      n:'Portal time ahead of the tool timers — 30 to 60 minutes −0.5, over 60 minutes −1', d:1, u:'' },
-  { k:'overrun',    n:'Task timer left running past its time limit', d:0.25, u:'each · max 1' },
-  { k:'crfail',     n:'Creation timer ended with no account — cancelled after 2 minutes or ran out — the first 2 a day are free', d:0.25, u:'each after 2 · max 1.5' },
-  { k:'typo',       n:'Username typo — the health check could not find the account until the owner corrected the name', d:0.25, u:'each · max 1' },
-  { k:'fix_open',   n:'A username sent back for fixing is still not corrected (or marked banned)', d:0.5, u:'each, per day it stays open · max 1.5' },
-  /* Nov 11 (Jeth: "deductions … not following the instructions for the tools and they have violations against the SOPs, the
-     portals"): the owner logs a violation on a VA-day from the QA table. A logged violation is the owner's own call, so it is
-     not held back by the daily floor. Every new rule starts with a 3-day grace — it shows as a reminder (−0) first. */
-  { k:'viol',       n:'Violation logged by the owner — tool instructions not followed (−0.5), portal rule broken (−0.5), SOP not followed (−1), serious SOP breach (−2)', d:0.5, u:'as logged · outside the floor', since:'2026-11-11' }
+  { k:'hidden_ban', n:'Hidden ban — a health check found one of their accounts banned that they never tagged (account safety)', d:1, u:'each · max 2 · 2 or more = no daily cap' },
+  { k:'hc_missing', n:'Daily health check not finished — by the share left undone (half undone −0.75, all undone −1.5)', d:1.5, u:'× share undone' },
+  { k:'hc_none',    n:'Daily health check never started', d:1.5, u:'' },
+  { k:'hc_late',    n:'Health check started late (after 8:15 AM / PM) — up to 15 min −0.1, up to 45 min −0.25, later −0.5', d:0.5, u:'by minutes late' },
+  { k:'tagging',    n:'New account added without its method, model or phone (record-keeping — charged the day it is added, a reminder after)', d:0.1, u:'each · max 0.5' },
+  { k:'quick',      n:'Session or DMs ticked within 20 seconds of starting (not really done)', d:0.5, u:'each · max 2 · no daily cap' },
+  { k:'fast',       n:'Tasks done in under 35% of the team time — by the share of the day\'s tasks (all of them −1.5)', d:1.5, u:'× share of tasks · max 1' },
+  { k:'cover',      n:'Portal time ahead of the tool timers by 30 min or more — by the share of the shift not covered (a third of the shift −1, half or more −1.5)', d:1.5, u:'× 3 × share uncovered · max 1.5' },
+  { k:'overrun',    n:'Task timer left running past its time limit', d:0.15, u:'each · max 0.75' },
+  { k:'crfail',     n:'Creation timer ended with no account — the first 2 a day are free', d:0.2, u:'each after 2 · max 1' },
+  { k:'typo',       n:'Username typo the owner had to correct', d:0.1, u:'each · max 0.5' },
+  { k:'fix_open',   n:'A username sent back for fixing is still not corrected (or marked banned)', d:0.25, u:'each, per day it stays open · max 1' },
+  { k:'viol',       n:'Violation logged by the owner — tool instructions not followed (−0.5), portal rule broken (−0.5), SOP not followed (−1), serious SOP breach (−2)', d:0.5, u:'as logged · outside the cap', since:'2026-11-11' }
 ];
+function qr2(x){ x=+x||0; if(x<=0) return 0; return Math.max(0.05, Math.round(x*20)/20); }   // QA v2: deductions in 0.05 steps
 /* the violation list — the same four in every tool (Reddit Central, ALTR Studio, Slaybae, the Client Hub) */
 var VIOL_TYPES=[
   { k:'tool', n:'Tool instructions not followed', d:0.5, ex:'skipped a step the tool asks for, wrong button or flow, ignored a tool warning' },
@@ -8004,28 +8003,31 @@ function pqFlags(va, day, dr, L){
   try{ mf=JSON.parse((dr&&dr.manual_flags)||'[]')||[]; }catch(e){ mf=[]; }
   mf.forEach(function(f){ if(f.type==='hidden_ban') F.push({ k:'hidden_ban', t:'Hidden ban · '+(f.account||''), d:pqRule('hidden_ban').d, c:'r' }); else if(f.type==='violation') F.push({ k:'viol', t:f.label||'Violation', d:+f.deduct||0, c:'r', tip:f.note||'' }); else F.push({ k:'manual', t:f.label||'Flag', d:+f.deduct||0, c:'a' }); });
   var night=SHIFTOF[va]==='night', hcDueNow=!L.live || phtStamp()>hcDue(night?'night':'day', day);   // Oct 13: due at the end of the shift
-  if(!L.off && hcDueNow && L.hcA>0 && L.hcD<L.hcA) F.push(L.hcD===0?{ k:'hc_none', t:'Health check never started (0/'+L.hcA+')', d:pqRule('hc_none').d, c:'r' }:{ k:'hc_missing', t:'Health check '+L.hcD+'/'+L.hcA, d:pqRule('hc_missing').d, c:'r' });
+  if(!L.off && hcDueNow && L.hcA>0 && L.hcD<L.hcA){ var hcShare=(L.hcA-L.hcD)/L.hcA;
+    F.push(L.hcD===0?{ k:'hc_none', t:'Health check never started (0/'+L.hcA+')', d:1.5, c:'r' }:{ k:'hc_missing', t:'Health check '+L.hcD+'/'+L.hcA+' · '+Math.round(hcShare*100)+'% left', d:qr2(1.5*hcShare), c:'r' }); }
   if(!L.off && dr && dr.hc_first_at && String(dr.hc_first_at).slice(0,10)>=day && String(dr.hc_first_at)>day+(night?' 20:15:00':' 08:15:00'))
-    F.push({ k:'hc_late', t:'Health check started '+fmtT(parseTs(dr.hc_first_at)), d:pqRule('hc_late').d, c:'a' });
+    (function(){ var t0=parseTs(dr.hc_first_at), th=parseTs(day+(night?' 20:15:00':' 08:15:00')), lm=(t0&&th)?Math.round((t0-th)/60000):0;
+      F.push({ k:'hc_late', t:'Health check started '+fmtT(t0)+(lm>0?' · '+lm+' min late':''), d:(lm<=15?0.1:(lm<=45?0.25:0.5)), c:'a' }); })();
   var rows=((PQ.st&&PQ.st.rows)||[]).filter(function(x){ return String(x.va).toLowerCase()===va && (x.kind==='session'||x.kind==='dms'); });
   var q=rows.filter(function(x){ return x.secs!=null && x.secs<20; }).length;
   if(q) F.push({ k:'quick', t:q+' finished within 20 s', d:Math.min(2,q*pqRule('quick').d), c:'r' });
   var fast=rows.filter(function(x){ if(x.secs==null || x.secs<20) return false; var tt=pqTeamTime(x.kind+'|'+x.stage+'|'+(x.method||'(none)')); return tt && x.secs<tt*0.35; }).length;
-  if(fast) F.push({ k:'fast', t:fast+' far under the team time', d:Math.min(1,fast*pqRule('fast').d), c:'a' });
+  var nTimed=rows.filter(function(x){ return x.secs!=null && x.secs>=20; }).length;
+  if(fast) F.push({ k:'fast', t:fast+' of '+nTimed+' tasks far under the team time', d:qr2(Math.min(1, 1.5*fast/Math.max(1,nTimed))), c:'a' });
   var ovr=((PQ.st&&PQ.st.rows)||[]).filter(function(x){ return String(x.va).toLowerCase()===va && x.kind==='overrun'; }).length;
-  if(ovr) F.push({ k:'overrun', t:ovr+' timer'+(ovr===1?'':'s')+' ran past the limit', d:Math.min(1, ovr*pqRule('overrun').d), c:'r' });
+  if(ovr) F.push({ k:'overrun', t:ovr+' timer'+(ovr===1?'':'s')+' ran past the limit', d:qr2(Math.min(0.75, ovr*0.15)), c:'r' });
   var crf=((PQ.st&&PQ.st.rows)||[]).filter(function(x){ return String(x.va).toLowerCase()===va && x.kind==='crfail' && (x.secs==null || x.secs>=CR_FREE); });   // Oct 31
   if(crf.length){ var crm=Math.round(crf.reduce(function(s2,x){ return s2+(+x.secs||0); },0)/60);
-    F.push({ k:'crfail', t:crf.length+' creation'+(crf.length===1?'':'s')+' with no account · '+crm+' min', d:Math.min(1.5, Math.max(0, crf.length-2)*pqRule('crfail').d), c:'r',
+    F.push({ k:'crfail', t:crf.length+' creation'+(crf.length===1?'':'s')+' with no account · '+crm+' min', d:qr2(Math.min(1, Math.max(0, crf.length-2)*0.2)), c:'r',
       tip:crf.map(function(x){ return fmtSecs(x.secs)+' — '+String(x.source||'').replace(/^cancel · /,''); }).join(' · ') }); }
-  try{ var cv=pqCover(va, day, dr); if(cv && cv.tracked-cv.timed>1800) F.push({ k:'cover', t:'Portal '+hm(cv.tracked-cv.timed)+' ahead of the tool ('+hm(cv.timed)+' of '+hm(cv.tracked)+')', d:(cv.tracked-cv.timed>3600?1:0.5), c:'r', tip:'The portal tracked '+hm(cv.tracked)+' but this tool\'s timers only covered '+hm(cv.timed)+' of it.' }); }catch(_cv){}
+  try{ var cv=pqCover(va, day, dr); if(cv && cv.tracked-cv.timed>1800) F.push({ k:'cover', t:'Portal '+hm(cv.tracked-cv.timed)+' ahead of the tool ('+hm(cv.timed)+' of '+hm(cv.tracked)+')', d:qr2(Math.min(1.5, 3*(cv.tracked-cv.timed)/Math.max(1,cv.tracked))), c:'r', tip:'The portal tracked '+hm(cv.tracked)+' but this tool\'s timers only covered '+hm(cv.timed)+' of it.' }); }catch(_cv){}
   var ps=CFG.process_start||'2026-10-01', untag=allRows().filter(function(r){ return owner(r)===va && !isDead(r) && !isParked(r) && (!methodOf(r) || !r.model || (cdateOf(r)>=ps && !r.device && phoneList(false, r.project).length)); });
   var typos=allRows().filter(function(r){ var ty=M(r).typo; return ty && ty.day===day && String(ty.by||owner(r)).toLowerCase()===va; });
-  if(typos.length) F.push({ k:'typo', t:typos.length+' username typo'+(typos.length===1?'':'s')+' corrected', d:Math.min(1,typos.length*pqRule('typo').d), c:'r', tip:typos.map(function(r){ var t=M(r).typo; return t.from+' → '+t.to; }).join(' · ') });
+  if(typos.length) F.push({ k:'typo', t:typos.length+' username typo'+(typos.length===1?'':'s')+' corrected', d:qr2(Math.min(0.5,typos.length*0.1)), c:'r', tip:typos.map(function(r){ var t=M(r).typo; return t.from+' → '+t.to; }).join(' · ') });
   var openFix=allRows().filter(function(r){ var f=M(r).fix; return f && fixTo(r)===va && !isDead(r) && String(f.day||'')<=day && (day===today() || String(f.day||'')<day); });
-  if(openFix.length && (day<today() || phtStamp()>day+(SHIFTOF[va]==='night'?' 23:00:00':' 12:00:00'))) F.push({ k:'fix_open', t:openFix.length+' username fix'+(openFix.length===1?'':'es')+' still open', d:Math.min(1.5, openFix.length*pqRule('fix_open').d), c:'a', tip:openFix.map(function(r){ return r.handle+' (asked '+String((M(r).fix||{}).day||'')+')'; }).join(' · ') });
+  if(openFix.length && (day<today() || phtStamp()>day+(SHIFTOF[va]==='night'?' 23:00:00':' 12:00:00'))) F.push({ k:'fix_open', t:openFix.length+' username fix'+(openFix.length===1?'':'es')+' still open', d:qr2(Math.min(1, openFix.length*0.25)), c:'a', tip:openFix.map(function(r){ return r.handle+' (asked '+String((M(r).fix||{}).day||'')+')'; }).join(' · ') });
   var untagNew=untag.filter(function(r){ var c=cdateOf(r)||String(r.created_at||'').slice(0,10); return c && c>=dAdd(day,-1) && c<=day; }).length;   // Nov 11 (Jeth): charged once, then a reminder
-  if(untag.length) F.push({ k:'tagging', t:untag.length+' account'+(untag.length===1?'':'s')+' missing tags'+(untagNew<untag.length?' ('+(untag.length-untagNew)+' reminder only)':''), d:Math.min(1,untagNew*pqRule('tagging').d), c:'a', tip:untag.slice(0,12).map(function(r){ return r.handle+': '+[!methodOf(r)?'method':'',!r.model?'model':'',(cdateOf(r)>=ps&&!r.device&&phoneList(false,r.project).length)?'phone':''].filter(String).join(', '); }).join('\n') });
+  if(untag.length) F.push({ k:'tagging', t:untag.length+' account'+(untag.length===1?'':'s')+' missing tags'+(untagNew<untag.length?' ('+(untag.length-untagNew)+' reminder only)':''), d:qr2(Math.min(0.5,untagNew*0.1)), c:'a', tip:untag.slice(0,12).map(function(r){ return r.handle+': '+[!methodOf(r)?'method':'',!r.model?'model':'',(cdateOf(r)>=ps&&!r.device&&phoneList(false,r.project).length)?'phone':''].filter(String).join(', '); }).join('\n') });
   // Oct 15: stage jumps / early promotions are no longer a QA finding (the client may move accounts ahead).
   return pqGraceApply(F, day);
 }
@@ -8085,7 +8087,7 @@ function pqQA(){
         '<td class="num">'+(a&&a.length?(a.reduce(function(s,x){ return s+x; },0)/a.length).toFixed(1)+'<span class="muted" style="font-size:10.5px"> · '+a.length+'d</span>':'<span class="muted">—</span>')+'</td>'+
         '<td style="white-space:nowrap"><button class="btn sm '+(sc!==''?'sec':'pri')+'" onclick="pqSave(\''+jsq(va)+'\','+sug+')">'+(sc!==''?'Update':'Save')+'</button> <button class="btn sm sec" title="Log a violation (tool instructions, portal rule, SOP)" onclick="pqViolOpen(\''+jsq(va)+'\')">＋ Violation</button></td></tr>';
     }).join('')+'</tbody></table></div>'+
-    '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn sm" onclick="pqRegradeUI(false)">Re-grade from Nov 1 with the fair rules (preview)</button><span class="muted" style="font-size:11.5px">Only automatic scores change; scores you typed by hand stay.</span></div>'+
+    '<div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn sm" onclick="pqRegradeUI(false)">Re-grade November with QA v2 (preview)</button><span class="muted" style="font-size:11.5px">Only automatic scores change; scores you typed by hand stay.</span></div>'+
     '<p class="muted" style="font-size:11.5px;margin-top:6px">Leave the score empty and press Save to accept the suggestion. Scores are stored per business day in the RcDaily sheet with who scored and when.</p>';
   return h;
 }

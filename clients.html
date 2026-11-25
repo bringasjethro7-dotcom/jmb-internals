@@ -2375,6 +2375,7 @@ var VQA=(function(){
 /* the fair-QA floor for the hub boards (Nov 11, same as Reddit Central and ALTR): a day loses at most 4 points to the
    automatic rules unless it shows something severe (working a phone without a clean pre-flight). */
 var HUB_QA_FLOOR=4;
+function q2(x){ x=+x||0; if(x<=0) return 0; return Math.max(0.05, Math.round(x*20)/20); }   // QA v2: deductions in 0.05 steps
 function IGPhones(CFG){
   var CID=CFG.cid, PROJECT=CFG.project, NS=CFG.ns, PX=CFG.px, KP=CFG.kp, SELF=null;
   var CL=function(){ return clientById(CID); };
@@ -3074,17 +3075,23 @@ function IGPhones(CFG){
       var noPf=0, due=0, done=0;
       Object.keys(w.worked).forEach(function(pid){ var p=rowById(pid), first=w.worked[pid].first||'';
         var had=p && pfList(p, date).some(function(x){ return pfOk(x) && (!first || x.at<=first); });
-        if(!had){ noPf++; issues.push('Worked '+(p?phoneLabel(p):'a phone')+' without a clean pre-flight first'); }
+        if(!had){ noPf++; issues.push('Worked '+(p?phoneLabel(p):'a phone')+' without a clean pre-flight first (phone safety · '+(noPf===1?'−2':'−1 more')+', no daily cap)'); }
         acctsOf(pid).forEach(function(a){ var pt=planTotals(plan(a, date)); due+=pt.t; done+=pt.d; }); });
-      if(rej) issues.push(rej+' pre-flight'+(rej>1?'s':'')+' marked not acceptable');
-      if(noMgr) issues.push(noMgr+' pre-flight'+(noMgr>1?'s':'')+' without the manager\'s go-ahead');
+      if(rej) issues.push(rej+' pre-flight'+(rej>1?'s':'')+' marked not acceptable (−'+Math.min(3,1.5*rej)+')');
+      if(noMgr) issues.push(noMgr+' pre-flight'+(noMgr>1?'s':'')+' without the manager\'s go-ahead (−'+q2(Math.min(1,0.25*noMgr))+')');
       if(stop) issues.push(stop+' STOP (fraud above 3 or a mismatch) — correctly not opened');
-      var miss=Math.max(0, due-done); if(miss) issues.push(miss+' planned step'+(miss>1?'s':'')+' not done ('+(SCH?'email / profile picture / scroll / reels':'warm-up / feed / reels')+')');
+      var miss=Math.max(0, due-done); if(miss) issues.push(miss+' of '+due+' planned step'+(due>1?'s':'')+' not done ('+(SCH?'email / profile picture / scroll / reels':'warm-up / feed / reels')+') — '+Math.round(miss/Math.max(1,due)*100)+'% of the plan (−'+(due>0?q2(3*miss/due):0)+')');
       var resMiss=0, resD=0;
-      if(RES && date>=RES_SINCE){ var seenR={}; Object.keys(w.worked).forEach(function(pid){ w.worked[pid].accts.forEach(function(a){ if(seenR[a.id]) return; seenR[a.id]=1; if(phase(a, date).k==='reels' && !grOf(a)[date]) resMiss++; }); });
-        if(resMiss){ var grc=date<RES_GRACE_END; resD=grc?0:Math.min(1, 0.25*resMiss); issues.push(resMiss+' account'+(resMiss>1?'s':'')+' without the day\'s followers / reel views log'+(grc?' (grace — reminder, counts from Nov 14)':' (−'+resD+')')); } }
-      /* Nov 11 fair QA: the automatic rules take at most 4 points a day, unless a phone was worked without a clean pre-flight */
-      var ded=3*noPf+2*rej+0.5*noMgr+Math.min(3, 0.5*miss)+resD;
+      var reelsN=0;
+      if(RES && date>=RES_SINCE){ var seenR={}; Object.keys(w.worked).forEach(function(pid){ w.worked[pid].accts.forEach(function(a){ if(seenR[a.id]) return; seenR[a.id]=1; if(phase(a, date).k==='reels'){ reelsN++; if(!grOf(a)[date]) resMiss++; } }); });
+        if(resMiss){ var grc=date<RES_GRACE_END; resD=grc?0:q2(Math.min(1, resMiss/Math.max(1,reelsN))); issues.push(resMiss+' of '+reelsN+' account'+(reelsN>1?'s':'')+' without the day\'s followers / reel views log'+(grc?' (grace — reminder, counts from Nov 14)':' (−'+resD+')')); } }
+      /* Nov 25 QA v2 (Jeth: "it depends on how heavy the mistake is"): each rule is weighed by how serious it is and how
+         much of the day it touched. Phone safety weighs most (a phone worked without a clean pre-flight, a pre-flight the
+         owner rejected); missed plan steps count by the SHARE of the day's plan left undone, not per step; a missing
+         manager go-ahead or results log is record-keeping. The automatic rules take at most 4 a day, unless a phone was
+         worked without a clean pre-flight. Applies to every November day. */
+      var dPf=noPf?Math.min(4, 2+(noPf-1)):0, dRej=Math.min(3, 1.5*rej), dMgr=q2(Math.min(1, 0.25*noMgr)), dMiss=due>0?q2(3*miss/due):0;
+      var ded=dPf+dRej+dMgr+dMiss+resD;
       if(!noPf) ded=Math.min(HUB_QA_FLOOR, ded);
       VQA.lines(PROJECT, k, date).forEach(function(t){ issues.push(t); }); ded+=VQA.ded(PROJECT, k, date);
       score=Math.max(0, Math.min(10, Math.round((10-ded)*2)/2));
