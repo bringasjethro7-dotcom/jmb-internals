@@ -4701,9 +4701,15 @@ function shotShrink(file){
   return new Promise(function(res, rej){
     var fr=new FileReader(); fr.onerror=function(){ rej(new Error('read')); };
     fr.onload=function(){ var img=new Image(); img.onerror=function(){ rej(new Error('image')); };
-      img.onload=function(){ var max=1800, w=img.naturalWidth, h=img.naturalHeight, s=Math.min(1, max/Math.max(w,h)); w=Math.round(w*s); h=Math.round(h*s);
-        var c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h);
-        var url=c.toDataURL('image/jpeg', 0.86); res({ data:url.split(',')[1], type:'image/jpeg', url:url }); };
+      img.onload=function(){ var W=img.naturalWidth, H=img.naturalHeight;
+        /* Nov 25: a tall phone screenshot is read as two overlapping halves, each at full sharpness — the small red
+           trash/brush icon that marks a mod removal is too small to see when the whole screen is shrunk at once. */
+        function cut(y0, y1){ var hh=y1-y0, s=Math.min(1, 1568/Math.max(W,hh)), w=Math.round(W*s), h=Math.round(hh*s);
+          var c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,y0,W,hh,0,0,w,h);
+          var u=c.toDataURL('image/jpeg', 0.9); return { data:u.split(',')[1], type:'image/jpeg' }; }
+        var parts=(H>W*1.6)?[cut(0, Math.round(H*0.55)), cut(Math.round(H*0.45), H)]:[cut(0, H)];
+        var tc=document.createElement('canvas'), ts=Math.min(1, 300/H); tc.width=Math.round(W*ts); tc.height=Math.round(H*ts); tc.getContext('2d').drawImage(img,0,0,tc.width,tc.height);
+        res({ parts:parts, url:tc.toDataURL('image/jpeg', 0.7) }); };
       img.src=fr.result; };
     fr.readAsDataURL(file);
   });
@@ -4736,7 +4742,7 @@ async function shotGo(key){
   var g=$('sbg-'+key), st=$('sbs-'+key); if(g){ g.disabled=true; g.innerHTML='<span class="bx"></span>Reading…'; } if(st) st.textContent='About 10–20 seconds.';
   var d=null;
   try{ var r=await fetch(SHOT_FN, { method:'POST', headers:{ 'Content-Type':'application/json', apikey:SB_KEY, Authorization:'Bearer '+SB_KEY },
-      body:JSON.stringify({ op:'read', sess:USER.sess, handle:S.handle, kind:S.kind, expect:S.expect||null, images:S.files.map(function(f){ return { data:f.data, type:f.type }; }) }) });
+      body:JSON.stringify({ op:'read', sess:USER.sess, handle:S.handle, kind:S.kind, expect:S.expect||null, images:[].concat.apply([], S.files.map(function(f){ return f.parts||[{ data:f.data, type:f.type }]; })).slice(0,12) }) });
     d=await r.json(); }catch(e){ d={ ok:false, error:'Connection problem — try again.' }; }
   if(g){ g.disabled=false; g.textContent='Read again'; } if(st) st.textContent='';
   S.tried=true;
